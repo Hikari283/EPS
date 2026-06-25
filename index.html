@@ -413,7 +413,7 @@ function atrialOffsets(mode){
     case 'avrt_ps':   return {HRA:40, His:18, cs:[0,12,24,36,48],  P:24};   // C型/左後中隔副路：CS近位(9-10,os付近)最早期
     case 'retro_rv':  return {HRA:22, His:0,  cs:[10,14,18,22,30], P:6};    // 室房逆行（結節）求心性
     case 'at_focus':  return {HRA:30, His:26, cs:[18,10,0,8,16],  P:20};    // 巣性AT(参照用)：CS中部最早期から両方向へ（巣性・非中隔）
-    case 'at_reentry':return {HRA:64, His:48, cs:[52,40,26,12,0],  P:32};  // マクロリエントリー性AT（ペリミトラル）：CS遠位最早期→CS近位→His→HRA（逐次活性化）
+    case 'at_reentry':return {HRA:48, His:22, cs:[0,14,28,42,54],  P:16};  // マクロリエントリー性AT（ペリミトラル）：CS近位最早期→CS遠位→His→HRA（逐次活性化）
     case 'atyp':      return {HRA:30, His:6,  cs:[0,8,16,26,36],  P:10};    // 非典型AVNRT逆行：CS近位/中隔最早期（求心性）
     default:          return {HRA:0,  His:38, cs:[30,38,46,54,62], P:12};
   }
@@ -1229,7 +1229,7 @@ function buildVentricularEntrainment(sc){
     const tRetV=atA+92+45, ppi=tRetV-lastV;
     res.vaav={pattern:'V-A-A-V', ppi, tcl, diff:ppi-tcl, inCircuit:false};
     res.notes.push(`ペーシング中は心房も<b>逆行性に AA=PCL（${pcl}ms）で捕捉</b>（最終Vの逆行A＝VAまでがペーシング依存）。`);
-    res.notes.push(`停止後 <b>V-A-A-V</b>：最終Vの逆行A（PCL・concentric）→ リエントリー回路自己A（偏心性・CS遠位最早期）→ 順行V。return cycle <b>A1→A2 ${tcl+AT_RETURN_EXTRA}ms ≈ TCL(${tcl})</b>（リエントリー回路継続・overdrive抑制なし）、以降は <b>TCL=${tcl}ms</b>。PPI−TCL ${ppi-tcl}ms（&gt;115ms＝心室は回路外＝<b>リエントリー性AT</b>）。`);
+    res.notes.push(`停止後 <b>V-A-A-V</b>：最終Vの逆行A（PCL・concentric）→ リエントリー回路自己A（偏心性・CS近位最早期）→ 順行V。return cycle <b>A1→A2 ${tcl+AT_RETURN_EXTRA}ms ≈ TCL(${tcl})</b>（リエントリー回路継続・overdrive抑制なし）、以降は <b>TCL=${tcl}ms</b>。PPI−TCL ${ppi-tcl}ms（&gt;115ms＝心室は回路外＝<b>リエントリー性AT</b>）。`);
   }
   state.result=res;
   return true;
@@ -3324,7 +3324,7 @@ function currentTruth(){
   const r=state.result;
   if(r && r.induced && r.mechanism.includes('AVNRT')) return {key:'avnrt', short:'AVNRT。心房と心室がほぼ同時で室房間隔が極短、His最早期の求心性心房興奮。'};
   if(r && r.induced && r.mechanism.includes('AVRT')) return {key:'avrt', short:'正方向性AVRT。心室の後に偏心性心房（CS遠位最早期）、VA間隔が比較的長い。'};
-  if(state.scenario==='at') return {key:'at', short:'マクロリエントリー性心房頻拍。心房が先行する長RP頻拍、CS遠位最早期（ペリミトラル）、房室結節は受動的に伝導。'};
+  if(state.scenario==='at') return {key:'at', short:'マクロリエントリー性心房頻拍。心房が先行する長RP頻拍、CS近位最早期（ペリミトラル）、房室結節は受動的に伝導。'};
   if(state.scenario==='atypavnrt') return {key:'atypavnrt', short:'非典型AVNRT(fast-slow)。長VAで求心性（中隔/CS近位最早期）、緩伝導路を逆行。'};
   if(state.scenario==='aflutter') return {key:'aflutter', short:'心房粗動。規則的な心房波と鋸歯状F波、しばしば2:1伝導。'};
   if(r && r.a2h2==null && state.pace.active) return {key:'block', short:'房室ブロック：S2が結節不応期に入り心室応答が脱落。'};
@@ -3340,7 +3340,7 @@ function setScenNote(){
     avrt:'WPW A型（左外側Kent）：V1陽性δ波・逆行はCS遠位最早期。S2で副路前向きブロック→narrow化→正方向性AVRT。',
     avrtB:'WPW B型（右自由壁Kent）：V1陰性δ波・逆行はHRA（右房）最早期。S2で副路前向きブロック→narrow化→正方向性AVRT。',
     avrtC:'WPW C型（後中隔Kent）：下壁δ陰性・逆行はCS近位（os付近）最早期。S2で副路前向きブロック→narrow化→正方向性AVRT。',
-    at:'マクロリエントリー性心房頻拍。「💥頻拍を誘発」で開始。CS遠位最早期（ペリミトラル）と長RP（A先行）を読み、AVNRTと鑑別。',
+    at:'マクロリエントリー性心房頻拍。「💥頻拍を誘発」で開始。CS近位最早期（ペリミトラル）と長RP（A先行）を読み、AVNRTと鑑別。',
     atypavnrt:'非典型AVNRT。「💥頻拍を誘発」で開始。長VAで求心性最早期（CS近位/中隔）。長RPのATとの鑑別がポイント。',
     aflutter:'心房粗動。「💥頻拍を誘発」で開始。CS/HRAの心房波の規則性と房室伝導比を読み取ります。',
     coumel_pos:'ORT（左自由壁）。「💥頻拍を誘発」で開始→途中で脚ブロックが出現し幅広QRSに。脚ブロック前後でVA・TCLを比較→延長（⊿≥35ms）＝同側自由壁副路（Coumel陽性）。',
@@ -3413,7 +3413,7 @@ function scenarioBaselineHints(){
   switch(state.scenario){
     case 'avnrt': return '洞調律ベース。②でHRAからS1S2を打ち、S2を10msずつ短くしてAHのjump（緩伝導路への切替）を探してください。';
     case 'avrt':  return 'デルタ波(予防興奮)に注目：HVが短縮しQRSの立ち上がりが緩徐です。S2で副路をブロックさせると正常QRSに戻ります。';
-    case 'at': return 'マクロリエントリー性心房頻拍。心房が先行する長RP頻拍です。CS遠位最早期（ペリミトラル）の偏心性活性化を確認し、求心性のAVNRTと区別しましょう。心室刺激でV-A-A-V応答（AVNRTはV-A-V）が鑑別に有用です。';
+    case 'at': return 'マクロリエントリー性心房頻拍。心房が先行する長RP頻拍です。CS近位最早期（ペリミトラル）の偏心性活性化を確認し、求心性のAVNRTと区別しましょう。心室刺激でV-A-A-V応答（AVNRTはV-A-V）が鑑別に有用です。';
     case 'atypavnrt': return '非典型AVNRT(fast-slow)。長VAで最早期心房は中隔（CS近位/His）＝求心性。長RPのATとの鑑別が要点です。';
     case 'aflutter': return '心房粗動。II誘導の鋸歯状波と、CS/HRAの規則的な心房波・房室伝導比を読みましょう。';
     case 'avblock_wenck': return 'Wenckebach型2度AVブロック。His distでAH間隔が順次延長し、4拍目でP波がブロック（His/V脱落）します。AH間隔をキャリパーで計測しましょう。';
@@ -3428,7 +3428,7 @@ function revealText(){
     sinus:'<b>正常房室伝導</b><br>AH(房室結節伝導,正常〜130ms)、HV(His-Purkinje,35-55ms)。S2短縮でAHは滑らかに延長し、結節有効不応期でブロック（心室脱落）。jumpは無い。',
     avnrt:'<b>AVNRT（通常型 slow-fast）</b><br>速伝導路と緩伝導路の二重生理。連結期短縮で速伝導路がERPに達しブロック→緩伝導路へ切替わりAHが≥50ms <b>jump</b>。緩伝導路順行+速伝導路逆行のリエントリーで頻拍。心房と心室がほぼ同時、VA<70ms、最早期心房はHis(中隔)＝<b>求心性</b>。',
     avrt:'<b>正方向性AVRT</b><br>洞調律で予防興奮（デルタ・短HV）。S2で副路が前向きブロック→AVNを順行(narrow QRS)→副路を逆行してリエントリー。心室の後に心房、最早期心房は副路付着部（左側壁ならCS遠位）＝<b>偏心性</b>。VAは比較的長い。',
-    at:'<b>マクロリエントリー性心房頻拍（AT）</b><br>心房内の大回路リエントリー（ペリミトラル型）。心房が先行する<b>長RP</b>頻拍で、CS遠位最早期の偏心性活性化（求心性のAVNRTと対比）。房室結節は受動的伝導のためAVブロックを作っても頻拍は持続（AVNRT/AVRTとの決定的な違い）。心室刺激でV-A-A-V応答。return cycle ≈ TCL（overdrive抑制なし）。',
+    at:'<b>マクロリエントリー性心房頻拍（AT）</b><br>心房内の大回路リエントリー（ペリミトラル型）。心房が先行する<b>長RP</b>頻拍で、CS近位最早期の偏心性活性化（求心性のAVNRTと対比）。房室結節は受動的伝導のためAVブロックを作っても頻拍は持続（AVNRT/AVRTとの決定的な違い）。心室刺激でV-A-A-V応答。return cycle ≈ TCL（overdrive抑制なし）。',
     atypavnrt:'<b>非典型AVNRT（fast-slow）</b><br>緩伝導路を逆行するため<b>長VA</b>。最早期心房は中隔（CS近位/His付近）＝<b>求心性</b>。心電図上は長RP頻拍に見え、巣性ATとの鑑別が問題になる（ATはAV非依存、AVNRTはHis後の心房が必須）。',
     aflutter:'<b>心房粗動</b><br>三尖弁峡部などのマクロリエントリー。心房周期≈240ms前後の規則的興奮、II誘導で鋸歯状F波、房室結節で2:1などに減衰伝導。',
     avblock_wenck:'<b>Wenckebach型2度AVブロック（Mobitz I）</b><br>His束上（AVN内）のブロック。AH間隔が徐々に延長（房室結節疲弊）→最終P波がブロック→休止後リセット。4:3パターンが典型的。通常は可逆的で良性。',
