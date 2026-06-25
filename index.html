@@ -1,0 +1,3604 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EPS Trainer — 電気生理検査トレーニング</title>
+<style>
+  :root{
+    --bg:#0b0f16; --panel:#121826; --panel2:#0e1420; --line:#1f2937;
+    --txt:#e5e7eb; --muted:#9ca3af; --accent:#38bdf8; --accent2:#22c55e;
+    --surf:#36d399; --atr:#f6d860; --his:#fb923c; --cs:#60a5fa; --rv:#c084fc; --stim:#f87171;
+    --grid:#16202e; --grid2:#22303f;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue","Hiragino Sans",sans-serif;font-size:13px}
+  .app{display:flex;height:100vh;overflow:hidden}
+  .side{width:330px;min-width:330px;background:var(--panel);border-right:1px solid var(--line);
+    overflow-y:auto;padding:14px}
+  .main{flex:1;display:flex;flex-direction:column;min-width:0}
+  h1{font-size:15px;margin:0 0 2px}
+  .sub{color:var(--muted);font-size:11px;margin-bottom:12px}
+  .card{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:11px;margin-bottom:12px}
+  .card h2{font-size:12px;margin:0 0 9px;color:var(--accent);text-transform:uppercase;letter-spacing:.04em}
+  label{display:block;font-size:11px;color:var(--muted);margin:8px 0 3px}
+  select,input[type=number]{width:100%;background:#0a0f18;border:1px solid var(--line);color:var(--txt);
+    border-radius:7px;padding:7px 8px;font-size:13px}
+  input[type=range]{width:100%}
+  .row{display:flex;gap:8px}
+  .row>div{flex:1}
+  .val{float:right;color:var(--txt);font-variant-numeric:tabular-nums}
+  button{width:100%;background:#1f2937;border:1px solid #2b3a4f;color:var(--txt);
+    border-radius:8px;padding:9px;font-size:13px;cursor:pointer;margin-top:8px}
+  button:hover{background:#26344a}
+  button.primary{background:var(--accent);color:#04222e;border-color:var(--accent);font-weight:700}
+  button.primary:hover{filter:brightness(1.1)}
+  button.go{background:var(--accent2);color:#042a12;border-color:var(--accent2);font-weight:700}
+  button.danger{background:#3a1620;border-color:#5c2230;color:#fca5a5}
+  .btns{display:flex;gap:8px}
+  .btns button{margin-top:0}
+  .topbar{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--panel);
+    border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .topbar .grow{flex:1}
+  .pill{font-size:11px;color:var(--muted);background:#0a0f18;border:1px solid var(--line);
+    padding:4px 9px;border-radius:20px}
+  .pill b{color:var(--txt);font-variant-numeric:tabular-nums}
+  .cv-wrap{flex:1;position:relative;overflow:hidden;background:#070b11}
+  canvas{display:block;position:absolute;top:0;left:0}
+  .readout{background:var(--panel);border-top:1px solid var(--line);padding:10px 12px;
+    max-height:190px;overflow-y:auto;font-size:12px}
+  .readout h3{margin:0 0 6px;font-size:12px;color:var(--accent)}
+  .meas{font-variant-numeric:tabular-nums}
+  .meas .m{display:inline-block;background:#0a0f18;border:1px solid var(--line);border-radius:6px;
+    padding:3px 8px;margin:0 6px 6px 0}
+  .meas .m b{color:#fcd34d}
+  .hint{color:var(--muted);line-height:1.55}
+  .hint code{background:#0a0f18;padding:1px 5px;border-radius:4px;color:#cbd5e1}
+  .tag{display:inline-block;padding:2px 7px;border-radius:5px;font-size:11px;font-weight:700;margin-right:6px}
+  .tag.ok{background:#0f2a16;color:#86efac;border:1px solid #1f5132}
+  .tag.bad{background:#2a1216;color:#fca5a5;border:1px solid #5c2230}
+  .tag.info{background:#0e2330;color:#7dd3fc;border:1px solid #155067}
+  .legend{display:flex;flex-wrap:wrap;gap:5px 12px;font-size:11px;color:var(--muted);margin-top:4px}
+  .legend i{width:9px;height:9px;border-radius:2px;display:inline-block;margin-right:4px;vertical-align:middle}
+  .small{font-size:10.5px;color:#6b7280;line-height:1.5;margin-top:6px}
+  .seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-top:4px}
+  .seg button{margin:0;border:0;border-radius:0;border-right:1px solid var(--line);font-size:11px;padding:7px 4px}
+  .seg button:last-child{border-right:0}
+  .seg button.on{background:var(--accent);color:#04222e;font-weight:700}
+  .mvgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .mvbtn{margin:0;padding:9px 6px;font-size:11.5px;font-weight:700;line-height:1.3;text-align:center;
+         background:#15202e;border:1px solid #243244;border-radius:8px;color:#cbd5e1}
+  .mvbtn span{display:block;font-size:9.5px;font-weight:500;color:#7c8aa0;margin-top:2px}
+  .mvbtn:hover{background:#1b2a3c;border-color:#2d4258}
+  .mvbtn.on{background:var(--accent);color:#04222e;border-color:var(--accent)}
+  .mvbtn.on span{color:#0a3a4a}
+  details{margin-top:6px}
+  summary{cursor:pointer;color:var(--accent);font-size:11px}
+  .kbd{font-size:10px;color:#6b7280;margin-top:8px;line-height:1.6}
+  /* ---- 録画タブバー ---- */
+  .tabbar{display:flex;align-items:center;gap:4px;padding:5px 10px;background:#0a0f18;border-bottom:1px solid var(--line);overflow-x:auto;min-height:34px;flex-shrink:0}
+  .tab{display:flex;align-items:center;gap:5px;padding:4px 11px;border-radius:7px;border:1px solid transparent;font-size:11px;cursor:pointer;white-space:nowrap;transition:background .12s}
+  .tab.live{background:#0e1420;border-color:var(--line);color:var(--accent)}
+  .tab.live.active{background:var(--accent);color:#04222e;font-weight:700;border-color:var(--accent)}
+  .tab.rec{background:#0e1420;border-color:var(--line);color:var(--muted)}
+  .tab.rec.active{background:#1a2535;border-color:#38bdf855;color:var(--txt);font-weight:600}
+  .tab.rec:hover:not(.active){background:#141d2b}
+  .tab .tab-close{font-size:10px;color:#6b7280;padding:0 2px;border-radius:3px;line-height:1}
+  .tab .tab-close:hover{background:#3a1620;color:#fca5a5}
+  .tab-hint{font-size:10px;color:#374151;margin-left:4px}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- ============ サイドバー操作パネル ============ -->
+  <div class="side">
+    <h1>EPS Trainer</h1>
+    <div class="sub">心内電位を読み・ペーシングを組み・キャリパーで診断する電気生理トレーニング</div>
+
+    <div class="card">
+      <h2>① シナリオ / 基質</h2>
+      <label>症例</label>
+      <select id="scenario">
+        <option value="avnrt">二重房室結節 / AVNRT 誘発</option>
+        <option value="avrt">副伝導路（WPW A型・左側）/ 正方向性AVRT</option>
+        <option value="avrtB">副伝導路（WPW B型・右側）/ 正方向性AVRT</option>
+        <option value="avrtC">副伝導路（WPW C型・後中隔）/ 正方向性AVRT</option>
+        <option value="at">心房頻拍 AT（巣性）</option>
+        <option value="atypavnrt">非典型AVNRT（fast-slow）</option>
+        <option value="aflutter">心房粗動</option>
+        <optgroup label="── Coumel's law（脚ブロック）──">
+          <option value="coumel_pos">ORT＋同側脚ブロック → VA/TCL延長（Coumel陽性）</option>
+          <option value="coumel_neg">ORT（中隔）＋脚ブロック → VA/TCL不変（Coumel陰性）</option>
+        </optgroup>
+      </select>
+      <label>洞周期 Sinus CL <span class="val" id="sclv">800 ms</span></label>
+      <input type="range" id="scl" min="500" max="1100" step="10" value="800">
+      <div class="small" id="scenNote"></div>
+      <button class="go" id="induceTachy" style="background:#7c2d12;border-color:#b91c1c;margin-top:10px">💥 頻拍を誘発する</button>
+      <div class="small" style="margin-top:4px;color:#7c8aa0">症例を選んでこのボタンで頻拍を開始。洞調律に戻すは下の「洞調律へ戻す」。</div>
+    </div>
+
+    <div class="card">
+      <h2>② ペーシング・プロトコル</h2>
+      <label>刺激部位 Site</label>
+      <select id="site">
+        <option value="HRA">高位右房 HRA（心房）</option>
+        <option value="HISd">His 遠位 dist</option>
+        <option value="HISm">His 中位 mid</option>
+        <option value="HISp">His 近位 prox</option>
+        <option value="CS90">CS 9-10（近位）</option>
+        <option value="CS87">CS 8-7</option>
+        <option value="CS65">CS 6-5</option>
+        <option value="CS43">CS 4-3</option>
+        <option value="CS21">CS 2-1（遠位）</option>
+        <option value="RVA">右室心尖 RVA（心室）</option>
+      </select>
+      <div class="small">電極レーンの上にマウスを置いて <b>T</b> キー → その電極が刺激部位になります。</div>
+      <label>ペーシング様式 Mode</label>
+      <div class="seg" id="paceModeSeg">
+        <button data-mode="s1s2" class="on">S1S2</button>
+        <button data-mode="burst">バースト</button>
+        <button data-mode="vscan">V Scan</button>
+      </div>
+      <label>センス Sense（同期チャンネル）</label>
+      <select id="sense">
+        <option value="none">なし None（即時開始）</option>
+        <option value="HRA">HRA（心房を検出して同期）</option>
+        <option value="RVA">RVA（心室を検出して同期）</option>
+      </select>
+      <div class="small">「なし」以外では自己心拍を1拍検出してから駆動列を開始します（最初の1拍だけ同期）。</div>
+      <div class="row" style="align-items:flex-end">
+        <div style="flex:1">
+          <label>基本周期 S1 (ms)</label>
+          <input type="number" id="s1cl" value="600" min="250" max="900" step="10">
+        </div>
+        <div style="display:flex;gap:4px;margin-bottom:1px">
+          <button id="s1dec" style="margin:0;padding:7px 11px;font-size:14px;font-weight:700">−</button>
+          <button id="s1inc" style="margin:0;padding:7px 11px;font-size:14px;font-weight:700">＋</button>
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>S1 連発数</label>
+          <input type="number" id="n1" value="8" min="3" max="12" step="1">
+        </div>
+      </div>
+      <div class="row" style="align-items:flex-end">
+        <div style="flex:1">
+          <label>出力 Output (V)</label>
+          <input type="number" id="output" value="5" min="0.1" max="20" step="0.1">
+        </div>
+        <div style="display:flex;gap:4px;margin-bottom:1px">
+          <button id="outDec" style="margin:0;padding:7px 11px;font-size:14px;font-weight:700">−</button>
+          <button id="outInc" style="margin:0;padding:7px 11px;font-size:14px;font-weight:700">＋</button>
+        </div>
+      </div>
+      <div class="small" id="captNote"><b>1.5V 以上</b>で捕捉（脱分極）。未満では刺激スパイクのみ出て<b>捕捉せず</b>（loss of capture）。</div>
+      <label style="display:flex;align-items:center;justify-content:space-between;margin-top:8px">
+        <span>ステップ幅</span>
+        <div class="seg" id="stepSeg" style="margin-top:0;width:auto">
+          <button data-step="5" style="padding:4px 9px">5</button>
+          <button data-step="10" class="on" style="padding:4px 9px">10</button>
+          <button data-step="20" style="padding:4px 9px">20</button>
+        </div>
+      </label>
+      <div class="row" style="align-items:flex-end">
+        <div style="flex:1">
+          <label>S2 連結期 (ms)</label>
+          <input type="number" id="s2" value="320" min="200" max="600" step="10">
+        </div>
+        <div style="display:flex;gap:4px;margin-bottom:1px">
+          <button id="s2dec" style="margin:0;padding:7px 11px;font-size:14px;font-weight:700">−</button>
+          <button id="s2inc" style="margin:0;padding:7px 11px;font-size:14px;font-weight:700">＋</button>
+        </div>
+      </div>
+      <div class="row" id="s3col" style="display:none;align-items:flex-end">
+        <div style="flex:1">
+          <label>S3 連結期 (ms)</label>
+          <input type="number" id="s3" value="280" min="200" max="500" step="10">
+        </div>
+        <div style="display:flex;gap:4px;margin-bottom:1px">
+          <button id="s3dec" style="margin:0;padding:7px 11px;font-size:14px;font-weight:700">−</button>
+          <button id="s3inc" style="margin:0;padding:7px 11px;font-size:14px;font-weight:700">＋</button>
+        </div>
+      </div>
+      <label style="display:flex;align-items:center;gap:6px;margin-top:6px">
+        <input type="checkbox" id="s3on" style="width:auto"> S3 を追加する</label>
+      <button class="go" id="deliver">⚡ 通電する（プロトコル実行）</button>
+      <button id="stopPace" class="danger" style="display:none">■ 通電停止</button>
+      <div class="btns">
+        <button id="resume">洞調律へ戻す</button>
+      </div>
+      <div class="small" id="modeNote">S1で基本周期を打ち込み、最後にS2(S3)の早期刺激を入れて応答を観察します。連結期を短くすると房室結節が漸減し、症例によってjump・頻拍誘発が起こります。</div>
+    </div>
+
+
+    <div class="card">
+      <h2>③ 表示 / キャリパー</h2>
+      <div class="btns">
+        <button id="playBtn" class="primary" autofocus>❄ フリーズ</button>
+        <button id="freezeReset">先頭へ</button>
+      </div>
+      <label>掃引速度 Sweep（紙送り）<span class="val" id="spdv">100 mm/s</span></label>
+      <div class="seg" id="sweepSeg">
+        <button data-mm="25">25</button>
+        <button data-mm="50">50</button>
+        <button data-mm="100" class="on">100</button>
+        <button data-mm="200">200</button>
+      </div>
+      <div class="small">単位は mm/s。速いほど時間軸が拡大し、画面の表示時間窓が狭くなります（実機と同じ）。再生は実時間で流れます。</div>
+      <label>ゲイン Gain <span class="val" id="gainv">1.0×</span></label>
+      <input type="range" id="gain" min="0.5" max="2.2" step="0.1" value="1.0">
+      <label style="margin-top:10px"><input type="checkbox" id="stimTrig"> ⚡ Stimトリガー線（AH計測）</label>
+      <div class="small">各ペーシング刺激に縦の基準線を引き、刺激→His（<b>AH≒StH</b>）を拍ごとに注記。波形は通常の時間軸のまま、AHの<b>デクリメント</b>が読めます（×＝房室ブロック）。下に系列値も表示。</div>
+      <label style="margin-top:10px">ツール</label>
+      <div class="seg" id="calModeSeg">
+        <button data-calmode="caliper" class="on">⟷ キャリパー</button>
+        <button data-calmode="line">｜ 一本線</button>
+      </div>
+      <div class="btns" style="margin-top:8px">
+        <button id="clrCal" class="danger">すべて消去</button>
+      </div>
+      <div class="kbd" id="calHelp">
+        <b>❄ フリーズ</b> 中の操作：<br>
+        · <b>左クリック</b>：1本目の線を置く → もう1回クリックで確定<br>
+        · 横線を<b>左ドラッグ</b>：縦横に移動（間隔固定）<br>
+        · 縦線を<b>左ドラッグ</b>：片側だけ移動<br>
+        · 縦線・横線上で<b>右クリック</b>：削除<br>
+        · 何もない所で<b>右ドラッグ</b>：画面をパン（過去の波形まで遡る）<br>
+        · Esc：配置中をキャンセル &nbsp;·&nbsp; <b>Shift</b>：フリーズ切替
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>④ 自己診断</h2>
+      <label>機序はどれ？</label>
+      <select id="dx">
+        <option value="">— 選択 —</option>
+        <option value="avnrt">AVNRT（通常型 slow-fast）</option>
+        <option value="avrt">正方向性AVRT（副伝導路）</option>
+        <option value="at">心房頻拍 AT</option>
+        <option value="atypavnrt">非典型AVNRT（fast-slow）</option>
+        <option value="aflutter">心房粗動</option>
+        <option value="coumel_pos">ORT＋脚ブロック（Coumel陽性）</option>
+        <option value="coumel_neg">ORT＋脚ブロック（Coumel陰性）</option>
+      </select>
+      <button id="checkDx">答え合わせ</button>
+      <div id="dxResult" class="small"></div>
+      <details>
+        <summary>解答・解説を見る</summary>
+        <div id="reveal" class="small"></div>
+      </details>
+    </div>
+
+    <div class="card">
+      <h2>⑤ アナライザー（自動計測）</h2>
+      <label style="display:flex;align-items:center;gap:6px">
+        <input type="checkbox" id="autoAnalyze" checked style="width:auto"> 通電後に自動解析する</label>
+      <button id="analyzeBtn">📐 いま表示中を解析</button>
+      <div id="analyzeOut" class="small"></div>
+      <div class="small">AH/HV/TCL/VA を自動計測し、最早期心房から求心性／偏心性を判定します。あくまで教育用の近似値です。</div>
+    </div>
+  </div>
+
+  <!-- ============ メイン表示 ============ -->
+  <div class="main">
+    <div class="topbar">
+      <span class="pill">表示時間窓 <b id="winLbl">2.5 s</b></span>
+      <span class="pill">時刻 <b id="tLbl">0.00 s</b></span>
+      <span class="pill"><b id="clLbl" style="color:#38bdf8">— ms</b></span>
+      <span class="pill" id="modeLbl">洞調律</span>
+      <span class="pill" id="pacePill" style="display:none">出力 <b id="paceOutLbl" style="color:#fbbf24">—</b> V</span>
+      <span class="pill" id="vscanPill" style="display:none">S2連結期 <b id="vscanCLLbl" style="color:#fb923c">—</b> ms</span>
+      <span class="grow"></span>
+      <div class="legend">
+        <span><i style="background:var(--surf)"></i>体表</span>
+        <span><i style="background:var(--atr)"></i>HRA</span>
+        <span><i style="background:var(--his)"></i>His</span>
+        <span><i style="background:var(--cs)"></i>CS</span>
+        <span><i style="background:var(--rv)"></i>RVA</span>
+        <span><i style="background:var(--stim)"></i>Stim</span>
+      </div>
+    </div>
+    <div class="tabbar" id="tabbar"></div>
+    <div class="cv-wrap" id="cvwrap">
+      <canvas id="cv"></canvas>
+    </div>
+    <div class="readout">
+      <h3>計測 / 所見</h3>
+      <div id="measOut" class="meas"><span class="hint">＋キャリパーで計測を追加してください。</span></div>
+      <div id="result" class="hint"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===================================================================
+   EPS Trainer — 教育用シミュレーション
+   ※ 実臨床の波形を簡略化したトレーニング用モデルです
+   =================================================================== */
+
+const CH = [
+  {id:'I',   label:'I',      group:'surf'},
+  {id:'II',  label:'II',     group:'surf'},
+  {id:'V1',  label:'V1',     group:'surf'},
+  {id:'HRA', label:'HRA',    group:'atr'},
+  {id:'HISd',label:'His dist',group:'his'},
+  {id:'HISm',label:'His mid', group:'his'},
+  {id:'HISp',label:'His prox',group:'his'},
+  {id:'CS90',label:'CS 9-10', group:'cs'},
+  {id:'CS87',label:'CS 8-7',  group:'cs'},
+  {id:'CS65',label:'CS 6-5',  group:'cs'},
+  {id:'CS43',label:'CS 4-3',  group:'cs'},
+  {id:'CS21',label:'CS 2-1',  group:'cs'},
+  {id:'RVA', label:'RVA',     group:'rv'},
+  {id:'STIM',label:'Stim',    group:'stim'},
+];
+// CS電極：近位(9-10)→遠位(2-1) の順
+const CSIDS = ['CS90','CS87','CS65','CS43','CS21'];
+const HISIDS = ['HISd','HISm','HISp'];
+const COLOR = {surf:'#36d399', atr:'#f6d860', his:'#fb923c', cs:'#60a5fa', rv:'#c084fc', stim:'#f87171'};
+
+// ---- 状態 ----
+const state = {
+  scenario:'avnrt', sinusCL:800,
+  pace:{active:false, maneuver:null, mode:'s1s2', running:false, site:'HRA', sense:'none', s1cl:600, n1:8, s2:320, s3on:false, s3:280, output:5},
+  baseDuration:30000,
+  playing:true, t0:0, clock:0, sweep:true, mmps:100, win:2500, gain:1.0,
+  events:[], duration:30000, result:null,
+  wave:null, stims:null,
+  tachyArmed:false,   // S1S2でAVNRT/AVRTを誘発済み（=頻拍進行中）→ RVバーストでエントレイン可
+  stimTrigger:false,  // Stimトリガー重ね描きモード
+};
+
+// ---- 波形テンプレート ----
+// dog: 二相性鋭波（心内電位向き）, gauss: 単相性（P,T向き）
+function dog(dt,s){ return -(dt/s)*Math.exp(-(dt*dt)/(2*s*s)); }
+function gauss(dt,s){ return Math.exp(-(dt*dt)/(2*s*s)); }
+// vmulti: 多相性（fractionated）鋭波 — 減衰振動で複数の山がギザギザ並ぶ（心内 心室電位向き）
+function vmulti(dt,s){ return Math.sin(dt/s*2.7)*Math.exp(-(dt*dt)/(2*s*s)); }
+function qrs(dt,s){ return gauss(dt,s) - 0.35*gauss(dt+2.4*s,0.7*s) - 0.42*gauss(dt-2.2*s,0.85*s); }
+function qrsd(dt,s){ // 予防興奮（デルタ）= 緩徐な立ち上がり
+  let delta = 0.45*gauss(dt+2.0*s,1.6*s)*(dt< -0.2*s?1:0.4);
+  return 0.85*gauss(dt,s) - 0.3*gauss(dt-2.2*s,0.9*s) + delta;
+}
+// qspace: RV心尖部ペースの幅広い陰性QS（下壁誘導向き。深い陰性主体＋終末わずか陽性）
+function qspace(dt,s){ return -gauss(dt,s) + 0.12*gauss(dt-2.6*s,1.0*s); }
+// qrsw: 心室筋ペース様の幅広QRS（緩徐な立ち上がり＋ノッチ。narrowとの対比用に明確に幅広）
+function qrsw(dt,s){ return 0.78*gauss(dt,s) + 0.42*gauss(dt+1.7*s,1.3*s) - 0.28*gauss(dt-2.1*s,1.2*s); }
+
+const KIND = {
+  A:   {fn:dog,  s:4,   a:1.05},  // 心内 心房電位（鋭い高周波スパイク）
+  V:   {fn:vmulti, s:7,  a:1.05},  // 心内 心室電位（多相性・じゃみじゃみ）
+  Vff: {fn:vmulti, s:6.5,a:0.34},  // 遠位 far-field 心室（多相性）
+  Vsp: {fn:vmulti, s:3.6,a:1.0},   // His電極のV：鋭い多相性スパイク（実機準拠, RVペース時）
+  Aff: {fn:dog,  s:7,   a:0.30},
+  H:   {fn:dog,  s:2.6, a:0.5},   // His束電位
+  P:   {fn:gauss,s:15,  a:0.26},
+  QRS: {fn:qrs,  s:7,   a:1.0},
+  QRSd:{fn:qrsd, s:8,   a:1.05},
+  QSp: {fn:qspace, s:11, a:1.0},   // RVペース：幅広い陰性QS（下壁誘導）
+  QRSw:{fn:qrsw, s:13, a:1.15},    // 心室筋ペース様の幅広QRS（パラヒス非捕捉。narrow s=7 の約2倍幅）
+  T:   {fn:gauss,s:38,  a:0.30},
+  S:   {fn:gauss,s:1.3, a:1.3},   // 刺激スパイク
+};
+
+function ev(ch,t,kind,scale=1){
+  const k = KIND[kind];
+  state._evpush.push({ch, t, fn:k.fn, s:k.s, a:k.a*scale, kind});
+}
+
+// ---- 心房興奮シーケンス（部位/機序で順序が変わる）----
+// cs配列は [CS9-10(近位) … CS2-1(遠位)] の到達オフセット
+function atrialOffsets(mode){
+  // CS電極ペーシング（CS90…CS21）：その電極が最早期、両方向へ伝播
+  // His束ペーシング：求心性心房活性化（AVNRT様）、dist→proxで微増
+  if(mode && HISIDS.includes(mode)){
+    const k = HISIDS.indexOf(mode); // 0=dist, 1=mid, 2=prox
+    const cs = [10+k*2, 14+k*2, 18+k*2, 24+k*2, 32+k*2];
+    return {HRA: 20+k*2, His: 0, cs, P: 6+k};
+  }
+  if(mode && mode.startsWith('CS')){
+    const k = CSIDS.indexOf(mode);           // 0=近位(9-10) … 4=遠位(2-1)
+    const cs = CSIDS.map((_,i)=> Math.abs(i-k)*14);
+    return {HRA: 34 + k*8, His: 28 + k*9, cs, P: 30 + k*4};
+  }
+  switch(mode){
+    case 'hra':       return {HRA:0,  His:38, cs:[30,38,46,54,62], P:12};   // 洞/HRAペース：HRA最早期、CSは近位→遠位
+    case 'csd':       return {HRA:60, His:46, cs:[48,40,28,15,0],  P:30};   // CS遠位ペース：遠位(2-1)最早期
+    case 'avnrt':     return {HRA:30, His:0,  cs:[20,26,32,40,48], P:4};    // 中隔・求心性。His最早期(VA≒0)、CSはVの後にA（近位CS90→遠位CS21で漸増する短いVA）
+    case 'avrt_left': return {HRA:66, His:50, cs:[66,52,40,24,0],  P:34};   // A型/左側壁副路：CS遠位(2-1)最早期（偏心性・左）
+    case 'avrt_right':return {HRA:0,  His:34, cs:[40,48,56,64,72], P:8};    // B型/右自由壁副路：HRA最早期、CSは近位→遠位（偏心性・右）
+    case 'avrt_ps':   return {HRA:40, His:18, cs:[0,12,24,36,48],  P:24};   // C型/左後中隔副路：CS近位(9-10,os付近)最早期
+    case 'retro_rv':  return {HRA:22, His:0,  cs:[10,14,18,22,30], P:6};    // 室房逆行（結節）求心性
+    case 'at_focus':  return {HRA:30, His:26, cs:[18,10,0,8,16],  P:20};    // 巣性AT：CS中部最早期から両方向へ（巣性・非中隔）
+    case 'atyp':      return {HRA:30, His:6,  cs:[0,8,16,26,36],  P:10};    // 非典型AVNRT逆行：CS近位/中隔最早期（求心性）
+    default:          return {HRA:0,  His:38, cs:[30,38,46,54,62], P:12};
+  }
+}
+
+function emitAtrial(t, mode, scale=1){
+  const o = atrialOffsets(mode);
+  ev('HRA', t+o.HRA, 'A', scale);
+  // His束電極の心房電位（dist/mid/prox）
+  ev('HISd',t+o.His,   'A', 0.85*scale);
+  ev('HISm',t+o.His+1, 'A', 0.75*scale);
+  ev('HISp',t+o.His+2, 'A', 0.65*scale);
+  // CS 5極
+  for(let i=0;i<CSIDS.length;i++) ev(CSIDS[i], t+o.cs[i], 'A', scale);
+  // 体表P
+  ev('I',  t+o.P, 'P', 0.7); ev('II', t+o.P, 'P', 1.0); ev('V1', t+o.P, 'P', 0.6);
+  return t+o.His; // His部での心房到達時刻を返す
+}
+
+function emitHis(tH,sc=1){ ev('HISd',tH,'H',0.6*sc); ev('HISm',tH+1,'H',1.0*sc); ev('HISp',tH+2,'H',0.55*sc); }
+
+// rate: 直前の拍からの間隔(ms)。短い（速いペーシング）ほどT波を小さく・前寄せして
+//       次の拍と繋がって見えるのを防ぐ。
+function emitVent(tV, preex=false, rate=null, rvPaced=false, surfaceKind=null){
+  // RVペース時はローカルV波をスパイク(tV)の右側から立ち上げる（スパイク→波形）
+  ev('RVA', rvPaced?tV+18:tV+4, 'V', 1.0);
+  if(rvPaced){
+    // RVペーシング（実機 slow-fast 実測 H-V-A）：His far-field V は +66（Hは別途emitHis +47）。
+    ev('HISd',tV+66,'Vsp',0.9); ev('HISm',tV+66,'Vsp',0.95); ev('HISp',tV+67,'Vsp',0.8);
+  } else {
+    ev('HISd',tV+2,'V',0.8); ev('HISm',tV+3,'V',0.78); ev('HISp',tV+4,'V',0.7);
+  }
+  // RVペース時：His(66)→CS で連続。HRAにも小さくV波。
+  if(rvPaced){
+    for(let i=0;i<CSIDS.length;i++) ev(CSIDS[i], tV+70+i*3,'Vff');
+    ev('HRA', tV+74,'Vff',0.22);
+  } else {
+    for(const id of CSIDS) ev(id, tV+16,'Vff');
+    ev('HRA', tV+18,'Vff',0.6);
+  }
+  const c = tV+18;
+  if(surfaceKind){
+    // 体表QRSの種別を明示指定（パラヒス非捕捉の幅広QRS等）
+    ev('I',c+8,surfaceKind,0.5); ev('II',c+8,surfaceKind,1.0); ev('V1',c+8,surfaceKind,0.85);
+  }
+  else if(preex){
+    // 予防興奮δ波：副路タイプで V1（A型陽性/B型陰性）・II下壁（C型陰性）の極性が変わる
+    const cfg = isAVRT(state.scenario) ? apConfig(state.scenario) : {v1:1, ii:1};
+    ev('I',c-6,'QRSd',0.5); ev('II',c-6,'QRSd',1.0*cfg.ii); ev('V1',c-6,'QRSd',0.85*cfg.v1);
+  }
+  else     { ev('I',c,'QRS',0.5);    ev('II',c,'QRS',1.0);    ev('V1',c,'QRS',0.85); }
+  // T波：速いレートでは振幅を下げ・前寄せして次拍と重ならないように
+  let tAmp=1.0, tOff=300;
+  if(rate!=null && rate<460){ const f=Math.max(0.25, (rate-200)/260); tAmp=0.55*f; tOff=Math.min(300, Math.round(rate*0.5)); }
+  if(tAmp>0.05){ ev('II', c+tOff,'T',1.0*tAmp); ev('V1', c+tOff,'T',0.7*tAmp); }
+}
+
+function emitStim(tS, site){
+  ev('STIM', tS, 'S', 1.0);
+  ev(site, tS, 'S', 0.55); // 刺激アーチファクトを刺激部位にも
+}
+// 捕捉判定：出力が閾値以上なら捕捉（脱分極を起こす）。未満なら刺激スパイクのみ（loss of capture）
+const CAPTURE_THRESH = 1.5; // 捕捉閾値（V）
+function captures(){ return state.pace.output >= CAPTURE_THRESH; }
+// 房室結節モデル（回復時間ベースの漸減伝導）：回復(=前His以降の時間)が短いほどAH延長、
+// ERP未満でブロック。速い心房バーストでWenckebach→2:1→高度ブロックが自然に出る。
+// 房室結節順行：rec=CL-AH で定常AHが決まる双曲線モデル
+// ERP=250ms, tau=130 → 緩やかな減衰曲線（洞調律AH≈120ms, CL400→AH≈220ms）
+const AVNODE = {ERP:250, AHmin:75, K:190, tau:130};
+// 逆行路（心室→心房）：回復時間ベース。速い心室バーストで VA Wenckebach→2:1→VAブロック。
+const RNODE = {ERP:285, VAmin:125, K:150, tau:100};
+
+// 1拍ぶんの順行伝導（心房→His→心室）
+function emitConducted(tA, mode, AH, HV, preex=false){
+  const tHisA = emitAtrial(tA, mode);
+  if(AH==null){ return; } // 房室ブロック：心室なし
+  const tH = tHisA + AH;
+  emitHis(tH);
+  emitVent(tH + HV, preex);
+}
+
+// ---- 房室結節 漸減伝導カーブ ----
+// 室房（逆行）伝導曲線：RVAペーシング時の VA 間隔（ms）。ブロック時は null
+function vaForCoupling(coupling){
+  if(coupling < 280) return null;                         // 逆行不応期 → VAブロック
+  if(coupling >= 550) return 135;                         // 基本周期：VA固定
+  // 漸減：連結期が短くなるほど VA が延長
+  const va = 135 + Math.round((550-coupling)*0.35);
+  return va;
+}
+
+function ahForCoupling(coupling, scenario){
+  // 二重房室結節生理（AH jump）を持つのは AVNRT / 非典型AVNRT のみ
+  // fast ERP=340ms → slow路へjump → slow ERP=288ms → ブロック
+  if(scenario==='avnrt' || scenario==='atypavnrt'){
+    const fastERP = 340, slowERP = 288;
+    if(coupling >= fastERP) return 82 + (430-coupling)*0.10;     // fast路（正常範囲）
+    if(coupling >= slowERP) return 250 + (fastERP-coupling)*1.6; // jump → slow路
+    return null;  // slow路ERPも越える → AVブロック
+  }
+  // AVRT・AT・粗動：房室結節は単一経路（正常）。滑らかに漸減し、ERPでブロック（jumpなし）
+  const erp = 260;
+  if(coupling >= erp) return 82 + Math.max(0,(380-coupling))*0.45;
+  return null;  // 房室結節ERP以下 → ブロック
+}
+
+// ===================================================================
+//  タイムライン生成
+// ===================================================================
+function fillTachyAT(start,end){
+  const cl=360;  // 巣性AT：心房が先行し、房室結節を介して心室へ（長RP）
+  for(let t=start;t<end;t+=cl){
+    const tHisA=emitAtrial(t,'at_focus',0.9);
+    const AH=92; emitHis(tHisA+AH); emitVent(tHisA+AH+45,false);
+  }
+}
+function fillTachyAtypAVNRT(start,end){
+  const cl=360;  // 非典型AVNRT(fast-slow)：心室の後、緩伝導路を逆行して遅れて求心性心房（長VA）
+  for(let t=start;t<end;t+=cl){
+    emitHis(t-35); emitVent(t,false);
+    emitAtrial(t+185,'atyp',0.9);
+  }
+}
+
+// シナリオ別の進行中頻拍を描画
+function renderTachy(sc, start, end){
+  if(sc==='avnrt') return fillTachyAVNRT(start,end);
+  if(isAVRT(sc))   return fillTachyAVRT(start,end,sc);
+  if(sc==='at')    return fillTachyAT(start,end);
+  if(sc==='atypavnrt') return fillTachyAtypAVNRT(start,end);
+  if(sc==='coumel_pos') return fillTachyCoumel(start,end,true);
+  if(sc==='coumel_neg') return fillTachyCoumel(start,end,false);
+  if(sc==='aflutter') return buildBaseline('aflutter',start,end);
+}
+// 頻拍の特性（TCL・心室が回路に含まれるか・逆行心房モード）
+// ORT（正方向性AVRT）のシナリオ判定と副伝導路（Kent束）タイプ設定
+function isAVRT(sc){ return sc==='avrt' || sc==='avrtB' || sc==='avrtC'; }
+// 誘発で開始する頻拍シナリオ（選択時は洞調律、誘発ボタンで頻拍に）
+function isInducible(sc){ return sc==='avnrt'||isAVRT(sc)||sc==='at'||sc==='atypavnrt'||sc==='aflutter'||sc==='coumel_pos'||sc==='coumel_neg'; }
+function apConfig(sc){
+  // retro=逆行心房マップ, v1/ii=予防興奮δ波の極性, side=副路部位, label=表示名
+  switch(sc){
+    case 'avrt':  return {retro:'avrt_left',  v1:+1,   ii:+1, side:'左外側',   label:'正方向性AVRT（A型・左側Kent束）'};
+    case 'avrtB': return {retro:'avrt_right', v1:-1,   ii:+1, side:'右自由壁', label:'正方向性AVRT（B型・右側Kent束）'};
+    case 'avrtC': return {retro:'avrt_ps',    v1:+0.6, ii:-1, side:'左後中隔', label:'正方向性AVRT（C型・後中隔Kent束）'};
+    default:      return {retro:'avrt_left',  v1:+1,   ii:+1, side:'左外側',   label:'正方向性AVRT'};
+  }
+}
+
+function tachyParams(sc){
+  if(isAVRT(sc)){ const c=apConfig(sc); return {tcl:330, inCircuit:true, retro:c.retro, va:135, label:c.label}; }
+  switch(sc){
+    case 'avnrt':     return {tcl:350, inCircuit:true,  retro:'retro_rv', va:135, label:'通常型AVNRT'};
+    case 'atypavnrt': return {tcl:360, inCircuit:true,  retro:'retro_rv', va:135, label:'非典型AVNRT'};
+    case 'avrt':      return {tcl:330, inCircuit:true,  retro:'avrt_left',va:135, label:'正方向性AVRT'};
+    case 'at':        return {tcl:360, inCircuit:false, retro:'retro_rv', va:150, label:'巣性AT'};
+    default: return null;
+  }
+}
+
+function buildBaseline(scenario, startT, endT){
+  const cl = state.sinusCL;
+  if(scenario==='at'){ fillTachyAT(startT,endT); return; }
+  if(scenario==='atypavnrt'){ fillTachyAtypAVNRT(startT,endT); return; }
+  if(scenario==='coumel_pos'){ fillTachyCoumel(startT,endT,true); return; }
+  if(scenario==='coumel_neg'){ fillTachyCoumel(startT,endT,false); return; }
+
+  // ---- 2度AVブロック Wenckebach型（4:3パターン）----
+  if(scenario==='avblock_wenck'){
+    const gapCL = cl*4; // 4拍で1グループ
+    const ahBase=120, ahInc=35;
+    for(let g=startT; g<endT; g+=gapCL){
+      for(let i=0;i<4;i++){
+        const t=g+i*cl;
+        if(t>=endT) break;
+        const tHisA=emitAtrial(t,'hra');
+        if(i<3){  // 3拍は伝導、4拍目はブロック
+          const ah=ahBase+i*ahInc;
+          emitHis(tHisA+ah);
+          emitVent(tHisA+ah+45,false);
+        }
+        // 4拍目：P波のみ（His/V なし）
+      }
+    }
+    return;
+  }
+
+  // ---- 2度AVブロック 2:1 ----
+  if(scenario==='avblock_21'){
+    let idx=0;
+    for(let t=startT; t<endT; t+=cl){
+      const tHisA=emitAtrial(t,'hra');
+      if(idx%2===0){
+        emitHis(tHisA+140); emitVent(tHisA+185,false);
+      }
+      idx++;
+    }
+    return;
+  }
+
+  // ---- 3度（完全）AVブロック — His束上：洞調律+接合部補充（60bpm）----
+  if(scenario==='avblock_3sup'){
+    // 洞P波（His・V なし）
+    for(let t=startT; t<endT; t+=cl) emitAtrial(t,'hra');
+    // 接合部補充：narrow QRS @ 1000ms CL（His起源）
+    const escCL=1000;
+    for(let t=startT+escCL; t<endT; t+=escCL){
+      emitHis(t-40); emitVent(t,false);
+    }
+    return;
+  }
+
+  // ---- 3度（完全）AVブロック — His束下：P→H あり、His以下ブロック → 心室性補充（40bpm）----
+  if(scenario==='avblock_3inf'){
+    // 洞P波＋His（AVN正常通過）→ HV遮断
+    for(let t=startT; t<endT; t+=cl){
+      const tHisA=emitAtrial(t,'hra');
+      emitHis(tHisA+90);  // H電位は出るが V なし
+    }
+    // 心室性補充：幅広QRS @ 1500ms CL（LBBB型）
+    const escCL=1500;
+    for(let t=startT+escCL; t<endT; t+=escCL){
+      emitVent(t,true);   // preex=true → 幅広QRS
+    }
+    return;
+  }
+
+  if(scenario==='aflutter'){
+    const fcl=240; let n=0;
+    for(let t=startT; t<endT; t+=fcl){
+      // 粗動波：CS/HRAは規則的、II誘導に鋸歯状F波
+      ev('HRA',t,'A',0.8);
+      for(let i=0;i<CSIDS.length;i++) ev(CSIDS[i], t+8+i*4, 'A', 0.8);
+      ev('HISd',t+12,'A',0.6); ev('HISm',t+13,'A',0.5); ev('HISp',t+14,'A',0.45);
+      ev('II',t+20,'P',-1.1); ev('II',t+120,'P',0.6); ev('V1',t+20,'P',0.5);
+      if(n%2===0){ const tH=t+12+95; emitHis(tH); emitVent(tH+45,false); } // 2:1伝導
+      n++;
+    }
+    return;
+  }
+  // 洞調律ベース
+  const preex = isAVRT(scenario);
+  for(let t=startT; t<endT; t+=cl){
+    if(preex){
+      const tHisA = emitAtrial(t,'hra');
+      // 予防興奮：心室はAVN＋副路の融合 → HV短縮・デルタ
+      emitHis(tHisA+80);
+      emitVent(tHisA+95, true);
+    }else{
+      emitConducted(t,'hra',85,45,false);
+    }
+  }
+}
+
+function buildPaced(){
+  const p = state.pace, sc = state.scenario;
+  // 進行中頻拍シナリオはバースト同様の物理（頻拍を背景に流す）で扱う
+  if(getBaselineTachyCL(sc)) return buildPacedTachy();
+  const preexDrive = (isAVRT(sc) && p.site!=='RVA');
+  const baseAH = ahForCoupling(p.s1cl, sc) ?? 95;
+
+  // ---- センス（同期）：自己心拍を1拍検出してから駆動列を開始 ----
+  // sense=none → 即時開始。sense指定 → 自己周期の格子上の1拍をセンスし、その拍からS1で駆動開始。
+  let driveStart;
+  if(p.sense!=='none'){
+    // センスあり：自己心拍を1拍検出してから駆動列
+    const cl = (sc==='aflutter') ? 240 : state.sinusCL;
+    const senseT = Math.ceil(1400/cl) * cl;
+    buildBaseline(sc, 0, senseT + 1);
+    driveStart = senseT + p.s1cl;
+  }else{
+    // センスなし：即時開始（洞拍を挟まない）
+    driveStart = 200;
+  }
+
+  let lastA = driveStart;
+  // ---- S1 駆動列 ----
+  for(let i=0;i<p.n1;i++){
+    const tS = driveStart + i*p.s1cl;
+    lastA = tS;
+    emitStim(tS, p.site);
+    if(captures()){
+      if(p.site==='RVA'){
+        // 心室ペーシング：逆行伝導（VA漸減曲線を適用）
+        emitVent(tS, false, null, true);
+        const vaS1=vaForCoupling(p.s1cl);
+        if(vaS1!=null){ emitHis(tS+50,1.6); emitAtrial(tS+vaS1,'retro_rv',0.9); }
+      }else{
+        const mode = (p.site==='HRA'?'hra':p.site);
+        const AH = ahForCoupling(p.s1cl, sc);
+        emitConductedFromPace(tS, mode, AH, 45, preexDrive);
+      }
+    }
+  }
+
+  const res = {site:p.site, a1a2:p.s2, a2h2:null, jump:false, induced:false,
+               mechanism:null, narrow:false, notes:[]};
+
+  // 捕捉なし（出力不足）：自己調律は継続（全期間描画）、非捕捉スパイクのみ重畳
+  if(!captures()){
+    const tS2nc = lastA + p.s2;
+    emitStim(tS2nc, p.site);
+    if(p.s3on && p.site!=='RVA') emitStim(tS2nc + p.s3, p.site);
+    buildBaseline(sc, 0, state.duration);   // 自己調律を全期間に描画（His等が平坦にならない）
+    res.notes.push(`出力 ${state.pace.output}V < 閾値 ${CAPTURE_THRESH}V → 捕捉せず（loss of capture）。自己調律は継続し脱分極なし。`);
+    res.mechanism='捕捉不全（loss of capture）';
+    state.result=res;
+    return true;
+  }
+
+  // ---- S2 ----
+  const tS2 = lastA + p.s2;
+  emitStim(tS2, p.site);
+  let lastEventV = tS2;
+  if(p.site==='RVA'){
+    emitVent(tS2,false,null,true);
+    const vaS2=vaForCoupling(p.s2);
+    if(vaS2!=null){
+      emitHis(tS2+50,1.6); emitAtrial(tS2+vaS2,'retro_rv',0.9);
+      res.notes.push(`心室S2：VA = ${vaS2}ms（逆行伝導あり）`);
+      lastEventV = tS2+vaS2;
+    }else{
+      res.notes.push('心室S2：室房ブロック（逆行不応期）');
+      lastEventV = tS2+300;
+    }
+  }else{
+    const mode = (p.site==='HRA'?'hra':p.site);
+    const A2H2 = ahForCoupling(p.s2, sc);
+    res.a2h2 = A2H2;
+    if(sc==='avnrt' && p.s2<340 && p.s2>=288){ res.jump = (A2H2 - baseAH)>=50; }
+    if(A2H2==null){
+      // 房室ブロック
+      emitAtrial(tS2, mode, 0.95);
+      res.notes.push('S2は房室結節有効不応期に入りブロック（心室応答なし）');
+      lastEventV = tS2;
+    }else{
+      const tHisA = emitAtrial(tS2, mode, 0.95);
+      emitHis(tHisA+A2H2);
+      // AVRTでS2がデルタ消失して narrow になる条件
+      const narrow = (isAVRT(sc) && p.s2<310);
+      res.narrow = narrow;
+      emitVent(tHisA+A2H2+45, isAVRT(sc) && !narrow);
+      lastEventV = tHisA+A2H2+45;
+    }
+  }
+
+  // ---- S3（任意）----
+  if(p.s3on && p.site!=='RVA'){
+    const tS3 = tS2 + p.s3;
+    emitStim(tS3,p.site);
+    const A3H3 = ahForCoupling(p.s3, sc);
+    const mode=(p.site==='HRA'?'hra':p.site);
+    if(A3H3==null){ emitAtrial(tS3,mode,0.95); }
+    else{ const tH=emitAtrial(tS3,mode,0.95); emitHis(tH+A3H3); emitVent(tH+A3H3+45,false); lastEventV=tH+A3H3+45; }
+  }
+
+  // ---- 誘発判定 → 頻拍 or 洞調律復帰 ----
+  // リエントリー3条件（本 p89-90, Coumel 1975）：①回路 ②緩徐伝導(房室結節) ③一方向性ブロック。
+  // ORT誘発（図2）：心房S2が副路の順行不応期(AP_ERP_ANT)以下 → 副路が順行ブロック（＝一方向性ブロック）
+  //   → 房室結節のみ順伝導（narrow化）→ 心室興奮の頃に副路が逆行回復 → 副路を逆伝導しORT開始。
+  const AP_ERP_ANT = 310;   // 副伝導路(Kent束)の順行有効不応期：これ未満で順行ブロック
+  const AVN_ERP    = 260;   // 房室結節ERP（ahForCoupling と一致）：これ未満は結節もブロック
+  let induce=null;
+  if(sc==='avnrt' && res.jump && p.site!=='RVA'){ induce='avnrt'; }
+  else if(isAVRT(sc) && p.site!=='RVA'){
+    const avnConducts = (res.a2h2!=null);          // ②房室結節が順伝導したか
+    const apBlockedAnt = (p.s2 < AP_ERP_ANT);      // ③副路が順行ブロック＝一方向性ブロック成立
+    if(avnConducts && apBlockedAnt){ induce='avrt'; res.narrow=true; }
+    else if(!avnConducts){
+      res.notes.push(`S2 ${p.s2}ms は房室結節ERP（${AVN_ERP}ms）未満 → 結節も順行ブロックし伝導なし。<b>連結期を延ばす</b>と誘発帯に入ります。`);
+    }else{
+      res.notes.push(`S2 ${p.s2}ms は副路の順行ERP（${AP_ERP_ANT}ms）以上 → 副路が順行伝導（δ波/fusion残存）し<b>一方向性ブロックが成立せず＝ORT誘発されず</b>。<b>連結期を ${AP_ERP_ANT}ms 未満</b>に短縮を。`);
+    }
+  }
+  // 心室S2からのORT誘発（図2の逆）：VESが副路を逆伝導→房室結節を順伝導でORT。
+  if(isAVRT(sc) && p.site==='RVA'){
+    if(p.s2<330){ induce='avrt'; }
+    else { res.notes.push(`心室S2 ${p.s2}ms では逆行が副路に十分先行せず<b>ORT誘発されず</b>。<b>連結期を 330ms 未満</b>に。`); }
+  }
+
+  if(induce==='avnrt'){
+    res.induced=true; res.mechanism='AVNRT（通常型 slow-fast）';
+    res.notes.push('AHのjump後にエコー→AVNRT誘発。心房と心室がほぼ同時、室房間隔ごく短く中隔最早期（求心性）。');
+    res.notes.push('→ <b>頻拍進行中</b>。バースト（部位RVA）で心室オーバードライブ／His不応期PVC等の鑑別が可能。');
+    fillTachyAVNRT(lastEventV+350, state.duration);
+    state.tachyArmed=true;
+  }else if(induce==='avrt'){
+    const cfg=apConfig(sc);
+    res.induced=true; res.mechanism=cfg.label;
+    res.notes.push(`S2連結期＜副路順行ERP(310ms)で<b>副路が順行ブロック（一方向性ブロック）</b>→房室結節のみ順行（narrow QRS化）→心室到達時に副路が逆行回復→<b>副路を逆伝導しORT開始</b>（本 p89-90 図2）。`);
+    res.notes.push(`副路は<b>${cfg.side}</b>（${sc==='avrt'?'A型/V1陽性・CS遠位最早':sc==='avrtB'?'B型/V1陰性・HRA(右房)最早':'C型/後中隔・CS近位最早・下壁δ陰性'}）。`);
+    res.notes.push('→ <b>頻拍進行中</b>。バースト（部位RVA）で心室オーバードライブ／His不応期PVC等の鑑別が可能。');
+    fillTachyAVRT(lastEventV+330, state.duration, sc);
+    state.tachyArmed=true;
+  }else{
+    res.mechanism = null;
+    state.tachyArmed=false;
+    buildBaseline(sc, lastEventV + state.sinusCL, state.duration);
+  }
+  state.result = res;
+}
+
+// ---- エントレインメント（RVAオーバードライブ → PPI−TCL）----
+function buildEntrainment(sc){
+  const tp = tachyParams(sc);
+  if(!tp){ showToast('この症例ではエントレインメントできません（頻拍が必要）'); return false; }
+  const tcl = tp.tcl;
+  const pcl = tcl - 30;            // TCLより30ms速くペーシング
+  const nPace = 8;
+  const tPaceStart = 4*tcl + 200;  // 数拍の頻拍を見せてから
+
+  // 1) 頻拍を数拍
+  renderTachy(sc, 0, tPaceStart - 5);
+
+  // 2) RVAオーバードライブ（心房はPCLに加速＝エントレイン）
+  //    体表QRSは漸増融合(progressive fusion)→固定融合(constant fusion)を示す
+  let lastV;
+  for(let i=0;i<nPace;i++){
+    const ts = tPaceStart + i*pcl;
+    emitStim(ts,'RVA');
+    // 融合度：最初の3拍は順行性成分が残り漸増融合、以降は固定融合
+    const fusionFrac = i<3 ? (i+1)/4 : 0.6;   // 0=完全自己, 1=完全ペース
+    emitVentFusion(ts, fusionFrac);
+    emitHis(ts+50,1.6); emitAtrial(ts + tp.va, tp.retro, 0.9);
+    lastV = ts;
+  }
+
+  // 3) ペーシング停止 → 復帰周期（PPI）。心室が回路内なら短い、ATは長い
+  const ppi = tcl + (tp.inCircuit ? (isAVRT(sc)?90:75) : 190);
+  const tResume = lastV + ppi;
+  renderTachy(sc, tResume, state.duration);
+
+  const diff = ppi - tcl;
+  state.result = {
+    site:'RVA', induced:true, mechanism:tp.label, a2h2:null, jump:false,
+    narrow:false, notes:[
+      `RVAをTCL−30ms（${pcl}ms）で${nPace}拍オーバードライブ → ペーシング中は心房もPCLに加速（エントレイン）。`,
+      `体表QRSは<b>漸増融合→固定融合</b>を呈し、entrainment（リエントリー回路）を証明。`,
+      `停止後の復帰周期 PPI ${ppi}ms、TCL ${tcl}ms、<b>PPI−TCL ${diff}ms</b>。`
+    ],
+    entrain:{tcl, ppi, diff, inCircuit:tp.inCircuit, label:tp.label, pcl, fusion:true}
+  };
+  return true;
+}
+
+// 融合QRS：frac=0で自己(narrow)、1で完全ペース(wide)。中間で両成分を重畳。
+function emitVentFusion(tV, frac){
+  frac=Math.max(0,Math.min(1,frac));
+  // 心内は通常通り（心室は実際に脱分極する）。RVペースは全電極でスパイク(tV)の右側から。
+  ev('RVA', tV+18, 'V', 1.0);
+  // His電極（実機 slow-fast AVNRT 実測）：Stim→H 47ms / H→V 19ms / V→A 67ms ＝ H-V-A。
+  //   逆行Hが先(+47)、その19ms後に遠位far-field V(+66)、67ms後にA(+133, lock loopでemit)。
+  //   CSのVはHis Vから連続（少し後）。HRA電極にはV波を出さない。
+  ev('HISd',tV+66,'Vsp',0.9); ev('HISm',tV+66,'Vsp',0.95); ev('HISp',tV+67,'Vsp',0.8);
+  for(let i=0;i<CSIDS.length;i++) ev(CSIDS[i], tV+70+i*3,'Vff');   // His(66)→CS で連続
+  ev('HRA', tV+74,'Vff',0.22);   // HRAにも小さくV波（実機で僅かに出る）
+  const c=tV+18;
+  // 体表QRS（paced QS成分）は His far-field V と同時刻(tV+66)＝His Vの延長線上に揃える。
+  const cp=tV+66;
+  const an=(1-frac), aw=frac;
+  if(an>0.05){ ev('I',c,'QRS',0.5*an); ev('II',c,'QRS',1.0*an); ev('V1',c,'QRS',0.85*an); }
+  if(aw>0.05){
+    // 幅広QSは His far-field V と同時刻（cp=tV+135）＝His Vの延長線上に揃える。
+    ev('I', cp,'QRSd', 0.55*aw);   // I は陽性（RV apex＝左上方軸でも I は陽性寄り）
+    ev('II',cp,'QSp',  1.15*aw);   // II は陰性QS（上方軸）
+    ev('V1',cp,'QSp',  0.70*aw);   // V1 は陰性（LBBB様）
+  }
+  ev('II', cp+165,'T',1.0); ev('V1', cp+165,'T',0.7);
+}
+
+// ---- パラヒス刺激（His捕捉↔非捕捉 → SA間隔で副路検出）----
+// 洞調律下でHis近傍を刺激。出力で His捕捉↔非捕捉 を切り替える（−/＋ボタンで調整）。
+//   高出力(≥HIS_CAPTURE_THRESH)：His捕捉＝narrow QRS・SA短い
+//   中出力(CAPTURE_THRESH〜)：His非捕捉＝局所心筋のみ→幅広QRS・SAは副路なら不変/結節なら延長
+//   低出力(<CAPTURE_THRESH)：捕捉せず（スパイクのみ）
+// 副路(extranodal)あり：非捕捉でもSA不変（ΔSA≈0）。結節性のみ：非捕捉でSA延長。
+const HIS_CAPTURE_THRESH = 4;   // これ以上の出力でHisも捕捉（narrow）
+// パラヒス1拍を描画（出力で His捕捉(narrow)↔非捕捉(幅広QRS)↔捕捉なし を切替）
+function emitParaHisBeat(t, sc, out, site){
+  const ap=isAVRT(sc), retro=ap?apConfig(sc).retro:'retro_rv';
+  const saCap=70, saNon=ap?74:132;
+  const hisCap=out>=HIS_CAPTURE_THRESH, myoCap=out>=CAPTURE_THRESH;
+  emitStim(t, site||'HISm');
+  if(!myoCap){ emitConducted(t,'hra',85,45,false); return; }     // 捕捉なし：自己（洞）拍
+  if(hisCap){ emitHis(t+5); emitVent(t+30,false); }              // His捕捉：narrow QRS
+  else      { emitVent(t+30,false,null,false,'QRSw'); emitHis(t+95,0.7); } // His非捕捉：幅広QRS
+  emitAtrial(t+30+(hisCap?saCap:saNon), retro, 0.9);
+}
+// 出力スケジュール（時刻→出力）を関数化：各拍の出力を返す
+function outputAtFactory(){
+  const sched=(state.pace.outputSchedule && state.pace.outputSchedule.length)
+    ? state.pace.outputSchedule.slice().sort((a,b)=>a.t-b.t)
+    : [{t:0, v:state.pace.output}];
+  return (t)=>{ let v=sched[0].v; for(const s of sched){ if(s.t<=t) v=s.v; } return v; };
+}
+function paraHisNotes(sc, out){
+  const ap=isAVRT(sc), saCap=70, saNon=ap?74:132, dSA=saNon-saCap;
+  const hisCapture=out>=HIS_CAPTURE_THRESH, myoCapture=out>=CAPTURE_THRESH;
+  const sa=hisCapture?saCap:saNon;
+  const stateLabel=!myoCapture?'捕捉なし（自己拍）':hisCapture?'His捕捉（narrow QRS）':'His非捕捉（幅広QRS）';
+  const notes=[`出力 <b>${out}V</b> → <b>${stateLabel}</b>（His捕捉閾値 ${HIS_CAPTURE_THRESH}V / 心筋捕捉閾値 ${CAPTURE_THRESH}V）。<b>−/＋で出力を変えると、その時点以降の拍が narrow↔幅広QRS に変化</b>（同じ掃引で比較）。`];
+  if(myoCapture){
+    notes.push(`現在のSA間隔 <b>${sa}ms</b>（捕捉時=${saCap} / 非捕捉時=${saNon}、<b>ΔSA ${dSA}ms</b>）。`);
+    notes.push(ap
+      ? `非捕捉でも SA がほぼ不変（ΔSA≈${dSA}ms）→ 逆行は<b>副伝導路（extranodal）</b>経由＝<b>副路あり</b>。`
+      : `非捕捉で SA が <b>延長（ΔSA ${dSA}ms）</b>→ 逆行は<b>His–房室結節（nodal）</b>経由＝<b>副路なし（結節性）</b>。`);
+  }else{ notes.push('出力が心筋捕捉閾値未満：脱分極せず自己拍。出力を上げてください。'); }
+  return {ap, saCap, saNon, dSA, sa, notes, hisCapture, myoCapture};
+}
+function buildParaHisian(sc){
+  const cl = 700, t0 = 900;
+  const outAt = outputAtFactory();
+  buildBaseline('sinus', 0, t0-200);
+  for(let t=t0; t<state.duration; t+=cl){ emitParaHisBeat(t, sc, outAt(t), 'HISm'); }
+  const info = paraHisNotes(sc, state.pace.output);
+  state.result = {
+    site:'HISm', induced:false, mechanism: info.ap?'副路（extranodal）パターン':'結節性（nodal）パターン',
+    a2h2:null, jump:false, narrow:false, notes:info.notes,
+    paraHis:{ap:info.ap, saCap:info.saCap, saNon:info.saNon, dSA:info.dSA, output:state.pace.output, hisCapture:info.hisCapture, myoCapture:info.myoCapture}
+  };
+  return true;
+}
+
+// ---- VAリンキング（心室ペーシング停止後のVA一定性）----
+// 副路/AVNRTはVA一定（リンク）、ATはVA変動（アンリンク）
+function buildVaLinking(sc){
+  const tp = tachyParams(sc);
+  if(!tp){ showToast('VAリンキングは頻拍症例で実施します（AVNRT/AVRT/AT/非典型AVNRT）'); return false; }
+  const tcl=tp.tcl, pcl=tcl-30, nPace=8;
+  const tPaceStart = 4*tcl + 200;
+  renderTachy(sc, 0, tPaceStart-5);
+
+  let lastV;
+  for(let i=0;i<nPace;i++){
+    const ts=tPaceStart+i*pcl;
+    emitStim(ts,'RVA'); emitVent(ts,false,null,true); emitHis(ts+50,1.6); emitAtrial(ts+tp.va, tp.retro, 0.9);
+    lastV=ts;
+  }
+
+  const baseVA = {avnrt:5, atypavnrt:180, avrt:116, at:200}[sc];
+  const jitter = [0,-45,40,-22];   // AT用：心房巣が独立 → VA変動
+  const tResume = lastV + (tp.inCircuit ? (isAVRT(sc)?90:75) : 190);
+  const vaSeq=[];
+  for(let i=0;i<4;i++){
+    const tV = tResume + i*tcl;
+    emitHis(tV-30); emitVent(tV,false);
+    const va = tp.inCircuit ? baseVA : (baseVA + jitter[i%4]);
+    emitAtrial(tV + Math.max(2,va), tp.retro, 0.9);
+    vaSeq.push(Math.round(va));
+  }
+  renderTachy(sc, tResume + 4*tcl, state.duration);
+
+  const spread = Math.max(...vaSeq)-Math.min(...vaSeq);
+  state.result = {
+    site:'RVA', induced:true, mechanism:tp.label, a2h2:null, jump:false, narrow:false,
+    notes:[
+      `心室を${nPace}拍ペーシング→停止。復帰VA系列 ${vaSeq.join(' / ')} ms。`,
+      spread<=15 ? 'VAは一定（<b>リンク</b>）' : 'VAが変動（<b>アンリンク</b>）'
+    ],
+    vaLink:{vaSeq, spread, linked:tp.inCircuit, label:tp.label}
+  };
+  return true;
+}
+
+// ---- 単一頻拍拍：心房活性化時刻 tA を基準に1拍を描画 ----
+// 各シナリオの V/His 幾何は fillTachy* と一致させる
+function emitTachyBeat(sc, tA){
+  if(sc==='avnrt'){ emitAtrial(tA,'avnrt',1.0); emitHis(tA-50); emitVent(tA-4,false); }  // VA≒0：A と V がほぼ同時。HV≒48ms（順行は正常）
+  else if(isAVRT(sc)){ const V=tA-120; emitHis(V-48); emitVent(V,false); emitAtrial(tA,apConfig(sc).retro,0.9); }
+  else if(sc==='at'){ emitAtrial(tA,'at_focus',0.9); emitHis(tA+92); emitVent(tA+92+50,false); }
+  else if(sc==='atypavnrt'){ const V=tA-185; emitHis(V-48); emitVent(V,false); emitAtrial(tA,'atyp',0.9); }
+}
+// tA から duration まで頻拍を連ねる
+function fillTachyFrom(sc, tA, tEnd){
+  const tcl=tachyParams(sc).tcl;
+  for(let t=tA; t<tEnd; t+=tcl) emitTachyBeat(sc,t);
+}
+
+// ---- His不応期PVC（AVRT vs AVNRT の決定打）----
+// 頻拍中、His が順行性に活性化された直後（His不応期）に心室期外刺激。
+// AVRT：副伝導路が心房を前進（または停止）→ 副路の存在を証明。
+// AVNRT/非典型/AT：His不応のため結節を逆行できず → 心房は不変（前進しない）。
+function buildHisRefractoryPVC(sc){
+  const tp=tachyParams(sc);
+  if(!tp){ showToast('His不応期PVCは頻拍中に実施します（誘発してから）'); return false; }
+  const tcl=tp.tcl, isORT=isAVRT(sc);
+  const nLead=6, A0=500;
+  for(let n=0;n<nLead;n++) emitTachyBeat(sc, A0+n*tcl);
+  const A_next = A0 + nLead*tcl;          // 本来の次の心房活性化
+  // His不応期PVC：拡張late couplingで投入（His は既に順行性committed）
+  const tPVC = A_next - 60;
+  emitStim(tPVC,'RVA'); emitVent(tPVC,false,null,true);
+
+  const res={ site:'RVA', induced:true, mechanism:tp.label, a2h2:null, jump:false, narrow:false, notes:[] };
+  if(isORT){
+    const advance=70;                     // 副路経由で心房を前進
+    const A_adv = A_next - advance;
+    emitAtrial(A_adv,apConfig(sc).retro,0.95);   // 前進＋偏心性最早期（タイプ別）
+    fillTachyFrom(sc, A_adv+tcl, state.duration);  // 頻拍はリセットして継続
+    res.notes.push(`His不応期に投入したPVCが心房を <b>${advance}ms 前進</b>させた（偏心性最早期）。`);
+    res.notes.push('→ Hisを介さず心房を捕捉＝<b>副伝導路の存在を証明（AVRT）</b>。');
+    res.hisPvc={advanced:true, delta:advance, ap:true, label:tp.label};
+  } else {
+    fillTachyFrom(sc, A_next, state.duration);         // 心房は不変・スケジュール通り
+    res.notes.push('His不応期PVCを投入したが、次の心房活性化は<b>前進しない</b>（不変）。');
+    res.notes.push(sc==='at'
+      ? '→ 心室は心房と独立（房室解離）。AT を支持。'
+      : '→ His不応のため結節を逆行できず＝<b>副伝導路なし（AVNRT）</b>を支持。');
+    res.hisPvc={advanced:false, delta:0, ap:false, label:tp.label};
+  }
+  state.result=res;
+  return true;
+}
+
+// ---- 心室オーバードライブ応答（V-A-V / V-A-A-V）----
+// 頻拍を心室から TCL−30 で連続ペーシング→停止。停止後の心房順序で鑑別。
+// AVNRT/AVRT（房室結節/副路が回路内＝AV連結）：V-A-V。AT（心房独立）：V-A-A-V。
+function buildVOverdrive(sc){
+  const tp=tachyParams(sc);
+  if(!tp){ showToast('心室オーバードライブは頻拍中に実施します'); return false; }
+  const tcl=tp.tcl, pcl=tcl-30, nPace=8, isAT=!tp.inCircuit;
+  for(let n=0;n<4;n++) emitTachyBeat(sc, 400+n*tcl);
+  const pStart = 400 + 4*tcl;
+  let lastV=pStart;
+  for(let i=0;i<nPace;i++){
+    const tV=pStart+i*pcl;
+    emitStim(tV,'RVA'); emitVent(tV,false,null,true); emitHis(tV+50,1.6);
+    emitAtrial(tV+tp.va, tp.retro, 0.85);   // 逆行心房（PCLに加速＝エントレイン）
+    lastV=tV;
+  }
+  const res={ site:'RVA', induced:true, mechanism:tp.label, a2h2:null, jump:false, narrow:false, notes:[] };
+  const lastRetroA = lastV + tp.va;
+  if(isAT){
+    // V-A-A-V：最後のV→逆行A（エントレイン）→AT巣の独立A→次のV
+    const tA_focus = lastRetroA + Math.round(tcl*0.7);
+    emitAtrial(tA_focus,'at_focus',0.9); emitHis(tA_focus+92); emitVent(tA_focus+92+45,false);
+    fillTachyFrom('at', tA_focus+tcl, state.duration);
+    res.notes.push('心室オーバードライブ停止後、心房が <b>A–A</b> と連続（巣性Aが介在）。');
+    res.notes.push('→ <b>V-A-A-V 応答＝巣性AT</b>（心室は回路外）。');
+    res.vaav={pattern:'V-A-A-V', isAT:true, label:tp.label};
+  } else {
+    // V-A-V：最後のV→逆行A→頻拍が再開しV
+    fillTachyFrom(sc, lastRetroA + Math.round(tcl*0.5), state.duration);
+    res.notes.push('心室オーバードライブ停止後、心房は<b>1拍</b>で次のVへ。');
+    res.notes.push('→ <b>V-A-V 応答＝AVNRT / AVRT</b>（房室結節・副路が回路内）。');
+    res.vaav={pattern:'V-A-V', isAT:false, label:tp.label};
+  }
+  state.result=res;
+  return true;
+}
+
+// ---- 心室エントレインメント（バースト 部位=RVA を頻拍中に打った時）----
+// ユーザー設定のPCL(=s1cl)で心室をオーバードライブ。PCL<TCLでエントレイン。
+// ・捕捉＝幅広ペースQRS、固定PCLでは毎拍同一の constant fusion／PCL短縮で progressive fusion（本書p93）
+// ・心房は1:1で逆行加速（AVNRT求心性／AVRT偏心性）、ATは独立（解離）
+// ・停止後：V-A-V（AVNRT/AVRT）/ V-A-A-V（AT）と PPI−TCL
+function tachyVoff(sc){ return sc==='avnrt'?5 : isAVRT(sc)?120 : sc==='atypavnrt'?185 : 0; }
+function fillTachyFromV(sc, tV0, tEnd){ fillTachyFrom(sc, tV0 + tachyVoff(sc), tEnd); }
+function buildVentricularEntrainment(sc){
+  const p=state.pace, tp=tachyParams(sc), tcl=tp.tcl, pcl=p.s1cl;
+  // 心室ペーシング開始位置 tOn と手前のリードイン頻拍
+  let tOn;
+  if(p.startAt!=null && p.startAt>=tcl){
+    // 押した瞬間の掃引位置からペーシング開始。手前はライブと同じ位相0の頻拍で埋める
+    //（位相をずらすと再描画で拍が動いてペーシング線が前の拍に重なって見えるため）。
+    tOn = p.startAt;
+    state.duration = Math.max(state.duration, tOn + 16000);   // 以降のペーシング分を確保
+    for(let ta=0; ta<tOn-tcl*0.5; ta+=tcl){ if(ta>0) emitTachyBeat(sc, ta); }
+  } else {
+    // ペーシング前のベースライン頻拍を5拍見せてから開始（録画で前の波形が残るように）
+    const nLead = 5;
+    let tA = 400;
+    for(let n=0;n<nLead;n++){ emitTachyBeat(sc, tA); tA+=tcl; }
+    tOn=tA;
+  }
+  state.pace.paceOnAt = tOn;   // ライブ掃引はここから開始（手前リードインは録画レビュー用）
+  const paceEnd=(p.stopAt!=null)?p.stopAt:state.duration;
+
+  // PCL ≥ TCL：エントレイン不可（頻拍を上回れない）
+  if(pcl>=tcl){
+    fillTachyFrom(sc, tA, state.duration);
+    for(let t=tOn; t<paceEnd; t+=pcl) emitStim(t,'RVA');
+    state.result={site:'RVA',induced:true,mechanism:tp.label,a2h2:null,jump:false,narrow:false,
+      notes:[`PCL ${pcl}ms ≥ TCL ${tcl}ms → 心室ペーシングが頻拍を上回れず、エントレインできません（頻拍継続）。`,
+             `オーバードライブには PCL を TCL（${tcl}ms）<b>未満</b>に設定してください。`]};
+    return true;
+  }
+
+  // 心室オーバードライブ（エントレイン）。本書 p93 準拠：
+  //   ・固定PCLでは毎拍同じ融合波形＝constant fusion（第1条件）
+  //   ・PCLを短くするほど房室結節伝導遅延↑で融合が強まる＝progressive fusion（第2条件）
+  //   VV/AA は刺激周期(PCL)で一定（定常状態, p92）。
+  // 最終的には必ず完全捕捉（深い陰性QS）に達する。レートはわずかに深さに効く程度。
+  const steadyFrac = Math.max(0.85, Math.min(0.98, 0.85 + (tcl-pcl)/tcl * 0.4));
+  // 乗っ取り（QS到達）までの拍数＝レート連動：速いレートほど少ない拍で完全捕捉へ。
+  //   TCL−20(Δ20)≈10拍、250ms(Δ100)≈3拍。
+  const onsetStep = Math.max(0.09, Math.min(0.45, (tcl-pcl)/tcl * 1.6));
+  // fast-slow AVNRT の pseudo V-A-A-V（本 p113 図7・p114 心房二重応答）：
+  //   刺激中は <b>fast pathway 逆伝導が顕在化</b>＝A1（concentric, retro_rv, 短VA）でPCL捕捉。
+  //   停止後に <b>superior slow pathway 逆伝導</b>で頻拍再開＝A2（eccentric, atyp）。
+  //   A1とA2は心房興奮順序が違う（fast経由 vs slow経由）。
+  //   A1A2は刺激周期(PCL)より長い（本 図7：PCL410に対しA1A2=476、＋約50〜66ms）。
+  const VA_FAST_AT = 70;          // 刺激中のfast pathway逆行VA（A1, 短い）
+  const A1A2_AT    = pcl + 50;    // A1→A2 ＝ PCL+50（PCLより長い、本 図7準拠）
+  let lastV=tOn, beat=0;
+  for(let t=tOn; t<paceEnd; t+=pcl){
+    emitStim(t,'RVA');
+    // 開始の数拍は「回路に入りきるまでの過渡」：自己QRS優位から定常融合へ収束。
+    //   → 体表QRSは R → rS → … → QS と徐々に移行（いきなりQSにはならない）。
+    const onset = Math.min(1, 0.12 + beat*onsetStep);   // 速いレートほど早く定常へ収束＝早く乗っ取る
+    emitVentFusion(t, steadyFrac*onset);
+    // His電極：逆行H は先に出る（実測 Stim→H 47ms）＝H-V-A（V は emitVentFusion の +66）。
+    emitHis(t+47, 0.6);
+    if(sc==='at') emitAtrial(t+tp.va,'retro_rv',0.9);  // AT：心房も逆行性(AVN経由＝concentric)にPCLで捕捉（entrain）
+    else if(sc==='atypavnrt') emitAtrial(t+VA_FAST_AT,'retro_rv',0.9); // fast-slow：刺激中はfast pathway逆行（concentric, 短VA）でPCL捕捉＝A1
+    lastV=t; beat++;
+  }
+  // ---- 心房の加速（本 p165 図22/23）----
+  // QRSが一定になる拍（onset≥1＝stable QRS）。AAがPCLに到達するのは：
+  //   AVNRT：stable QRS の後（心室は傍観者＝transition zone 後に初めて心房捕捉）
+  //   ORT  ：transition zone 中（心室が回路近く＝融合の途中で心房加速）
+  // それまでAAは頻拍周期(TCL)のまま＝「最初からPCLにはならない」。
+  // 逆行VA（RVペース）：停止後に「逆行A→次の自己A＝TCL」かつ PPI−TCL が所定値になるよう
+  //   VA_pacing = ppiTcl(表示) + VA_tachy。ORTは短い（心室が回路に近い）／AVNRTは長い（心室は遠い）。
+  // 逆行A位置 lastV+VA_PACE。AVNRT は実機実測で His-V(+66)→A 67ms ＝ A@+133（PPI−TCL≈128, >115）。
+  const ppiTclRef = isAVRT(sc) ? 50 : 128;
+  const vaTachy   = isAVRT(sc) ? 120 : 5;
+  const VA_PACE   = ppiTclRef + vaTachy;     // ORT 170 / AVNRT 133（=逆行A位置 lastV+VA_PACE）
+  if(sc==='avnrt' || isAVRT(sc)){
+    const stableBeat = Math.max(1, Math.ceil((1-0.12)/onsetStep));
+    const aReach = isAVRT(sc) ? Math.max(1, Math.round(stableBeat*0.5)) : (stableBeat+2);
+    const tAccel = tOn + aReach*pcl;     // この時刻からAAがPCL
+    // 加速前：心房はTCLでドリフト（V＝PCLとは独立）＝transition zone
+    let aT = tOn;
+    while(aT < tAccel){
+      emitAtrial(aT, tp.retro, 0.9);
+      aT += (aT < tAccel - pcl) ? tcl : Math.round((tcl+pcl)/2);   // ランプ1拍
+    }
+    // 加速後：各ペースV + VA_PACE にロック（AA=PCL・V-A一定）。最後の逆行A = lastV+VA_PACE が V-A-VのA。
+    for(let t=tOn; t<=lastV; t+=pcl){
+      if(t >= tAccel) emitAtrial(t + VA_PACE, tp.retro, 0.9);
+    }
+  }
+  // AT：ペーシング中は心房も逆行性にPCLで捕捉済み（上ループでemit）。AT focusは overdrive 抑制。
+  //     停止後に AT focus が再開して2つ目のAになる＝V-A-A-V。
+  //     最初の返り A1→A2 は overdrive 抑制ぶん <b>TCLより長い return cycle</b>（本 p111 図3：445>TCL395）。
+  //     これで A1→A2 はPCLともTCLとも紛れず、どの電極（CS含む）で測ってもPCLには見えない。
+  //     A2 以降は頻拍SL=TCL で継続。
+  const AT_RETURN_EXTRA = 50;                                   // return cycle = TCL + 50
+  let atNext = (sc==='at') ? (lastV + tp.va + tcl + AT_RETURN_EXTRA) : null;
+
+  const res={site:'RVA',induced:true,mechanism:tp.label,a2h2:null,jump:false,narrow:false,notes:[]};
+
+  // 停止前（連続中）
+  if(p.stopAt==null){
+    if(sc==='at'){
+      res.notes.push(`RVAを ${pcl}ms でオーバードライブ中。心室はPCL、<b>心房も逆行性に AA=PCL（${pcl}ms）で捕捉</b>（AT focusは overdrive 抑制）。`);
+      res.notes.push(`まず <b>AA間隔がPCLに一致（＝ペーシング依存）</b> を確認してから停止。停止後 <b>V-A-A-V</b> なら心室は回路外＝巣性AT。`);
+    } else if(sc==='atypavnrt'){
+      res.notes.push(`RVAを ${pcl}ms でオーバードライブ中。逆行は <b>fast pathway が顕在化</b>＝A1（concentric）で心房を AA=PCL 捕捉。`);
+      res.notes.push(`停止すると <b>一見 V-A-A-V（pseudo）</b>：fast→A1 と superior slow→A2 の<b>心房二重応答</b>。A1とA2は興奮順序が違う。ΔAA=TCL−A1A2 で鑑別（本 p113図7・p114）。`);
+    } else {
+      res.notes.push(`RVAを ${pcl}ms（TCL ${tcl}ms）でオーバードライブ中。<b>VV=PCLは1拍目から</b>だが、<b>AAは最初TCLのまま</b>で、数拍かけてPCLへ短縮（定常状態へ）。`);
+      res.notes.push(`体表QRSは <b>R→rS→…→深い陰性QS（完全捕捉）</b> へ移行（transition zone → stable QRS）。<b>到達までの拍数はレート依存</b>（TCL−20≈10拍 / 速いレートほど少ない拍）。`);
+      res.notes.push(isAVRT(sc)
+        ? `心房の加速（AA→PCL）は <b>transition zone 中</b>（QRS融合の途中）に起こる＝心室が回路に近い <b>ORT</b> の所見（本 p165 図22）。`
+        : `心房の加速（AA→PCL）は <b>stable QRS（QRS一定）になった後</b>に初めて起こる＝心室は傍観者の <b>AVNRT</b> の所見（本 p165 図23）。`);
+      res.notes.push(`停止すると V-A-V 応答・PPIが出ます。`);
+    }
+    state.result=res; return true;
+  }
+
+  // 停止後
+  if(sc==='avnrt' || isAVRT(sc)){
+    // V-A-V：最後の逆行A（lastV+va）→ 回路一周 → 頻拍再開V
+    // PPI−TCL と SA−VA で AVNRT（心室は傍観者＝長い）と AVRT（心室が回路近く＝短い）を鑑別。
+    // 基準（永嶋『EPSとSVT』p152, González-Torrecilla 2006 / Nagashima 2024）：
+    //   PPI−TCL 115ms・corrected PPI−TCL 110ms・SA−VA 85ms。ORT は下回る（rule in）、AVNRTは上回る（除外診断）。
+    const isORT=isAVRT(sc);
+    const ppiTcl = isORT ? 50 : 128;   // ORT<115（実例≈45）/ AVNRT>115（実機≈128）
+    const saVa   = isORT ? 20 : 135;   // ORT<85（実例≈10）/ AVNRT>85（実例≈140）
+    const ppi = tcl + ppiTcl;
+    const tRetV = lastV + ppi;
+    fillTachyFromV(sc, tRetV, state.duration);
+    res.vaav={pattern:'V-A-V', ppi, tcl, diff:ppiTcl, saVa, inCircuit:isORT};
+    res.entrain={tcl, ppi, diff:ppiTcl, saVa, inCircuit:isORT, label:tp.label, pcl, fusion:true};
+    res.notes.push(`RVA ${pcl}ms オーバードライブ → 心房1:1逆行（VA一定）でエントレイン。`);
+    res.notes.push(`停止後 <b>V-A-V</b>＝房室結節/副路が回路内（AT除外）。次は PPI−TCL・SA−VA で ORT(AVRT) を rule in。`);
+    res.notes.push(isORT
+      ? `<b>PPI−TCL ${ppiTcl}ms（&lt;115）</b>・<b>SA−VA ${saVa}ms（&lt;85）</b> → 両基準を満たし <b>ORT（AVRT）と診断（rule in）</b>。`
+      : `<b>PPI−TCL ${ppiTcl}ms（&gt;115）</b>・<b>SA−VA ${saVa}ms（&gt;85）</b> → ORTの所見なし。ORTを除外でき矛盾なし＝<b>AVNRT（除外診断）</b>。心室は傍観者。`);
+  }else if(sc==='atypavnrt'){
+    // pseudo V-A-A-V（本 p113 図7・p114 心房二重応答 DAR）：1つの最終Vが逆行性に
+    //   fast pathway→A1（concentric, lastV+VA_FAST_AT＝上ループでemit済）と
+    //   superior slow pathway→A2（eccentric, atyp）の両方を伝導＝二重応答 → 一見 V-A-A-V。
+    //   A1とA2は心房興奮順序が違う（A1=刺激中のA/fast、A2=頻拍再開後のA/slow）。A1A2は短い。
+    //   鑑別＝ΔAA = TCL − A1A2（金古2022 図8）：AVNRT は >26ms（A1A2短）、AT は <−80ms（A1A2長）。
+    const A1 = lastV + VA_FAST_AT;
+    const A2 = A1 + A1A2_AT;                          // 短いA1A2（slow pathway逆行）
+    emitAtrial(A2, 'atyp', 0.9);                      // A2＝eccentric（A1のconcentricと興奮順序が違う）
+    fillTachyAtypAVNRT(A2 + 175, state.duration);     // A2→fast順行→V→slow逆行→…で頻拍再開
+    const dAA = tcl - A1A2_AT;                        // ΔAA = TCL − A1A2
+    const tRetV = A2 + 175, ppi = tRetV - lastV;
+    res.vaav={pattern:'V-A-A-V (pseudo)', ppi, tcl, diff:ppi-tcl, dAA, a1a2:A1A2_AT, inCircuit:true, pseudo:true};
+    res.notes.push(`停止後 <b>一見 V-A-A-V</b>：最終Vが逆行性に <b>fast→A1（concentric）</b>＋<b>superior slow→A2（eccentric）</b> の<b>心房二重応答</b>（本 p113 図7）。`);
+    res.notes.push(`<b>A1とA2は心房興奮順序が違う</b>（A1＝刺激中のA・fast経由 / A2＝頻拍再開後のA・slow経由）＝<b>心房二重応答</b>。これが pseudo V-A-A-V の本質（機序は fast-slow AVNRT）。`);
+    res.notes.push(`<b>A1A2 = ${A1A2_AT}ms（PCL ${pcl}ms より長い）</b>。ΔAA = TCL−A1A2 = ${dAA}ms（金古2022, 本 p114 図8：AVNRT は通常 ΔAA&gt;26／AT は&lt;−80。本例は重複域で、決め手は A1とA2の興奮順序の違い）。`);
+  }else{
+    // V-A-A-V：#1 逆行A（最終ペース由来・AA=PCLでペーシング依存／上ループでemit済）
+    //          → #2 AT focus自己A（return・at_focusパターン）→ 順行V
+    const atA=atNext;                                                 // #2 AT focus再開
+    emitTachyBeat('at', atA);
+    fillTachyFrom('at', atA+tcl, state.duration);
+    const tRetV=atA+92+45, ppi=tRetV-lastV;
+    res.vaav={pattern:'V-A-A-V', ppi, tcl, diff:ppi-tcl, inCircuit:false};
+    res.notes.push(`ペーシング中は心房も<b>逆行性に AA=PCL（${pcl}ms）で捕捉</b>（最終Vの逆行A＝VAまでがペーシング依存）。`);
+    res.notes.push(`停止後 <b>V-A-A-V</b>：最終Vの逆行A（PCL・concentric）→ AT自己A（偏心性at_focus）→ 順行V。最初の返り <b>A1→A2 ${tcl+AT_RETURN_EXTRA}ms は TCL(${tcl}) より長い return cycle</b>（overdrive抑制）、以降は <b>TCL=${tcl}ms</b>。PPI−TCL ${ppi-tcl}ms（&gt;115ms＝心室は回路外＝<b>巣性AT</b>）。`);
+  }
+  state.result=res;
+  return true;
+}
+
+// ---- バースト用ヘルパー ----
+// 進行中頻拍シナリオの TCL を返す（洞調律ベースは null）
+function getBaselineTachyCL(sc){
+  if(sc==='at')        return 360;
+  if(sc==='atypavnrt') return 360;
+  if(sc==='aflutter')  return 240;
+  return null;
+}
+// 洞調律で埋める（頻拍終了後の回復拍）
+function buildSinusFill(startT, endT){
+  const cl=state.sinusCL;
+  for(let t=startT; t<endT; t+=cl) emitConducted(t,'hra',85,45,false);
+}
+
+// ---- 連続ペーシング（Pace Straight / バースト）：停止まで S1周期で打ち続ける ----
+function buildStraightPace(){
+  const p=state.pace, sc=state.scenario;
+  const cl=p.s1cl;
+  const capt=captures();
+  const paceEnd=(p.stopAt!=null)?p.stopAt:state.duration;
+
+  // ════ His電極でのバースト = パラヒス刺激（出力で narrow↔幅広QRS、ΔSAで鑑別）════
+  if(HISIDS.includes(p.site)){
+    const outAt = outputAtFactory();
+    const driveStart = Math.round(2*state.sinusCL);   // 数拍見せてから連続ペーシング
+    state.pace.paceOnAt = driveStart;
+    buildBaseline('sinus', 0, driveStart-200);
+    for(let t=driveStart; t<paceEnd; t+=cl){ emitParaHisBeat(t, sc, outAt(t), p.site); }
+    if(p.stopAt!=null) buildBaseline('sinus', p.stopAt+Math.round(cl*0.6), state.duration);
+    const info = paraHisNotes(sc, p.output);
+    state.result = { site:p.site, induced:false, straight:true,
+      mechanism: info.ap?'副路（extranodal）パターン':'結節性（nodal）パターン',
+      a2h2:null, jump:false, narrow:false, notes:info.notes,
+      paraHis:{ap:info.ap, saCap:info.saCap, saNon:info.saNon, dSA:info.dSA, output:p.output, hisCapture:info.hisCapture, myoCapture:info.myoCapture} };
+    return true;
+  }
+
+  // ════ 頻拍中の RVA バースト → 心室エントレインメント ════
+  // 誘発済み頻拍（tachyArmed）に対する心室オーバードライブ＝エントレインメント
+  const entrainable = (sc==='at'||sc==='atypavnrt'||sc==='avnrt'||isAVRT(sc)) && state.tachyArmed;
+  if(p.site==='RVA' && capt && entrainable){ return buildVentricularEntrainment(sc); }
+
+  // ════ 誘発済み頻拍シナリオ（AT / 非典型AVNRT / 粗動）への心房/心室オーバードライブ ════
+  const tachyCL = state.tachyArmed ? getBaselineTachyCL(sc) : null;
+  if(tachyCL){
+    const tLabel={at:'巣性AT',atypavnrt:'非典型AVNRT',aflutter:'心房粗動'}[sc];
+    const tBpm=Math.round(60000/tachyCL);
+    const pBpm=Math.round(60000/cl);
+
+    // ── ①捕捉不全 or ペーシングが頻拍より遅い → 頻拍継続、スパイクのみ ──
+    if(!capt || cl>=tachyCL){
+      buildBaseline(sc, 0, state.duration);   // 頻拍を全期間埋める
+      const pStart=200;
+      for(let t=pStart; t<paceEnd; t+=cl){
+        ev('STIM',t,'S',1.0); ev(p.site,t,'S',0.55);
+      }
+      const why = !capt
+        ? `出力 ${state.pace.output}V < 閾値 ${CAPTURE_THRESH}V → 捕捉せず（loss of capture）。頻拍は継続。`
+        : `S1 ${cl}ms（${pBpm} bpm）< 頻拍レート ${tBpm} bpm（TCL ${tachyCL}ms）→ 頻拍がペーシングを上回り捕捉できない。頻拍は継続。`;
+      state.result={
+        site:p.site, induced:true, mechanism:tLabel,
+        a2h2:null, jump:false, narrow:false, straight:true,
+        notes:[why,
+          cl>=tachyCL ? `オーバードライブには S1 を ${tachyCL}ms 未満（> ${tBpm} bpm）に設定してください。` : null
+        ].filter(Boolean)
+      };
+      return true;
+    }
+
+    // ── ②ペーシングが頻拍より速い → オーバードライブ ──
+    // センスありは頻拍を4拍見せてから、センスなし(none)は待たず即開始
+    const tPaceOn = (p.sense==='none') ? 150 : tachyCL*4;
+    renderTachy(sc, 0, tPaceOn);
+
+    let lastT=tPaceOn;
+    for(let t=tPaceOn; t<paceEnd; t+=cl){
+      emitStim(t, p.site);
+      if(p.site==='RVA'){
+        emitVent(t,false,cl);
+        const va=vaForCoupling(cl); if(va!=null){ emitHis(t+50,1.6); emitAtrial(t+va,'retro_rv',0.9); }
+      } else {
+        const mode=p.site==='HRA'?'hra':p.site;
+        const AH=(ahForCoupling(cl,sc)??90);
+        emitConductedFromPace(t, mode, AH, 45, false);
+      }
+      lastT=t;
+    }
+
+    // 停止後の波形
+    if(p.stopAt!=null){
+      const recov=lastT+Math.round(cl*0.65);
+      if(sc==='aflutter'){
+        // 粗動は停止後も再開（エントレインメント：PPI≒TCL）
+        renderTachy(sc, recov+tachyCL, state.duration);
+      } else {
+        // AT/非典型AVNRT → オーバードライブで終了 → 洞調律復帰
+        buildSinusFill(recov, state.duration);
+      }
+    }
+
+    const postNote = p.stopAt!=null
+      ? (sc==='aflutter'
+          ? `停止後：粗動が再開（PPI ≈ TCL = ${tachyCL}ms）。完全エントレインメントを確認できます。`
+          : `停止後：頻拍終了・洞調律復帰。PPI（停止後間隔）> TCL の場合は非回路性（AT様）を示唆。`)
+      : `停止ボタンを押すとペーシング終了・結果が確認できます。`;
+    state.result={
+      site:p.site, induced:true, mechanism:tLabel,
+      a2h2:null, jump:false, narrow:false, straight:true,
+      notes:[
+        `S1 ${cl}ms（${pBpm} bpm）で${tLabel}（TCL ${tachyCL}ms / ${tBpm} bpm）をオーバードライブ。`,
+        postNote
+      ]
+    };
+    return true;
+  }
+
+  // ════ 洞調律ベースシナリオ（AVNRT/AVRT/AVブロック）════
+  // ペーシング前に洞調律を約5拍見せる（録画で前の波形が残るように）
+  const driveStart=Math.round(5*state.sinusCL);
+  state.pace.paceOnAt = driveStart;   // ライブ掃引はここから（手前リードインは録画用）
+  // 捕捉不全：自己調律は継続（全期間描画）、非捕捉の刺激スパイクのみ重畳
+  if(!capt){
+    buildBaseline(sc, 0, state.duration);
+    for(let t=driveStart; t<paceEnd; t+=cl){ ev('STIM',t,'S',1.0); ev(p.site,t,'S',0.55); }
+    state.result={site:p.site, induced:false, mechanism:'捕捉不全（loss of capture）',
+      a2h2:null, jump:false, narrow:false, straight:true,
+      notes:[`出力 ${state.pace.output}V < 閾値 ${CAPTURE_THRESH}V → 捕捉せず。自己調律は継続し、刺激スパイクのみ（脱分極なし）。`]};
+    return true;
+  }
+  buildBaseline(sc, 0, driveStart-200);
+  const preex=(isAVRT(sc)&&p.site!=='RVA');
+  let lastT=driveStart;
+  // 房室結節：回復時間ベースの漸減伝導（速い心房バースト→Wenckebach→2:1→ブロック）
+  const node=AVNODE, ATRIAL_ERP=190;
+  const SINUS_AH=120;  // 洞調律時のAH（初期値・ウォームアップ基準）
+  const ADAPT=0.32;    // AH適応速度（0=即時定常, 1=変化なし）← 徐々に変化
+  // 洞調律の最終His発火時刻から初期化（driveStartの1洞周期前のHis ≈ driveStart - sinusCL + SINUS_AH）
+  let lastHis = driveStart - state.sinusCL + SINUS_AH;
+  let prevAH = SINUS_AH;   // 指数平滑のための直前AH
+  let lastACap=-1e9, conducted=0, avBlocked=0, aBlocked=0;
+  // 逆行路（心室ペーシング用）：回復時間ベースの逆行漸減（VA Wenckebach→2:1→VAブロック）
+  let lastAretro=-1e9, vaConducted=0, vaBlocked=0;
+  for(let t=driveStart; t<paceEnd; t+=cl){
+    emitStim(t, p.site);
+    if(capt){
+      if(p.site==='RVA'){
+        emitVent(t,false,cl,true);
+        const rec=t-lastAretro;                   // 逆行路の回復時間
+        if(rec>=RNODE.ERP){
+          const VA=Math.round(RNODE.VAmin + RNODE.K/(1+(rec-RNODE.ERP)/RNODE.tau));
+          emitHis(t+50,1.6); emitAtrial(t+VA,'retro_rv',0.9);
+          lastAretro=t+VA; vaConducted++;
+        } else { vaBlocked++; }                    // 逆行ブロック（VA Wenckebach/2:1）
+      }else{
+        const mode=p.site==='HRA'?'hra':p.site;
+        // 心房ERP：速すぎると心房自体を捕捉できない（スパイクのみ）
+        if(t-lastACap < ATRIAL_ERP){ aBlocked++; lastT=t; continue; }
+        lastACap=t;
+        const tHisA=emitAtrial(t, mode);          // 心房捕捉（毎拍A波）
+        const rec=tHisA-lastHis;                  // 房室結節の回復時間
+        if(rec>=node.ERP){
+          // 定常状態AHを計算し、前拍から指数平滑でなだらかに変化（ウォームアップ効果）
+          const rawAH=Math.round(node.AHmin + node.K/(1+(rec-node.ERP)/node.tau));
+          const AH=Math.round(prevAH*(1-ADAPT) + rawAH*ADAPT);
+          prevAH=AH;
+          emitHis(tHisA+AH); emitVent(tHisA+AH+45, preex);
+          lastHis=tHisA+AH; conducted++;
+        } else {
+          avBlocked++;   // 房室ブロック（Wenckebach脱落 / 2:1）
+          // ブロック後は次拍の回復時間が長くなるのでprevAHを少し戻す（Wenckebach後のAH短縮）
+          prevAH=Math.max(SINUS_AH, Math.round(prevAH*0.75));
+        }
+      }
+    }
+    lastT=t;
+  }
+  if(p.stopAt!=null) buildBaseline(sc, lastT+Math.round(cl*0.6), state.duration);
+  let condNote=null;
+  if(capt && p.site!=='RVA' && (avBlocked>0||aBlocked>0)){
+    condNote=`房室伝導 ${conducted}拍 / ブロック ${avBlocked}拍`
+      + (avBlocked>0 ? `（速いレートで漸減伝導→${conducted>=avBlocked*1.5?'Wenckebach':'2:1ブロック'}）` : '')
+      + (aBlocked>0 ? `。心房ERPで ${aBlocked}拍は心房も非捕捉。` : '。');
+  } else if(capt && p.site==='RVA' && vaBlocked>0){
+    condNote=`逆行VA伝導 ${vaConducted}拍 / 逆行ブロック ${vaBlocked}拍`
+      + `（速い心室ペーシングで逆行漸減→${vaConducted>=vaBlocked*1.5?'VA Wenckebach':'VA 2:1ブロック'}）。`;
+  }
+  state.result={
+    site:p.site, induced:false,
+    mechanism:capt?'連続ペーシング（バースト）':'捕捉不全（loss of capture）',
+    a2h2:null, jump:false, narrow:false,
+    notes:(capt
+      ?[`刺激部位 ${p.site} を S1 ${cl}ms で連続ペーシング中。停止後に洞調律復帰。`, condNote]
+      :[`出力 ${state.pace.output}V < 閾値 ${CAPTURE_THRESH}V → 捕捉せず。刺激スパイクのみで脱分極なし。`]
+    ).filter(Boolean),
+    straight:true};
+  return true;
+}
+
+// ---- 進行中頻拍に対する S1S2（プログラム刺激）：バースト同様の物理 ----
+// 速い駆動のみ捕捉（オーバードライブ）、遅い/捕捉不全なら頻拍継続。
+function buildPacedTachy(){
+  const p=state.pace, sc=state.scenario;
+  const tachyCL=getBaselineTachyCL(sc);
+  const tLabel={at:'巣性AT',atypavnrt:'非典型AVNRT',aflutter:'心房粗動'}[sc];
+  const tBpm=Math.round(60000/tachyCL), pBpm=Math.round(60000/p.s1cl);
+  const capt=captures();
+  const isRVA=(p.site==='RVA');
+  const mode=(p.site==='HRA'?'hra':p.site);
+  const res={site:p.site, a1a2:p.s2, a2h2:null, jump:false, induced:true,
+             mechanism:tLabel, narrow:false, straight:true, notes:[]};
+
+  // ── 捕捉不全 or 駆動が頻拍より遅い → 頻拍継続、スパイクのみ ──
+  if(!capt || p.s1cl>=tachyCL){
+    buildBaseline(sc, 0, state.duration);
+    const driveStart=200;
+    let lastA=driveStart;
+    for(let i=0;i<p.n1;i++){ const tS=driveStart+i*p.s1cl; lastA=tS; ev('STIM',tS,'S',1.0); ev(p.site,tS,'S',0.55); }
+    const tS2=lastA+p.s2; ev('STIM',tS2,'S',1.0); ev(p.site,tS2,'S',0.55);
+    if(p.s3on && !isRVA){ const tS3=tS2+p.s3; ev('STIM',tS3,'S',1.0); ev(p.site,tS3,'S',0.55); }
+    res.notes.push(!capt
+      ? `出力 ${state.pace.output}V < 閾値 ${CAPTURE_THRESH}V → 捕捉せず（loss of capture）。頻拍は継続。`
+      : `S1 ${p.s1cl}ms（${pBpm} bpm）< 頻拍レート ${tBpm} bpm（TCL ${tachyCL}ms）→ 駆動が頻拍を上回れず非捕捉。頻拍は継続。`);
+    if(capt) res.notes.push(`オーバードライブ／リセットには S1 を ${tachyCL}ms 未満（> ${tBpm} bpm）に設定してください。`);
+    state.result=res;
+    return true;
+  }
+
+  // ── 駆動が頻拍より速い → オーバードライブ駆動 → S2早期刺激 → 頻拍リセット（再開）──
+  const nLead=4, driveStart=tachyCL*nLead;
+  renderTachy(sc, 0, driveStart);
+  let lastA=driveStart, lastV=driveStart;
+  for(let i=0;i<p.n1;i++){
+    const tS=driveStart+i*p.s1cl; lastA=tS;
+    emitStim(tS, p.site);
+    if(isRVA){ emitVent(tS,false,null,true); const va=vaForCoupling(p.s1cl); if(va!=null){ emitHis(tS+50,1.6); emitAtrial(tS+va,'retro_rv',0.9); } lastV=tS; }
+    else { const AH=(ahForCoupling(p.s1cl,sc)??90); emitConductedFromPace(tS,mode,AH,45,false); lastV=tS+AH+45; }
+  }
+  // S2 早期刺激
+  const tS2=lastA+p.s2; emitStim(tS2,p.site);
+  res.a2h2=isRVA?null:ahForCoupling(p.s2,sc);
+  if(isRVA){ emitVent(tS2,false,null,true); const va2=vaForCoupling(p.s2); if(va2!=null){ emitHis(tS2+50,1.6); emitAtrial(tS2+va2,'retro_rv',0.9); lastV=tS2+va2; } else lastV=tS2+250; }
+  else { const A2H2=ahForCoupling(p.s2,sc); if(A2H2==null){ emitAtrial(tS2,mode,0.95); lastV=tS2; } else { const tH=emitAtrial(tS2,mode,0.95); emitHis(tH+A2H2); emitVent(tH+A2H2+45,false); lastV=tH+A2H2+45; } }
+  // S2 後：頻拍がリセットして再開（substrate は不変）
+  renderTachy(sc, lastV+tachyCL, state.duration);
+  res.notes.push(`S1 ${p.s1cl}ms（${pBpm} bpm）×${p.n1}拍で${tLabel}（TCL ${tachyCL}ms）をオーバードライブ → S2 ${p.s2}ms 早期刺激。`);
+  res.notes.push(`停止後：頻拍が再開（リセット）。基質は不変で再現性あり。`);
+  state.result=res;
+  return true;
+}
+
+// ---- V Scan（単発刺激・自動デクリメンタル）----
+// S1×1発 → S2単発早期刺激。2秒ごとに連結期を10ms短縮。停止まで継続。
+const VSCAN_STEP_GAP = 2000;
+const VSCAN_LEAD = 1000;
+function buildVScan(){
+  const p=state.pace, sc=state.scenario;
+  // 進行中頻拍：背景に頻拍を流し、スキャン刺激は速ければ捕捉・遅ければ非捕捉
+  if(getBaselineTachyCL(sc)) return buildVScanTachy();
+  // AVNRT/AVRT が誘発済み（tachyArmed）→ 進行中頻拍に対するリセット確認手技
+  if((sc==='avnrt'||isAVRT(sc)) && state.tachyArmed) return buildVScanResetArmed();
+  // 洞調律ベース：背景は洞調律、単発刺激を「1セグメント1発・画面上で固定位置」に置く
+  const DEC=10, LEAD=VSCAN_LEAD;
+  const isRVA=(p.site==='RVA');
+  const mode=(p.site==='HRA'?'hra':p.site);
+  const preex=(isAVRT(sc) && !isRVA);
+  const start=p.s1cl;
+  const floor=Math.max(200, start-160);
+  let nSteps=Math.floor((start-floor)/DEC)+1;
+  if(nSteps>20) nSteps=20; if(nSteps<1) nSteps=1;
+  const GAP=state.win;                                   // 表示窓に合わせて刺激位置を固定
+  const EXTRA_OFF=Math.min(LEAD+120, Math.round(GAP*0.6));
+  const stopAt=p.stopAt;                                 // 停止位置（録画切り詰め用）
+  if(stopAt!=null){
+    const kStop=Math.floor((stopAt-LEAD-EXTRA_OFF)/GAP)+1;
+    nSteps=Math.max(1, Math.min(nSteps, kStop));
+    state.duration=Math.min(LEAD+nSteps*GAP, stopAt + (state.sinusCL||800)*3);
+  } else {
+    state.duration = LEAD + nSteps*GAP;
+  }
+  const capt=captures();
+  const couplings=[];
+  buildBaseline(sc, 0, state.duration);                  // 背景：洞調律を全期間
+  for(let k=0;k<nSteps;k++){
+    const coupling = start - k*DEC; couplings.push(coupling);
+    const segStart = LEAD + k*GAP;
+    const tExtra = segStart + EXTRA_OFF;                 // 単発刺激（固定位置）
+    if(stopAt!=null && tExtra > stopAt) break;           // 停止位置を越える刺激は打たない
+    emitStim(tExtra, p.site);
+    if(capt){
+      if(isRVA){ emitVent(tExtra,false,null,true); const va=vaForCoupling(coupling); if(va!=null){ emitHis(tExtra+50,1.6); emitAtrial(tExtra+va,'retro_rv',0.9); } }
+      else { const AH=ahForCoupling(coupling,sc); emitConductedFromPace(tExtra,mode,AH,45,preex); }
+    }
+  }
+  state.result={ site:p.site, induced:false, mechanism:'V Scan（単発刺激スキャン）',
+    a2h2:null, jump:false, narrow:false,
+    notes:[`${p.site} から単発刺激1発を、連結期 ${start}ms から ${DEC}ms ずつ短縮（${couplings.length}段）。`,
+           capt?'各刺激は固定位置。捕捉あり。':'出力不足で捕捉せず（スパイクのみ）。'],
+    vscan:{start, end:couplings[couplings.length-1], steps:couplings.length, gap:GAP} };
+  return true;
+}
+
+// ---- 進行中頻拍に対する V Scan：背景に頻拍を流し、スキャン刺激を重畳 ----
+// 単発スキャン刺激は進行中頻拍をリセットするのみ（新レートに化けない）。
+function buildVScanTachy(){
+  const p=state.pace, sc=state.scenario;
+  const STEP_GAP=VSCAN_STEP_GAP, DEC=10, FLOOR=200, LEAD=VSCAN_LEAD;
+  const tachyCL=getBaselineTachyCL(sc);
+  const tLabel={at:'巣性AT',atypavnrt:'非典型AVNRT',aflutter:'心房粗動'}[sc];
+  let start=p.s1cl;
+  let nSteps=Math.floor((start-FLOOR)/DEC)+1;
+  if(nSteps>48) nSteps=48; if(nSteps<1) nSteps=1;
+  state.duration=LEAD+nSteps*STEP_GAP;
+  // 背景頻拍を全期間
+  buildBaseline(sc, 0, state.duration);
+  const couplings=[];
+  for(let k=0;k<nSteps;k++){
+    const segStart=LEAD+k*STEP_GAP;
+    const coupling=start-k*DEC; couplings.push(coupling);
+    const tS1=segStart+600;          // S1 単発スキャン刺激
+    ev('STIM',tS1,'S',1.0); ev(p.site,tS1,'S',0.55);
+    const tS2=tS1+coupling;          // S2 早期刺激
+    ev('STIM',tS2,'S',1.0); ev(p.site,tS2,'S',0.55);
+  }
+  state.result={ site:p.site, induced:true, mechanism:tLabel,
+    a2h2:null, jump:false, narrow:false,
+    notes:[
+      `進行中の${tLabel}（TCL ${tachyCL}ms）に対して ${p.site} から単発スキャン刺激（${start}→${couplings[couplings.length-1]}ms）。`,
+      `単発早期刺激は頻拍をリセットするのみで頻拍レートは不変。連続停止/誘発はバースト・エントレインメントで評価してください。`
+    ],
+    vscan:{start, end:couplings[couplings.length-1], steps:couplings.length} };
+  return true;
+}
+
+// ---- 誘発済みAVNRT/AVRTに対する V Scan（早期刺激スキャン）----
+// 進行中頻拍に対し RV から「単発1拍」の早期刺激を、頻拍周期より長めの連結期から
+// 10msずつ短縮して打つ。連結期≧TCL は遅発で非リセット（頻拍そのまま）、
+// 連結期＜TCL は早期刺激が次拍を preempt して頻拍をリセット（刺激起点から再開）。
+function buildVScanResetArmed(){
+  const p=state.pace, sc=state.scenario;
+  const DEC=10, LEAD=VSCAN_LEAD;
+  const tachyCL = (sc==='avnrt') ? 350 : 330;
+  const site = (p.site==='RVA') ? 'RVA' : p.site;
+  const startCoupling = tachyCL + 20;                 // 頻拍周期より少し長めから開始
+  const floor = Math.max(180, tachyCL - 130);         // ある程度早期まで縮める
+  let nSteps = Math.floor((startCoupling - floor)/DEC) + 1;
+  if(nSteps>20) nSteps=20; if(nSteps<1) nSteps=1;
+  // 各刺激を「画面上で常に同じ位置」に置くため、セグメント間隔＝表示窓(win)に合わせる。
+  // すると刺激時刻 mod win が一定になり、ライブ掃引でも毎回同じ位置に出る。
+  const GAP = state.win;
+  const EXTRA_OFF = Math.min(LEAD+120, Math.round(GAP*0.6));  // 窓内の刺激位置（固定）
+  const stopAt = state.pace.stopAt;                   // 停止位置（録画切り詰め用）
+  if(stopAt!=null){                                   // 停止時：その位置までの段数に制限
+    const kStop = Math.floor((stopAt - LEAD - EXTRA_OFF)/GAP) + 1;
+    nSteps = Math.max(1, Math.min(nSteps, kStop));
+    state.duration = Math.min(LEAD + nSteps*GAP, stopAt + tachyCL*5);
+  } else {
+    state.duration = LEAD + nSteps*GAP;
+  }
+  const emitTB = (t)=> emitTachyBeat(sc, t);          // 頻拍1拍を描画
+  const emitExtra = (t)=>{                            // RVからの単発刺激1拍
+    emitStim(t, site);
+    if(site==='RVA') emitVent(t,false,null,true);     // RVペーシング：His電極は大V波を出さない
+    else emitAtrial(t, site==='HRA'?'hra':site, 0.9);
+  };
+  const isORT=isAVRT(sc);
+  const couplings=[];
+  if(!isORT){
+    // AVNRT：His不応期PVCは頻拍をリセットしない＝規則的グリッドを一切乱さず、PVCを重畳するだけ。
+    for(let t=0; t<state.duration; t+=tachyCL) emitTB(t);
+    // PVCは基準拍 B に対し「delay」だけ遅れて打つ。開始位置はユーザー設定SLで決まる：
+    //   次のHis = B + (CL-50)。PVCの His基準位置 = delay - (CL-50) = SL - CL。
+    //   SL 350-400 → His〜V の間 / SL≧400 → V・A より後ろ / SL<350 → His より前。
+    //   delay を毎回 DEC ずつ縮める＝PVCが少しずつ早期化（Hisより前へ向かって短縮）。
+    const SL = Math.max(200, Math.round(p.s1cl || (tachyCL+20)));  // ユーザー設定SL
+    const period = 7*tachyCL;                          // PVC間隔（CLの整数倍＝位相を保つ）
+    let delay = SL - 50;                               // 開始位置（His基準 = SL - CL）
+    // 最初のPVCがページ中央付近(≈win*1.5)に来るよう基準拍を選ぶ
+    let B = Math.round((state.win*1.5 - delay)/tachyCL)*tachyCL;
+    if(B < tachyCL*2) B = tachyCL*2;
+    // His周辺の窓に絞る（段数を抑えてPVCがページを横断＝一周しないように）
+    const nScan = Math.min(nSteps, 10);
+    for(let k=0;k<nScan;k++){
+      const tExtra = B + delay;
+      if(stopAt!=null && tExtra > stopAt) break;
+      emitExtra(tExtra);
+      const prevBeat = Math.floor(tExtra/tachyCL)*tachyCL;
+      couplings.push(Math.round(tExtra - prevBeat));   // 実連結期（表示用）
+      B += period; delay -= DEC;                        // 次の基準拍へ＋ Hisへ寄せる
+    }
+  } else {
+    // AVRT：His不応期PVCが副路経由で心房を前進＝頻拍リセット（連結期は逆算配置）
+    let nextBeat=0;
+    for(let k=0;k<nSteps;k++){
+      const coupling = startCoupling - k*DEC; couplings.push(coupling);
+      const segStart = LEAD + k*GAP, segEnd = Math.min(segStart + GAP, state.duration);
+      const tExtra = segStart + EXTRA_OFF;
+      if(stopAt!=null && tExtra > stopAt){ while(nextBeat < state.duration){ emitTB(nextBeat); nextBeat += tachyCL; } break; }
+      const refBeat = tExtra - coupling;
+      while(nextBeat < refBeat - tachyCL*0.5){ emitTB(nextBeat); nextBeat += tachyCL; }
+      emitTB(refBeat); nextBeat = refBeat + tachyCL;
+      emitExtra(tExtra);
+      if(coupling < tachyCL){
+        const A_adv = tExtra + 70;                   // 副路逆行で心房前進（偏心性最早期）
+        emitAtrial(A_adv,apConfig(sc).retro,0.95);
+        nextBeat = A_adv + tachyCL;                  // 前進拍からリセット
+      }
+      while(nextBeat < segEnd){ emitTB(nextBeat); nextBeat += tachyCL; }
+    }
+    while(nextBeat < state.duration){ emitTB(nextBeat); nextBeat += tachyCL; }
+  }
+  const tLabel = isORT ? '正方向性AVRT（His不応期PVCスキャン）' : 'AVNRT（His不応期PVCスキャン）';
+  state.result={ site, induced:true, mechanism:tLabel,
+    a2h2:null, jump:false, narrow:false,
+    notes:[
+      `進行中頻拍（TCL ${tachyCL}ms）に ${site} から単発早期刺激。拡張期から始め、連結期を10msずつ縮めてPVCをHis（不応期）へ寄せる。`,
+      isORT
+        ? '順行性Hisは確定（committed）して常に発火。His不応期PVCが副路経由で<b>心房を前進</b>＝副伝導路の存在を証明（AVRT）。'
+        : '順行性Hisは確定（committed）して常に発火。His不応期PVCでも<b>心房は不変</b>（His不応で結節を逆行できず）＝AVNRTを支持。頻拍は規則的のまま（リセットなし）。'
+    ],
+    vscan:{start:startCoupling, end:couplings[couplings.length-1], steps:couplings.length, gap:GAP} };
+  return true;
+}
+
+// ペーシング由来の順行拍（部位別モード）
+function emitConductedFromPace(tS, mode, AH, HV, preex){
+  const tHisA = emitAtrial(tS, mode);
+  if(AH==null) return;
+  const tH=tHisA+AH; emitHis(tH); emitVent(tH+HV, preex);
+}
+
+function fillTachyAVNRT(start, end){
+  const cl=350;
+  for(let t=start;t<end;t+=cl){
+    // VA≒0：A と V がほぼ同時（典型的slow-fast AVNRT）。HV≒48ms
+    emitAtrial(t,'avnrt',1.0);
+    emitHis(t-50);
+    emitVent(t-4,false);
+  }
+}
+function fillTachyAVRT(start,end,sc='avrt'){
+  const cl=330, VA=120, retro=apConfig(sc).retro;
+  for(let t=start;t<end;t+=cl){
+    emitHis(t-48);
+    emitVent(t,false);
+    emitAtrial(t+VA,retro,0.9); // 心室の後に偏心性心房（タイプ別マップ）
+  }
+}
+
+// ---- Coumel's law（脚ブロックによるVA/TCL延長）デモ ----
+// ORT進行中に脚ブロックが出現。副路が脚ブロックと同側（自由壁）なら、興奮が対側脚を下降して
+// 心室を横断し副路へ達するぶん VA（＝室房伝導時間）が延長 → TCLも同量だけ延長（Coumel陽性）。
+// 中隔/対側副路では延長しない（Coumel陰性）。⊿VA≥35ms で自由壁副路と局在診断。
+function fillTachyCoumel(start, end, pos){
+  const retro = pos ? 'avrt_left' : 'avrt_ps';  // 陽性=左自由壁 / 陰性=後中隔
+  const TCL0=330, VA0=135, HV=48;
+  const dV = pos ? 45 : 0;                       // 脚ブロックでのVA延長（同側自由壁なら大）
+  const tBBB = start + Math.round(5.5*TCL0);     // narrow数拍 → 脚ブロック出現
+  let t=start;
+  while(t<end){
+    const bbb = t>=tBBB;
+    const VA = VA0 + (bbb?dV:0);
+    emitHis(t-HV);
+    emitVent(t, false, null, false, bbb?'QRSw':null);  // narrow → 脚ブロックで幅広QRS
+    emitAtrial(t+VA, retro, 0.9);
+    t += TCL0 + (bbb?dV:0);                       // TCLもVAと同量だけ延長
+  }
+  state.result = {
+    site:null, induced:true,
+    mechanism: pos?'ORT（左自由壁Kent）＋同側脚ブロック＝Coumel陽性':'ORT（後中隔Kent）＋脚ブロック＝Coumel陰性',
+    a2h2:null, jump:false, narrow:false, notes:[
+      `進行中ORT。途中で<b>脚ブロック（幅広QRS）</b>が出現。脚ブロック前後で <b>VA・TCL</b> をキャリパーで比較。`,
+      pos
+        ? `脚ブロックと副路が<b>同側（左自由壁）</b> → 興奮が対側脚→心室横断で副路へ達するぶん <b>VA/TCL が ${dV}ms 延長（Coumel陽性）</b>。⊿≥35ms ＝<b>自由壁（左側）副路</b>と局在（Coumel's law）。`
+        : `脚ブロックが出ても <b>VA/TCL は不変（⊿≈0＝Coumel陰性）</b> → 副路は<b>中隔（または対側）</b>。自由壁副路は否定的。`
+    ]
+  };
+}
+
+// ===================================================================
+//  録画タブ システム
+// ===================================================================
+const recordings = [];
+let activeTab = 'live';       // 'live' | recording.id (number)
+let liveViewBackup = null;    // live状態のバックアップ（録画ビュー中）
+
+// 録画ビューの初期 t0：最後の刺激 + 洞調律復帰5拍が右端に来るよう配置
+// 録画ビューは 100mm/s（win=2500ms）で開くため、それを前提に計算
+const REC_WIN = 2500; // 100mm/s 相当
+function recT0(){
+  const allStims = state.stims ? Object.values(state.stims).flat() : [];
+  if(allStims.length > 0){
+    const lastStim = Math.max(...allStims);
+    // 最後のペーシング刺激を左から約35%に置く → ペーシングの最後＋停止後の応答が見える
+    const t0 = lastStim - REC_WIN * 0.35;
+    return Math.max(0, Math.min(t0, state.duration - REC_WIN));
+  }
+  return Math.max(0, state.duration - REC_WIN);
+}
+
+function saveRecording(label){
+  if(!state.wave) return null;
+  const id = recordings.length + 1;
+  const rec = {
+    id,
+    label: label || `Rec ${id}`,
+    wave: state.wave,
+    stims: state.stims,
+    hisEvs: state.hisEvs || [],
+    duration: state.duration,
+    result: state.result ? JSON.parse(JSON.stringify(state.result)) : null,
+    t0: recT0(),  // 最後の刺激直後を中心に表示
+    paceMode: state.pace.mode,
+  };
+  recordings.push(rec);
+  renderTabs();
+  showToast(`📼 ${rec.label} を保存しました`);
+  return rec;
+}
+
+function switchToLive(){
+  if(activeTab !== 'live'){
+    // 録画のt0を保存
+    const rec = recordings.find(r=>r.id===activeTab);
+    if(rec) rec.t0 = state.t0;
+    // live状態を復元
+    if(liveViewBackup){
+      state.wave=liveViewBackup.wave; state.stims=liveViewBackup.stims;
+      state.hisEvs=liveViewBackup.hisEvs; state.duration=liveViewBackup.duration;
+      state.t0=liveViewBackup.t0;
+      if(liveViewBackup.mmps) applySweep(liveViewBackup.mmps); // 元の掃引速度に戻す
+      liveViewBackup=null;
+    }
+  }
+  activeTab='live';
+  state.playing=true; setPlayBtn();
+  renderTabs(); draw();
+}
+
+function switchToRecording(rec){
+  if(activeTab==='live'){
+    liveViewBackup={wave:state.wave, stims:state.stims, hisEvs:state.hisEvs,
+                    duration:state.duration, t0:state.t0,
+                    mmps:state.mmps};           // 掃引速度も保存
+    state.playing=false; setPlayBtn();
+    applySweep(100);                            // 録画ビューは100mm/s（2500ms窓）
+  } else {
+    const cur=recordings.find(r=>r.id===activeTab);
+    if(cur) cur.t0=state.t0;
+  }
+  activeTab=rec.id;
+  state.wave=rec.wave; state.stims=rec.stims; state.hisEvs=rec.hisEvs;
+  state.duration=rec.duration; state.t0=rec.t0;
+  renderTabs(); draw();
+}
+
+function closeRecording(id){
+  const idx=recordings.findIndex(r=>r.id===id);
+  if(idx<0) return;
+  const wasActive=(activeTab===id);
+  recordings.splice(idx,1);
+  if(wasActive) switchToLive();
+  else renderTabs();
+}
+
+function renderTabs(){
+  const bar=document.getElementById('tabbar');
+  if(!bar) return;
+  let html=`<div class="tab live${activeTab==='live'?' active':''}" data-tab="live">● ライブ</div>`;
+  if(recordings.length) html+=`<span class="tab-hint">│</span>`;
+  for(const rec of recordings){
+    const isActive=(activeTab===rec.id);
+    html+=`<div class="tab rec${isActive?' active':''}" data-tab="${rec.id}">`
+        +`📼 ${rec.label}`
+        +`<span class="tab-close" data-close="${rec.id}">✕</span>`
+        +`</div>`;
+  }
+  if(recordings.length===0){
+    html+=`<span class="tab-hint">ペーシング終了時に波形が自動保存されます。Zキーでいつでも保存</span>`;
+  }
+  bar.innerHTML=html;
+  // イベント配線
+  bar.querySelectorAll('.tab').forEach(el=>{
+    el.addEventListener('click', e=>{
+      if(e.target.dataset.close) return; // closeボタンはここでは処理しない
+      const t=el.dataset.tab;
+      if(t==='live') switchToLive();
+      else { const rec=recordings.find(r=>r.id===+t); if(rec) switchToRecording(rec); }
+    });
+  });
+  bar.querySelectorAll('.tab-close').forEach(el=>{
+    el.addEventListener('click', e=>{
+      e.stopPropagation();
+      closeRecording(+el.dataset.close);
+    });
+  });
+}
+
+function generateTimeline(preserveView){
+  // preserveView: 掃引位置・視点を保ったまま波形だけ再生成（出力変更のシームレス更新）
+  const _pv = {c:state.clock, o:state.sweepOrigin, t0:state.t0};
+  // 録画ビュー中は先にライブへ戻す
+  if(!preserveView && activeTab!=='live') switchToLive();
+  state._evpush=[];
+  state.pace.paceOnAt = null;            // バースト系のビルドが設定（ライブ掃引の開始位置）
+  state.duration = state.baseDuration;   // V Scan で延長するため毎回リセット（buildVScanが上書き）
+  if(state.pace.active){
+    const mv=state.pace.maneuver;
+    if(mv){
+      const fn = mv==='entrain'?buildEntrainment : mv==='parahis'?buildParaHisian : mv==='valink'?buildVaLinking
+               : mv==='hispvc'?buildHisRefractoryPVC : mv==='voverdrive'?buildVOverdrive : null;
+      if(!fn || !fn(state.scenario)){ state.pace.active=false; state.pace.maneuver=null; state.result=null; buildBaseline(state.scenario,0,state.duration); }
+    } else if(state.pace.mode==='burst'){ buildStraightPace(); }
+    else if(state.pace.mode==='vscan'){ buildVScan(); }
+    else buildPaced();
+  }
+  else{
+    state.result=null;
+    const sc=state.scenario;
+    if(isInducible(sc) && state.tachyArmed){
+      // 誘発済み頻拍を表示（手技後も継続。「洞調律へ戻す」で戻る）
+      renderTachy(sc, 0, state.duration);
+    }
+    else buildBaseline('sinus', 0, state.duration);   // 未誘発は洞調律
+  }
+  state.events = state._evpush;
+  state._evpush=null;
+  // 波形バッファ再構築＋掃引リセット（バーストは「波形の続きから」＝startAtを維持）
+  buildWaveBuffers();
+  if(preserveView){
+    // 視点維持：掃引位置・原点・視点を変えずに波形だけ差し替え（出力変更のシームレス更新用）
+    state.clock=_pv.c; state.sweepOrigin=_pv.o; state.t0=_pv.t0;
+    updateResultPanel();
+    if(!state.playing) draw();
+    return;
+  }
+  state.sweepOrigin = 0;
+  if(state.pace.active && state.pace.paceOnAt){
+    // ライブはペーシング開始位置から掃引を始める（押したら即ペーシング）。
+    // 手前のリードインは録画レビュー（drawStatic/t0）でだけ見える。
+    state.sweepOrigin = state.pace.paceOnAt;
+    state.clock = state.pace.paceOnAt;
+    state.t0 = 0;
+  } else {
+    state.clock = 0;
+    if(state.pace.active) state.t0=0;
+  }
+  updateResultPanel();
+  updateModeLabel();
+  if(typeof runAnalyzer==='function' && document.getElementById('autoAnalyze')?.checked) runAnalyzer();
+}
+
+// ===================================================================
+//  描画
+// ===================================================================
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const wrap = document.getElementById('cvwrap');
+const PLOT_MM = 250;        // プロット領域の物理幅相当(mm)。100mm/s → 2.5秒窓 になる基準
+const LEFT = 78;            // ラベル幅
+let W=900,H=600,laneH=0,plotW=0,pxPerMs=0,dpr=1;
+let stimReviewOC = null;    // Stimレビュー用オフスクリーンCanvas
+let _inSplit = false;       // スプリット描画中フラグ（clearRect スキップ用）
+let stimReviewFlashEnd = 0; // レビュー更新フラッシュ終了時刻
+let splitDivX = null;       // 仕切り線X座標（nullのときW/2）
+let splitDivDrag = false;   // 仕切り線ドラッグ中
+
+function resize(){
+  dpr = window.devicePixelRatio||1;
+  W = wrap.clientWidth; H = wrap.clientHeight;
+  cv.style.width=W+'px'; cv.style.height=H+'px';
+  cv.width=Math.floor(W*dpr); cv.height=Math.floor(H*dpr);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  laneH = H/CH.length;
+  plotW = W-LEFT;
+  pxPerMs = plotW/state.win;
+}
+function applySweep(mm){
+  state.mmps = mm;
+  state.win = PLOT_MM/mm*1000;          // 表示時間窓(ms)
+  pxPerMs = plotW/state.win;
+  document.getElementById('spdv').textContent = mm+' mm/s';
+  document.getElementById('winLbl').textContent = (state.win/1000).toFixed(state.win<2000?2:1)+' s';
+  document.querySelectorAll('#sweepSeg button').forEach(b=>b.classList.toggle('on', +b.dataset.mm===mm));
+  if(!state.playing) draw();
+}
+window.addEventListener('resize', resize);
+new ResizeObserver(()=>{ resize(); draw(); }).observe(wrap);
+
+function timeToX(t){ return LEFT + (t-state.t0)*pxPerMs; }
+function xToTime(x){ return state.t0 + (x-LEFT)/pxPerMs; }
+
+// ---- 波形バッファ（掃引描画を高速化）----
+const WDT = 2; // サンプリング間隔(ms)
+function buildWaveBuffers(){
+  const N = Math.ceil(state.duration/WDT)+1;
+  const buffers={}, stims={}, hisEvs=[], atrEvs=[], ventEvs=[];
+  for(const ch of CH){ buffers[ch.id]=new Float32Array(N); stims[ch.id]=[]; }
+  for(const e of state.events){
+    const buf=buffers[e.ch]; if(!buf) continue;
+    if(e.kind==='S') stims[e.ch].push(e.t);
+    if(e.kind==='H') hisEvs.push(e.t);
+    // 周期自動計測用：HRA電極の心房興奮(A)、RVA電極の心室興奮(V)
+    if(e.kind==='A' && e.ch==='HRA') atrEvs.push(e.t);
+    if(e.kind==='V' && e.ch==='RVA') ventEvs.push(e.t);
+    const i0=Math.max(0, Math.floor((e.t-180)/WDT));
+    const i1=Math.min(N-1, Math.ceil((e.t+180)/WDT));
+    for(let i=i0;i<=i1;i++){ buf[i] += e.a*e.fn(i*WDT - e.t, e.s); }
+  }
+  atrEvs.sort((a,b)=>a-b); ventEvs.sort((a,b)=>a-b);
+  state.wave=buffers; state.stims=stims; state.hisEvs=hisEvs;
+  state.atrEvs=atrEvs; state.ventEvs=ventEvs;
+}
+
+// 現在の掃引/表示位置における実周期(ms)を波形から自動計測
+// 心房興奮を優先、無ければ心室興奮。直近2拍の間隔を返す（測れなければnull）。
+function measureCycleAt(tNow){
+  const pick=(evs)=>{
+    if(!evs || evs.length<2) return null;
+    // tNow 以前で最も近い興奮とその一つ前
+    let i=evs.length-1;
+    while(i>0 && evs[i] > tNow) i--;
+    // tNow より未来しかない場合は最初の2拍
+    if(evs[i] > tNow){ if(evs.length<2) return null; return evs[1]-evs[0]; }
+    if(i<1) return (evs.length>=2)? evs[1]-evs[0] : null;
+    return evs[i]-evs[i-1];
+  };
+  return pick(state.atrEvs) ?? pick(state.ventEvs);
+}
+function sampleAt(chId, t){
+  const buf = state.wave && state.wave[chId]; if(!buf) return 0;
+  let i=Math.round(t/WDT); if(i<0)i=0; else if(i>=buf.length)i=buf.length-1;
+  return buf[i];
+}
+
+// ペーシング・スパイク（縦線＋▼）
+function drawPacePulse(x, top, lH){
+  // Stim チャンネル専用：下向き矩形パルス（リアルなペーシングアーティファクト）
+  ctx.save();
+  ctx.strokeStyle = COLOR.stim;
+  ctx.lineWidth = 2.5;
+  const y0 = top + lH*0.25;  // 基準線
+  const y1 = top + lH*0.92;  // パルス底
+  const pw = Math.max(2, lH*0.04); // パルス幅（px）
+  ctx.beginPath();
+  ctx.moveTo(x, y0);
+  ctx.lineTo(x, y1);
+  ctx.lineTo(x+pw, y1);
+  ctx.lineTo(x+pw, y0);
+  ctx.stroke();
+  ctx.restore();
+}
+// mode: 'near'（刺激部位＝背の高い縦スパイク＋三角）, 'far'（他チャンネルの遠隔アーチファクト＝細く薄い縦線）, 'stimlane'
+function drawStimSpike(x, top, mode){
+  ctx.save();
+  ctx.strokeStyle = COLOR.stim;
+  if(mode==='far'){
+    // 遠隔アーチファクト：実症例同様、背の高い明るい縦線で全チャンネルを貫く
+    ctx.globalAlpha = 0.85;
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(x, top+laneH*0.12);
+    ctx.lineTo(x, top+laneH*0.92);
+    ctx.stroke();
+  } else {
+    ctx.lineWidth = (mode==='stimlane') ? 2.2 : 1.8;
+    ctx.beginPath();
+    ctx.moveTo(x, top+laneH*(mode==='stimlane'?0.10:0.13));
+    ctx.lineTo(x, top+laneH*0.92);
+    ctx.stroke();
+    ctx.fillStyle=COLOR.stim;
+    const ty=top+laneH*0.07;
+    ctx.beginPath();
+    ctx.moveTo(x-3.2, ty); ctx.lineTo(x+3.2, ty); ctx.lineTo(x, ty+6); ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+}
+function drawToast(){
+  if(toast && performance.now() < toast.until){
+    ctx.save();
+    ctx.font='bold 12px sans-serif';
+    const w=ctx.measureText(toast.text).width+22;
+    const tx=LEFT+(plotW-w)/2;
+    ctx.fillStyle='rgba(56,189,248,0.95)';
+    ctx.fillRect(tx, H-40, w, 26);
+    ctx.fillStyle='#04222e';
+    ctx.fillText(toast.text, tx+11, H-22);
+    ctx.restore();
+  }
+}
+
+// ---- 掃引描画（オシロスコープ式：消去バーが左→右に走り古い波形を上書き）----
+function drawSweep(){
+  if(!_inSplit) ctx.clearRect(0,0,W,H);
+  const win=state.win, dur=state.duration, clock=state.clock;
+  const origin=state.sweepOrigin||0;   // ライブ掃引の原点（バーストはペーシング開始位置）
+  const pageStart=origin+Math.floor((clock-origin)/win)*win;
+  const cursorFrac=(clock-pageStart)/win;
+  const cursorX=LEFT+cursorFrac*plotW;
+  const eraseW=12;
+
+  // 固定グリッド
+  ctx.lineWidth=1;
+  for(let ms=0; ms<=win+1; ms+=200){
+    const x=LEFT+(ms/win)*plotW;
+    ctx.strokeStyle=(Math.round(ms)%1000===0)?'#22303f':'#16202e';
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+  }
+
+  for(let ci=0; ci<CH.length; ci++){
+    const ch=CH[ci]; const top=ci*laneH, base=top+laneH*0.62;
+    if(ci===hoverChIdx && PACE_SITES.includes(ch.id)){ ctx.fillStyle='rgba(248,113,113,0.07)'; ctx.fillRect(0,top,W,laneH); }
+    ctx.strokeStyle='#101826'; ctx.beginPath(); ctx.moveTo(0,top); ctx.lineTo(W,top); ctx.stroke();
+    ctx.fillStyle=COLOR[ch.group]; ctx.font='bold 11px sans-serif'; ctx.fillText(ch.label,6,top+laneH*0.5);
+    if(ch.id===state.pace.site){
+      ctx.fillStyle='#f87171'; ctx.fillRect(6,top+laneH*0.5+4,26,13);
+      ctx.fillStyle='#1a0a0c'; ctx.font='bold 10px sans-serif'; ctx.fillText('⚡T',9,top+laneH*0.5+14);
+    }
+    const gain=state.gain*(laneH*0.34);
+    if(ch.id==='STIM'){
+      // Stim チャンネル：フラット基準線＋大きな下向きパルス
+      const stimBase=top+laneH*0.25;
+      ctx.strokeStyle=COLOR.stim; ctx.lineWidth=1.0;
+      ctx.beginPath(); ctx.moveTo(LEFT,stimBase); ctx.lineTo(W,stimBase); ctx.stroke();
+      const sl2=state.stims && state.stims['STIM'];
+      if(sl2) for(const tS of sl2){
+        let x=null;
+        if(tS>=pageStart && tS<=pageStart+cursorFrac*win) x=LEFT+((tS-pageStart)/win)*plotW;
+        else if(pageStart>=win){ const ps=pageStart-win; if(tS>=ps+cursorFrac*win && tS<=ps+win) x=LEFT+((tS-ps)/win)*plotW; }
+        if(x==null || (x>cursorX && x<cursorX+eraseW)) continue;
+        drawPacePulse(x, top, laneH);
+      }
+    } else {
+      ctx.strokeStyle=COLOR[ch.group]; ctx.lineWidth=1.3; ctx.beginPath();
+      let started=false;
+      for(let x=LEFT; x<=W; x+=1){
+        if(x>cursorX && x<cursorX+eraseW){ started=false; continue; }
+        const xf=(x-LEFT)/plotW;
+        const tData = (x<=cursorX)? pageStart+xf*win : (pageStart-win)+xf*win;
+        if(tData<0 || tData>=dur){ started=false; continue; }
+        let y=base - sampleAt(ch.id,tData)*gain;
+        if(y<top+2)y=top+2; if(y>top+laneH-2)y=top+laneH-2;
+        if(!started){ctx.moveTo(x,y);started=true;} else ctx.lineTo(x,y);
+      }
+      ctx.stroke();
+      // 刺激スパイク（逆マップで画面x算出）：全チャンネルに遠隔アーチファクト、刺激部位は近接スパイク
+      const allStimT = (state.stims && state.stims['STIM']) || [];
+      const siteSet = new Set((state.stims && state.stims[ch.id]) || []);
+      for(const tS of allStimT){
+        let x=null;
+        if(tS>=pageStart && tS<=pageStart+cursorFrac*win) x=LEFT+((tS-pageStart)/win)*plotW;
+        else if(pageStart>=win){ const ps=pageStart-win; if(tS>=ps+cursorFrac*win && tS<=ps+win) x=LEFT+((tS-ps)/win)*plotW; }
+        if(x==null || (x>cursorX && x<cursorX+eraseW)) continue;
+        drawStimSpike(x, top, siteSet.has(tS)?'near':'far');
+      }
+    }
+  }
+  // His電位縦線（橙・破線）— V Scan中 or V Scan録画ビュー
+  const recObjSweep = activeTab!=='live' ? recordings.find(r=>r.id===activeTab) : null;
+  const showHisSweep=false;  // V Scan の His縦線は表示しない
+  if(showHisSweep && state.hisEvs){
+    ctx.save();
+    ctx.strokeStyle='rgba(251,146,60,0.75)';
+    ctx.lineWidth=1.2;
+    ctx.setLineDash([4,3]);
+    for(const tH of state.hisEvs){
+      let x=null;
+      if(tH>=pageStart && tH<=pageStart+cursorFrac*win) x=LEFT+((tH-pageStart)/win)*plotW;
+      else if(pageStart>=win){ const ps=pageStart-win; if(tH>=ps+cursorFrac*win && tH<=ps+win) x=LEFT+((tH-ps)/win)*plotW; }
+      if(x==null || (x>cursorX && x<cursorX+eraseW)) continue;
+      ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  drawToast();
+}
+
+// 掃引が最終刺激＋伝導応答を通過した時点でレビューをキャプチャするよう予約
+// （Deliver直後ではなく、実際にペーシングが流れ終わってから1回だけ更新）
+function scheduleReviewCapture(){
+  const stims = (state.stims && state.stims['STIM']) ? state.stims['STIM'] : [];
+  if(stims.length === 0){ reviewPendingT = null; return; }
+  const lastStim = stims[stims.length - 1];
+  reviewPendingT = lastStim + 600;  // 最終刺激＋伝導応答(His/V)が出揃うまでの余裕
+}
+
+// 指定t0でレビュービットマップを描画・保存（フラッシュなし）。パン時にも再利用。
+function renderReviewBitmap(t0){
+  if(!state.wave) buildWaveBuffers();
+  const savedT0 = state.t0;
+  state.t0 = t0;
+  drawStatic();
+  const oc = document.createElement('canvas');
+  oc.width = cv.width; oc.height = cv.height;
+  const octx = oc.getContext('2d');
+  octx.putImageData(ctx.getImageData(0,0,cv.width,cv.height), 0,0);
+  stimReviewOC = oc;
+  reviewT0_cap = t0;
+  reviewPxPerMs_cap = pxPerMs;
+  reviewW_cap = W;
+  state.t0 = savedT0;
+}
+
+function captureStimReview(refClock){
+  // refClock 指定時はその時刻までの最後の刺激を基準にする（停止位置からレビュー）。
+  // 未指定ならタイムライン全体の最後の刺激。
+  const all = (state.stims && state.stims['STIM']) ? state.stims['STIM'] : [];
+  let stims = all;
+  if(refClock!=null){ const f = all.filter(t=>t<=refClock); if(f.length) stims = f; }
+  // 最終刺激をビットマップ中央(50%)に置く（縮小せず1:1表示でパネル中央に来るよう）
+  const maxT0 = Math.max(0, state.duration - state.win);
+  let t0, lastStim;
+  if(stims.length > 0){
+    lastStim = stims[stims.length - 1];
+    t0 = Math.min(Math.max(0, lastStim - state.win * 0.5), maxT0);
+  } else {
+    t0 = maxT0;
+    lastStim = t0 + state.win * 0.5;
+  }
+  renderReviewBitmap(t0);
+  reviewCenterT = lastStim;               // パネル中央に最終ペーシングを表示
+  stimReviewFlashEnd = Date.now() + 500;  // 更新フラッシュ
+  if(state.stimTrigger) requestAnimationFrame(()=>draw());
+}
+
+function getSplitX(){ return splitDivX ?? Math.floor(W/2); }
+function reviewPanelW(){ return Math.max(1, W - getSplitX()); }  // 右パネルの実幅
+
+// レビューは1:1スケール表示。パネル中央＝reviewCenterT。
+// パネル左端の時刻：
+function reviewVisT0(){
+  if(!reviewPxPerMs_cap) return reviewT0_cap;
+  return reviewCenterT - (reviewPanelW() * 0.5) / reviewPxPerMs_cap;
+}
+// レビューパネル座標変換（比率ベース — レビュー更新でずれない）
+function reviewXToFrac(cx){ return (cx - getSplitX()) / reviewPanelW(); }
+function reviewFracToX(f){ return getSplitX() + f * reviewPanelW(); }
+function reviewFracToTime(f){
+  if(!reviewPxPerMs_cap) return 0;
+  return reviewVisT0() + (f * reviewPanelW()) / reviewPxPerMs_cap;
+}
+function calBarY_r(n){ return 30 + n * 22; }
+function hitTestReview(x, y){
+  const CAL_HIT = 8;
+  for(let i = reviewCalipers.length-1; i >= 0; i--){
+    const c = reviewCalipers[i];
+    const xa = reviewFracToX(c.fa), xb = reviewFracToX(c.fb);
+    const by = c.barY;
+    const xL = Math.min(xa,xb), xR = Math.max(xa,xb);
+    if(Math.abs(y-by)<8 && x>=xL-8 && x<=xR+8) return {kind:'rcal',idx:i,which:'both'};
+    if(Math.abs(x-xa)<CAL_HIT) return {kind:'rcal',idx:i,which:'a'};
+    if(Math.abs(x-xb)<CAL_HIT) return {kind:'rcal',idx:i,which:'b'};
+  }
+  return null;
+}
+function drawReviewCalipers(){
+  const hW = getSplitX();
+  ctx.save();
+  ctx.beginPath(); ctx.rect(hW,0,W-hW,H); ctx.clip();
+  ctx.font='bold 11px sans-serif';
+  reviewCalipers.forEach((c,i)=>{
+    const xa=reviewFracToX(c.fa), xb=reviewFracToX(c.fb);
+    const by=c.barY;
+    const ta=reviewFracToTime(c.fa), tb=reviewFracToTime(c.fb);
+    const d=Math.abs(tb-ta);
+    const xL=Math.min(xa,xb), xR=Math.max(xa,xb);
+    ctx.strokeStyle='#67e8f9'; ctx.setLineDash([]);
+    ctx.lineWidth=1.4;
+    [xa,xb].forEach(x=>{ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); });
+    ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(xL,by); ctx.lineTo(xR,by); ctx.stroke();
+    ctx.lineWidth=1.4;
+    [xa,xb].forEach(x=>{ ctx.beginPath(); ctx.moveTo(x,by-5); ctx.lineTo(x,by+5); ctx.stroke(); });
+    const lbl=`R${i+1}  ${Math.round(d)} ms · ${Math.round(60000/d)} bpm`;
+    const tw=ctx.measureText(lbl).width, midX=(xa+xb)/2;
+    ctx.fillStyle='#111827'; ctx.fillRect(midX-tw/2-5,by-17,tw+10,14);
+    ctx.strokeStyle='#67e8f9'; ctx.lineWidth=1; ctx.strokeRect(midX-tw/2-5,by-17,tw+10,14);
+    ctx.fillStyle='#67e8f9'; ctx.fillText(lbl,midX-tw/2,by-5);
+  });
+  // 配置中プレビュー
+  if(reviewCalPending!==null && reviewCalMouseT!==null){
+    const xa=reviewFracToX(reviewCalPending.fa), xb=reviewCalMouseT;
+    const ta=reviewFracToTime(reviewCalPending.fa), tb=reviewFracToTime(reviewXToFrac(xb));
+    const d=Math.abs(tb-ta);
+    ctx.strokeStyle='#67e8f9'; ctx.lineWidth=1.4; ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(xa,0); ctx.lineTo(xa,H); ctx.stroke();
+    ctx.setLineDash([5,4]);
+    ctx.beginPath(); ctx.moveTo(xb,0); ctx.lineTo(xb,H); ctx.stroke();
+    ctx.setLineDash([]);
+    const by=calBarY_r(reviewCalipers.length);
+    const xL=Math.min(xa,xb), xR=Math.max(xa,xb);
+    ctx.lineWidth=2; ctx.strokeStyle='rgba(103,232,249,0.5)';
+    ctx.beginPath(); ctx.moveTo(xL,by); ctx.lineTo(xR,by); ctx.stroke();
+    if(d>5){
+      const lbl=`${Math.round(d)} ms · ${Math.round(60000/d)} bpm`;
+      const tw=ctx.measureText(lbl).width, midX=(xa+xb)/2;
+      ctx.fillStyle='rgba(17,24,39,0.85)'; ctx.fillRect(midX-tw/2-5,by-17,tw+10,14);
+      ctx.strokeStyle='#67e8f9'; ctx.lineWidth=1; ctx.strokeRect(midX-tw/2-5,by-17,tw+10,14);
+      ctx.fillStyle='#67e8f9'; ctx.fillText(lbl,midX-tw/2,by-5);
+    }
+  }
+  ctx.restore();
+}
+
+function drawSplitView(){
+  const halfW = getSplitX();
+  ctx.clearRect(0,0,W,H);
+
+  // ---- 左半分：リアルタイム（掃引 or 静止）----
+  ctx.save();
+  ctx.beginPath(); ctx.rect(0,0,halfW,H); ctx.clip();
+  _inSplit = true;
+  if(state.playing && state.sweep){
+    if(!state.wave) buildWaveBuffers();
+    drawSweep();
+  } else {
+    drawStatic();
+  }
+  _inSplit = false;
+  ctx.restore();
+
+  // ---- 区切り線 ----
+  ctx.save();
+  ctx.strokeStyle='#5b7a9e'; ctx.lineWidth=2; ctx.setLineDash([]);
+  ctx.beginPath(); ctx.moveTo(halfW,0); ctx.lineTo(halfW,H); ctx.stroke();
+  // ドラッグハンドル（中央の掴みマーク）
+  const hy=Math.floor(H/2);
+  ctx.fillStyle='#5b7a9e';
+  ctx.beginPath(); ctx.arc(halfW,hy,7,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#c8d8f0'; ctx.font='bold 11px sans-serif'; ctx.textAlign='center';
+  ctx.fillText('⇔',halfW,hy+4);
+  ctx.textAlign='left';
+  // REVIEWラベル
+  ctx.fillStyle='rgba(75,94,122,0.85)'; ctx.fillRect(halfW+4,0,64,18);
+  ctx.fillStyle='#c8d8f0'; ctx.font='bold 10px sans-serif';
+  ctx.fillText('⚡ REVIEW',halfW+8,12);
+  ctx.restore();
+
+  // ---- 右半分：Stimトリガーレビュー（フリーズ）----
+  const rightW = W - halfW;   // 右パネルの実際の幅（仕切り位置で変動）
+  if(stimReviewOC){
+    // 縮小せず1:1スケールで、reviewCenterT を中央に表示（ビットマップから等倍クロップ）
+    const visT0 = reviewVisT0();
+    let sxCss = LEFT + (visT0 - reviewT0_cap) * reviewPxPerMs_cap; // クロップ左端（CSS px）
+    const swCss = rightW;                                          // 等倍：dest幅=src幅
+    // ビットマップ範囲[0,W]内にクランプ（端でも黒余白が出ないように）
+    sxCss = Math.max(0, Math.min(W - swCss, sxCss));
+    ctx.drawImage(stimReviewOC, sxCss*dpr, 0, swCss*dpr, cv.height, halfW, 0, rightW, H);
+    // 更新フラッシュ（切り替わり演出）
+    const now = Date.now();
+    if(now < stimReviewFlashEnd){
+      const frac = (stimReviewFlashEnd - now) / 500;
+      ctx.save();
+      ctx.globalAlpha = frac * 0.35;
+      ctx.fillStyle = '#fbbf24';
+      ctx.fillRect(halfW, 0, rightW, H);
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = `rgba(251,191,36,${frac * 0.9})`;
+      ctx.lineWidth = 3;
+      ctx.strokeRect(halfW+1, 1, rightW-2, H-2);
+      ctx.restore();
+    }
+  } else {
+    ctx.fillStyle='rgba(75,94,122,0.25)';
+    ctx.fillRect(halfW,0,rightW,H);
+    ctx.fillStyle='#4b5e7a'; ctx.font='12px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('ペーシングを実行するとレビューが表示されます',halfW+rightW/2,H/2);
+    ctx.textAlign='left';
+  }
+  // レビューキャリパーを最前面に描画
+  if(stimReviewOC) drawReviewCalipers();
+}
+
+function draw(){
+  if(state.stimTrigger){ drawSplitView(); return; }
+  if(state.playing && state.sweep){
+    if(!state.wave) buildWaveBuffers();
+    drawSweep();
+    return;
+  }
+  drawStatic();
+}
+
+// ---- Stimトリガー線（各刺激に縦線＋AH注記。波形は通常の時間軸のまま）----
+function drawStimTriggered(){
+  drawStatic();                       // 通常の時間表示をベースに描く
+  const stims = (state.stims && state.stims['STIM']) ? state.stims['STIM'] : [];
+  const his = (state.hisEvs||[]).slice().sort((a,b)=>a-b);
+  const tWinStart=state.t0, tWinEnd=state.t0+state.win;
+  const hisIdx=CH.findIndex(c=>c.id==='HISm');
+  const hisTop = hisIdx>=0 ? hisIdx*laneH : 0;
+  ctx.save();
+  ctx.font='bold 10px sans-serif';
+  for(const tS of stims){
+    if(tS<tWinStart || tS>tWinEnd) continue;
+    const x=timeToX(tS); if(x<LEFT) continue;
+    // Stim 縦トリガー線（全レーン貫通・赤破線）
+    ctx.strokeStyle='rgba(248,113,113,0.5)'; ctx.lineWidth=1; ctx.setLineDash([3,3]);
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+    // 対応する His → AH(Stim–His)を注記
+    const h=his.find(v=>v>tS+3 && v<tS+360);
+    if(h && h<=tWinEnd){
+      const xh=timeToX(h), ah=Math.round(h-tS);
+      ctx.setLineDash([]);
+      ctx.strokeStyle='#fbbf24'; ctx.lineWidth=1.4;
+      const yb=hisTop+12;
+      ctx.beginPath(); ctx.moveTo(x,yb); ctx.lineTo(xh,yb); ctx.stroke();   // AH区間バー
+      ctx.beginPath(); ctx.moveTo(xh,yb-3); ctx.lineTo(xh,yb+3); ctx.stroke();
+      ctx.fillStyle='#fbbf24';
+      ctx.fillText(ah+'', (x+xh)/2-7, yb-2);
+    } else {
+      // 房室ブロック（脱落）マーク
+      ctx.setLineDash([]); ctx.fillStyle='#f87171';
+      ctx.fillText('×', x+2, hisTop+12);
+    }
+  }
+  ctx.restore();
+  // ラベル
+  ctx.save(); ctx.fillStyle='rgba(251,191,36,0.92)'; ctx.font='bold 12px sans-serif';
+  const lbl='⚡ Stimトリガー — 各刺激の縦線とAH(Stim–His)を表示';
+  const w=ctx.measureText(lbl).width+16; ctx.fillRect(W-w-10,8,w,22);
+  ctx.fillStyle='#1a1206'; ctx.fillText(lbl,W-w-2,23); ctx.restore();
+  updateStHReadout(stims);
+}
+
+// 各刺激→直後のHisまでの StH（≒AH）系列を所見欄に表示
+function updateStHReadout(stims){
+  const el=document.getElementById('measOut'); if(!el) return;
+  const his=(state.hisEvs||[]).slice().sort((a,b)=>a-b);
+  const seq=[];
+  for(const tS of stims){
+    const h=his.find(x=>x>tS+3 && x<tS+360);
+    seq.push(h?Math.round(h-tS):null);
+  }
+  const shown=seq.slice(-12);
+  const parts=shown.map(v=> v==null?'<span style="color:#f87171">×</span>':`${v}`);
+  el.innerHTML=`<span class="m">⚡ Stim–His（≒AH）系列 ms：</span> `
+    + `<b style="color:#fbbf24">${parts.join(' → ')}</b>`
+    + `<span class="hint" style="margin-left:8px">×＝房室ブロック（脱落）。右へ延長＝デクリメント。</span>`;
+}
+
+function drawStatic(){
+  if(!_inSplit) ctx.clearRect(0,0,W,H);
+  // 背景グリッド（時間）
+  const tWinStart = state.t0, tWinEnd = state.t0+state.win;
+  ctx.lineWidth=1;
+  for(let t=Math.ceil(tWinStart/100)*100; t<tWinEnd; t+=100){
+    const x=timeToX(t);
+    ctx.beginPath();
+    ctx.strokeStyle = (Math.round(t)%1000===0)? '#22303f' : '#16202e';
+    ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+    if(Math.round(t)%1000===0){
+      ctx.fillStyle='#3b4a5e'; ctx.font='10px sans-serif';
+      ctx.fillText((t/1000).toFixed(0)+'s', x+3, H-4);
+    }
+  }
+  // 各チャネル
+  for(let ci=0; ci<CH.length; ci++){
+    const ch=CH[ci];
+    const top=ci*laneH, base=top+laneH*0.62;
+    // ホバー中レーンの淡いハイライト（T で刺激部位指定できる対象）
+    if(ci===hoverChIdx && PACE_SITES.includes(ch.id)){
+      ctx.fillStyle='rgba(248,113,113,0.07)';
+      ctx.fillRect(0, top, W, laneH);
+    }
+    // レーン区切り
+    ctx.strokeStyle='#101826'; ctx.beginPath();
+    ctx.moveTo(0,top); ctx.lineTo(W,top); ctx.stroke();
+    // ラベル
+    ctx.fillStyle=COLOR[ch.group]; ctx.font='bold 11px sans-serif';
+    ctx.fillText(ch.label, 6, top+laneH*0.5);
+    // 刺激部位インジケータ（⚡T）
+    if(ch.id===state.pace.site){
+      ctx.fillStyle='#f87171';
+      ctx.fillRect(6, top+laneH*0.5+4, 26, 13);
+      ctx.fillStyle='#1a0a0c'; ctx.font='bold 10px sans-serif';
+      ctx.fillText('⚡T', 9, top+laneH*0.5+14);
+    }
+    // Stim チャンネル専用描画（波形バッファ不使用・stims から描画）
+    if(ch.id==='STIM'){
+      const stimBase=top+laneH*0.25;
+      ctx.strokeStyle=COLOR.stim; ctx.lineWidth=1.0;
+      ctx.beginPath(); ctx.moveTo(LEFT,stimBase); ctx.lineTo(W,stimBase); ctx.stroke();
+      const sl3=state.stims && state.stims['STIM'];
+      if(sl3) for(const tS of sl3){ if(tS>=tWinStart && tS<=tWinEnd){ const x=timeToX(tS); if(x>=LEFT) drawPacePulse(x,top,laneH); } }
+      continue;
+    }
+    // 波形描画（波形バッファを使用）
+    const gain = state.gain * (laneH*0.34);
+    ctx.strokeStyle=COLOR[ch.group]; ctx.lineWidth=1.3;
+    ctx.beginPath();
+    let started=false;
+    for(let x=LEFT; x<=W; x+=1){
+      const t=xToTime(x);
+      if(t<0 || t>state.duration){ started=false; continue; }
+      let y=base - sampleAt(ch.id,t)*gain;
+      if(y<top+2) y=top+2; if(y>top+laneH-2) y=top+laneH-2;
+      if(!started){ ctx.moveTo(x,y); started=true; } else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+
+    // ペーシング・スパイク：全チャンネルに遠隔アーチファクト、刺激部位は近接スパイク
+    const allStimT = (state.stims && state.stims['STIM']) || [];
+    const siteSet = new Set((state.stims && state.stims[ch.id]) || []);
+    for(const tS of allStimT){
+      if(tS<tWinStart || tS>tWinEnd) continue;
+      const x=timeToX(tS);
+      if(x<LEFT) continue;
+      drawStimSpike(x, top, siteSet.has(tS)?'near':'far');
+    }
+  }
+  // His電位縦線（橙・破線）— V Scan中 or V Scan録画ビュー
+  const recObjStatic = activeTab!=='live' ? recordings.find(r=>r.id===activeTab) : null;
+  const showHisStatic=false;  // V Scan の His縦線は表示しない
+  if(showHisStatic && state.hisEvs){
+    ctx.save();
+    ctx.strokeStyle='rgba(251,146,60,0.75)';
+    ctx.lineWidth=1.2;
+    ctx.setLineDash([4,3]);
+    for(const tH of state.hisEvs){
+      const x=timeToX(tH);
+      if(x<LEFT || x>W) continue;
+      ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  drawCalipers();
+  drawMarkers();
+  // フリーズ表示
+  if(!state.playing){
+    ctx.save();
+    ctx.fillStyle='rgba(248,113,113,0.92)';
+    ctx.font='bold 12px sans-serif';
+    const lbl=activeTab!=='live'?'📼 録画ビュー — 右ドラッグでパン':'❄ FROZEN — 計測モード';
+    const w=ctx.measureText(lbl).width+16;
+    ctx.fillRect(W-w-10, 8, w, 22);
+    ctx.fillStyle='#1a0a0c';
+    ctx.fillText(lbl, W-w-2, 23);
+    ctx.restore();
+  }
+  // トースト（刺激部位変更などの一時メッセージ）
+  if(toast && performance.now() < toast.until){
+    ctx.save();
+    ctx.font='bold 12px sans-serif';
+    const w=ctx.measureText(toast.text).width+22;
+    const tx=LEFT+(plotW-w)/2;
+    ctx.fillStyle='rgba(56,189,248,0.95)';
+    ctx.fillRect(tx, H-40, w, 26);
+    ctx.fillStyle='#04222e';
+    ctx.fillText(toast.text, tx+11, H-22);
+    ctx.restore();
+  }
+}
+
+// ===================================================================
+//  キャリパー
+// ===================================================================
+const calipers = [];      // [{a:ms, b:ms, barY:px}, ...]  2点キャリパー
+const markers  = [];      // [{t:ms}, ...]  一本線マーカー
+let calMode    = 'caliper'; // 'caliper' | 'line'
+let calPending = null;    // {a:ms}  1本目を置いた状態（caliper mode）
+let calMouseT  = null;    // マウスの現在時刻（プレビュー用）
+let drag = null;          // {kind, idx, which?, startX, startY, ...}
+let panDrag = null;       // {startX, startT0} 右クリックドラッグで画面パン（フリーズ中）
+let panMoved = false;     // パンで移動したか（contextmenuの削除抑制用）
+// レビューパネル専用キャリパー（更新されても保持）
+const reviewCalipers = [];
+let reviewCalPending = null;
+let reviewCalMouseT  = null;
+let reviewDrag       = null;
+let reviewT0_cap     = 0;   // キャプチャ時のt0
+let reviewPxPerMs_cap = 0;  // キャプチャ時のpxPerMs
+let reviewW_cap      = 0;   // キャプチャ時のW
+let reviewPendingT   = null; // 掃引クロックがこの時刻を通過したらレビューをキャプチャ
+let reviewPanDrag    = null; // レビューパネルのパン（右クリックドラッグ）
+let reviewPanMoved   = false;
+let reviewCenterT    = 0;    // レビューパネル中央に表示する時刻（既定＝最終ペーシング）
+let hoverChIdx = -1;      // マウスが乗っているレーンのindex（-1=なし）
+let toast = null;         // {text, until} 一時メッセージ
+const PACE_SITES = ['HRA', ...HISIDS, ...CSIDS, 'RVA']; // 刺激可能な電極
+
+const CAL_BAR_BASE_Y = 42; // 横棒の基準Y（複数あれば20pxずつ下へ）
+const CAL_HIT_PX     = 8;  // ヒット判定ピクセル幅
+
+function calBarY(i){ return CAL_BAR_BASE_Y + i * 20; }
+
+function hitTestAll(x, y){
+  // キャリパー（後から置いたものを優先）
+  for(let i = calipers.length-1; i >= 0; i--){
+    const c = calipers[i];
+    const xa = timeToX(c.a), xb = timeToX(c.b);
+    const by = c.barY;
+    const xL = Math.min(xa,xb), xR = Math.max(xa,xb);
+    if(y >= by-CAL_HIT_PX && y <= by+CAL_HIT_PX && x > xL+CAL_HIT_PX && x < xR-CAL_HIT_PX)
+      return {kind:'caliper', idx:i, which:'both'};
+    if(Math.abs(x-xa) < CAL_HIT_PX) return {kind:'caliper', idx:i, which:'a'};
+    if(Math.abs(x-xb) < CAL_HIT_PX) return {kind:'caliper', idx:i, which:'b'};
+  }
+  // 一本線マーカー
+  for(let i = markers.length-1; i >= 0; i--){
+    if(Math.abs(timeToX(markers[i].t) - x) < CAL_HIT_PX)
+      return {kind:'marker', idx:i};
+  }
+  return null;
+}
+
+function drawCalipers(){
+  ctx.save();
+  ctx.font = 'bold 11px sans-serif';
+
+  // --- 確定済みキャリパー ---
+  calipers.forEach((c, i)=>{
+    const xa = timeToX(c.a), xb = timeToX(c.b);
+    const by = c.barY;
+    const d  = Math.abs(c.b - c.a);
+    const xL = Math.min(xa,xb), xR = Math.max(xa,xb);
+
+    ctx.strokeStyle = '#fcd34d'; ctx.setLineDash([]);
+
+    // 縦線2本
+    ctx.lineWidth = 1.4;
+    [xa, xb].forEach(x=>{
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+    });
+
+    // 横棒（インタラクティブな把持部分）
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(xL, by); ctx.lineTo(xR, by); ctx.stroke();
+    // 横棒の両端ティック
+    ctx.lineWidth = 1.4;
+    [xa, xb].forEach(x=>{
+      ctx.beginPath(); ctx.moveTo(x, by-5); ctx.lineTo(x, by+5); ctx.stroke();
+    });
+
+    // ラベル（横棒の上）
+    const lbl = `#${i+1}  ${Math.round(d)} ms · ${Math.round(60000/d)} bpm`;
+    const tw  = ctx.measureText(lbl).width;
+    const midX= (xa + xb) / 2;
+    ctx.fillStyle = '#111827';
+    ctx.fillRect(midX - tw/2 - 5, by - 17, tw + 10, 14);
+    ctx.strokeStyle = '#fcd34d'; ctx.lineWidth = 1;
+    ctx.strokeRect(midX - tw/2 - 5, by - 17, tw + 10, 14);
+    ctx.fillStyle = '#fcd34d';
+    ctx.fillText(lbl, midX - tw/2, by - 5);
+  });
+
+  // --- 配置中プレビュー ---
+  if(!state.playing && calPending !== null && calMouseT !== null){
+    const xa = timeToX(calPending.a), xb = timeToX(calMouseT);
+    const d  = Math.abs(calMouseT - calPending.a);
+
+    ctx.strokeStyle = '#fcd34d'; ctx.lineWidth = 1.4; ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(xa, 0); ctx.lineTo(xa, H); ctx.stroke();
+
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(xb, 0); ctx.lineTo(xb, H); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // プレビュー横棒
+    const by = calBarY(calipers.length);
+    const xL = Math.min(xa,xb), xR = Math.max(xa,xb);
+    ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(252,211,77,0.55)';
+    ctx.beginPath(); ctx.moveTo(xL, by); ctx.lineTo(xR, by); ctx.stroke();
+
+    // プレビューラベル
+    if(d > 5){
+      const lbl = `${Math.round(d)} ms · ${Math.round(60000/d)} bpm`;
+      const tw  = ctx.measureText(lbl).width;
+      const midX= (xa + xb) / 2;
+      ctx.fillStyle = 'rgba(17,24,39,0.85)';
+      ctx.fillRect(midX - tw/2 - 5, by - 17, tw + 10, 14);
+      ctx.fillStyle = '#fcd34d';
+      ctx.fillText(lbl, midX - tw/2, by - 5);
+    }
+  }
+
+  ctx.restore();
+}
+
+function drawMarkers(){
+  ctx.save();
+  ctx.font = 'bold 10px sans-serif';
+  const COL = '#67e8f9';
+
+  // 確定済み一本線
+  markers.forEach((m, i)=>{
+    const x = timeToX(m.t);
+    if(x < LEFT-6 || x > W+6) return;
+    ctx.strokeStyle = COL; ctx.lineWidth = 1.4; ctx.setLineDash([6,3]);
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+    ctx.setLineDash([]);
+    // 上部ハンドル（下向き三角）
+    ctx.fillStyle = COL;
+    ctx.beginPath(); ctx.moveTo(x-6,0); ctx.lineTo(x+6,0); ctx.lineTo(x,10); ctx.closePath(); ctx.fill();
+    // ラベル
+    ctx.fillStyle = COL;
+    ctx.fillText('L'+(i+1), x+4, 22);
+  });
+
+  // 一本線モードのプレビュー（マウス追従）
+  if(!state.playing && calMode==='line' && calMouseT!==null){
+    const x = timeToX(calMouseT);
+    ctx.strokeStyle = 'rgba(103,232,249,0.45)'; ctx.lineWidth=1.2; ctx.setLineDash([6,3]);
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  ctx.restore();
+}
+
+// ---- イベント ----
+cv.addEventListener('pointermove', e=>{
+  const r = cv.getBoundingClientRect();
+  const x = e.clientX - r.left, y = e.clientY - r.top;
+  calMouseT = xToTime(x);
+  hoverChIdx = Math.floor(y / laneH);
+  if(hoverChIdx<0 || hoverChIdx>=CH.length) hoverChIdx = -1;
+
+  // 仕切り線ドラッグ
+  if(splitDivDrag){
+    splitDivX = Math.max(LEFT+40, Math.min(W-80, x));
+    draw();
+    return;
+  }
+
+  // 仕切り線ホバー（カーソル変更）
+  if(state.stimTrigger){
+    const div = getSplitX();
+    if(Math.abs(x - div) <= 6){ cv.style.cursor = 'col-resize'; return; }
+  }
+
+  // レビューパネルのパン（右クリックドラッグ）：中央時刻を移動（1:1なのでビットマップ再描画不要）
+  if(reviewPanDrag){
+    const dPx = x - reviewPanDrag.startX;
+    if(Math.abs(dPx) > 3) reviewPanMoved = true;
+    const dTime = reviewPxPerMs_cap ? dPx / reviewPxPerMs_cap : 0;
+    let nc = reviewPanDrag.startCenterT - dTime;   // 右へドラッグ→過去（左の波形）へ
+    // ビットマップ範囲内に収める（中央±パネル半幅がビットマップ[0,W]内）
+    const halfSpan = (reviewPanelW() * 0.5) / reviewPxPerMs_cap;
+    const tLeftEdge  = reviewT0_cap + (0 - LEFT)/reviewPxPerMs_cap;
+    const tRightEdge = reviewT0_cap + (W - LEFT)/reviewPxPerMs_cap;
+    nc = Math.max(tLeftEdge + halfSpan, Math.min(tRightEdge - halfSpan, nc));
+    reviewCenterT = nc;
+    draw();
+    return;
+  }
+
+  // レビューパネル操作（右半分）
+  if(state.stimTrigger && stimReviewOC && x > getSplitX()){
+    reviewCalMouseT = x;
+    if(reviewDrag){
+      const df = reviewXToFrac(x) - reviewXToFrac(reviewDrag.startX);
+      if(reviewDrag.which === 'both'){
+        reviewCalipers[reviewDrag.idx].fa = reviewDrag.startA + df;
+        reviewCalipers[reviewDrag.idx].fb = reviewDrag.startB + df;
+        reviewCalipers[reviewDrag.idx].barY = reviewDrag.startBarY + (y - reviewDrag.startY);
+      } else {
+        const key = reviewDrag.which === 'a' ? 'fa' : 'fb';
+        reviewCalipers[reviewDrag.idx][key] = reviewXToFrac(x);
+      }
+      draw(); return;
+    }
+    const hit = hitTestReview(x, y);
+    cv.style.cursor = !hit ? 'crosshair' : hit.which==='both' ? 'move' : 'ew-resize';
+    if(reviewCalPending) draw();
+    return;
+  }
+
+  if(panDrag){
+    const dPx = x - panDrag.startX;
+    if(Math.abs(dPx) > 3){ panMoved = true; if(panDrag.isLeft) panDrag.didMove = true; }
+    let nt0 = panDrag.startT0 - dPx/pxPerMs;    // 右へドラッグ→過去（左の波形）へ
+    const maxT0 = Math.max(0, state.duration - state.win);
+    nt0 = Math.max(0, Math.min(maxT0, nt0));
+    state.t0 = nt0;
+    draw();
+    return;
+  }
+
+  if(drag){
+    const dT = xToTime(x) - xToTime(drag.startX);
+    if(drag.kind === 'caliper'){
+      if(drag.which === 'both'){
+        calipers[drag.idx].a = drag.startA + dT;
+        calipers[drag.idx].b = drag.startB + dT;
+        calipers[drag.idx].barY = drag.startBarY + (y - drag.startY);
+      } else {
+        calipers[drag.idx][drag.which] = xToTime(x);
+      }
+    } else {
+      markers[drag.idx].t = drag.startT + dT;
+    }
+    updateMeasOut();
+    if(!state.playing) draw();
+    return;
+  }
+
+  if(!state.playing){
+    const hit = hitTestAll(x, y);
+    cv.style.cursor = !hit ? 'crosshair'
+      : hit.kind==='marker' ? 'ew-resize'
+      : hit.which==='both'  ? 'move' : 'ew-resize';
+    if(calPending || calMode==='line') draw();
+  }
+});
+
+cv.addEventListener('pointerdown', e=>{
+  const r = cv.getBoundingClientRect();
+  const x = e.clientX - r.left, y = e.clientY - r.top;
+
+  // 右クリックまたはホイールボタン：画面パン開始
+  if(e.button === 2 || e.button === 1){
+    e.preventDefault();
+    // レビューパネルドラッグ → レビューをパン
+    if(state.stimTrigger && stimReviewOC && x > getSplitX()){
+      reviewPanDrag = {startX:x, startCenterT:reviewCenterT};
+      reviewPanMoved = false;
+      cv.setPointerCapture(e.pointerId);
+      cv.style.cursor = 'grabbing';
+      return;
+    }
+    if(!state.playing){
+      const hit = hitTestAll(x, y);
+      if(!hit && !calPending){
+        panDrag = {startX:x, startT0:state.t0};
+        panMoved = false;
+        cv.setPointerCapture(e.pointerId);
+        cv.style.cursor = 'grabbing';
+      }
+    }
+    return;
+  }
+  if(e.button !== 0) return;
+
+  // 仕切り線クリック開始
+  if(state.stimTrigger && Math.abs(x - getSplitX()) <= 6){
+    splitDivDrag = true;
+    cv.setPointerCapture(e.pointerId);
+    cv.style.cursor = 'col-resize';
+    return;
+  }
+
+  // レビューパネルへのクリック（右半分）
+  if(state.stimTrigger && stimReviewOC && x > getSplitX()){
+    const hit = hitTestReview(x, y);
+    if(hit){
+      reviewDrag = {idx:hit.idx, which:hit.which, startX:x, startY:y,
+        startA:reviewCalipers[hit.idx].fa, startB:reviewCalipers[hit.idx].fb,
+        startBarY:reviewCalipers[hit.idx].barY};
+      cv.setPointerCapture(e.pointerId);
+    } else {
+      // キャリパー配置（比率で保存）
+      const f = reviewXToFrac(x);
+      if(reviewCalPending === null){
+        reviewCalPending = {fa: f};
+      } else {
+        reviewCalipers.push({fa:reviewCalPending.fa, fb:f, barY:calBarY_r(reviewCalipers.length)});
+        reviewCalPending = null;
+      }
+      draw();
+    }
+    return;
+  }
+
+  if(!state.playing){
+    const hit = hitTestAll(x, y);
+    if(hit){
+      if(hit.kind === 'caliper'){
+        drag = {kind:'caliper', idx:hit.idx, which:hit.which,
+                startX:x, startY:y,
+                startA:calipers[hit.idx].a, startB:calipers[hit.idx].b,
+                startBarY:calipers[hit.idx].barY};
+      } else {
+        drag = {kind:'marker', idx:hit.idx, startX:x, startT:markers[hit.idx].t};
+      }
+      cv.setPointerCapture(e.pointerId);
+      return;
+    }
+
+    // 左クリックドラッグでもパン（キャリパー追加はpointerupで判定）
+    panDrag = {startX:x, startT0:state.t0, isLeft:true, didMove:false, addCalX:x};
+    panMoved = false;
+    cv.setPointerCapture(e.pointerId);
+    cv.style.cursor = 'grabbing';
+  }
+});
+
+cv.addEventListener('pointerup', e=>{
+  if(splitDivDrag){ splitDivDrag = false; cv.style.cursor = 'default'; return; }
+  if(reviewPanDrag){ reviewPanDrag = null; cv.style.cursor = 'default'; return; }
+  if(reviewDrag){ reviewDrag = null; draw(); return; }
+  drag = null;
+  if(panDrag){
+    const wasPan = panMoved || (panDrag.didMove);
+    const isLeft = panDrag.isLeft;
+    const addCalX = panDrag.addCalX;
+    panDrag = null;
+    cv.style.cursor = state.playing ? 'default' : 'crosshair';
+    // 左ボタンで動かなかった場合 → キャリパー追加
+    if(isLeft && !wasPan && !state.playing){
+      const t = xToTime(addCalX);
+      if(calMode === 'line'){
+        markers.push({t});
+        updateMeasOut(); draw();
+      } else {
+        if(calPending === null){
+          calPending = {a: t};
+        } else {
+          calipers.push({a:calPending.a, b:t, barY:CAL_BAR_BASE_Y + calipers.length*20});
+          calPending = null;
+          updateMeasOut();
+        }
+        draw();
+      }
+    }
+  }
+});
+cv.addEventListener('pointerleave', ()=>{ hoverChIdx = -1; });
+
+// ホイールボタンの autoscroll（ブラウザ既定動作）を抑止
+cv.addEventListener('mousedown', e=>{ if(e.button === 1) e.preventDefault(); }, {passive:false});
+
+cv.addEventListener('contextmenu', e=>{
+  e.preventDefault();
+  if(panMoved){ panMoved = false; return; }
+  const r = cv.getBoundingClientRect();
+  const x = e.clientX - r.left, y = e.clientY - r.top;
+  // レビューパネル右クリック → レビューキャリパー削除
+  if(state.stimTrigger && stimReviewOC && x > getSplitX()){
+    if(reviewPanMoved){ reviewPanMoved = false; return; }  // パン操作だったので削除しない
+    if(reviewCalPending){ reviewCalPending = null; draw(); return; }
+    const hit = hitTestReview(x, y);
+    if(hit){ reviewCalipers.splice(hit.idx, 1); draw(); }
+    return;
+  }
+  if(!state.playing){
+    if(calPending){ calPending = null; draw(); return; }
+    const hit = hitTestAll(x, y);
+    if(hit){
+      if(hit.kind === 'caliper') calipers.splice(hit.idx, 1);
+      else markers.splice(hit.idx, 1);
+      updateMeasOut(); draw();
+    }
+  }
+});
+
+window.addEventListener('keydown', e=>{
+  if(e.key === 'Escape'){
+    if(calPending){ calPending = null; if(!state.playing) draw(); }
+    return;
+  }
+  if(e.key === 'Shift'){
+    if(e.repeat) return;
+    e.preventDefault();
+    if(activeTab==='live'){ state.playing = !state.playing; setPlayBtn(); }
+    else { switchToLive(); }
+    return;
+  }
+  if((e.key === 'z' || e.key === 'Z') && !e.repeat){
+    e.preventDefault();
+    if(state.wave){
+      const n=recordings.length+1;
+      const lbl = state.pace.active
+        ? `Z${n} ${({s1s2:'S1S2',burst:'バースト',vscan:'V Scan'}[state.pace.mode]||'')} ${state.pace.site}`
+        : `Z${n} 洞調律`;
+      saveRecording(lbl);
+    }
+    return;
+  }
+  if(e.key === 'ArrowLeft' || e.key === 'ArrowRight'){
+    e.preventDefault();
+    const step = state.win * 0.1;  // 表示窓の10%ずつ移動
+    const dir = e.key === 'ArrowLeft' ? -1 : 1;
+    if(state.stimTrigger && stimReviewOC){
+      // Stimレビューパネルをパン
+      const halfSpan = (reviewPanelW() * 0.5) / reviewPxPerMs_cap;
+      const tLeftEdge  = reviewT0_cap;
+      const tRightEdge = reviewT0_cap + reviewW_cap / reviewPxPerMs_cap;
+      let nc = reviewCenterT + dir * step;
+      nc = Math.max(tLeftEdge + halfSpan, Math.min(tRightEdge - halfSpan, nc));
+      reviewCenterT = nc;
+      draw();
+    } else if(!state.playing){
+      const maxT0 = Math.max(0, state.duration - state.win);
+      state.t0 = Math.max(0, Math.min(maxT0, state.t0 + dir * step));
+      draw();
+    }
+    return;
+  }
+  if((e.key === 't' || e.key === 'T') && !e.repeat){
+    if(hoverChIdx < 0) return;
+    const ch = CH[hoverChIdx];
+    if(PACE_SITES.includes(ch.id)){
+      state.pace.site = ch.id;
+      const sel = document.getElementById('site');
+      if(sel) sel.value = ch.id;
+      showToast('刺激部位 → ' + ch.label);
+    } else {
+      showToast(ch.label + ' は刺激部位に設定できません');
+    }
+    if(!state.playing) draw();
+  }
+}, {capture: true});
+
+function showToast(text){ toast = {text, until: performance.now() + 1400}; }
+
+function updateMeasOut(){
+  const el = document.getElementById('measOut');
+  let html = calipers.map((c,i)=>{
+    const d = Math.abs(c.b - c.a);
+    return `<span class="m">#${i+1} <b>${Math.round(d)} ms</b> · ${Math.round(60000/d)} bpm</span>`;
+  }).join('');
+  html += markers.map((m,i)=>
+    `<span class="m" style="border-color:#67e8f9;color:#67e8f9">L${i+1} <b>${(m.t/1000).toFixed(3)} s</b></span>`
+  ).join('');
+  el.innerHTML = html || '<span class="hint">フリーズ中に左クリックで計測を追加できます。</span>';
+}
+
+// ===================================================================
+//  アニメーション
+// ===================================================================
+let last=performance.now();
+function loop(now){
+  const dt=(now-last)/1000; last=now;
+  if(state.playing){
+    const prevClock = state.clock;
+    state.clock += dt*1000;         // 実時間で流す（掃引クロック）
+    // 予約済みレビュー：掃引が最終刺激＋応答を通過した瞬間に1回だけキャプチャ
+    if(reviewPendingT!=null && state.stimTrigger && prevClock < reviewPendingT && state.clock >= reviewPendingT){
+      captureStimReview();
+      reviewPendingT = null;
+    }
+    if(state.clock >= state.duration) state.clock=state.sweepOrigin||0;
+  }
+  document.getElementById('tLbl').textContent=((state.playing?state.clock:state.t0)/1000).toFixed(2)+' s';
+  // V Scan 現在連結期表示
+  const vscanPill=document.getElementById('vscanPill');
+  const vscanCLLbl=document.getElementById('vscanCLLbl');
+  if(state.pace.active && state.pace.mode==='vscan' && state.result && state.result.vscan){
+    const r=state.result.vscan;
+    const gap=r.gap||VSCAN_STEP_GAP;
+    const k=Math.max(0,Math.floor((state.clock-VSCAN_LEAD)/gap));
+    const cl=Math.max(r.end, r.start - k*10);
+    vscanCLLbl.textContent=cl;
+    vscanPill.style.display='';
+  } else {
+    vscanPill.style.display='none';
+  }
+  // 周期表示（常時）：波形から実測した現在の周期を表示（実臨床のモニタ同様）
+  const clLbl=document.getElementById('clLbl');
+  const tNow = state.playing ? state.clock : (state.t0 + state.win*0.5);
+  const measured = measureCycleAt(tNow);
+  if(measured && measured>50){
+    const cl=Math.round(measured);
+    clLbl.textContent=`CL ${cl} ms (${Math.round(60000/cl)} bpm)`;
+  } else if(state.pace.active){
+    const sl=state.pace.s1cl;
+    clLbl.textContent=`SL ${sl} ms (${Math.round(60000/sl)} bpm)`;
+  } else {
+    clLbl.textContent=`— ms`;
+  }
+  // 出力ピル（ペーシング中のみ）
+  const pacePill=document.getElementById('pacePill');
+  if(state.pace.active && state.pace.mode!=='vscan'){
+    document.getElementById('paceOutLbl').textContent=state.pace.output;
+    pacePill.style.display='';
+  } else {
+    pacePill.style.display='none';
+  }
+  draw();
+  requestAnimationFrame(loop);
+}
+
+// ===================================================================
+//  UI 配線
+// ===================================================================
+const $=id=>document.getElementById(id);
+
+$('scenario').onchange=e=>{ state.scenario=e.target.value; state.pace.active=false; state.pace.running=false; state.tachyArmed=false; setScenNote(); generateTimeline(); updatePaceButtons(); };
+$('scl').oninput=e=>{ state.sinusCL=+e.target.value; $('sclv').textContent=e.target.value+' ms'; if(!state.pace.active) generateTimeline(); };
+$('site').onchange=e=>{ state.pace.site=e.target.value; };
+$('sense').onchange=e=>{ state.pace.sense=e.target.value; };
+$('s1cl').onchange=e=>{ state.pace.s1cl=+e.target.value; };
+$('n1').onchange=e=>{ state.pace.n1=+e.target.value; };
+$('output').onchange=e=>{
+  const v=+e.target.value;
+  state.pace.output=v;
+  if(isParaHisContext()){
+    // 手動入力（スピナー/キー）もパラヒス中はシームレス更新（左端リセットしない）
+    if(!state.pace.outputSchedule) state.pace.outputSchedule=[{t:0, v}];
+    state.pace.outputSchedule.push({t: state.clock, v});
+    rebuildParaHisLive();
+    const pill=document.getElementById('paceOutLbl'); if(pill) pill.textContent=v;
+  } else if(state.pace.active){ generateTimeline(); }
+};
+$('s2').onchange=e=>{ state.pace.s2=+e.target.value; };
+$('s3on').onchange=e=>{ state.pace.s3on=e.target.checked; $('s3col').style.display=e.target.checked?'flex':'none'; };
+$('s3').onchange=e=>{ state.pace.s3=+e.target.value; };
+
+// ステップ幅セレクタ
+let paceStep = 10;
+document.querySelectorAll('#stepSeg button').forEach(b=>{
+  b.onclick=()=>{
+    paceStep=+b.dataset.step;
+    document.querySelectorAll('#stepSeg button').forEach(x=>x.classList.toggle('on',x===b));
+  };
+});
+
+// S2 −/＋ボタン：値を変更してそのまま再通電
+function adjustAndDeliver(inputId, stateKey, delta){
+  const el=$( inputId);
+  const min=+el.min, max=+el.max;
+  const newVal = Math.min(max, Math.max(min, state.pace[stateKey] + delta));
+  state.pace[stateKey] = newVal;
+  el.value = newVal;
+  // S1S2モードなら即再通電
+  if(state.pace.mode==='s1s2'){
+    state.pace.active=true; state.pace.maneuver=null;
+    generateTimeline(); state.playing=true; setPlayBtn(); updatePaceButtons();
+    if(state.stimTrigger) scheduleReviewCapture();
+  }
+}
+// パラヒス（マヌーバー/バースト）：掃引・視点を保ったまま波形だけ再生成（画面リフレッシュなし）
+function rebuildParaHisLive(){ generateTimeline(true); }
+// 出力変更をシームレスに反映すべき文脈か（パラヒス手技 or His電極でのバースト）
+function isParaHisContext(){
+  return state.pace.active && !state.pace.stopAt && (
+    state.pace.maneuver==='parahis' ||
+    (state.pace.mode==='burst' && !state.pace.maneuver && HISIDS.includes(state.pace.site))
+  );
+}
+$('s2dec').onclick=()=>adjustAndDeliver('s2','s2',-paceStep);
+$('s2inc').onclick=()=>adjustAndDeliver('s2','s2',+paceStep);
+$('s3dec').onclick=()=>adjustAndDeliver('s3','s3',-paceStep);
+$('s3inc').onclick=()=>adjustAndDeliver('s3','s3',+paceStep);
+
+// S1基本周期 −/＋ボタン：値を変更し、ペーシング中なら現モードのまま即再通電
+function adjustS1(delta){
+  const el=$('s1cl');
+  const min=+el.min, max=+el.max;
+  const newVal = Math.min(max, Math.max(min, state.pace.s1cl + delta));
+  state.pace.s1cl = newVal;
+  el.value = newVal;
+  if(state.pace.active){
+    generateTimeline(); state.playing=true; setPlayBtn(); updatePaceButtons();
+  }
+}
+$('s1dec').onclick=()=>adjustS1(-paceStep);
+$('s1inc').onclick=()=>adjustS1(+paceStep);
+
+// 出力 −/＋ボタン：パラヒス刺激などで His捕捉↔非捕捉 を切り替えるため。実行中は即再描画。
+function adjustOutput(delta){
+  const el=$('output');
+  const min=+el.min, max=+el.max;
+  const newVal = Math.round(Math.min(max, Math.max(min, state.pace.output + delta))*10)/10;
+  state.pace.output = newVal;
+  el.value = newVal;
+  if(isParaHisContext()){
+    // パラヒス（手技/バースト）：出力変更を現在の掃引位置に記録し、掃引・再生を止めず波形だけ差し替え
+    // （generateTimelineの全更新＝画面リフレッシュを避け、シームレスに narrow↔幅広 が切替わる）
+    if(!state.pace.outputSchedule) state.pace.outputSchedule=[{t:0, v:newVal}];
+    state.pace.outputSchedule.push({t: state.clock, v:newVal});
+    rebuildParaHisLive();
+    const pill=document.getElementById('paceOutLbl'); if(pill) pill.textContent=newVal;
+  } else if(state.pace.active){
+    generateTimeline(); state.playing=true; setPlayBtn(); updatePaceButtons();
+    if(state.stimTrigger && state.pace.mode==='s1s2' && !state.pace.maneuver) scheduleReviewCapture();
+  } else if(!state.playing){ draw(); }
+}
+$('outDec').onclick=()=>adjustOutput(-0.1);
+$('outInc').onclick=()=>adjustOutput(+0.1);
+
+function clearMvHighlight(){ document.querySelectorAll('.mvbtn').forEach(x=>x.classList.remove('on')); }
+$('deliver').onclick=()=>{
+  clearMvHighlight();
+  state.pace.active=true; state.pace.maneuver=null;
+  state.pace.running = (state.pace.mode!=='s1s2'); // バースト/V Scanは継続モード
+  // ペーシングは頭出し（一番左から）。startAtは使わない。
+  state.pace.startAt = null;
+  // His電極バースト（パラヒス）は出力スケジュールを初期化（開始時の出力で全拍）
+  if(state.pace.mode==='burst' && HISIDS.includes(state.pace.site)) state.pace.outputSchedule=[{t:0, v:state.pace.output}];
+  generateTimeline(); state.playing=true; setPlayBtn(); updatePaceButtons();
+  // S1S2/S1S2S3 は有限列：掃引が最終S2(S3)＋伝導応答を通過したらレビュー更新を予約
+  if(state.stimTrigger && state.pace.mode==='s1s2') scheduleReviewCapture();
+};
+
+// 頻拍をワンタッチ誘発（連結期を合わせずに即・頻拍開始）
+$('induceTachy').onclick=()=>{
+  const sc=state.scenario;
+  clearMvHighlight();
+  state.pace.active=false; state.pace.maneuver=null; state.pace.running=false;
+  if(isInducible(sc)){
+    state.tachyArmed=true;
+    generateTimeline();                 // 誘発済み頻拍として描画（else分岐がtachyArmedを参照）
+    state.playing=true; setPlayBtn(); updatePaceButtons();
+    const nm={at:'巣性AT',atypavnrt:'非典型AVNRT',aflutter:'心房粗動',coumel_pos:'ORT（Coumel陽性）',coumel_neg:'ORT（Coumel陰性）'}[sc] || (tachyParams(sc)?tachyParams(sc).label:'頻拍');
+    showToast(`${nm} を誘発しました`);
+  } else {
+    showToast('この症例は頻拍を誘発できません（洞調律）');
+  }
+};
+
+// 鑑別手技ボタン
+const MV_NOTES={
+  hispvc:'His不応期PVC：頻拍中にHis不応期のタイミングで心室期外刺激。心房が前進すれば副伝導路（AVRT）の証明。AVNRT/ATでは心房は不変。',
+  voverdrive:'心室オーバードライブ：心室をTCL−30で連続ペーシング→停止。停止後 V-A-V＝AVNRT/AVRT、V-A-A-V＝巣性AT。',
+  entrain:'エントレインメント：心室オーバードライブ中は constant fusion（PCL短縮で progressive fusion）、停止後の PPI−TCL・SA−VA で鑑別。',
+  valink:'VAリンキング：心室ペーシング停止後の復帰VAが一定（リンク）＝AVNRT/AVRT、変動（アンリンク）＝AT。',
+  parahis:'パラヒス刺激：洞調律下でHis近傍を高出力（His捕捉）→低出力（非捕捉）。SA不変＝副路あり、延長＝結節性。'
+};
+document.querySelectorAll('.mvbtn').forEach(b=>{
+  b.onclick=()=>{
+    const mv=b.dataset.mv;
+    document.getElementById('mvNote').innerHTML=MV_NOTES[mv]||'';
+    state.pace.active=true; state.pace.maneuver=mv; state.pace.running=false;
+    // パラヒスは出力スケジュールを初期化（開始時の出力で全拍）
+    if(mv==='parahis') state.pace.outputSchedule=[{t:0, v:state.pace.output}];
+    generateTimeline();
+    // マヌーバーが不成立（非頻拍症例等）なら解除
+    if(!state.pace.maneuver){ updatePaceButtons(); return; }
+    state.playing=true; setPlayBtn(); updatePaceButtons();
+    document.querySelectorAll('.mvbtn').forEach(x=>x.classList.toggle('on', x===b));
+  };
+});
+$('stopPace').onclick=()=>{
+  const mode=state.pace.mode, site=state.pace.site;
+  const modeLabel={s1s2:'S1S2',burst:'バースト',vscan:'V Scan'}[mode]||mode;
+  // 手技（マヌーバー）を停止：録画保存し、結果リズム（頻拍継続なら頻拍）へ戻す
+  if(state.pace.maneuver){
+    const mvLabel={hispvc:'His不応期PVC',voverdrive:'心室オーバードライブ',entrain:'エントレインメント',valink:'VAリンキング',parahis:'パラヒス刺激'}[state.pace.maneuver]||'手技';
+    const savedClock=state.clock;
+    if(state.stimTrigger) captureStimReview(savedClock);
+    saveRecording(mvLabel);
+    clearMvHighlight();
+    state.pace.active=false; state.pace.maneuver=null; state.pace.running=false;
+    generateTimeline(); updatePaceButtons();
+    state.clock = savedClock % state.duration;
+    return;
+  }
+  if(mode==='burst'){
+    // バースト停止：clock時点でペーシング打ち切り＋洞調律回復を付加して録画保存
+    const savedClock = state.clock;
+    state.pace.stopAt = savedClock;
+    generateTimeline();          // paceEnd=clock まで打ち、以降は洞調律
+    // ペーシング波形が有効な間にレビューをキャプチャ（停止位置基準）
+    if(state.stimTrigger) captureStimReview(savedClock);
+    const rec = saveRecording(`${modeLabel} ${site}`);
+    state.pace.stopAt = null; state.pace.startAt = null;
+    state.pace.active=false; state.pace.maneuver=null; state.pace.running=false;
+    generateTimeline(); updatePaceButtons();
+    // 停止位置からそのまま継続（generateTimeline でリセットされたclockを復元）
+    state.clock = savedClock % state.duration;
+  } else if(mode==='vscan'){
+    // V Scan：停止位置まで切り詰めて録画保存（実際に打った拍数・波形に一致）。ライブは継続
+    const savedClock = state.clock;
+    state.pace.stopAt = savedClock;
+    generateTimeline();          // 停止位置までのV Scanを再構築
+    if(state.stimTrigger) captureStimReview(savedClock);
+    const rec = saveRecording(`${modeLabel} ${site}`);
+    state.pace.stopAt = null;
+    state.pace.active=false; state.pace.maneuver=null; state.pace.running=false;
+    generateTimeline(); updatePaceButtons();
+    state.clock = savedClock % state.duration;
+  } else {
+    // S1S2 / S1S2S3 など：ライブ継続
+    const savedClock = state.clock;
+    // ペーシング波形が有効な間にレビューをキャプチャ（停止位置基準）
+    if(state.stimTrigger) captureStimReview(savedClock);
+    const rec = saveRecording(`${modeLabel} ${site}`);
+    state.pace.active=false; state.pace.maneuver=null; state.pace.running=false;
+    generateTimeline(); updatePaceButtons();
+    state.clock = savedClock % state.duration;
+  }
+};
+$('resume').onclick=()=>{
+  if(state.pace.active && !state.pace.maneuver){
+    const mode=state.pace.mode, site=state.pace.site;
+    const modeLabel={s1s2:'S1S2',burst:'バースト',vscan:'V Scan'}[mode]||mode;
+    saveRecording(`${modeLabel} ${site}`);
+  }
+  clearMvHighlight();
+  state.pace.active=false; state.pace.maneuver=null; state.pace.running=false; state.tachyArmed=false;
+  generateTimeline(); updatePaceButtons();
+};
+document.querySelectorAll('#paceModeSeg button').forEach(b=>{
+  b.onclick=()=>{
+    state.pace.mode=b.dataset.mode;
+    document.querySelectorAll('#paceModeSeg button').forEach(x=>x.classList.toggle('on', x===b));
+    // V Scan は心室の早期刺激スキャン → 刺激部位を自動でRVAに（誘発時のHRA等から切替）
+    if(state.pace.mode==='vscan'){
+      state.pace.site='RVA';
+      const sel=document.getElementById('site'); if(sel) sel.value='RVA';
+      if(!state.playing) draw();
+    }
+    // バースト：頻拍中なら臨床定番の「TCL−20ms」をS1の初期値に（本書p92：TCLより10〜20ms短い）
+    if(state.pace.mode==='burst'){
+      const sc=state.scenario;
+      const onTachy = state.tachyArmed && (sc==='at'||sc==='atypavnrt'||sc==='aflutter'||sc==='avnrt'||isAVRT(sc));
+      let tcl = onTachy ? (getBaselineTachyCL(sc) || (sc==='avnrt'?350:330)) : null;
+      if(tcl){ const v=Math.max(200, tcl-20); state.pace.s1cl=v; const el=$('s1cl'); if(el) el.value=v; }
+      // 頻拍中バースト＝心室オーバードライブが定番（V-A-V/V-A-A-V）→ 刺激部位を自動でRVAに
+      // （心房バーストだと房室結節Wenckebachになり V-A-A-V が見えないため）
+      if(onTachy){
+        state.pace.site='RVA';
+        const sel=document.getElementById('site'); if(sel) sel.value='RVA';
+        if(!state.playing) draw();
+      }
+    }
+    updatePaceButtons();
+  };
+});
+function updatePaceButtons(){
+  const d=$('deliver'), s=$('stopPace'), note=$('modeNote');
+  const m=state.pace.mode, running=state.pace.running;
+  const labels={ s1s2:'⚡ 通電する（S1S2）', burst:'🔁 バースト開始', vscan:'📉 V Scan 開始' };
+  const notes={
+    s1s2:'S1で基本周期を打ち込み、最後にS2(S3)の早期刺激を入れて応答を観察します。連結期を短くすると房室結節が漸減し、jump・頻拍誘発が起こります。',
+    burst:'S1周期で停止ボタンまで連続ペーシングします（オーバードライブ／バースト）。',
+    vscan:'単発の早期刺激をS1から10msずつ短縮（5秒間隔）して停止まで自動スキャンします。連結期＝基本周期S1の値を開始値に使います。'
+  };
+  if(d) d.textContent = labels[m];
+  if(note) note.textContent = notes[m];
+  // 継続ペーシング中／手技（マヌーバー）実行中は「通電停止」を出し、通電ボタンを隠す
+  const showStop = running || !!state.pace.maneuver;
+  if(s) s.style.display = showStop ? 'block' : 'none';
+  if(d) d.style.display = showStop ? 'none' : 'block';
+}
+
+$('playBtn').onclick=()=>{ state.playing=!state.playing; setPlayBtn(); };
+function setPlayBtn(){
+  const b=$('playBtn');
+  b.textContent = state.playing?'❄ フリーズ':'▶ 再生';
+  b.classList.toggle('danger', !state.playing);
+  b.classList.toggle('primary', state.playing);
+  cv.style.cursor = state.playing ? 'default' : 'crosshair';
+  if(state.playing){ calPending=null; }
+  else {
+    // フリーズ：掃引位置に静的窓を合わせる（キャリパー計測用）
+    const _o=state.sweepOrigin||0;
+    let ps = _o+Math.floor((state.clock-_o)/state.win)*state.win;
+    if(ps > state.duration-state.win) ps = Math.max(0, state.duration-state.win);
+    state.t0 = ps;
+  }
+}
+$('freezeReset').onclick=()=>{ state.t0=0; state.clock=0; draw(); };
+document.querySelectorAll('#sweepSeg button').forEach(b=>{ b.onclick=()=>applySweep(+b.dataset.mm); });
+$('gain').oninput=e=>{ state.gain=+e.target.value; $('gainv').textContent=(+e.target.value).toFixed(1)+'×'; if(!state.playing)draw(); };
+$('stimTrig').onchange=e=>{
+  state.stimTrigger=e.target.checked;
+  if(state.stimTrigger){ captureStimReview(); }
+  draw();
+};
+$('clrCal').onclick=()=>{ calipers.length=0; markers.length=0; calPending=null; updateMeasOut(); if(!state.playing)draw(); };
+
+document.querySelectorAll('#calModeSeg button').forEach(b=>{
+  b.onclick=()=>{
+    calMode = b.dataset.calmode;
+    document.querySelectorAll('#calModeSeg button').forEach(x=>x.classList.toggle('on', x===b));
+    calPending = null;
+    const help = document.getElementById('calHelp');
+    if(calMode==='line'){
+      help.innerHTML = '<b>❄ フリーズ</b> 中の操作（一本線モード）：<br>'
+        +'· <b>左クリック</b>：マーカー線を置く<br>'
+        +'· 線を<b>左ドラッグ</b>：位置を移動<br>'
+        +'· 線上で<b>右クリック</b>：削除<br>'
+        +'· <b>Shift</b>：フリーズ切替';
+    } else {
+      help.innerHTML = '<b>❄ フリーズ</b> 中の操作：<br>'
+        +'· <b>左クリック</b>：1本目の線を置く → もう1回で確定<br>'
+        +'· 横線を<b>左ドラッグ</b>：縦横に移動（間隔固定）<br>'
+        +'· 縦線を<b>左ドラッグ</b>：片側だけ移動<br>'
+        +'· 縦線・横線上で<b>右クリック</b>：削除<br>'
+        +'· Esc：配置中をキャンセル &nbsp;·&nbsp; <b>Shift</b>：フリーズ切替';
+    }
+  };
+});
+
+$('checkDx').onclick=()=>{
+  const pick=$('dx').value, el=$('dxResult');
+  if(!pick){ el.innerHTML='<span class="hint">機序を選んでください。</span>'; return; }
+  const truth = currentTruth();
+  if(pick===truth.key){ el.innerHTML='<span class="tag ok">正解</span>'+truth.short; }
+  else el.innerHTML='<span class="tag bad">不正解</span>もう一度、最早期心房・VA関係・QRS幅・AHの変化を見てみましょう。';
+};
+
+function currentTruth(){
+  const r=state.result;
+  if(r && r.induced && r.mechanism.includes('AVNRT')) return {key:'avnrt', short:'AVNRT。心房と心室がほぼ同時で室房間隔が極短、His最早期の求心性心房興奮。'};
+  if(r && r.induced && r.mechanism.includes('AVRT')) return {key:'avrt', short:'正方向性AVRT。心室の後に偏心性心房（CS遠位最早期）、VA間隔が比較的長い。'};
+  if(state.scenario==='at') return {key:'at', short:'巣性心房頻拍。心房が先行する長RP頻拍、最早期心房は巣（非中隔）、房室結節は受動的に伝導。'};
+  if(state.scenario==='atypavnrt') return {key:'atypavnrt', short:'非典型AVNRT(fast-slow)。長VAで求心性（中隔/CS近位最早期）、緩伝導路を逆行。'};
+  if(state.scenario==='aflutter') return {key:'aflutter', short:'心房粗動。規則的な心房波と鋸歯状F波、しばしば2:1伝導。'};
+  if(r && r.a2h2==null && state.pace.active) return {key:'block', short:'房室ブロック：S2が結節不応期に入り心室応答が脱落。'};
+  return {key:'sinus', short:'正常房室伝導。AHは連結期短縮で漸減、最後はブロック。'};
+}
+
+// ---- 結果/解説/モード表示 ----
+function setScenNote(){
+  $('scenario').value=state.scenario;
+  const notes={
+    sinus:'AH/HV間隔を計測し、S2を短縮して漸減伝導と房室ブロックを観察します。',
+    avnrt:'S2を二段刺激で短縮。340ms付近で速伝導路がブロックしAHが大きくjump→AVNRT誘発を狙います。',
+    avrt:'WPW A型（左外側Kent）：V1陽性δ波・逆行はCS遠位最早期。S2で副路前向きブロック→narrow化→正方向性AVRT。',
+    avrtB:'WPW B型（右自由壁Kent）：V1陰性δ波・逆行はHRA（右房）最早期。S2で副路前向きブロック→narrow化→正方向性AVRT。',
+    avrtC:'WPW C型（後中隔Kent）：下壁δ陰性・逆行はCS近位（os付近）最早期。S2で副路前向きブロック→narrow化→正方向性AVRT。',
+    at:'巣性心房頻拍。「💥頻拍を誘発」で開始。最早期心房（巣の位置）と長RP（A先行）を読み、AVNRTと鑑別。',
+    atypavnrt:'非典型AVNRT。「💥頻拍を誘発」で開始。長VAで求心性最早期（CS近位/中隔）。長RPのATとの鑑別がポイント。',
+    aflutter:'心房粗動。「💥頻拍を誘発」で開始。CS/HRAの心房波の規則性と房室伝導比を読み取ります。',
+    coumel_pos:'ORT（左自由壁）。「💥頻拍を誘発」で開始→途中で脚ブロックが出現し幅広QRSに。脚ブロック前後でVA・TCLを比較→延長（⊿≥35ms）＝同側自由壁副路（Coumel陽性）。',
+    coumel_neg:'ORT（中隔）。「💥頻拍を誘発」で開始→脚ブロックが出てもVA・TCLは不変（Coumel陰性）→自由壁副路を否定。',
+    avblock_wenck:'Wenckebach型2度AVブロック。AH間隔が段階的に延長し脱落（4:3パターン）。His束上ブロックが典型。',
+    avblock_21:'2:1 AVブロック。1拍おきにP波が伝導しない。His電位で上位/下位の鑑別を行います。',
+    avblock_3sup:'3度（完全）AVブロック — His束上。P波とHisは解離。接合部補充（narrow QRS・60bpm）。',
+    avblock_3inf:'3度（完全）AVブロック — His束下。P→H電位はあるがVがない（HV遮断）。心室性補充（wide QRS・40bpm）。',
+  };
+  $('scenNote').textContent=notes[state.scenario]||'';
+}
+function updateModeLabel(){
+  const r=state.result; let txt='洞調律', cls='pill';
+  // 誘発式シナリオは誘発済み(tachyArmed)のときだけ頻拍名を表示、未誘発は洞調律
+  if(state.tachyArmed){
+    if(state.scenario==='aflutter') txt='心房粗動';
+    if(state.scenario==='at') txt='心房頻拍 AT';
+    if(state.scenario==='atypavnrt') txt='非典型AVNRT';
+    if(state.scenario==='avnrt') txt='AVNRT';
+    if(isAVRT(state.scenario)) txt='正方向性AVRT';
+    if(state.scenario==='coumel_pos') txt='ORT＋脚ブロック（Coumel陽性）';
+    if(state.scenario==='coumel_neg') txt='ORT＋脚ブロック（Coumel陰性）';
+  }
+  if(state.scenario==='avblock_wenck') txt='2度AVブロック Wenckebach';
+  if(state.scenario==='avblock_21') txt='2度AVブロック 2:1';
+  if(state.scenario==='avblock_3sup') txt='3度AVブロック（His束上）';
+  if(state.scenario==='avblock_3inf') txt='3度AVブロック（His束下）';
+  if(state.pace.active){
+    if(state.pace.mode==='burst') txt='🔁 バースト（'+state.pace.site+' '+state.pace.s1cl+'ms）';
+    else if(state.pace.mode==='vscan') txt='📉 V Scan（'+state.pace.site+' '+(r&&r.vscan?r.vscan.start+'→'+r.vscan.end:'')+'ms）';
+    else if(state.pace.maneuver==='entrain') txt='⏱ エントレインメント（'+(r&&r.entrain?r.entrain.label:'')+'）';
+    else if(state.pace.maneuver==='parahis') txt='⚡ パラヒス刺激';
+    else if(state.pace.maneuver==='valink') txt='🔗 VAリンキング（'+(r&&r.vaLink?r.vaLink.label:'')+'）';
+    else if(state.pace.maneuver==='hispvc') txt='🫀 His不応期PVC（'+(r&&r.hisPvc?r.hisPvc.label:'')+'）';
+    else if(state.pace.maneuver==='voverdrive') txt='💓 心室オーバードライブ（'+(r&&r.vaav?r.vaav.pattern:'')+'）';
+    else if(r&&r.induced) txt='⚡ '+r.mechanism;
+    else txt='ペーシング・プロトコル実行中';
+  }
+  $('modeLbl').textContent=txt;
+}
+function updateResultPanel(){
+  const el=$('result'); const r=state.result;
+  if(!state.pace.active){
+    el.innerHTML = scenarioBaselineHints();
+    $('reveal').innerHTML = revealText();
+    return;
+  }
+  let h='';
+  if(r.a2h2!=null) h+=`<span class="m" style="background:#0a0f18;border:1px solid #1f2937;padding:3px 8px;border-radius:6px">A1A2 <b>${r.a1a2}</b> → A2H2 <b>${Math.round(r.a2h2)} ms</b></span> `;
+  if(r.jump) h+='<span class="tag info">AH jump 検出（二重結節生理）</span>';
+  if(r.a2h2==null && r.site!=='RVA') h+='<span class="tag bad">房室ブロック（心室応答なし）</span>';
+  if(r.induced) h+='<span class="tag ok">頻拍誘発：'+r.mechanism+'</span>';
+  if(r.narrow) h+='<span class="tag info">QRS narrow化</span>';
+  h+='<div class="hint" style="margin-top:6px">'+r.notes.map(n=>'・'+n).join('<br>')+'</div>';
+  h+='<div class="hint" style="margin-top:4px">計測してみよう：'+measureTargets()+'</div>';
+  el.innerHTML=h;
+  $('reveal').innerHTML=revealText();
+}
+function measureTargets(){
+  switch(state.scenario){
+    case 'avnrt': return '<code>A2H2</code>（HisのA→H）, 頻拍周期, 室房間隔(VA), 最早期心房（His vs CS vs HRA）';
+    case 'avrt':  return '<code>VA間隔</code>, 頻拍周期, 最早期心房（CS遠位か）, QRS幅の変化';
+    case 'at':    return '<code>RP/VA間隔</code>, 頻拍周期, 最早期心房（巣の位置）, AVブロック時の頻拍持続';
+    case 'atypavnrt': return '<code>VA間隔</code>(長め), 頻拍周期, 最早期心房（中隔・CS近位か）';
+    case 'aflutter': return '心房周期(F-F), 房室伝導比, CS興奮順序';
+    default: return '<code>AH</code>(A→H), <code>HV</code>(H→QRS立ち上がり), A1A2 vs A2H2 の漸減';
+  }
+}
+function scenarioBaselineHints(){
+  switch(state.scenario){
+    case 'avnrt': return '洞調律ベース。②でHRAからS1S2を打ち、S2を10msずつ短くしてAHのjump（緩伝導路への切替）を探してください。';
+    case 'avrt':  return 'デルタ波(予防興奮)に注目：HVが短縮しQRSの立ち上がりが緩徐です。S2で副路をブロックさせると正常QRSに戻ります。';
+    case 'at': return '巣性心房頻拍。心房が先行する長RP頻拍です。最早期心房（巣）を探し、求心性中隔のAVNRTと区別しましょう。心室刺激でV-A-A-V応答（AVNRTはV-A-V）が鑑別に有用です。';
+    case 'atypavnrt': return '非典型AVNRT(fast-slow)。長VAで最早期心房は中隔（CS近位/His）＝求心性。長RPのATとの鑑別が要点です。';
+    case 'aflutter': return '心房粗動。II誘導の鋸歯状波と、CS/HRAの規則的な心房波・房室伝導比を読みましょう。';
+    case 'avblock_wenck': return 'Wenckebach型2度AVブロック。His distでAH間隔が順次延長し、4拍目でP波がブロック（His/V脱落）します。AH間隔をキャリパーで計測しましょう。';
+    case 'avblock_21': return '2:1 AVブロック。奇数拍はAH→V伝導、偶数拍はP波のみ（Hisなし）。His電位の有無で上位/下位の鑑別を確認しましょう。';
+    case 'avblock_3sup': return '3度（完全）AVブロック — His束上。P波（洞調律）と接合部補充（narrow QRS）が完全解離。Hisチャネルで洞P後にHis電位がないことを確認しましょう。';
+    case 'avblock_3inf': return '3度（完全）AVブロック — His束下。洞P→His電位はあるが心室V脱落（HV遮断）。心室性補充（wide QRS）が独立して打ちます。HV遮断を確認しましょう。';
+    default: return '';
+  }
+}
+function revealText(){
+  const base={
+    sinus:'<b>正常房室伝導</b><br>AH(房室結節伝導,正常〜130ms)、HV(His-Purkinje,35-55ms)。S2短縮でAHは滑らかに延長し、結節有効不応期でブロック（心室脱落）。jumpは無い。',
+    avnrt:'<b>AVNRT（通常型 slow-fast）</b><br>速伝導路と緩伝導路の二重生理。連結期短縮で速伝導路がERPに達しブロック→緩伝導路へ切替わりAHが≥50ms <b>jump</b>。緩伝導路順行+速伝導路逆行のリエントリーで頻拍。心房と心室がほぼ同時、VA<70ms、最早期心房はHis(中隔)＝<b>求心性</b>。',
+    avrt:'<b>正方向性AVRT</b><br>洞調律で予防興奮（デルタ・短HV）。S2で副路が前向きブロック→AVNを順行(narrow QRS)→副路を逆行してリエントリー。心室の後に心房、最早期心房は副路付着部（左側壁ならCS遠位）＝<b>偏心性</b>。VAは比較的長い。',
+    at:'<b>巣性心房頻拍（AT）</b><br>心房内の異常自動能/微小リエントリー。心房が先行する<b>長RP</b>頻拍で、最早期心房は巣の位置（非中隔のことが多い）。房室結節は受動的伝導のためAVブロックを作っても頻拍は持続（AVNRT/AVRTとの決定的な違い）。心室刺激でV-A-A-V応答。',
+    atypavnrt:'<b>非典型AVNRT（fast-slow）</b><br>緩伝導路を逆行するため<b>長VA</b>。最早期心房は中隔（CS近位/His付近）＝<b>求心性</b>。心電図上は長RP頻拍に見え、巣性ATとの鑑別が問題になる（ATはAV非依存、AVNRTはHis後の心房が必須）。',
+    aflutter:'<b>心房粗動</b><br>三尖弁峡部などのマクロリエントリー。心房周期≈240ms前後の規則的興奮、II誘導で鋸歯状F波、房室結節で2:1などに減衰伝導。',
+    avblock_wenck:'<b>Wenckebach型2度AVブロック（Mobitz I）</b><br>His束上（AVN内）のブロック。AH間隔が徐々に延長（房室結節疲弊）→最終P波がブロック→休止後リセット。4:3パターンが典型的。通常は可逆的で良性。',
+    avblock_21:'<b>2:1 AVブロック</b><br>連続しているためWenckebachかMobitz IIか判別困難。<b>His電位の有無が鍵</b>：伝導しない拍にHisがあれば下位（危険）、なければ上位（AVN内、良性）。',
+    avblock_3sup:'<b>3度AVブロック — His束上</b><br>P波と接合部補充が完全解離（AV dissociation）。Hisチャネル：洞P後にH電位なし。補充はHis束より上位の接合部起源（narrow QRS, 50–60 bpm）。通常ペースメーカー適応。',
+    avblock_3inf:'<b>3度AVブロック — His束下（完全ブロック）</b><br>洞P→His電位は正常通過だが<b>HV遮断</b>でV脱落。心室性補充（wide QRS, 30–40 bpm）が独立。高度な傷害で突然死リスク高く、永続的ペースメーカー絶対適応。',
+  };
+  return base[state.scenario]||'';
+}
+
+// ===================================================================
+//  アナライザー（自動計測エンジン）
+// ===================================================================
+const ATR_CHANS = ['HRA','HISd','HISm','HISp',...CSIDS];
+function evk(ch,kinds){ return state.events.filter(e=>e.ch===ch && kinds.includes(e.kind)).sort((a,b)=>a.t-b.t); }
+
+// 基準時刻 tRef 近傍で最も早い心房電位を返す（求心性/偏心性判定用）
+function earliestAtrial(tRef, win=90){
+  let best=null, all=[];
+  for(const ch of ATR_CHANS){
+    const e = state.events.filter(x=>x.ch===ch && x.kind==='A' && Math.abs(x.t-tRef)<win).sort((a,b)=>a.t-b.t)[0];
+    if(e){ all.push({ch, t:e.t}); if(!best || e.t<best.t) best={ch, t:e.t}; }
+  }
+  return best ? {best, all} : null;
+}
+// 最早期心房の部位カテゴリ → 求心性(中隔)か偏心性(CS)か
+function activationPattern(ch){
+  if(ch==='HRA') return {label:'HRA（高位右房・洞調律型）', kind:'high'};
+  if(HISIDS.includes(ch)) return {label:'His束近傍（中隔）', kind:'concentric'};
+  // CS：近位(9-10)寄り=中隔寄り、遠位(2-1)=側壁
+  const k = CSIDS.indexOf(ch);
+  if(k<=1) return {label:'CS近位（中隔寄り）', kind:'concentric'};
+  if(k===2) return {label:'CS中部（左房寄り）', kind:'eccentric'};
+  return {label:'CS遠位（左側壁＝偏心性）', kind:'eccentric'};
+}
+
+// His複合での AH / HV を計測（H基準で前のHISm-A、後のRVA-V）
+function ahHvAt(hEv){
+  const A = state.events.filter(e=>e.ch==='HISm'&&e.kind==='A'&&e.t<hEv.t&&hEv.t-e.t<280).sort((a,b)=>b.t-a.t)[0];
+  const V = state.events.filter(e=>e.ch==='RVA'&&e.kind==='V'&&e.t>=hEv.t&&e.t-hEv.t<160).sort((a,b)=>a.t-b.t)[0];
+  return { AH: A?Math.round(hEv.t-A.t):null, HV: V?Math.round(V.t-hEv.t):null };
+}
+
+function runAnalyzer(){
+  const r = state.result;
+  const out = [];
+  const Hs = evk('HISm',['H']);
+  const Vs = evk('RVA',['V']);
+
+  // --- 1. 基線/駆動拍の AH・HV（最初の伝導His複合）---
+  // 進行中の頻拍シナリオでは順行A→H→Vが無いため基線AH/HVは表示しない
+  const ongoingBaselineTachy = ['atypavnrt','aflutter'].includes(state.scenario) && !state.pace.active;
+  if(Hs.length && !ongoingBaselineTachy){
+    const m = ahHvAt(Hs[0]);
+    if(m.AH!=null)
+      out.push(`<b>基線</b> AH <b>${m.AH}</b> ms ／ HV <b>${m.HV??'—'}</b> ms`);
+  }
+
+  // --- 2. 頻拍中：TCL・VA・最早期心房 ---
+  const ongoingTachy = ['at','atypavnrt'].includes(state.scenario) && !state.pace.active;
+  const isTachy = (r && r.induced) || ongoingTachy;
+  if(isTachy && Vs.length>=3){
+    const tail = Vs.slice(-4);
+    const ints=[]; for(let i=1;i<tail.length;i++) ints.push(tail[i].t-tail[i-1].t);
+    const tcl = Math.round(ints.reduce((a,b)=>a+b,0)/ints.length);
+    // 末尾Vは直後の心房が描かれていない場合があるため1つ手前を基準にする
+    const vRef = tail[tail.length-2] || tail[tail.length-1];
+    // vRef 直後（〜TCL内）の最早期心房を探す
+    let bestA=null;
+    for(const ch of ATR_CHANS){
+      const e=state.events.filter(x=>x.ch===ch&&x.kind==='A'&&x.t>vRef.t-40&&x.t<vRef.t+tcl*0.95)
+                          .sort((a,b)=>a.t-b.t)[0];
+      if(e&&(!bestA||e.t<bestA.t)) bestA={ch,t:e.t};
+    }
+    out.push(`<b>頻拍周期 TCL</b> <b>${tcl}</b> ms（${Math.round(60000/tcl)} bpm）`);
+    if(bestA){
+      const va = Math.round(bestA.t - vRef.t);   // 心室→心房
+      const patt = activationPattern(bestA.ch);
+      const ecc = patt.kind==='eccentric';
+      out.push(`<b>VA</b> ${va<=2?'ほぼ同時':va+'ms'} ／ <b>最早期心房</b> ${CH.find(c=>c.id===bestA.ch).label}`);
+      out.push(`<span class="tag ${ecc?'bad':'info'}">${ecc?'偏心性':patt.kind==='concentric'?'求心性':'高位右房'}：${patt.label}</span>`);
+      // 鑑別ヒント（VA・最早期心房から）
+      let hint;
+      if(ecc) hint = va<160 ? '→ 偏心性・心室直後の心房 → <b>正方向性AVRT（副伝導路）</b>を支持'
+                            : '→ 偏心性・長RP → <b>巣性AT</b>を支持';
+      else    hint = va<70  ? '→ 短VA・求心性中隔 → <b>通常型AVNRT</b>を支持'
+                            : '→ 長VA・求心性中隔 → <b>非典型AVNRT／中隔起源AT</b>を支持';
+      out.push(hint);
+    }
+  }
+
+  // --- 2c. パラヒス刺激 ΔSA ---
+  if(r && r.paraHis){
+    const e=r.paraHis;
+    out.push(`<b>パラヒス刺激</b> SA 捕捉 ${e.saCap}ms → 非捕捉 ${e.saNon}ms（ΔSA ${e.dSA}ms）`);
+    out.push(`<span class="tag ${e.dSA<=20?'bad':'ok'}">${e.dSA<=20?'ΔSA小：His非捕捉でもSA不変':'ΔSA大：His非捕捉でSA延長'}</span>`);
+    out.push(e.dSA<=20 ? '→ <b>extranodal（副路）パターン</b>：隔壁副路の存在を示唆'
+                       : '→ <b>nodal（結節性）パターン</b>：副路なし（房室結節伝導）');
+  }
+
+  // --- 2d. VAリンキング ---
+  if(r && r.vaLink){
+    const e=r.vaLink;
+    out.push(`<b>VAリンキング</b> 復帰VA ${e.vaSeq.join(' / ')} ms（ばらつき ${e.spread}ms）`);
+    out.push(`<span class="tag ${e.spread<=15?'ok':'bad'}">${e.spread<=15?'VA一定（リンク）':'VA変動（アンリンク）'}</span>`);
+    out.push(e.spread<=15 ? '→ <b>AVNRT / AVRT</b>（VAが心室に連結）を支持'
+                          : '→ <b>巣性AT</b>（心房が独立＝VA非連結）を支持');
+  }
+
+  // --- 2e. His不応期PVC ---
+  if(r && r.hisPvc){
+    const e=r.hisPvc;
+    out.push(`<b>His不応期PVC</b> 心房は ${e.advanced?`<b>${e.delta}ms 前進</b>`:'<b>不変</b>'}`);
+    out.push(`<span class="tag ${e.advanced?'bad':'ok'}">${e.advanced?'前進あり：副伝導路を介して心房捕捉':'前進なし：His不応で結節を逆行できず'}</span>`);
+    out.push(e.advanced ? '→ <b>AVRT（副伝導路）を証明</b>' : '→ <b>AVNRT</b>（副路なし）を支持');
+  }
+  // --- 2f. 心室オーバードライブ応答 V-A-V / V-A-A-V ---
+  if(r && r.vaav){
+    const e=r.vaav;
+    out.push(`<b>心室オーバードライブ応答</b> <b>${e.pattern}</b>`);
+    out.push(`<span class="tag ${e.isAT?'bad':'ok'}">${e.isAT?'V-A-A-V：心房が独立':'V-A-V：房室が連結'}</span>`);
+    out.push(e.isAT ? '→ <b>巣性AT</b>（心室は回路外）' : '→ <b>AVNRT / AVRT</b>（心室が回路に参加）');
+  }
+
+  // --- 2b. エントレインメント PPI−TCL ---
+  if(r && r.entrain){
+    const e=r.entrain;
+    out.push(`<b>エントレインメント</b> PPI ${e.ppi}ms − TCL ${e.tcl}ms ＝ <b>PPI−TCL ${e.diff}ms</b>`);
+    out.push(`<span class="tag ${e.diff<115?'ok':'bad'}">${e.diff<115?'PPI−TCL < 115ms：心室が回路内／近接':'PPI−TCL > 115ms：心室は回路外'}</span>`);
+    out.push(e.diff<115 ? '→ <b>AVNRT / AVRT</b>（心室が回路に参加）を支持'
+                        : '→ <b>巣性AT</b>（心室は回路外＝オーバードライブ抑制型）を支持');
+  }
+
+  if(r && !state.pace.maneuver){
+    if(r.a2h2!=null){
+      out.push(`<b>S2応答</b> A1A2 ${r.a1a2} → A2H2 <b>${Math.round(r.a2h2)}</b> ms` + (r.jump?' <span class="tag info">AH jump</span>':''));
+    } else if(r.a2h2==null && state.pace.active && r.site!=='RVA'){
+      out.push('<span class="tag bad">S2 房室ブロック（心室応答なし）</span>');
+    }
+  }
+
+  // --- 3. 心房粗動：F-F周期と伝導比 ---
+  if(state.scenario==='aflutter' && !state.pace.active){
+    const Fs = evk('HRA',['A']);
+    if(Fs.length>=3){
+      const ff = Math.round((Fs[Fs.length-1].t-Fs[0].t)/(Fs.length-1));
+      const ratio = Vs.length? (Fs.length/Math.max(1,Vs.length)).toFixed(1):'—';
+      out.push(`<b>心房周期 F-F</b> <b>${ff}</b> ms ／ 房室伝導比 約 <b>${ratio}:1</b>`);
+    }
+  }
+
+  document.getElementById('analyzeOut').innerHTML =
+    out.length ? out.map(s=>`<div style="margin:4px 0">${s}</div>`).join('')
+               : '<span class="hint">解析対象がありません。通電するか粗動シナリオを表示してください。</span>';
+}
+
+$('analyzeBtn').onclick = runAnalyzer;
+
+// ---- 初期化 ----
+resize();
+applySweep(100);
+setScenNote();
+setPlayBtn();
+generateTimeline();
+updatePaceButtons();
+renderTabs();
+// レイアウト確定後に再リサイズ（readout の高さが確定してから）
+requestAnimationFrame(()=>{ resize(); draw(); });
+setTimeout(()=>{ resize(); draw(); }, 200);
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
