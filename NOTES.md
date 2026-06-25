@@ -105,16 +105,22 @@ reviewCalipers[]    // レビュー専用キャリパー（fraction保存）
 
 ---
 
-## 開発の進め方（職場で続けるとき）
+## 開発の進め方（USB ↔ クラウドを行き来するとき）
 
-1. このフォルダ（`index.html` と `NOTES.md` がある場所）で Claude Code を起動。
-2. 「NOTES.md を読んでプロジェクトの続きを手伝って」と依頼。
-3. 動作確認は `index.html` をブラウザで開く（Chrome/Edge推奨）。
-   - Claude Code のプレビュー機能（preview_*）が使える環境なら自動チェックも可能。
+1. Claude Code on the web を開く（https://claude.ai/code）。
+2. `NOTES.md` を `@` でアップロードして「読んで続きを手伝って」と依頼。
+3. 作業前に USB の最新 `index.html` を `@` でアップロードする（前回より新しい場合）。
+4. 作業が終わったら「**セッション終了**」または「**USB版に反映して**」と伝える。
+   → Claude が最新 `index.html` をダウンロードリンクとして提示するので USB に上書き保存。
+5. 動作確認は `index.html` をブラウザで開く（Chrome/Edge推奨）。
+
+> **Claude への指示**（このメモを読んだとき）:
+> セッション中に `index.html` を変更した場合、作業終了時に必ず `SendUserFile` で
+> `/home/user/EPS/index.html` をユーザーへ送ること。
 
 ### 注意：バージョン管理
 USBで持ち運ぶ場合、**常に「最後に編集した方が最新」**。古いファイルで上書きしないよう注意。
-作業後は必ず最新の `index.html` をUSB/クラウドにコピーしてから席を離れること。
+作業後は必ず最新の `index.html` をUSBにコピーしてから席を離れること。
 
 ---
 
