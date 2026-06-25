@@ -104,7 +104,7 @@
         <option value="avrt">副伝導路（WPW A型・左側）/ 正方向性AVRT</option>
         <option value="avrtB">副伝導路（WPW B型・右側）/ 正方向性AVRT</option>
         <option value="avrtC">副伝導路（WPW C型・後中隔）/ 正方向性AVRT</option>
-        <option value="at">心房頻拍 AT（巣性）</option>
+        <option value="at">心房頻拍 AT（リエントリー性）</option>
         <option value="atypavnrt">非典型AVNRT（fast-slow）</option>
         <option value="aflutter">心房粗動</option>
         <optgroup label="── Coumel's law（脚ブロック）──">
@@ -412,7 +412,8 @@ function atrialOffsets(mode){
     case 'avrt_right':return {HRA:0,  His:34, cs:[40,48,56,64,72], P:8};    // B型/右自由壁副路：HRA最早期、CSは近位→遠位（偏心性・右）
     case 'avrt_ps':   return {HRA:40, His:18, cs:[0,12,24,36,48],  P:24};   // C型/左後中隔副路：CS近位(9-10,os付近)最早期
     case 'retro_rv':  return {HRA:22, His:0,  cs:[10,14,18,22,30], P:6};    // 室房逆行（結節）求心性
-    case 'at_focus':  return {HRA:30, His:26, cs:[18,10,0,8,16],  P:20};    // 巣性AT：CS中部最早期から両方向へ（巣性・非中隔）
+    case 'at_focus':  return {HRA:30, His:26, cs:[18,10,0,8,16],  P:20};    // 巣性AT(参照用)：CS中部最早期から両方向へ（巣性・非中隔）
+    case 'at_reentry':return {HRA:64, His:48, cs:[52,40,26,12,0],  P:32};  // マクロリエントリー性AT（ペリミトラル）：CS遠位最早期→CS近位→His→HRA（逐次活性化）
     case 'atyp':      return {HRA:30, His:6,  cs:[0,8,16,26,36],  P:10};    // 非典型AVNRT逆行：CS近位/中隔最早期（求心性）
     default:          return {HRA:0,  His:38, cs:[30,38,46,54,62], P:12};
   }
@@ -523,9 +524,9 @@ function ahForCoupling(coupling, scenario){
 //  タイムライン生成
 // ===================================================================
 function fillTachyAT(start,end){
-  const cl=360;  // 巣性AT：心房が先行し、房室結節を介して心室へ（長RP）
+  const cl=360;  // マクロリエントリー性AT：心房が先行し、房室結節を介して心室へ（長RP）
   for(let t=start;t<end;t+=cl){
-    const tHisA=emitAtrial(t,'at_focus',0.9);
+    const tHisA=emitAtrial(t,'at_reentry',0.9);
     const AH=92; emitHis(tHisA+AH); emitVent(tHisA+AH+45,false);
   }
 }
@@ -568,7 +569,7 @@ function tachyParams(sc){
     case 'avnrt':     return {tcl:350, inCircuit:true,  retro:'retro_rv', va:135, label:'通常型AVNRT'};
     case 'atypavnrt': return {tcl:360, inCircuit:true,  retro:'retro_rv', va:135, label:'非典型AVNRT'};
     case 'avrt':      return {tcl:330, inCircuit:true,  retro:'avrt_left',va:135, label:'正方向性AVRT'};
-    case 'at':        return {tcl:360, inCircuit:false, retro:'retro_rv', va:150, label:'巣性AT'};
+    case 'at':        return {tcl:360, inCircuit:false, retro:'retro_rv', va:150, label:'リエントリー性AT'};
     default: return null;
   }
 }
@@ -982,7 +983,7 @@ function buildVaLinking(sc){
 function emitTachyBeat(sc, tA){
   if(sc==='avnrt'){ emitAtrial(tA,'avnrt',1.0); emitHis(tA-50); emitVent(tA-4,false); }  // VA≒0：A と V がほぼ同時。HV≒48ms（順行は正常）
   else if(isAVRT(sc)){ const V=tA-120; emitHis(V-48); emitVent(V,false); emitAtrial(tA,apConfig(sc).retro,0.9); }
-  else if(sc==='at'){ emitAtrial(tA,'at_focus',0.9); emitHis(tA+92); emitVent(tA+92+50,false); }
+  else if(sc==='at'){ emitAtrial(tA,'at_reentry',0.9); emitHis(tA+92); emitVent(tA+92+50,false); }
   else if(sc==='atypavnrt'){ const V=tA-185; emitHis(V-48); emitVent(V,false); emitAtrial(tA,'atyp',0.9); }
 }
 // tA から duration まで頻拍を連ねる
@@ -1048,10 +1049,10 @@ function buildVOverdrive(sc){
   if(isAT){
     // V-A-A-V：最後のV→逆行A（エントレイン）→AT巣の独立A→次のV
     const tA_focus = lastRetroA + Math.round(tcl*0.7);
-    emitAtrial(tA_focus,'at_focus',0.9); emitHis(tA_focus+92); emitVent(tA_focus+92+45,false);
+    emitAtrial(tA_focus,'at_reentry',0.9); emitHis(tA_focus+92); emitVent(tA_focus+92+45,false);
     fillTachyFrom('at', tA_focus+tcl, state.duration);
     res.notes.push('心室オーバードライブ停止後、心房が <b>A–A</b> と連続（巣性Aが介在）。');
-    res.notes.push('→ <b>V-A-A-V 応答＝巣性AT</b>（心室は回路外）。');
+    res.notes.push('→ <b>V-A-A-V 応答＝AT（心室は回路外）</b>。');
     res.vaav={pattern:'V-A-A-V', isAT:true, label:tp.label};
   } else {
     // V-A-V：最後のV→逆行A→頻拍が再開しV
@@ -1156,12 +1157,11 @@ function buildVentricularEntrainment(sc){
       if(t >= tAccel) emitAtrial(t + VA_PACE, tp.retro, 0.9);
     }
   }
-  // AT：ペーシング中は心房も逆行性にPCLで捕捉済み（上ループでemit）。AT focusは overdrive 抑制。
-  //     停止後に AT focus が再開して2つ目のAになる＝V-A-A-V。
-  //     最初の返り A1→A2 は overdrive 抑制ぶん <b>TCLより長い return cycle</b>（本 p111 図3：445>TCL395）。
-  //     これで A1→A2 はPCLともTCLとも紛れず、どの電極（CS含む）で測ってもPCLには見えない。
-  //     A2 以降は頻拍SL=TCL で継続。
-  const AT_RETURN_EXTRA = 50;                                   // return cycle = TCL + 50
+  // AT：ペーシング中は心房も逆行性にPCLで捕捉済み（上ループでemit）。
+  //     リエントリー回路は心室ペーシング中も継続（抑制されない）。
+  //     停止後、逆行A（A1）の次に回路の自己A（A2）が来る＝V-A-A-V。
+  //     リエントリー性ATのreturn cycle ≈ TCL（回路継続、overdrive抑制なし）。
+  const AT_RETURN_EXTRA = 20;                                   // return cycle ≈ TCL + 20ms（リエントリー回路継続）
   let atNext = (sc==='at') ? (lastV + tp.va + tcl + AT_RETURN_EXTRA) : null;
 
   const res={site:'RVA',induced:true,mechanism:tp.label,a2h2:null,jump:false,narrow:false,notes:[]};
@@ -1169,8 +1169,8 @@ function buildVentricularEntrainment(sc){
   // 停止前（連続中）
   if(p.stopAt==null){
     if(sc==='at'){
-      res.notes.push(`RVAを ${pcl}ms でオーバードライブ中。心室はPCL、<b>心房も逆行性に AA=PCL（${pcl}ms）で捕捉</b>（AT focusは overdrive 抑制）。`);
-      res.notes.push(`まず <b>AA間隔がPCLに一致（＝ペーシング依存）</b> を確認してから停止。停止後 <b>V-A-A-V</b> なら心室は回路外＝巣性AT。`);
+      res.notes.push(`RVAを ${pcl}ms でオーバードライブ中。心室はPCL、<b>心房も逆行性に AA=PCL（${pcl}ms）で捕捉</b>（リエントリー回路は継続）。`);
+      res.notes.push(`まず <b>AA間隔がPCLに一致（＝ペーシング依存）</b> を確認してから停止。停止後 <b>V-A-A-V</b> なら心室は回路外＝リエントリー性AT。`);
     } else if(sc==='atypavnrt'){
       res.notes.push(`RVAを ${pcl}ms でオーバードライブ中。逆行は <b>fast pathway が顕在化</b>＝A1（concentric）で心房を AA=PCL 捕捉。`);
       res.notes.push(`停止すると <b>一見 V-A-A-V（pseudo）</b>：fast→A1 と superior slow→A2 の<b>心房二重応答</b>。A1とA2は興奮順序が違う。ΔAA=TCL−A1A2 で鑑別（本 p113図7・p114）。`);
@@ -1222,14 +1222,14 @@ function buildVentricularEntrainment(sc){
     res.notes.push(`<b>A1A2 = ${A1A2_AT}ms（PCL ${pcl}ms より長い）</b>。ΔAA = TCL−A1A2 = ${dAA}ms（金古2022, 本 p114 図8：AVNRT は通常 ΔAA&gt;26／AT は&lt;−80。本例は重複域で、決め手は A1とA2の興奮順序の違い）。`);
   }else{
     // V-A-A-V：#1 逆行A（最終ペース由来・AA=PCLでペーシング依存／上ループでemit済）
-    //          → #2 AT focus自己A（return・at_focusパターン）→ 順行V
+    //          → #2 リエントリー回路自己A（return・at_reentryパターン）→ 順行V
     const atA=atNext;                                                 // #2 AT focus再開
     emitTachyBeat('at', atA);
     fillTachyFrom('at', atA+tcl, state.duration);
     const tRetV=atA+92+45, ppi=tRetV-lastV;
     res.vaav={pattern:'V-A-A-V', ppi, tcl, diff:ppi-tcl, inCircuit:false};
     res.notes.push(`ペーシング中は心房も<b>逆行性に AA=PCL（${pcl}ms）で捕捉</b>（最終Vの逆行A＝VAまでがペーシング依存）。`);
-    res.notes.push(`停止後 <b>V-A-A-V</b>：最終Vの逆行A（PCL・concentric）→ AT自己A（偏心性at_focus）→ 順行V。最初の返り <b>A1→A2 ${tcl+AT_RETURN_EXTRA}ms は TCL(${tcl}) より長い return cycle</b>（overdrive抑制）、以降は <b>TCL=${tcl}ms</b>。PPI−TCL ${ppi-tcl}ms（&gt;115ms＝心室は回路外＝<b>巣性AT</b>）。`);
+    res.notes.push(`停止後 <b>V-A-A-V</b>：最終Vの逆行A（PCL・concentric）→ リエントリー回路自己A（偏心性・CS遠位最早期）→ 順行V。return cycle <b>A1→A2 ${tcl+AT_RETURN_EXTRA}ms ≈ TCL(${tcl})</b>（リエントリー回路継続・overdrive抑制なし）、以降は <b>TCL=${tcl}ms</b>。PPI−TCL ${ppi-tcl}ms（&gt;115ms＝心室は回路外＝<b>リエントリー性AT</b>）。`);
   }
   state.result=res;
   return true;
@@ -1280,7 +1280,7 @@ function buildStraightPace(){
   // ════ 誘発済み頻拍シナリオ（AT / 非典型AVNRT / 粗動）への心房/心室オーバードライブ ════
   const tachyCL = state.tachyArmed ? getBaselineTachyCL(sc) : null;
   if(tachyCL){
-    const tLabel={at:'巣性AT',atypavnrt:'非典型AVNRT',aflutter:'心房粗動'}[sc];
+    const tLabel={at:'リエントリー性AT',atypavnrt:'非典型AVNRT',aflutter:'心房粗動'}[sc];
     const tBpm=Math.round(60000/tachyCL);
     const pBpm=Math.round(60000/cl);
 
@@ -1438,7 +1438,7 @@ function buildStraightPace(){
 function buildPacedTachy(){
   const p=state.pace, sc=state.scenario;
   const tachyCL=getBaselineTachyCL(sc);
-  const tLabel={at:'巣性AT',atypavnrt:'非典型AVNRT',aflutter:'心房粗動'}[sc];
+  const tLabel={at:'リエントリー性AT',atypavnrt:'非典型AVNRT',aflutter:'心房粗動'}[sc];
   const tBpm=Math.round(60000/tachyCL), pBpm=Math.round(60000/p.s1cl);
   const capt=captures();
   const isRVA=(p.site==='RVA');
@@ -1542,7 +1542,7 @@ function buildVScanTachy(){
   const p=state.pace, sc=state.scenario;
   const STEP_GAP=VSCAN_STEP_GAP, DEC=10, FLOOR=200, LEAD=VSCAN_LEAD;
   const tachyCL=getBaselineTachyCL(sc);
-  const tLabel={at:'巣性AT',atypavnrt:'非典型AVNRT',aflutter:'心房粗動'}[sc];
+  const tLabel={at:'リエントリー性AT',atypavnrt:'非典型AVNRT',aflutter:'心房粗動'}[sc];
   let start=p.s1cl;
   let nSteps=Math.floor((start-FLOOR)/DEC)+1;
   if(nSteps>48) nSteps=48; if(nSteps<1) nSteps=1;
@@ -3130,7 +3130,7 @@ $('induceTachy').onclick=()=>{
     state.tachyArmed=true;
     generateTimeline();                 // 誘発済み頻拍として描画（else分岐がtachyArmedを参照）
     state.playing=true; setPlayBtn(); updatePaceButtons();
-    const nm={at:'巣性AT',atypavnrt:'非典型AVNRT',aflutter:'心房粗動',coumel_pos:'ORT（Coumel陽性）',coumel_neg:'ORT（Coumel陰性）'}[sc] || (tachyParams(sc)?tachyParams(sc).label:'頻拍');
+    const nm={at:'リエントリー性AT',atypavnrt:'非典型AVNRT',aflutter:'心房粗動',coumel_pos:'ORT（Coumel陽性）',coumel_neg:'ORT（Coumel陰性）'}[sc] || (tachyParams(sc)?tachyParams(sc).label:'頻拍');
     showToast(`${nm} を誘発しました`);
   } else {
     showToast('この症例は頻拍を誘発できません（洞調律）');
@@ -3140,7 +3140,7 @@ $('induceTachy').onclick=()=>{
 // 鑑別手技ボタン
 const MV_NOTES={
   hispvc:'His不応期PVC：頻拍中にHis不応期のタイミングで心室期外刺激。心房が前進すれば副伝導路（AVRT）の証明。AVNRT/ATでは心房は不変。',
-  voverdrive:'心室オーバードライブ：心室をTCL−30で連続ペーシング→停止。停止後 V-A-V＝AVNRT/AVRT、V-A-A-V＝巣性AT。',
+  voverdrive:'心室オーバードライブ：心室をTCL−30で連続ペーシング→停止。停止後 V-A-V＝AVNRT/AVRT、V-A-A-V＝リエントリー性AT。',
   entrain:'エントレインメント：心室オーバードライブ中は constant fusion（PCL短縮で progressive fusion）、停止後の PPI−TCL・SA−VA で鑑別。',
   valink:'VAリンキング：心室ペーシング停止後の復帰VAが一定（リンク）＝AVNRT/AVRT、変動（アンリンク）＝AT。',
   parahis:'パラヒス刺激：洞調律下でHis近傍を高出力（His捕捉）→低出力（非捕捉）。SA不変＝副路あり、延長＝結節性。'
@@ -3324,7 +3324,7 @@ function currentTruth(){
   const r=state.result;
   if(r && r.induced && r.mechanism.includes('AVNRT')) return {key:'avnrt', short:'AVNRT。心房と心室がほぼ同時で室房間隔が極短、His最早期の求心性心房興奮。'};
   if(r && r.induced && r.mechanism.includes('AVRT')) return {key:'avrt', short:'正方向性AVRT。心室の後に偏心性心房（CS遠位最早期）、VA間隔が比較的長い。'};
-  if(state.scenario==='at') return {key:'at', short:'巣性心房頻拍。心房が先行する長RP頻拍、最早期心房は巣（非中隔）、房室結節は受動的に伝導。'};
+  if(state.scenario==='at') return {key:'at', short:'マクロリエントリー性心房頻拍。心房が先行する長RP頻拍、CS遠位最早期（ペリミトラル）、房室結節は受動的に伝導。'};
   if(state.scenario==='atypavnrt') return {key:'atypavnrt', short:'非典型AVNRT(fast-slow)。長VAで求心性（中隔/CS近位最早期）、緩伝導路を逆行。'};
   if(state.scenario==='aflutter') return {key:'aflutter', short:'心房粗動。規則的な心房波と鋸歯状F波、しばしば2:1伝導。'};
   if(r && r.a2h2==null && state.pace.active) return {key:'block', short:'房室ブロック：S2が結節不応期に入り心室応答が脱落。'};
@@ -3340,7 +3340,7 @@ function setScenNote(){
     avrt:'WPW A型（左外側Kent）：V1陽性δ波・逆行はCS遠位最早期。S2で副路前向きブロック→narrow化→正方向性AVRT。',
     avrtB:'WPW B型（右自由壁Kent）：V1陰性δ波・逆行はHRA（右房）最早期。S2で副路前向きブロック→narrow化→正方向性AVRT。',
     avrtC:'WPW C型（後中隔Kent）：下壁δ陰性・逆行はCS近位（os付近）最早期。S2で副路前向きブロック→narrow化→正方向性AVRT。',
-    at:'巣性心房頻拍。「💥頻拍を誘発」で開始。最早期心房（巣の位置）と長RP（A先行）を読み、AVNRTと鑑別。',
+    at:'マクロリエントリー性心房頻拍。「💥頻拍を誘発」で開始。CS遠位最早期（ペリミトラル）と長RP（A先行）を読み、AVNRTと鑑別。',
     atypavnrt:'非典型AVNRT。「💥頻拍を誘発」で開始。長VAで求心性最早期（CS近位/中隔）。長RPのATとの鑑別がポイント。',
     aflutter:'心房粗動。「💥頻拍を誘発」で開始。CS/HRAの心房波の規則性と房室伝導比を読み取ります。',
     coumel_pos:'ORT（左自由壁）。「💥頻拍を誘発」で開始→途中で脚ブロックが出現し幅広QRSに。脚ブロック前後でVA・TCLを比較→延長（⊿≥35ms）＝同側自由壁副路（Coumel陽性）。',
@@ -3403,7 +3403,7 @@ function measureTargets(){
   switch(state.scenario){
     case 'avnrt': return '<code>A2H2</code>（HisのA→H）, 頻拍周期, 室房間隔(VA), 最早期心房（His vs CS vs HRA）';
     case 'avrt':  return '<code>VA間隔</code>, 頻拍周期, 最早期心房（CS遠位か）, QRS幅の変化';
-    case 'at':    return '<code>RP/VA間隔</code>, 頻拍周期, 最早期心房（巣の位置）, AVブロック時の頻拍持続';
+    case 'at':    return '<code>RP/VA間隔</code>, 頻拍周期, 最早期心房（CS遠位・ペリミトラル）, AVブロック時の頻拍持続';
     case 'atypavnrt': return '<code>VA間隔</code>(長め), 頻拍周期, 最早期心房（中隔・CS近位か）';
     case 'aflutter': return '心房周期(F-F), 房室伝導比, CS興奮順序';
     default: return '<code>AH</code>(A→H), <code>HV</code>(H→QRS立ち上がり), A1A2 vs A2H2 の漸減';
@@ -3413,7 +3413,7 @@ function scenarioBaselineHints(){
   switch(state.scenario){
     case 'avnrt': return '洞調律ベース。②でHRAからS1S2を打ち、S2を10msずつ短くしてAHのjump（緩伝導路への切替）を探してください。';
     case 'avrt':  return 'デルタ波(予防興奮)に注目：HVが短縮しQRSの立ち上がりが緩徐です。S2で副路をブロックさせると正常QRSに戻ります。';
-    case 'at': return '巣性心房頻拍。心房が先行する長RP頻拍です。最早期心房（巣）を探し、求心性中隔のAVNRTと区別しましょう。心室刺激でV-A-A-V応答（AVNRTはV-A-V）が鑑別に有用です。';
+    case 'at': return 'マクロリエントリー性心房頻拍。心房が先行する長RP頻拍です。CS遠位最早期（ペリミトラル）の偏心性活性化を確認し、求心性のAVNRTと区別しましょう。心室刺激でV-A-A-V応答（AVNRTはV-A-V）が鑑別に有用です。';
     case 'atypavnrt': return '非典型AVNRT(fast-slow)。長VAで最早期心房は中隔（CS近位/His）＝求心性。長RPのATとの鑑別が要点です。';
     case 'aflutter': return '心房粗動。II誘導の鋸歯状波と、CS/HRAの規則的な心房波・房室伝導比を読みましょう。';
     case 'avblock_wenck': return 'Wenckebach型2度AVブロック。His distでAH間隔が順次延長し、4拍目でP波がブロック（His/V脱落）します。AH間隔をキャリパーで計測しましょう。';
@@ -3428,7 +3428,7 @@ function revealText(){
     sinus:'<b>正常房室伝導</b><br>AH(房室結節伝導,正常〜130ms)、HV(His-Purkinje,35-55ms)。S2短縮でAHは滑らかに延長し、結節有効不応期でブロック（心室脱落）。jumpは無い。',
     avnrt:'<b>AVNRT（通常型 slow-fast）</b><br>速伝導路と緩伝導路の二重生理。連結期短縮で速伝導路がERPに達しブロック→緩伝導路へ切替わりAHが≥50ms <b>jump</b>。緩伝導路順行+速伝導路逆行のリエントリーで頻拍。心房と心室がほぼ同時、VA<70ms、最早期心房はHis(中隔)＝<b>求心性</b>。',
     avrt:'<b>正方向性AVRT</b><br>洞調律で予防興奮（デルタ・短HV）。S2で副路が前向きブロック→AVNを順行(narrow QRS)→副路を逆行してリエントリー。心室の後に心房、最早期心房は副路付着部（左側壁ならCS遠位）＝<b>偏心性</b>。VAは比較的長い。',
-    at:'<b>巣性心房頻拍（AT）</b><br>心房内の異常自動能/微小リエントリー。心房が先行する<b>長RP</b>頻拍で、最早期心房は巣の位置（非中隔のことが多い）。房室結節は受動的伝導のためAVブロックを作っても頻拍は持続（AVNRT/AVRTとの決定的な違い）。心室刺激でV-A-A-V応答。',
+    at:'<b>マクロリエントリー性心房頻拍（AT）</b><br>心房内の大回路リエントリー（ペリミトラル型）。心房が先行する<b>長RP</b>頻拍で、CS遠位最早期の偏心性活性化（求心性のAVNRTと対比）。房室結節は受動的伝導のためAVブロックを作っても頻拍は持続（AVNRT/AVRTとの決定的な違い）。心室刺激でV-A-A-V応答。return cycle ≈ TCL（overdrive抑制なし）。',
     atypavnrt:'<b>非典型AVNRT（fast-slow）</b><br>緩伝導路を逆行するため<b>長VA</b>。最早期心房は中隔（CS近位/His付近）＝<b>求心性</b>。心電図上は長RP頻拍に見え、巣性ATとの鑑別が問題になる（ATはAV非依存、AVNRTはHis後の心房が必須）。',
     aflutter:'<b>心房粗動</b><br>三尖弁峡部などのマクロリエントリー。心房周期≈240ms前後の規則的興奮、II誘導で鋸歯状F波、房室結節で2:1などに減衰伝導。',
     avblock_wenck:'<b>Wenckebach型2度AVブロック（Mobitz I）</b><br>His束上（AVN内）のブロック。AH間隔が徐々に延長（房室結節疲弊）→最終P波がブロック→休止後リセット。4:3パターンが典型的。通常は可逆的で良性。',
@@ -3513,7 +3513,7 @@ function runAnalyzer(){
       // 鑑別ヒント（VA・最早期心房から）
       let hint;
       if(ecc) hint = va<160 ? '→ 偏心性・心室直後の心房 → <b>正方向性AVRT（副伝導路）</b>を支持'
-                            : '→ 偏心性・長RP → <b>巣性AT</b>を支持';
+                            : '→ 偏心性・長RP → <b>リエントリー性AT</b>を支持';
       else    hint = va<70  ? '→ 短VA・求心性中隔 → <b>通常型AVNRT</b>を支持'
                             : '→ 長VA・求心性中隔 → <b>非典型AVNRT／中隔起源AT</b>を支持';
       out.push(hint);
@@ -3535,7 +3535,7 @@ function runAnalyzer(){
     out.push(`<b>VAリンキング</b> 復帰VA ${e.vaSeq.join(' / ')} ms（ばらつき ${e.spread}ms）`);
     out.push(`<span class="tag ${e.spread<=15?'ok':'bad'}">${e.spread<=15?'VA一定（リンク）':'VA変動（アンリンク）'}</span>`);
     out.push(e.spread<=15 ? '→ <b>AVNRT / AVRT</b>（VAが心室に連結）を支持'
-                          : '→ <b>巣性AT</b>（心房が独立＝VA非連結）を支持');
+                          : '→ <b>AT</b>（心房が独立＝VA非連結）を支持');
   }
 
   // --- 2e. His不応期PVC ---
@@ -3550,7 +3550,7 @@ function runAnalyzer(){
     const e=r.vaav;
     out.push(`<b>心室オーバードライブ応答</b> <b>${e.pattern}</b>`);
     out.push(`<span class="tag ${e.isAT?'bad':'ok'}">${e.isAT?'V-A-A-V：心房が独立':'V-A-V：房室が連結'}</span>`);
-    out.push(e.isAT ? '→ <b>巣性AT</b>（心室は回路外）' : '→ <b>AVNRT / AVRT</b>（心室が回路に参加）');
+    out.push(e.isAT ? '→ <b>AT</b>（心室は回路外）' : '→ <b>AVNRT / AVRT</b>（心室が回路に参加）');
   }
 
   // --- 2b. エントレインメント PPI−TCL ---
@@ -3559,7 +3559,7 @@ function runAnalyzer(){
     out.push(`<b>エントレインメント</b> PPI ${e.ppi}ms − TCL ${e.tcl}ms ＝ <b>PPI−TCL ${e.diff}ms</b>`);
     out.push(`<span class="tag ${e.diff<115?'ok':'bad'}">${e.diff<115?'PPI−TCL < 115ms：心室が回路内／近接':'PPI−TCL > 115ms：心室は回路外'}</span>`);
     out.push(e.diff<115 ? '→ <b>AVNRT / AVRT</b>（心室が回路に参加）を支持'
-                        : '→ <b>巣性AT</b>（心室は回路外＝オーバードライブ抑制型）を支持');
+                        : '→ <b>AT</b>（心室は回路外）を支持');
   }
 
   if(r && !state.pace.maneuver){
