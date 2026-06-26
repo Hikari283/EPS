@@ -1152,25 +1152,22 @@ function buildVentricularEntrainment(sc){
     const nPre    = isAVRT(sc) ? Math.max(1, Math.round(stableBeat*0.5)) : (stableBeat+2);
 
     if(sc==='atypavnrt'){
-      // fast-slow AVNRT：逆行は slow pathway（VA≈185ms、atyp パターン）
-      // 頻拍中と同じ活性化順序でエントレイン。遷移ゾーンで AA=TCL→PCL へ短縮。
-      const VA_SLOW = 185;
-      let aT = tOn + VA_SLOW;                               // 最初の A（slow pathway, 頻拍 VA に合わせたオフセット）
+      // fast-slow AVNRT：ペーシング中は fast pathway 逆行（V+70ms, retro_rv）が観察される。
+      // 遷移ゾーンで AA=TCL→PCL へ短縮。lastV も含めて出力し、直前の A から A1 まで PCL を保証。
+      // post-stop では A1 は再 emit せず A2 だけ出す（ここで出した lastV+70 = A1 として使われる）。
+      let aT = tOn;
       for(let i=0; i<nPre; i++){
-        emitAtrial(aT, 'atyp', 0.9);
+        emitAtrial(aT, 'retro_rv', 0.9);
         aT += tcl;
       }
       for(let s=0; s<nTrans; s++){
-        emitAtrial(aT, 'atyp', 0.9);
+        emitAtrial(aT, 'retro_rv', 0.9);
         aT += Math.max(pcl, tcl - aaStep*(s+1));
       }
-      // エントレイン後：各ペースV + VA_SLOW にロック（AA=PCL）
-      // 停止後 A1 が lastV+VA_FAST_AT(=70) に出るため、
-      // lastV+VA_SLOW(=185) が A1 より後になるので lastV は除外する
-      const kEntrain = Math.ceil((aT - VA_SLOW - tOn) / pcl);
+      // エントレイン後：V+VA_FAST_AT（=70ms）にロック。lastV も含む → lastV+70 = A1
+      const kEntrain = Math.ceil((aT - VA_FAST_AT - tOn) / pcl);
       for(let k=kEntrain; tOn+k*pcl <= lastV; k++){
-        if(tOn + k*pcl + VA_SLOW >= lastV + VA_FAST_AT) break; // A1 と重なる拍はスキップ
-        emitAtrial(tOn + k*pcl + VA_SLOW, 'atyp', 0.9);
+        emitAtrial(tOn + k*pcl + VA_FAST_AT, 'retro_rv', 0.9);
       }
     } else {
       // AVNRT / ORT
@@ -1241,8 +1238,7 @@ function buildVentricularEntrainment(sc){
     //   superior slow pathway→A2（eccentric, atyp）の両方を伝導＝二重応答 → 一見 V-A-A-V。
     //   A1とA2は心房興奮順序が違う（A1=刺激中のA/fast、A2=頻拍再開後のA/slow）。A1A2は短い。
     //   鑑別＝ΔAA = TCL − A1A2（金古2022 図8）：AVNRT は >26ms（A1A2短）、AT は <−80ms（A1A2長）。
-    const A1 = lastV + VA_FAST_AT;
-    emitAtrial(A1, 'retro_rv', 0.9);                  // A1：fast pathway 逆行（concentric）
+    const A1 = lastV + VA_FAST_AT;                     // A1：エントレインループで emit 済（lastV+70）
     const A2 = A1 + A1A2_AT;                          // A1A2 = PCL（ペーシングSL）→ A2 = lastV+70+PCL
     emitAtrial(A2, 'atyp_vaav', 0.9);                 // A2：His=6ms(A1と違う)、CS=retro_rv準拠でA1A2=PCL on all CS ch
     fillTachyAtypAVNRT(A2 + 175, state.duration);     // A2→fast順行→V→slow逆行→…で頻拍再開
