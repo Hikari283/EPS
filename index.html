@@ -1113,10 +1113,10 @@ function buildVentricularEntrainment(sc){
   const onsetStep = Math.max(0.09, Math.min(0.45, (tcl-pcl)/tcl * 1.6));
   // fast-slow AVNRT の pseudo V-A-A-V（本 p112）：
   //   刺激中は fast pathway 逆伝導が顕在化＝A1（concentric, retro_rv, 短VA）のみ出現。
-  //   slow pathway→A2 は V+70+PCL（次Vより70ms後）→ ペーシング中は次Vに隠れて不可視。
-  //   停止後、最終Vから A1(+70ms)→A2(A1+PCL)→頻拍再開V が出現＝pseudo V-A-A-V。
+  //   slow pathway→A2 は V+PCL（次Vと同時）→ ペーシング中は次Vに埋もれて不可視。
+  //   停止後、最終Vから A1(+70ms)→A2(+PCL=V+PCL)→頻拍再開V が出現＝pseudo V-A-A-V。
   const VA_FAST_AT = 70;          // fast pathway逆行VA（A1, concentric, 短い）
-  const A1A2_AT    = pcl;         // A1→A2 = PCL（ペーシングSL）→ A2はV+70+PCL（次Vより後）＝停止後にのみ出現（本 p112）
+  const A1A2_AT    = pcl - VA_FAST_AT;  // A1→A2 = PCL−70ms → A2 = lastV+PCL（V→A2=PCL＝ペーシングSL）
   let lastV=tOn, beat=0;
   for(let t=tOn; t<paceEnd; t+=pcl){
     emitStim(t,'RVA');
@@ -1129,7 +1129,7 @@ function buildVentricularEntrainment(sc){
     if(sc==='at') emitAtrial(t+tp.va,'retro_rv',0.9);  // AT：心房も逆行性(AVN経由＝concentric)にPCLで捕捉（entrain）
     else if(sc==='atypavnrt'){
       emitAtrial(t+VA_FAST_AT, 'retro_rv', 0.9); // A1: fast pathway逆行（concentric, 短VA, PCL依存）
-      // A2（slow pathway）はV+70+PCL > 次のV(V+PCL) → ペーシング中は次Vに隠れて不可視。停止後に出現。
+      // A2（slow pathway）はV+PCL = 次のV → ペーシング中は次Vに埋もれて不可視。停止後に出現。
     }
     lastV=t; beat++;
   }
@@ -1213,14 +1213,14 @@ function buildVentricularEntrainment(sc){
     //   A1とA2は心房興奮順序が違う（A1=刺激中のA/fast、A2=頻拍再開後のA/slow）。A1A2は短い。
     //   鑑別＝ΔAA = TCL − A1A2（金古2022 図8）：AVNRT は >26ms（A1A2短）、AT は <−80ms（A1A2長）。
     const A1 = lastV + VA_FAST_AT;
-    const A2 = A1 + A1A2_AT;                          // A1A2 = PCL（ペーシングSL）→ A2 = lastV+70+PCL（本 p112）
+    const A2 = lastV + pcl;                            // V→A2 = PCL（ペーシングSL）→ A2 = lastV+PCL（本 p112）
     emitAtrial(A2, 'atyp', 0.9);                      // A2＝eccentric（A1のconcentricと興奮順序が違う）
     fillTachyAtypAVNRT(A2 + 175, state.duration);     // A2→fast順行→V→slow逆行→…で頻拍再開
     const dAA = tcl - A1A2_AT;                        // ΔAA = TCL − A1A2
     const tRetV = A2 + 175, ppi = tRetV - lastV;
     res.vaav={pattern:'V-A-A-V (pseudo)', ppi, tcl, diff:ppi-tcl, dAA, a1a2:A1A2_AT, inCircuit:true, pseudo:true};
-    res.notes.push(`停止後 <b>pseudo V-A-A-V</b>（本 p112）：最終Vから <b>fast→A1（concentric, +${VA_FAST_AT}ms）</b> → <b>slow→A2（eccentric, A1+${pcl}ms＝<b>A1A2=PCL</b>）</b>。`);
-    res.notes.push(`<b>A1A2 = PCL（${pcl}ms）</b>：最終Vが slow pathway 経由で A2 を捕捉。<b>A1とA2の興奮順序の違い</b>（concentric vs eccentric）が fast-slow AVNRT の決め手。`);
+    res.notes.push(`停止後 <b>pseudo V-A-A-V</b>（本 p112）：最終Vから <b>fast→A1（concentric, +${VA_FAST_AT}ms）</b> → <b>slow→A2（eccentric, V+${pcl}ms＝<b>V→A2=PCL</b>）</b>。`);
+    res.notes.push(`<b>V→A2 = PCL（${pcl}ms）</b>：最終Vが slow pathway 経由で A2 を捕捉。A1A2 = ${A1A2_AT}ms。<b>A1とA2の興奮順序の違い</b>（concentric vs eccentric）が fast-slow AVNRT の決め手。`);
     res.notes.push(`<b>A1A2 = ${A1A2_AT}ms</b>。ΔAA = TCL−A1A2 = ${dAA}ms（金古2022, 本 p114 図8：AVNRT は通常 ΔAA&gt;26ms を満たす）。`);
   }else{
     // V-A-A-V：#1 逆行A（最終ペース由来・AA=PCLでペーシング依存／上ループでemit済）
