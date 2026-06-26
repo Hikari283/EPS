@@ -1117,7 +1117,7 @@ function buildVentricularEntrainment(sc){
   //   → 刺激中から V-A1-A2 が各PCLサイクルに並ぶ（両Aとも PCL依存）。
   //   停止後も同じく V-A1-A2-V（pseudo V-A-A-V）。A1・A2は興奮順序が違う。
   const VA_FAST_AT = 70;          // fast pathway逆行VA（A1, concentric, 短い）
-  const A1A2_AT    = pcl - VA_FAST_AT; // slow pathway逆行 A1→A2 = PCL−70ms → V+A2 = PCL（本 p112 pseudo V-A-A-V）
+  const A1A2_AT    = pcl;         // A1→A2 = PCL（ペーシングSL）→ A2はV+70+PCL（次Vより後）＝停止後にのみ出現（本 p112）
   let lastV=tOn, beat=0;
   for(let t=tOn; t<paceEnd; t+=pcl){
     emitStim(t,'RVA');
@@ -1129,8 +1129,8 @@ function buildVentricularEntrainment(sc){
     emitHis(t+47, 0.6);
     if(sc==='at') emitAtrial(t+tp.va,'retro_rv',0.9);  // AT：心房も逆行性(AVN経由＝concentric)にPCLで捕捉（entrain）
     else if(sc==='atypavnrt'){
-      emitAtrial(t+VA_FAST_AT,         'retro_rv', 0.9); // A1: fast pathway逆行（concentric, 短VA, PCL依存）
-      emitAtrial(t+VA_FAST_AT+A1A2_AT, 'atyp',     0.9); // A2: slow pathway逆行（eccentric, PCL依存, V+180ms < PCL）
+      emitAtrial(t+VA_FAST_AT, 'retro_rv', 0.9); // A1: fast pathway逆行（concentric, 短VA, PCL依存）
+      // A2（slow pathway）はV+70+PCL > 次のV(V+PCL) → ペーシング中は次Vに隠れて不可視。停止後に出現。
     }
     lastV=t; beat++;
   }
@@ -1175,8 +1175,8 @@ function buildVentricularEntrainment(sc){
       res.notes.push(`RVAを ${pcl}ms でオーバードライブ中。心室はPCL、<b>心房も逆行性に AA=PCL（${pcl}ms）で捕捉</b>（リエントリー回路は継続）。`);
       res.notes.push(`まず <b>AA間隔がPCLに一致（＝ペーシング依存）</b> を確認してから停止。停止後 <b>V-A-A-V</b> なら心室は回路外＝リエントリー性AT。`);
     } else if(sc==='atypavnrt'){
-      res.notes.push(`RVAを ${pcl}ms でオーバードライブ中。各ペースVから <b>fast→A1（concentric, +${VA_FAST_AT}ms）</b> と <b>superior slow→A2（eccentric, +${pcl}ms＝ペーシングSL）</b> の<b>心房二重応答</b>が毎拍出現（本 p112）。`);
-      res.notes.push(`<b>A1・A2ともにペーシングSL依存</b>。停止後は <b>pseudo V-A-A-V</b>：A1とA2の<b>興奮順序の違い</b>（concentric vs eccentric）が fast-slow AVNRT の決め手。`);
+      res.notes.push(`RVAを ${pcl}ms でオーバードライブ中。各ペースVから <b>fast→A1（concentric, +${VA_FAST_AT}ms）</b> が PCL 依存で出現。<b>slow→A2</b> は V+${VA_FAST_AT+pcl}ms（次Vより後）のため<b>ペーシング中は次Vに隠れて不可視</b>（本 p112）。`);
+      res.notes.push(`停止後、最終Vから A1(+${VA_FAST_AT}ms) → A2(A1+${pcl}ms＝<b>A1A2=PCL</b>) → 頻拍再開 V で <b>pseudo V-A-A-V</b> が出現。`);
     } else {
       res.notes.push(`RVAを ${pcl}ms（TCL ${tcl}ms）でオーバードライブ中。<b>VV=PCLは1拍目から</b>だが、<b>AAは最初TCLのまま</b>で、数拍かけてPCLへ短縮（定常状態へ）。`);
       res.notes.push(`体表QRSは <b>R→rS→…→深い陰性QS（完全捕捉）</b> へ移行（transition zone → stable QRS）。<b>到達までの拍数はレート依存</b>（TCL−20≈10拍 / 速いレートほど少ない拍）。`);
@@ -1220,8 +1220,8 @@ function buildVentricularEntrainment(sc){
     const dAA = tcl - A1A2_AT;                        // ΔAA = TCL − A1A2
     const tRetV = A2 + 175, ppi = tRetV - lastV;
     res.vaav={pattern:'V-A-A-V (pseudo)', ppi, tcl, diff:ppi-tcl, dAA, a1a2:A1A2_AT, inCircuit:true, pseudo:true};
-    res.notes.push(`停止後 <b>pseudo V-A-A-V</b>（本 p112）：最終Vから <b>fast→A1（concentric, +${VA_FAST_AT}ms）</b>＋<b>superior slow→A2（eccentric, +${pcl}ms＝ペーシングSL）</b> の<b>心房二重応答</b>。`);
-    res.notes.push(`<b>A2はペーシングSL（${pcl}ms）に一致</b>（刺激中から PCL 依存）。<b>A1とA2の興奮順序の違い</b>（concentric vs eccentric）が fast-slow AVNRT の決め手。`);
+    res.notes.push(`停止後 <b>pseudo V-A-A-V</b>（本 p112）：最終Vから <b>fast→A1（concentric, +${VA_FAST_AT}ms）</b> → <b>slow→A2（eccentric, A1+${pcl}ms＝<b>A1A2=PCL</b>）</b>。`);
+    res.notes.push(`<b>A1A2 = PCL（${pcl}ms）</b>：最終Vが slow pathway 経由で A2 を捕捉。<b>A1とA2の興奮順序の違い</b>（concentric vs eccentric）が fast-slow AVNRT の決め手。`);
     res.notes.push(`<b>A1A2 = ${A1A2_AT}ms</b>。ΔAA = TCL−A1A2 = ${dAA}ms（金古2022, 本 p114 図8：AVNRT は通常 ΔAA&gt;26ms を満たす）。`);
   }else{
     // V-A-A-V：#1 逆行A（最終ペース由来・AA=PCLでペーシング依存／上ループでemit済）
