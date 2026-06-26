@@ -1151,21 +1151,39 @@ function buildVentricularEntrainment(sc){
     // 遷移前の拍数：ORT は transition zone 中に心房加速（早め）、AVNRT/atypavnrt は stable QRS 後
     const nPre    = isAVRT(sc) ? Math.max(1, Math.round(stableBeat*0.5)) : (stableBeat+2);
 
-    // AVNRT / ORT / fast-slow AVNRT：同一ロジック（aT=tOn から TCL→PCL 遷移）
-    const retroMode = (sc==='atypavnrt') ? 'retro_rv' : tp.retro;
-    let aT = tOn;
-    for(let i=0; i<nPre; i++){
-      emitAtrial(aT, retroMode, 0.9);
-      aT += tcl;
-    }
-    for(let s=0; s<nTrans; s++){
-      emitAtrial(aT, retroMode, 0.9);
-      aT += Math.max(pcl, tcl - aaStep*(s+1));
-    }
-    // atypavnrt：停止後 A1 が lastV+VA_FAST_AT に出るため、エントレインループはその手前で止める
-    const entrainEnd = (sc==='atypavnrt') ? (lastV + VA_FAST_AT - pcl/2) : (lastV + VA_PACE + pcl/2);
-    for(let tA = aT; tA <= entrainEnd; tA += pcl){
-      emitAtrial(tA, retroMode, 0.9);
+    if(sc==='atypavnrt'){
+      // fast-slow AVNRT：逆行は slow pathway（VA≈185ms、atyp パターン）
+      // 頻拍中と同じ活性化順序でエントレイン。遷移ゾーンで AA=TCL→PCL へ短縮。
+      const VA_SLOW = 185;
+      let aT = tOn + VA_SLOW;                               // 最初の A（slow pathway, 頻拍 VA に合わせたオフセット）
+      for(let i=0; i<nPre; i++){
+        emitAtrial(aT, 'atyp', 0.9);
+        aT += tcl;
+      }
+      for(let s=0; s<nTrans; s++){
+        emitAtrial(aT, 'atyp', 0.9);
+        aT += Math.max(pcl, tcl - aaStep*(s+1));
+      }
+      // エントレイン後：各ペースV + VA_SLOW にロック（AA=PCL）
+      // aT 以降、最初の V+VA_SLOW を探してロック開始
+      const kEntrain = Math.ceil((aT - VA_SLOW - tOn) / pcl);
+      for(let k=kEntrain; tOn+k*pcl <= lastV; k++){
+        emitAtrial(tOn + k*pcl + VA_SLOW, 'atyp', 0.9);
+      }
+    } else {
+      // AVNRT / ORT
+      let aT = tOn;
+      for(let i=0; i<nPre; i++){
+        emitAtrial(aT, tp.retro, 0.9);
+        aT += tcl;
+      }
+      for(let s=0; s<nTrans; s++){
+        emitAtrial(aT, tp.retro, 0.9);
+        aT += Math.max(pcl, tcl - aaStep*(s+1));
+      }
+      for(let tA = aT; tA <= lastV + VA_PACE + pcl/2; tA += pcl){
+        emitAtrial(tA, tp.retro, 0.9);
+      }
     }
   }
   // AT：ペーシング中は心房も逆行性にPCLで捕捉済み（上ループでemit）。
