@@ -1146,26 +1146,29 @@ function buildVentricularEntrainment(sc){
   const vaTachy   = isAVRT(sc) ? 120 : 5;
   const VA_PACE   = ppiTclRef + vaTachy;     // ORT 170 / AVNRT 133（=逆行A位置 lastV+VA_PACE）
   if(sc==='avnrt' || isAVRT(sc)){
+    // 遷移ゾーン：TCL→PCL を 10ms ステップで短縮（EPSの本 p163-166）。
+    // 例：TCL=360, PCL=330 → AA: TCL, TCL, …, TCL-10, TCL-20, TCL-30(=PCL), PCL, …
     const stableBeat = Math.max(1, Math.ceil((1-0.12)/onsetStep));
-    const aReach = isAVRT(sc) ? Math.max(1, Math.round(stableBeat*0.5)) : (stableBeat+2);
-    const tAccel = tOn + aReach*pcl;     // この時刻からAAがPCL
-    // 遷移ゾーン：AA間隔をTCLからPCLへ線形に短縮（PCLより短い拍は出ない）。
-    // 最後の遷移Aは firstEntrainA−PCL に合わせ、次のエントレインAとのAA=PCLを保証。
-    const firstEntrainA = tAccel + VA_PACE;
-    const lastTransA    = firstEntrainA - pcl;           // この位置で終わると次AAがちょうどPCL
-    const nInt          = aReach - 1;                    // 遷移拍間のインターバル数
-    const aaFirst       = Math.round(2*(lastTransA-tOn)/nInt - pcl); // 線形補間の初期AA
+    const aaStep  = 10;                                   // ms/step（本では5ms、本シミュはTCL-PCL差大きいため10ms）
+    const nTrans  = Math.max(1, Math.ceil((tcl - pcl) / aaStep)); // ≈3（AVNRT標準）
+    // 遷移前の拍数：AVNRTはstable QRS後に心房加速、AVRTはtransition zone中（本p165）
+    const nPre    = isAVRT(sc) ? Math.max(1, Math.round(stableBeat*0.5)) : (stableBeat+2);
+    // 心房タイムライン（Vタイムラインとは独立）
     let aT = tOn;
-    for(let i=0; i<aReach; i++){
+    // TCL拍（遷移前）
+    for(let i=0; i<nPre; i++){
       emitAtrial(aT, tp.retro, 0.9);
-      if(i < nInt){
-        const aa = Math.max(pcl, Math.round(aaFirst - (aaFirst-pcl)*i/(nInt-1)));
-        aT += aa;
-      }
+      aT += tcl;
+    }
+    // 遷移ゾーン：AA を tcl-aaStep → tcl-2*aaStep → … → pcl へ段階的に短縮
+    for(let s=0; s<nTrans; s++){
+      emitAtrial(aT, tp.retro, 0.9);
+      aT += Math.max(pcl, tcl - aaStep*(s+1));
     }
     // エントレイン後：各ペースV + VA_PACE にロック（AA=PCL）。最後の逆行A が V-A-V の A。
+    const tAccel = aT;                                    // 遷移完了時刻
     for(let t=tOn; t<=lastV; t+=pcl){
-      if(t >= tAccel) emitAtrial(t + VA_PACE, tp.retro, 0.9);
+      if(t >= tAccel - VA_PACE) emitAtrial(t + VA_PACE, tp.retro, 0.9);
     }
   }
   // AT：ペーシング中は心房も逆行性にPCLで捕捉済み（上ループでemit）。
