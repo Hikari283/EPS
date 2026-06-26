@@ -1150,10 +1150,12 @@ function buildVentricularEntrainment(sc){
     const aReach = isAVRT(sc) ? Math.max(1, Math.round(stableBeat*0.5)) : (stableBeat+2);
     const tAccel = tOn + aReach*pcl;     // この時刻からAAがPCL
     // 加速前：心房はTCLでドリフト（V＝PCLとは独立）＝transition zone
+    // 最初のエントレインA（tAccel+VA_PACE）との間隔がPCL未満になる遷移Aは出さない（臨床的に短すぎる拍を防ぐ）
+    const firstEntrainA = tAccel + VA_PACE;
     let aT = tOn;
     while(aT < tAccel){
-      emitAtrial(aT, tp.retro, 0.9);
-      aT += (aT < tAccel - pcl) ? tcl : Math.round((tcl+pcl)/2);   // ランプ1拍
+      if(firstEntrainA - aT >= pcl) emitAtrial(aT, tp.retro, 0.9);
+      aT += (aT < tAccel - pcl) ? tcl : Math.round((tcl+pcl)/2);
     }
     // 加速後：各ペースV + VA_PACE にロック（AA=PCL・V-A一定）。最後の逆行A = lastV+VA_PACE が V-A-VのA。
     for(let t=tOn; t<=lastV; t+=pcl){
