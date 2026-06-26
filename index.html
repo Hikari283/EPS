@@ -415,6 +415,7 @@ function atrialOffsets(mode){
     case 'at_focus':  return {HRA:30, His:26, cs:[18,10,0,8,16],  P:20};    // 巣性AT(参照用)：CS中部最早期から両方向へ（巣性・非中隔）
     case 'at_reentry':return {HRA:48, His:22, cs:[0,14,28,42,54],  P:16};  // マクロリエントリー性AT（ペリミトラル）：CS近位最早期→CS遠位→His→HRA（逐次活性化）
     case 'atyp':      return {HRA:30, His:6,  cs:[0,8,16,26,36],  P:10};    // 非典型AVNRT逆行：CS近位/中隔最早期（求心性）
+    case 'atyp_vaav': return {HRA:30, His:6,  cs:[10,14,20,28,38],P:10};   // pseudo V-A-A-V A2用：CSオフセットをretro_rvに合わせてA1A2=PCLを全CS chで保証
     default:          return {HRA:0,  His:38, cs:[30,38,46,54,62], P:12};
   }
 }
@@ -1214,7 +1215,7 @@ function buildVentricularEntrainment(sc){
     //   鑑別＝ΔAA = TCL − A1A2（金古2022 図8）：AVNRT は >26ms（A1A2短）、AT は <−80ms（A1A2長）。
     const A1 = lastV + VA_FAST_AT;
     const A2 = A1 + A1A2_AT;                          // A1A2 = PCL（ペーシングSL）→ A2 = lastV+70+PCL
-    emitAtrial(A2, 'atyp', 0.9);                      // A2＝eccentric（A1のconcentricと興奮順序が違う）
+    emitAtrial(A2, 'atyp_vaav', 0.9);                 // A2：His=6ms(A1と違う)、CS=retro_rv準拠でA1A2=PCL on all CS ch
     fillTachyAtypAVNRT(A2 + 175, state.duration);     // A2→fast順行→V→slow逆行→…で頻拍再開
     const dAA = tcl - A1A2_AT;                        // ΔAA = TCL − A1A2
     const tRetV = A2 + 175, ppi = tRetV - lastV;
