@@ -1149,24 +1149,25 @@ function buildVentricularEntrainment(sc){
     const aaStep  = 10;
     const nTrans  = Math.max(1, Math.ceil((tcl - pcl) / aaStep));
     const nPre    = isAVRT(sc) ? Math.max(1, Math.round(stableBeat*0.5)) : (stableBeat+2);
+    const retroMode = sc==='atypavnrt' ? 'retro_rv' : tp.retro;
     let aT = tOn;
-    for(let i=0; i<nPre; i++){
-      emitAtrial(aT, sc==='atypavnrt' ? 'retro_rv' : tp.retro, 0.9);
+    // ペーシング中のみ emit（paceEnd を超えたら打ち切り→停止後 V-A-A-V 領域を汚染しない）
+    for(let i=0; i<nPre && aT <= paceEnd; i++){
+      emitAtrial(aT, retroMode, 0.9);
       aT += tcl;
     }
-    for(let s=0; s<nTrans; s++){
-      emitAtrial(aT, sc==='atypavnrt' ? 'retro_rv' : tp.retro, 0.9);
+    for(let s=0; s<nTrans && aT <= paceEnd; s++){
+      emitAtrial(aT, retroMode, 0.9);
       aT += Math.max(pcl, tcl - aaStep*(s+1));
     }
     if(sc==='atypavnrt'){
-      // エントレイン後：aT ベースで PCL 刻み（隙間なし）。
-      // A1（lastV+VA_FAST_AT）は post-stop で emit するため、手前で打ち切る。
-      for(let tA = aT; tA <= lastV + VA_FAST_AT - pcl/2; tA += pcl){
-        emitAtrial(tA, 'retro_rv', 0.9);
+      // エントレイン後：aT ベースで PCL 刻み（隙間なし）。paceEnd 内かつ A1 手前で打ち切る。
+      for(let tA = aT; tA <= Math.min(paceEnd, lastV + VA_FAST_AT - pcl/2); tA += pcl){
+        emitAtrial(tA, retroMode, 0.9);
       }
     } else {
       for(let tA = aT; tA <= lastV + VA_PACE + pcl/2; tA += pcl){
-        emitAtrial(tA, tp.retro, 0.9);
+        emitAtrial(tA, retroMode, 0.9);
       }
     }
   }
