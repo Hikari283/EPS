@@ -1165,9 +1165,11 @@ function buildVentricularEntrainment(sc){
         aT += Math.max(pcl, tcl - aaStep*(s+1));
       }
       // エントレイン後：各ペースV + VA_SLOW にロック（AA=PCL）
-      // aT 以降、最初の V+VA_SLOW を探してロック開始
+      // 停止後 A1 が lastV+VA_FAST_AT(=70) に出るため、
+      // lastV+VA_SLOW(=185) が A1 より後になるので lastV は除外する
       const kEntrain = Math.ceil((aT - VA_SLOW - tOn) / pcl);
       for(let k=kEntrain; tOn+k*pcl <= lastV; k++){
+        if(tOn + k*pcl + VA_SLOW >= lastV + VA_FAST_AT) break; // A1 と重なる拍はスキップ
         emitAtrial(tOn + k*pcl + VA_SLOW, 'atyp', 0.9);
       }
     } else {
