@@ -1128,7 +1128,10 @@ function buildVentricularEntrainment(sc){
     // His電極：逆行H は先に出る（実測 Stim→H 47ms）＝H-V-A（V は emitVentFusion の +66）。
     emitHis(t+47, 0.6);
     if(sc==='at') emitAtrial(t+tp.va,'retro_rv',0.9);  // AT：心房も逆行性(AVN経由＝concentric)にPCLで捕捉（entrain）
-    // atypavnrt の心房出力は遷移ゾーンブロックで一括処理
+    else if(sc==='atypavnrt'){
+      emitAtrial(t+VA_FAST_AT, 'retro_rv', 0.9); // A1: fast pathway逆行（concentric, 短VA, PCL依存）
+      // A2（slow pathway）はA1+PCL > 次のV(V+PCL) → ペーシング中は次Vに隠れて不可視。停止後に出現。
+    }
     lastV=t; beat++;
   }
   // ---- 心房の加速（本 p165 図22/23）----
@@ -1142,47 +1145,29 @@ function buildVentricularEntrainment(sc){
   const ppiTclRef = isAVRT(sc) ? 50 : 128;
   const vaTachy   = isAVRT(sc) ? 120 : 5;
   const VA_PACE   = ppiTclRef + vaTachy;     // ORT 170 / AVNRT 133（=逆行A位置 lastV+VA_PACE）
-  if(sc==='avnrt' || isAVRT(sc) || sc==='atypavnrt'){
+  if(sc==='avnrt' || isAVRT(sc)){
     // 遷移ゾーン：TCL→PCL を 10ms ステップで短縮（EPSの本 p163-166）。
-    // AVNRT/ORT/fast-slow AVNRT 共通ロジック。
+    // 例：TCL=360, PCL=330 → AA: TCL, TCL, …, TCL-10, TCL-20, TCL-30(=PCL), PCL, …
     const stableBeat = Math.max(1, Math.ceil((1-0.12)/onsetStep));
-    const aaStep  = 10;
-    const nTrans  = Math.max(1, Math.ceil((tcl - pcl) / aaStep));
-    // 遷移前の拍数：ORT は transition zone 中に心房加速（早め）、AVNRT/atypavnrt は stable QRS 後
+    const aaStep  = 10;                                   // ms/step（本では5ms、本シミュはTCL-PCL差大きいため10ms）
+    const nTrans  = Math.max(1, Math.ceil((tcl - pcl) / aaStep)); // ≈3（AVNRT標準）
+    // 遷移前の拍数：AVNRTはstable QRS後に心房加速、AVRTはtransition zone中（本p165）
     const nPre    = isAVRT(sc) ? Math.max(1, Math.round(stableBeat*0.5)) : (stableBeat+2);
-
-    if(sc==='atypavnrt'){
-      // fast-slow AVNRT：ペーシング中は fast pathway 逆行（V+70ms, retro_rv）が観察される。
-      // 遷移ゾーンで AA=TCL→PCL へ短縮。lastV も含めて出力し、直前の A から A1 まで PCL を保証。
-      // post-stop では A1 は再 emit せず A2 だけ出す（ここで出した lastV+70 = A1 として使われる）。
-      let aT = tOn;
-      for(let i=0; i<nPre; i++){
-        emitAtrial(aT, 'retro_rv', 0.9);
-        aT += tcl;
-      }
-      for(let s=0; s<nTrans; s++){
-        emitAtrial(aT, 'retro_rv', 0.9);
-        aT += Math.max(pcl, tcl - aaStep*(s+1));
-      }
-      // エントレイン後：V+VA_FAST_AT（=70ms）にロック。lastV も含む → lastV+70 = A1
-      const kEntrain = Math.ceil((aT - VA_FAST_AT - tOn) / pcl);
-      for(let k=kEntrain; tOn+k*pcl <= lastV; k++){
-        emitAtrial(tOn + k*pcl + VA_FAST_AT, 'retro_rv', 0.9);
-      }
-    } else {
-      // AVNRT / ORT
-      let aT = tOn;
-      for(let i=0; i<nPre; i++){
-        emitAtrial(aT, tp.retro, 0.9);
-        aT += tcl;
-      }
-      for(let s=0; s<nTrans; s++){
-        emitAtrial(aT, tp.retro, 0.9);
-        aT += Math.max(pcl, tcl - aaStep*(s+1));
-      }
-      for(let tA = aT; tA <= lastV + VA_PACE + pcl/2; tA += pcl){
-        emitAtrial(tA, tp.retro, 0.9);
-      }
+    // 心房タイムライン（Vタイムラインとは独立）
+    let aT = tOn;
+    // TCL拍（遷移前）
+    for(let i=0; i<nPre; i++){
+      emitAtrial(aT, tp.retro, 0.9);
+      aT += tcl;
+    }
+    // 遷移ゾーン：AA を tcl-aaStep → tcl-2*aaStep → … → pcl へ段階的に短縮
+    for(let s=0; s<nTrans; s++){
+      emitAtrial(aT, tp.retro, 0.9);
+      aT += Math.max(pcl, tcl - aaStep*(s+1));
+    }
+    // エントレイン後：遷移終了点(aT)から PCL 刻みで連続出力（隙間なし）
+    for(let tA = aT; tA <= lastV + VA_PACE + pcl/2; tA += pcl){
+      emitAtrial(tA, tp.retro, 0.9);
     }
   }
   // AT：ペーシング中は心房も逆行性にPCLで捕捉済み（上ループでemit）。
@@ -1238,7 +1223,7 @@ function buildVentricularEntrainment(sc){
     //   superior slow pathway→A2（eccentric, atyp）の両方を伝導＝二重応答 → 一見 V-A-A-V。
     //   A1とA2は心房興奮順序が違う（A1=刺激中のA/fast、A2=頻拍再開後のA/slow）。A1A2は短い。
     //   鑑別＝ΔAA = TCL − A1A2（金古2022 図8）：AVNRT は >26ms（A1A2短）、AT は <−80ms（A1A2長）。
-    const A1 = lastV + VA_FAST_AT;                     // A1：エントレインループで emit 済（lastV+70）
+    const A1 = lastV + VA_FAST_AT;
     const A2 = A1 + A1A2_AT;                          // A1A2 = PCL（ペーシングSL）→ A2 = lastV+70+PCL
     emitAtrial(A2, 'atyp_vaav', 0.9);                 // A2：His=6ms(A1と違う)、CS=retro_rv準拠でA1A2=PCL on all CS ch
     fillTachyAtypAVNRT(A2 + 175, state.duration);     // A2→fast順行→V→slow逆行→…で頻拍再開
