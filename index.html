@@ -1151,36 +1151,19 @@ function buildVentricularEntrainment(sc){
     // 遷移前の拍数：ORT は transition zone 中に心房加速（早め）、AVNRT/atypavnrt は stable QRS 後
     const nPre    = isAVRT(sc) ? Math.max(1, Math.round(stableBeat*0.5)) : (stableBeat+2);
 
-    if(sc==='atypavnrt'){
-      // fast-slow AVNRT：頻拍中は slow pathway 逆行で A2（atyp, VA=185ms）。
-      // 乗っ取り前は A2 が TCL で継続、遷移で A1（fast retro, retro_rv, 短VA）に切替わる。
-      let aT = tOn + 185;                                 // 最初の A2（頻拍 VA に合わせたオフセット）
-      for(let i=0; i<nPre; i++){
-        emitAtrial(aT, 'atyp', 0.9);                     // 遷移前：頻拍 A2（slow pathway 逆行）
-        aT += tcl;
-      }
-      for(let s=0; s<nTrans; s++){
-        emitAtrial(aT, 'retro_rv', 0.9);                 // 遷移：A1 が徐々に優位（fast retro）
-        aT += Math.max(pcl, tcl - aaStep*(s+1));
-      }
-      // エントレイン後：A1（retro_rv）が PCL で固定
-      for(let tA = aT; tA <= lastV + VA_FAST_AT + pcl/2; tA += pcl){
-        emitAtrial(tA, 'retro_rv', 0.9);
-      }
-    } else {
-      // AVNRT / ORT
-      let aT = tOn;
-      for(let i=0; i<nPre; i++){
-        emitAtrial(aT, tp.retro, 0.9);
-        aT += tcl;
-      }
-      for(let s=0; s<nTrans; s++){
-        emitAtrial(aT, tp.retro, 0.9);
-        aT += Math.max(pcl, tcl - aaStep*(s+1));
-      }
-      for(let tA = aT; tA <= lastV + VA_PACE + pcl/2; tA += pcl){
-        emitAtrial(tA, tp.retro, 0.9);
-      }
+    // AVNRT / ORT / fast-slow AVNRT：同一ロジック（aT=tOn から TCL→PCL 遷移）
+    const retroMode = (sc==='atypavnrt') ? 'retro_rv' : tp.retro;
+    let aT = tOn;
+    for(let i=0; i<nPre; i++){
+      emitAtrial(aT, retroMode, 0.9);
+      aT += tcl;
+    }
+    for(let s=0; s<nTrans; s++){
+      emitAtrial(aT, retroMode, 0.9);
+      aT += Math.max(pcl, tcl - aaStep*(s+1));
+    }
+    for(let tA = aT; tA <= lastV + VA_PACE + pcl/2; tA += pcl){
+      emitAtrial(tA, retroMode, 0.9);
     }
   }
   // AT：ペーシング中は心房も逆行性にPCLで捕捉済み（上ループでemit）。
