@@ -1165,10 +1165,9 @@ function buildVentricularEntrainment(sc){
       emitAtrial(aT, tp.retro, 0.9);
       aT += Math.max(pcl, tcl - aaStep*(s+1));
     }
-    // エントレイン後：各ペースV + VA_PACE にロック（AA=PCL）。最後の逆行A が V-A-V の A。
-    const tAccel = aT;                                    // 遷移完了時刻
-    for(let t=tOn; t<=lastV; t+=pcl){
-      if(t >= tAccel - VA_PACE) emitAtrial(t + VA_PACE, tp.retro, 0.9);
+    // エントレイン後：遷移終了点(aT)から PCL 刻みで連続出力（隙間なし）
+    for(let tA = aT; tA <= lastV + VA_PACE + pcl/2; tA += pcl){
+      emitAtrial(tA, tp.retro, 0.9);
     }
   }
   // AT：ペーシング中は心房も逆行性にPCLで捕捉済み（上ループでemit）。
