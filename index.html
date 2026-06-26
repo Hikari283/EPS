@@ -1159,11 +1159,10 @@ function buildVentricularEntrainment(sc){
       aT += Math.max(pcl, tcl - aaStep*(s+1));
     }
     if(sc==='atypavnrt'){
-      // エントレイン後：V+VA_FAST_AT(=70ms) にロック（V-aligned）。
-      // lastV も含むので lastV+70 = A1 となり、直前 A から A1 = PCL が保証される。
-      const kStart = Math.ceil((aT - VA_FAST_AT - tOn) / pcl);
-      for(let k=kStart; tOn+k*pcl <= lastV; k++){
-        emitAtrial(tOn + k*pcl + VA_FAST_AT, 'retro_rv', 0.9);
+      // エントレイン後：aT ベースで PCL 刻み（隙間なし）。
+      // A1（lastV+VA_FAST_AT）は post-stop で emit するため、手前で打ち切る。
+      for(let tA = aT; tA <= lastV + VA_FAST_AT - pcl/2; tA += pcl){
+        emitAtrial(tA, 'retro_rv', 0.9);
       }
     } else {
       for(let tA = aT; tA <= lastV + VA_PACE + pcl/2; tA += pcl){
@@ -1225,6 +1224,7 @@ function buildVentricularEntrainment(sc){
     //   A1とA2は心房興奮順序が違う（A1=刺激中のA/fast、A2=頻拍再開後のA/slow）。A1A2は短い。
     //   鑑別＝ΔAA = TCL − A1A2（金古2022 図8）：AVNRT は >26ms（A1A2短）、AT は <−80ms（A1A2長）。
     const A1 = lastV + VA_FAST_AT;
+    emitAtrial(A1, 'retro_rv', 0.9);                  // A1：fast pathway 逆行
     const A2 = A1 + A1A2_AT;                          // A1A2 = PCL（ペーシングSL）→ A2 = lastV+70+PCL
     emitAtrial(A2, 'atyp_vaav', 0.9);                 // A2：His=6ms(A1と違う)、CS=retro_rv準拠でA1A2=PCL on all CS ch
     fillTachyAtypAVNRT(A2 + 175, state.duration);     // A2→fast順行→V→slow逆行→…で頻拍再開
