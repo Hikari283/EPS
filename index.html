@@ -1149,15 +1149,21 @@ function buildVentricularEntrainment(sc){
     const stableBeat = Math.max(1, Math.ceil((1-0.12)/onsetStep));
     const aReach = isAVRT(sc) ? Math.max(1, Math.round(stableBeat*0.5)) : (stableBeat+2);
     const tAccel = tOn + aReach*pcl;     // この時刻からAAがPCL
-    // 加速前：心房はTCLでドリフト（V＝PCLとは独立）＝transition zone
-    // 最初のエントレインA（tAccel+VA_PACE）との間隔がPCL未満になる遷移Aは出さない（臨床的に短すぎる拍を防ぐ）
+    // 遷移ゾーン：AA間隔をTCLからPCLへ線形に短縮（PCLより短い拍は出ない）。
+    // 最後の遷移Aは firstEntrainA−PCL に合わせ、次のエントレインAとのAA=PCLを保証。
     const firstEntrainA = tAccel + VA_PACE;
+    const lastTransA    = firstEntrainA - pcl;           // この位置で終わると次AAがちょうどPCL
+    const nInt          = aReach - 1;                    // 遷移拍間のインターバル数
+    const aaFirst       = Math.round(2*(lastTransA-tOn)/nInt - pcl); // 線形補間の初期AA
     let aT = tOn;
-    while(aT < tAccel){
-      if(firstEntrainA - aT >= pcl) emitAtrial(aT, tp.retro, 0.9);
-      aT += (aT < tAccel - pcl) ? tcl : Math.round((tcl+pcl)/2);
+    for(let i=0; i<aReach; i++){
+      emitAtrial(aT, tp.retro, 0.9);
+      if(i < nInt){
+        const aa = Math.max(pcl, Math.round(aaFirst - (aaFirst-pcl)*i/(nInt-1)));
+        aT += aa;
+      }
     }
-    // 加速後：各ペースV + VA_PACE にロック（AA=PCL・V-A一定）。最後の逆行A = lastV+VA_PACE が V-A-VのA。
+    // エントレイン後：各ペースV + VA_PACE にロック（AA=PCL）。最後の逆行A が V-A-V の A。
     for(let t=tOn; t<=lastV; t+=pcl){
       if(t >= tAccel) emitAtrial(t + VA_PACE, tp.retro, 0.9);
     }
