@@ -1220,6 +1220,7 @@ function buildVentricularEntrainment(sc){
     //   A1とA2は心房興奮順序が違う（A1=刺激中のA/fast、A2=頻拍再開後のA/slow）。A1A2は短い。
     //   鑑別＝ΔAA = TCL − A1A2（金古2022 図8）：AVNRT は >26ms（A1A2短）、AT は <−80ms（A1A2長）。
     const A1 = lastV + VA_FAST_AT;
+    emitAtrial(A1, 'retro_rv', 0.9);                  // A1：fast pathway 逆行（concentric）
     const A2 = A1 + A1A2_AT;                          // A1A2 = PCL（ペーシングSL）→ A2 = lastV+70+PCL
     emitAtrial(A2, 'atyp_vaav', 0.9);                 // A2：His=6ms(A1と違う)、CS=retro_rv準拠でA1A2=PCL on all CS ch
     fillTachyAtypAVNRT(A2 + 175, state.duration);     // A2→fast順行→V→slow逆行→…で頻拍再開
