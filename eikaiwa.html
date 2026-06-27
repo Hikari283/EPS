@@ -105,6 +105,10 @@
   .btn.go{background:#15402c;border-color:#1d5e3e;color:#bff0d4}
   .btn.warn2{background:#3a2a12;border-color:#5e451d;color:#ffd9a8}
   .btn.ng{background:#3a1820;border-color:#5e2330;color:#ffc2cc}
+  .csel{flex:1;min-width:120px;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--panel2);color:var(--txt);font-size:15px}
+  .bigplay{width:96px;height:96px;border-radius:50%;border:none;font-size:36px;color:#06121f;background:radial-gradient(circle at 30% 30%,#8fd0ff,#3a8fe0);box-shadow:0 8px 24px rgba(58,143,224,.4)}
+  .bigplay.on{background:radial-gradient(circle at 30% 30%,#7ef0c0,#16a06b)}
+  .card .en.idle{font-size:20px;color:var(--muted);font-weight:600}
 
   /* Report */
   .report{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:14px;padding-bottom:8px}
@@ -164,6 +168,11 @@
         <div class="emo">💬</div>
         <div>AIと英会話（実践）
           <small>ロールプレイ／フリートーク・添削＆レポートつき（無料キーでOK）</small></div>
+      </button>
+      <button class="mode" data-mode="car">
+        <div class="emo">🚗</div>
+        <div>車モード（聞き流し）
+          <small>運転中ハンズフリー・自動再生でフレーズ／単語を耳から学習</small></div>
       </button>
       <button class="mode" data-mode="review">
         <div class="emo">🔁</div>
@@ -240,7 +249,7 @@
   <!-- PRACTICE (phrase / word) -->
   <section id="practice" class="screen hidden">
     <div class="sub">
-      <button class="back" data-back>‹ もどる</button>
+      <button class="back" id="pracBack">‹ シーン選択</button>
       <div class="title" id="pracTitle">フレーズ練習</div>
       <div class="chip" id="pracCat">—</div>
     </div>
@@ -297,6 +306,50 @@
         <button class="btn go" id="revGood">できた</button>
       </div>
       <div class="row"><button class="btn alt" id="revDelete">🗑 この項目を削除</button></div>
+    </div>
+  </section>
+
+  <!-- SCENE PICKER (phrase / word) -->
+  <section id="pick" class="screen hidden">
+    <div class="sub">
+      <button class="back" data-back>‹ もどる</button>
+      <div class="title" id="pickTitle">シーンを選ぶ</div>
+    </div>
+    <p class="tip" id="pickHint">学びたいシーンを選んでください。</p>
+    <div class="list" id="pickList"></div>
+  </section>
+
+  <!-- CAR MODE -->
+  <section id="car" class="screen hidden">
+    <div class="sub">
+      <button class="back" data-back>‹ もどる</button>
+      <div class="title">🚗 車モード</div>
+      <div class="chip" id="carProg">—</div>
+    </div>
+    <div class="row">
+      <select id="carKind" class="csel">
+        <option value="phrase">フレーズ</option>
+        <option value="word">単語</option>
+        <option value="both">フレーズ＋単語</option>
+      </select>
+      <select id="carScene" class="csel"><option value="">全シーン</option></select>
+    </div>
+    <div class="card">
+      <div class="cat" id="carCat">準備完了</div>
+      <div class="en idle" id="carEn">▶ を押すと自動再生</div>
+      <div class="ja2" id="carJa"></div>
+    </div>
+    <div class="controls">
+      <div class="row">
+        <button class="btn alt" id="carPrev">⏮ 前</button>
+        <button class="bigplay" id="carPlay">▶</button>
+        <button class="btn alt" id="carNext">次 ⏭</button>
+      </div>
+      <div class="row">
+        <button class="btn alt" id="carJaToggle">🇯🇵 和訳: ON</button>
+        <button class="btn alt" id="carGapToggle">🔁 復唱の間: OFF</button>
+      </div>
+      <p class="tip">運転中は画面を見ず、音声に集中してください。操作は停車中に。</p>
     </div>
   </section>
 </main>
@@ -523,12 +576,13 @@ const S = {
   keys: { claude: localStorage.getItem('ee_apikey') || '', gemini: localStorage.getItem('ee_gkey') || '' },
   gmodel: localStorage.getItem('ee_gmodel') || 'gemini-2.5-flash-lite',
   voiceURI: localStorage.getItem('ee_voice') || '',
-  voices: [], enVoice: null,
+  voices: [], enVoice: null, jaVoice: null,
   mode: null, hands: false,
   conv: null,            // {kind:'role'|'free', meta, history:[], starter}
   recog: null, recActive: false,
-  pracList: [], pracIdx: 0, pracKind: 'phrase', pracAuto: false, pracAutoTimer: null,
+  pracList: [], pracIdx: 0, pracKind: 'phrase', pracCat: null, pracAuto: false, pracAutoTimer: null,
   rev: [], revIdx: 0, revShown: false,
+  car: {kind:'phrase', scene:'', list:[], idx:0, playing:false, readJa:true, gap:false, timer:null},
 };
 const rates = {beginner:0.82, intermediate:0.95, advanced:1.05};
 const levelJa = {beginner:'初級', intermediate:'中級', advanced:'上級'};
@@ -559,7 +613,10 @@ function incSessions(){ const s=stats(); s.sessions=(s.sessions||0)+1; saveStats
 
 /* ================= DOM ================= */
 const $ = id => document.getElementById(id);
-const sections = {home:$('home'), setup:$('setup'), conv:$('conv'), report:$('report'), practice:$('practice'), review:$('review')};
+const sections = {home:$('home'), setup:$('setup'), conv:$('conv'), report:$('report'), practice:$('practice'), review:$('review'), pick:$('pick'), car:$('car')};
+const CAT_EMO = {"あいさつ":"👋","リアクション":"💬","つなぎ":"🔗","お願い":"🙏","レストラン":"🍝","旅行":"🧳","仕事":"💼","気持ち":"😊","会話の必須":"⭐","句動詞":"🔁","性質":"🧑","形容詞":"🎨","時間・頻度":"⏰"};
+function catEmo(c){ return CAT_EMO[c] || "📌"; }
+function cats(kind){ const arr=kind==='word'?WORDS:PHRASES; return [...new Set(arr.map(x=>x.cat))]; }
 function show(name){ Object.values(sections).forEach(s=>s.classList.add('hidden')); sections[name].classList.remove('hidden'); S.mode=name; }
 let toastTimer;
 function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'),1800); }
@@ -567,6 +624,7 @@ function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('sho
 /* ================= Speech synthesis ================= */
 function loadVoices(){
   S.voices = window.speechSynthesis ? speechSynthesis.getVoices() : [];
+  S.jaVoice = S.voices.find(v => /^ja(-|_)/i.test(v.lang)) || null;
   const en = S.voices.filter(v => /^en(-|_)/i.test(v.lang));
   const sel = $('voiceSel'); sel.innerHTML='';
   if(!en.length){ sel.innerHTML='<option>英語音声が見つかりません</option>'; S.enVoice=null; return; }
@@ -687,15 +745,18 @@ document.querySelectorAll('.mode').forEach(b=>{
   b.addEventListener('click',()=>{
     const m=b.dataset.mode;
     if(m==='conv') openSetup();
+    else if(m==='car') openCar();
     else if(m==='review') openReview();
-    else if(m==='phrase') openPractice('phrase');
-    else openPractice('word');
+    else if(m==='phrase') openPicker('phrase');
+    else if(m==='word') openPicker('word');
   });
 });
 document.querySelectorAll('[data-back]').forEach(b=>b.addEventListener('click',()=>{ leaveAll(); refreshHome(); show('home'); }));
 function leaveAll(){
   stopSpeak(); stopRecog(); S.hands=false; S.pracAuto=false;
   if(S.pracAutoTimer){ clearTimeout(S.pracAutoTimer); S.pracAutoTimer=null; }
+  S.car.playing=false; if(S.car.timer){ clearTimeout(S.car.timer); S.car.timer=null; }
+  $('carPlay').textContent='▶'; $('carPlay').classList.remove('on');
   $('convHands').textContent='🚗 ハンズフリー: OFF';
   ['convMic','pracMic','revMic'].forEach(id=>$(id).classList.remove('live','speaking'));
   $('convMicLabel').textContent='タップして話す';
@@ -898,13 +959,30 @@ $('reportBack').addEventListener('click',()=>{ refreshHome(); show('home'); });
 $('reportHome').addEventListener('click',()=>{ refreshHome(); show('home'); });
 $('reportAgain').addEventListener('click',()=>{ if(S.conv){ if(S.conv.kind==='role') startRole(S.conv.meta); else startFree(S.conv.meta); } else openSetup(); });
 
+/* ================= SCENE PICKER ================= */
+function openPicker(kind){
+  show('pick'); S.pracKind=kind;
+  $('pickTitle').textContent=(kind==='word'?'単語':'フレーズ練習')+' — シーンを選ぶ';
+  const arr=kind==='word'?WORDS:PHRASES;
+  const list=$('pickList'); list.innerHTML='';
+  const mk=(emo,label,desc,cat)=>{ const b=document.createElement('button'); b.className='item';
+    b.innerHTML='<div class="emo">'+emo+'</div><div><div class="t">'+label+'</div><div class="d">'+desc+'</div></div>';
+    b.addEventListener('click',()=>openPractice(kind,cat)); list.appendChild(b); };
+  mk('📚','すべて','全'+arr.length+'件をまとめて練習', null);
+  cats(kind).forEach(c=>{ const n=arr.filter(x=>x.cat===c).length; mk(catEmo(c), c, n+'件', c); });
+}
+
 /* ================= PRACTICE (phrase / word) ================= */
-function openPractice(kind){
-  show('practice'); S.pracKind=kind; S.pracList=(kind==='phrase'?PHRASES:WORDS).slice(); S.pracIdx=0;
-  $('pracTitle').textContent=kind==='phrase'?'フレーズ練習':'単語を覚える';
+function openPractice(kind, cat){
+  show('practice'); S.pracKind=kind; S.pracCat=cat||null;
+  let arr=(kind==='word'?WORDS:PHRASES).slice();
+  if(cat) arr=arr.filter(x=>x.cat===cat);
+  S.pracList=arr; S.pracIdx=0;
+  $('pracTitle').textContent=(kind==='word'?'単語を覚える':'フレーズ練習');
   $('cPho').style.display=kind==='word'?'block':'none';
   renderPrac(); setTimeout(speakPrac,300);
 }
+$('pracBack').addEventListener('click',()=>{ leaveAll(); openPicker(S.pracKind); });
 function curItem(){ return S.pracList[S.pracIdx]; }
 function renderPrac(){
   const it=curItem();
@@ -1008,6 +1086,79 @@ $('revDelete').addEventListener('click',()=>{
   S.rev.splice(S.revIdx,1); toast('削除しました');
   if(!S.rev.length) openReview(); else { if(S.revIdx>=S.rev.length) S.revIdx=S.rev.length-1; renderRev(); }
 });
+
+/* ================= CAR MODE (聞き流し) ================= */
+function carSourceArr(){
+  if(S.car.kind==='word') return WORDS.slice();
+  if(S.car.kind==='both') return PHRASES.concat(WORDS);
+  return PHRASES.slice();
+}
+function carPopulateScenes(){
+  const sel=$('carScene'); const cur=S.car.scene;
+  const cs = S.car.kind==='both' ? [...new Set(PHRASES.concat(WORDS).map(x=>x.cat))] : cats(S.car.kind);
+  sel.innerHTML='<option value="">全シーン</option>'+cs.map(c=>'<option value="'+c+'">'+c+'</option>').join('');
+  sel.value = cs.includes(cur)?cur:''; S.car.scene=sel.value;
+}
+function carBuildList(){
+  let arr=carSourceArr();
+  if(S.car.scene) arr=arr.filter(x=>x.cat===S.car.scene);
+  S.car.list=arr; S.car.idx=0;
+}
+function openCar(){
+  show('car'); $('carKind').value=S.car.kind;
+  carPopulateScenes(); carBuildList();
+  carPause();
+  $('carJaToggle').textContent='🇯🇵 和訳: '+(S.car.readJa?'ON':'OFF');
+  $('carGapToggle').textContent='🔁 復唱の間: '+(S.car.gap?'ON':'OFF');
+  carRenderIdle();
+}
+function carRenderIdle(){
+  $('carCat').textContent=(S.car.list.length?('全'+S.car.list.length+'件'):'項目なし');
+  const en=$('carEn'); en.textContent='▶ を押すと自動再生'; en.classList.add('idle');
+  $('carJa').textContent=''; $('carProg').textContent=S.car.list.length?('0 / '+S.car.list.length):'—';
+}
+function carRender(it){
+  $('carCat').textContent=it.cat;
+  const en=$('carEn'); en.textContent=it.en; en.classList.remove('idle');
+  $('carJa').textContent=it.ja; $('carProg').textContent=(S.car.idx+1)+' / '+S.car.list.length;
+}
+function carUtter(text, lang){
+  const u=new SpeechSynthesisUtterance(text);
+  if(lang==='ja'){ u.lang='ja-JP'; if(S.jaVoice) u.voice=S.jaVoice; u.rate=1.0; }
+  else { if(S.enVoice){u.voice=S.enVoice;u.lang=S.enVoice.lang;} else u.lang='en-US'; u.rate=rates[S.level]||0.9; }
+  return u;
+}
+function carPlayCurrent(){
+  if(!S.car.playing || !S.car.list.length) return;
+  const it=S.car.list[S.car.idx]; carRender(it);
+  const seq=[{t:it.en,lang:'en'}];
+  if(S.car.readJa && it.ja) seq.push({t:it.ja,lang:'ja'});
+  let i=0;
+  function step(){
+    if(!S.car.playing) return;
+    if(i>=seq.length){ S.car.timer=setTimeout(()=>{ if(!S.car.playing) return; S.car.idx=(S.car.idx+1)%S.car.list.length; carPlayCurrent(); }, 800); return; }
+    const s=seq[i++]; const u=carUtter(s.t,s.lang);
+    u.onend=()=>{ if(!S.car.playing) return;
+      if(s.lang==='en' && S.car.gap){ S.car.timer=setTimeout(step, Math.min(6000, 900+s.t.length*55)); } else step(); };
+    u.onerror=()=>{ if(S.car.playing) step(); };
+    if(window.speechSynthesis) speechSynthesis.speak(u);
+  }
+  if(window.speechSynthesis) speechSynthesis.cancel(); step();
+}
+function carPlay(){ if(!S.car.list.length){ toast('再生する項目がありません'); return; }
+  S.car.playing=true; $('carPlay').textContent='⏸'; $('carPlay').classList.add('on'); carPlayCurrent(); }
+function carPause(){ S.car.playing=false; if(S.car.timer){clearTimeout(S.car.timer);S.car.timer=null;} stopSpeak();
+  $('carPlay').textContent='▶'; $('carPlay').classList.remove('on'); }
+function carStep(dir){ if(!S.car.list.length) return; if(S.car.timer){clearTimeout(S.car.timer);S.car.timer=null;} stopSpeak();
+  S.car.idx=(S.car.idx+dir+S.car.list.length)%S.car.list.length;
+  if(S.car.playing) carPlayCurrent(); else carRender(S.car.list[S.car.idx]); }
+$('carPlay').addEventListener('click',()=>{ S.car.playing?carPause():carPlay(); });
+$('carNext').addEventListener('click',()=>carStep(1));
+$('carPrev').addEventListener('click',()=>carStep(-1));
+$('carKind').addEventListener('change',e=>{ S.car.kind=e.target.value; carPause(); carPopulateScenes(); carBuildList(); carRenderIdle(); });
+$('carScene').addEventListener('change',e=>{ S.car.scene=e.target.value; carPause(); carBuildList(); carRenderIdle(); });
+$('carJaToggle').addEventListener('click',()=>{ S.car.readJa=!S.car.readJa; $('carJaToggle').textContent='🇯🇵 和訳: '+(S.car.readJa?'ON':'OFF'); });
+$('carGapToggle').addEventListener('click',()=>{ S.car.gap=!S.car.gap; $('carGapToggle').textContent='🔁 復唱の間: '+(S.car.gap?'ON':'OFF'); });
 
 /* ================= Settings ================= */
 function paintLevelSeg(){ document.querySelectorAll('#segLevel button').forEach(b=>b.classList.toggle('on', b.dataset.lvl===S.level)); }
