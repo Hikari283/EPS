@@ -71,6 +71,7 @@
   .bubble .ja{display:block;color:var(--muted);font-size:13px;margin-top:6px;border-top:1px dashed var(--line);padding-top:6px}
   .bubble .corr{display:block;color:var(--warm);font-size:13.5px;margin-top:6px;line-height:1.5}
   .bubble .bet{display:block;color:var(--accent2);font-size:13.5px;margin-top:5px;line-height:1.5}
+  .bubble .teach{display:block;color:#dff1ff;background:#0f2a40;border:1px solid #1f4a6b;border-radius:10px;padding:9px 11px;font-size:14px;margin-top:8px;line-height:1.65}
   .bubble.sys{align-self:center;background:none;color:var(--muted);font-size:13px;text-align:center;max-width:100%}
   .typing{align-self:flex-start;color:var(--muted);font-size:14px;padding:6px 4px}
 
@@ -142,6 +143,23 @@
   .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#15402c;border:1px solid #1d5e3e;
     color:#bff0d4;padding:10px 16px;border-radius:999px;font-size:13px;z-index:60;opacity:0;transition:opacity .25s;pointer-events:none}
   .toast.show{opacity:1}
+
+  /* 横画面（運転中の横置き）対応 */
+  @media (orientation: landscape) and (max-height: 600px){
+    main{max-width:920px;padding:10px 16px;gap:8px}
+    header{padding:8px 16px}
+    .hero h1{font-size:18px} .hero p{font-size:12px}
+    .modes{grid-template-columns:1fr 1fr}
+    .mode{padding:12px} .mode .emo{width:42px;height:42px;font-size:24px}
+    .mic{width:72px;height:72px;font-size:26px}
+    .bigplay{width:72px;height:72px;font-size:26px}
+    .card{min-height:0;padding:12px}
+    .card .en{font-size:22px} .card .ja2{font-size:16px}
+    .controls{gap:8px} .miclabel{min-height:14px}
+    .stream{min-height:80px}
+    .list{max-height:none}
+    .stat b{font-size:18px}
+  }
 </style>
 </head>
 <body>
@@ -221,6 +239,9 @@
       <div class="heard" id="convHeard"></div>
       <button class="mic" id="convMic">🎤</button>
       <div class="miclabel" id="convMicLabel">タップして話す</div>
+      <div class="row">
+        <button class="btn acc" id="convAsk">❓ 質問する（日本語OK）</button>
+      </div>
       <div class="row">
         <button class="btn alt" id="convHands">🚗 ハンズフリー: OFF</button>
         <button class="btn alt" id="convRepeat">🔁 もう一度聞く</button>
@@ -646,15 +667,24 @@ function speak(text,{rate}={}){
     speechSynthesis.speak(u);
   });
 }
+function speakJa(text){
+  return new Promise(res=>{
+    if(!window.speechSynthesis || !text){ res(); return; }
+    const u=new SpeechSynthesisUtterance(text);
+    u.lang='ja-JP'; if(S.jaVoice) u.voice=S.jaVoice; u.rate=1.0;
+    u.onend=()=>res(); u.onerror=()=>res();
+    speechSynthesis.speak(u);
+  });
+}
 function stopSpeak(){ if(window.speechSynthesis) speechSynthesis.cancel(); }
 
 /* ================= Speech recognition ================= */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 function recogSupported(){ return !!SR; }
-function startRecog({onfinal,onheard,onend}={}){
+function startRecog({lang,onfinal,onheard,onend}={}){
   if(!SR) return;
   try{ if(S.recog) S.recog.abort(); }catch(e){}
-  const r=new SR(); r.lang='en-US'; r.interimResults=true; r.continuous=false; r.maxAlternatives=1;
+  const r=new SR(); r.lang=lang||'en-US'; r.interimResults=true; r.continuous=false; r.maxAlternatives=1;
   let finalText='';
   r.onresult=e=>{ let interim='',fin='';
     for(let i=e.resultIndex;i<e.results.length;i++){ const t=e.results[i][0].transcript; if(e.results[i].isFinal) fin+=t; else interim+=t; }
@@ -826,6 +856,7 @@ function roleJa(s){ return s; }
 function bubble(streamId,cls,text,extra){
   const el=$(streamId); const b=document.createElement('div'); b.className='bubble '+cls; b.textContent=text;
   if(extra){
+    if(extra.teach){ const s=document.createElement('div'); s.className='teach'; s.textContent='📘 '+extra.teach; b.appendChild(s); }
     if(extra.ja){ const s=document.createElement('span'); s.className='ja'; s.textContent=extra.ja; b.appendChild(s); }
     if(extra.corr){ const s=document.createElement('span'); s.className='corr'; s.textContent='✏️ 直し: '+extra.corr; b.appendChild(s); }
     if(extra.bet){ const s=document.createElement('span'); s.className='bet'; s.textContent='💡 自然な言い方: '+extra.bet; b.appendChild(s); }
@@ -848,24 +879,28 @@ function convListen(){
 }
 function convSystem(){
   const lv=cefr[S.level];
+  const lvl = S.level==='beginner'?'use simple words and short sentences.':S.level==='advanced'?'use natural native-level English.':'use everyday natural English.';
+  const teacher = `You are also acting as the learner's English teacher. At ANY moment the learner may stop the conversation to ask a learning question — in Japanese OR English — such as "available ってどういう意味?", "How do you say 〜 in English?", "今のどういう意味?", "この単語教えて", "もっとゆっくり言って", or a grammar/pronunciation question (a message starting with "[質問]" is always such a question). When that happens, briefly step out of the flow and TEACH: put a clear, concise JAPANESE explanation in the "teach" field, including the relevant English word/phrase and a short example sentence. Keep "reply" to a short friendly English line that answers/acknowledges and gently returns to the conversation. If the learner is NOT asking a learning question, leave "teach" as an empty string and just converse normally.`;
   if(S.conv.kind==='role'){
     const m=S.conv.meta;
     return `You are role-playing to help a Japanese learner practice real spoken English (level: ${lv}).
 SITUATION: ${m.situation}
 You play: ${m.ai}. The learner plays: ${m.you}.
 The learner's goal for this roleplay: ${m.goal}.
-Stay fully in character and move the scene forward naturally. Keep each reply short and spoken (1-2 sentences) and usually ask something so the learner keeps talking. Match the learner's level (${lv}); ${S.level==='beginner'?'use simple words and short sentences.':S.level==='advanced'?'use natural native-level English.':'use everyday natural English.'}
+Stay in character and move the scene forward naturally. Keep each reply short and spoken (1-2 sentences) and usually ask something so the learner keeps talking. Match the learner's level (${lv}); ${lvl}
+${teacher}
 If the learner's last message has a clear English mistake, give one short gentle correction. If it is understandable but unnatural, suggest a more natural phrasing.
 When the goal is clearly achieved, set "done" to true and wrap up the scene warmly.
 Reply ONLY with a JSON object (no extra text):
-{"reply":"<your in-character English line>","ja":"<natural Japanese translation of reply>","correction":"<learner's wrong phrase → better phrase, one short line; empty string if none>","better":"<a more natural way to say what the learner meant; empty string if none>","done":true or false}`;
+{"reply":"<your in-character English line>","ja":"<natural Japanese translation of reply>","teach":"<Japanese explanation if the learner asked a learning question, else empty>","correction":"<learner's wrong phrase → better phrase, one short line; empty string if none>","better":"<a more natural way to say what the learner meant; empty string if none>","done":true or false}`;
   }
   return `You are an encouraging expert English conversation tutor for a Japanese learner (level: ${lv}).
 Have a natural spoken conversation about: ${S.conv.meta.title}.
-Keep each reply short and spoken (1-2 sentences) and ALWAYS end with one follow-up question to keep the learner talking. Match their level (${lv}); ${S.level==='beginner'?'use simple words and short sentences.':S.level==='advanced'?'use natural native-level English.':'use everyday natural English.'}
+Keep each reply short and spoken (1-2 sentences) and usually end with one follow-up question to keep the learner talking. Match their level (${lv}); ${lvl}
+${teacher}
 If the learner's last message has a clear English mistake, give one short gentle correction. If understandable but unnatural, suggest a more natural phrasing.
 Reply ONLY with a JSON object (no extra text):
-{"reply":"<your English reply>","ja":"<natural Japanese translation>","correction":"<wrong → better, one short line; empty if none>","better":"<more natural phrasing of what they meant; empty if none>","done":false}`;
+{"reply":"<your English reply>","ja":"<natural Japanese translation>","teach":"<Japanese explanation if the learner asked a learning question, else empty>","correction":"<wrong → better, one short line; empty if none>","better":"<more natural phrasing of what they meant; empty if none>","done":false}`;
 }
 async function convReply(){
   const typing=document.createElement('div'); typing.className='typing'; typing.textContent='…'; $('convStream').appendChild(typing);
@@ -876,11 +911,13 @@ async function convReply(){
     typing.remove();
     const o=parseJSON(raw)||{reply:raw};
     const reply=o.reply||raw;
-    bubble('convStream','ai',reply,{ja:o.ja||'', corr:(o.correction||'').trim(), bet:(o.better||'').trim()});
+    const teach=(o.teach||'').trim();
+    bubble('convStream','ai',reply,{teach, ja:o.ja||'', corr:(o.correction||'').trim(), bet:(o.better||'').trim()});
     S.conv.history.push({role:'assistant',content:reply});
     // auto-save learning points to review deck
     autoSaveLearning(o);
     $('convMic').classList.add('speaking'); $('convMicLabel').textContent='読み上げ中…';
+    if(teach && S.jaVoice){ await speakJa(teach); }
     await speak(reply);
     $('convMic').classList.remove('speaking'); $('convMicLabel').textContent='タップして話す';
     if(o.done){ bubble('convStream','sys','🎉 ゴール達成！「📝 終了してレポート」で講評を受け取れます。'); S.hands=false; $('convHands').textContent='🚗 ハンズフリー: OFF'; return; }
@@ -909,6 +946,22 @@ $('convHands').addEventListener('click',()=>{
   if(!S.hands) stopRecog();
 });
 $('convRepeat').addEventListener('click',()=>{ const last=[...S.conv.history].reverse().find(m=>m.role==='assistant'); if(last){ stopRecog(); speak(last.content); } });
+$('convAsk').addEventListener('click',()=>{
+  if(needKey()) return;
+  if(S.recActive){ stopRecog(); return; }
+  if(!recogSupported()){ bubble('convStream','sys','この端末は音声認識に未対応です。'); return; }
+  stopSpeak();
+  if(S.hands){ S.hands=false; $('convHands').textContent='🚗 ハンズフリー: OFF'; }
+  $('convHeard').textContent=''; $('convMic').classList.add('live'); $('convMic').classList.remove('speaking');
+  $('convMicLabel').textContent='質問をどうぞ（日本語でOK）…';
+  startRecog({ lang:'ja-JP',
+    onheard:t=>$('convHeard').textContent='“'+t+'”',
+    onfinal:t=>{ $('convMic').classList.remove('live'); $('convMicLabel').textContent='考え中…'; $('convHeard').textContent='';
+      bubble('convStream','me','❓ '+t); S.conv.history.push({role:'user',content:'[質問] '+t}); convReply(); },
+    onend:err=>{ $('convMic').classList.remove('live'); $('convMicLabel').textContent='タップして話す';
+      if(err==='not-allowed') bubble('convStream','sys','マイクが許可されていません。'); }
+  });
+});
 
 /* ================= FEEDBACK REPORT ================= */
 $('convFeedback').addEventListener('click',()=>{
