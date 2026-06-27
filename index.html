@@ -1128,14 +1128,10 @@ function buildVentricularEntrainment(sc){
     emitVentFusion(t, steadyFrac*onset, stvDelay);
     // His電極：逆行H は先に出る（実測 Stim→H 47ms）
     emitHis(t+47, 0.6);
-    // ORT/AT/atypavnrt：per-V A emission（AVNRT は遷移ゾーンブロックで別途処理）
-    if(sc!=='avnrt'){
-      const vaForA    = sc==='atypavnrt' ? VA_FAST_AT : tp.va;
-      const retroForA = sc==='atypavnrt' ? 'retro_rv'  : tp.retro;
-      // atypavnrt: 最終拍のAはpost-stopで確実にemitするためVループでは出さない
-      const isLastBeat = sc==='atypavnrt' && (t + pcl >= paceEnd);
-      if(!isLastBeat && t + stvDelay + vaForA <= paceEnd){
-        emitAtrial(t + stvDelay + vaForA, retroForA, 0.9);
+    // ORT/AT：per-V A emission（AVNRT・atypavnrt は遷移ゾーンブロックで別途処理）
+    if(isAVRT(sc) || sc==='at'){
+      if(t + stvDelay + tp.va <= paceEnd){
+        emitAtrial(t + stvDelay + tp.va, tp.retro, 0.9);
       }
     }
     lastV=t; beat++;
@@ -1151,23 +1147,28 @@ function buildVentricularEntrainment(sc){
   const ppiTclRef = isAVRT(sc) ? 50 : 128;
   const vaTachy   = isAVRT(sc) ? 120 : 5;
   const VA_PACE   = ppiTclRef + vaTachy;     // ORT 170 / AVNRT 133（=逆行A位置 lastV+VA_PACE）
-  // AVNRT：絶対時刻 TCL→PCL 遷移ゾーン（心室は傍観者＝stable QRS 後に初めてAA=PCL）
-  // CS V視覚は V ループの stvDelay で延長済み。A波タイミングは独立してTCL→PCL。
-  if(sc==='avnrt'){
+  // AVNRT / fast-slow AVNRT：絶対時刻 TCL→PCL 遷移ゾーン
+  // 心室は傍観者＝stable QRS になった後に初めて AA=PCL になる。
+  // atypavnrt も同様（fast pathway 逆行 VA が短い＝VA_FAST_AT, aT=tOn+VA_FAST_AT+66）。
+  if(sc==='avnrt' || sc==='atypavnrt'){
     const stableBeat = Math.max(1, Math.ceil((1-0.12)/onsetStep));
     const nPre  = stableBeat + 2;
     const aaStep = 10;
     const nTrans = Math.max(1, Math.ceil((tcl - pcl) / aaStep));
-    // aT=tOn+80 → CS V(+66ms)より後にA波が来る（V-H-A 即座）
-    let aT = tOn + 80;
+    const retroMode = 'retro_rv';
+    // atypavnrt: A comes at tOn + 66(stv@beat0) + VA_FAST_AT = tOn+136ms
+    // avnrt:     A comes at tOn + 80ms (consistent with stv+va offset)
+    let aT = sc==='atypavnrt' ? tOn + 66 + VA_FAST_AT : tOn + 80;
     for(let i=0; i<nPre && aT<=paceEnd; i++){
-      emitAtrial(aT, tp.retro, 0.9); aT += tcl;
+      emitAtrial(aT, retroMode, 0.9); aT += tcl;
     }
     for(let s=0; s<nTrans && aT<=paceEnd; s++){
-      emitAtrial(aT, tp.retro, 0.9); aT += Math.max(pcl, tcl - aaStep*(s+1));
+      emitAtrial(aT, retroMode, 0.9); aT += Math.max(pcl, tcl - aaStep*(s+1));
     }
-    for(let tA=aT; tA<=lastV+VA_PACE+pcl/2; tA+=pcl){
-      emitAtrial(tA, tp.retro, 0.9);
+    // entrained phase: for atypavnrt stop before A1 region (post-stop emits A1 explicitly)
+    const entrainEnd = sc==='atypavnrt' ? lastV + VA_FAST_AT - pcl/2 : lastV+VA_PACE+pcl/2;
+    for(let tA=aT; tA<=entrainEnd; tA+=pcl){
+      emitAtrial(tA, retroMode, 0.9);
     }
   }
   // AT：ペーシング中は心房も逆行性にPCLで捕捉済み（上ループでemit）。
