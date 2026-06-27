@@ -567,7 +567,7 @@ function apConfig(sc){
 function tachyParams(sc){
   if(isAVRT(sc)){ const c=apConfig(sc); return {tcl:330, inCircuit:true, retro:c.retro, va:135, label:c.label}; }
   switch(sc){
-    case 'avnrt':     return {tcl:350, inCircuit:true,  retro:'retro_rv', va:20,  label:'通常型AVNRT'};
+    case 'avnrt':     return {tcl:350, inCircuit:true,  retro:'retro_rv', va:135, label:'通常型AVNRT'};
     case 'atypavnrt': return {tcl:360, inCircuit:true,  retro:'retro_rv', va:135, label:'非典型AVNRT'};
     case 'avrt':      return {tcl:330, inCircuit:true,  retro:'avrt_left',va:135, label:'正方向性AVRT'};
     case 'at':        return {tcl:360, inCircuit:false, retro:'retro_rv', va:150, label:'リエントリー性AT'};
@@ -1111,10 +1111,7 @@ function buildVentricularEntrainment(sc){
   const steadyFrac = Math.max(0.85, Math.min(0.98, 0.85 + (tcl-pcl)/tcl * 0.4));
   // 乗っ取り（QS到達）までの拍数＝レート連動：速いレートほど少ない拍で完全捕捉へ。
   //   TCL−20(Δ20)≈10拍、250ms(Δ100)≈3拍。
-  // AVNRT：QRSをstableBeat_A=8拍で一定に合わせる（AA=PCL開始と同期）
-  const onsetStep = sc==='avnrt'
-    ? 0.88 / 8
-    : Math.max(0.09, Math.min(0.45, (tcl-pcl)/tcl * 1.6));
+  const onsetStep = Math.max(0.09, Math.min(0.45, (tcl-pcl)/tcl * 1.6));
   // fast-slow AVNRT の pseudo V-A-A-V（本 p112）：
   //   刺激中は fast pathway 逆伝導が顕在化＝A1（concentric, retro_rv, 短VA）のみ出現。
   //   slow pathway→A2 は A1+PCL（次VよりVA_FAST_AT後）→ ペーシング中は次Vに隠れて不可視。
@@ -1127,14 +1124,10 @@ function buildVentricularEntrainment(sc){
     // 開始の数拍は「回路に入りきるまでの過渡」：自己QRS優位から定常融合へ収束。
     //   → 体表QRSは R → rS → … → QS と徐々に移行（いきなりQSにはならない）。
     const onset = Math.min(1, 0.12 + beat*onsetStep);   // 速いレートほど早く定常へ収束＝早く乗っ取る
-    // AVNRT：VもAも同じstvDelay（キャップなし）を使う→VA=tp.va-66=一定。
-    //   8拍分ランプ後キャップ→AA=TCL×8拍→PCL。QRS onsetも8拍で一定に合わせる。
     // ORT/AT：Stim→V(CS)が15ms→66msに徐々に延長（rate-dependent RV→LV伝導遅延）
-    const usePerV = sc==='avnrt' || isAVRT(sc) || sc==='at';
-    const stableBeat_A = 8;
-    const stvDelay = sc==='avnrt'
-      ? Math.min(15 + beat*(tcl-pcl), 15 + stableBeat_A*(tcl-pcl))
-      : (usePerV ? Math.min(15 + beat*(tcl-pcl), 66) : 70);
+    // avnrt/atypavnrt は遷移ゾーンブロックでA波を一括処理するためper-V不要
+    const usePerV = isAVRT(sc) || sc==='at';
+    const stvDelay = usePerV ? Math.min(15 + beat*(tcl-pcl), 66) : 70;
     emitVentFusion(t, steadyFrac*onset, stvDelay);
     // His電極：逆行H は先に出る（実測 Stim→H 47ms）＝H-V-A（V は emitVentFusion の +66）。
     emitHis(t+47, 0.6);
@@ -1156,15 +1149,12 @@ function buildVentricularEntrainment(sc){
   const ppiTclRef = isAVRT(sc) ? 50 : 128;
   const vaTachy   = isAVRT(sc) ? 120 : 5;
   const VA_PACE   = ppiTclRef + vaTachy;     // ORT 170 / AVNRT 133（=逆行A位置 lastV+VA_PACE）
-  // AVNRT/ORTはVループ内でper-V emit済みのため遷移ゾーンブロックをスキップ
-  if(sc==='atypavnrt'){
-    // 遷移ゾーン：TCL→PCL を 10ms ステップで短縮（EPSの本 p163-166）。
-    // 例：TCL=350, PCL=330 → AA: TCL, TCL, …, TCL-10, TCL-20(=PCL), PCL, …
-    const stableBeat = Math.max(1, Math.ceil((1-0.12)/onsetStep));
+  // avnrt/atypavnrt：遷移ゾーンブロックでA波を一括処理（F/S同様の絶対時間制御）
+  if(sc==='atypavnrt' || sc==='avnrt'){
     const aaStep  = 10;
     const nTrans  = Math.max(1, Math.ceil((tcl - pcl) / aaStep));
-    const nPre    = sc==='atypavnrt' ? 3 : (stableBeat+2);
-    const retroMode = sc==='atypavnrt' ? 'retro_rv' : tp.retro;
+    const nPre    = 3;
+    const retroMode = 'retro_rv';
     let aT = tOn;
     // ペーシング中のみ emit（paceEnd を超えたら打ち切り→停止後 V-A-A-V 領域を汚染しない）
     for(let i=0; i<nPre && aT <= paceEnd; i++){
@@ -1181,7 +1171,8 @@ function buildVentricularEntrainment(sc){
         emitAtrial(tA, retroMode, 0.9);
       }
     } else {
-      for(let tA = aT; tA <= lastV + VA_PACE + pcl/2; tA += pcl){
+      // avnrt：paceEnd まで PCL 刻みで emit
+      for(let tA = aT; tA <= paceEnd; tA += pcl){
         emitAtrial(tA, retroMode, 0.9);
       }
     }
