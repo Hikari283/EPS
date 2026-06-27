@@ -1128,15 +1128,10 @@ function buildVentricularEntrainment(sc){
     emitVentFusion(t, steadyFrac*onset, stvDelay);
     // His電極：逆行H は先に出る（実測 Stim→H 47ms）
     emitHis(t+47, 0.6);
-    // ORT/AT/atypavnrt：per-V A emission（fast pathway逆行でV毎にA即座出現）
+    // ORT/AT：per-V A emission（AVNRT・atypavnrt は遷移ゾーンブロックで別途処理）
     if(isAVRT(sc) || sc==='at'){
       if(t + stvDelay + tp.va <= paceEnd){
         emitAtrial(t + stvDelay + tp.va, tp.retro, 0.9);
-      }
-    }
-    if(sc==='atypavnrt'){
-      if(t + stvDelay + VA_FAST_AT <= paceEnd){
-        emitAtrial(t + stvDelay + VA_FAST_AT, 'retro_rv', 0.9);
       }
     }
     lastV=t; beat++;
@@ -1155,14 +1150,14 @@ function buildVentricularEntrainment(sc){
   // AVNRT / fast-slow AVNRT：絶対時刻 TCL→PCL 遷移ゾーン
   // 心室は傍観者＝stable QRS になった後に初めて AA=PCL になる。
   // atypavnrt も同様（fast pathway 逆行 VA が短い＝VA_FAST_AT, aT=tOn+VA_FAST_AT+66）。
-  if(sc==='avnrt'){
+  if(sc==='avnrt' || sc==='atypavnrt'){
     const stableBeat = Math.max(1, Math.ceil((1-0.12)/onsetStep));
-    const nPre  = stableBeat + 2;
+    // atypavnrt: nPre=2（少なめ）でA波が消えないようにしつつ遷移ゾーンを確保
+    const nPre  = sc==='atypavnrt' ? 2 : stableBeat + 2;
     const aaStep = 10;
     const nTrans = Math.max(1, Math.ceil((tcl - pcl) / aaStep));
     const retroMode = 'retro_rv';
-    // atypavnrt: A comes at tOn + 66(stv@beat0) + VA_FAST_AT = tOn+136ms
-    // avnrt:     A comes at tOn + 80ms (consistent with stv+va offset)
+    // atypavnrt: aT=tOn+66+VA_FAST_AT(=tOn+136ms)、avnrt: aT=tOn+80ms
     let aT = sc==='atypavnrt' ? tOn + 66 + VA_FAST_AT : tOn + 80;
     for(let i=0; i<nPre && aT<=paceEnd; i++){
       emitAtrial(aT, retroMode, 0.9); aT += tcl;
@@ -1170,8 +1165,8 @@ function buildVentricularEntrainment(sc){
     for(let s=0; s<nTrans && aT<=paceEnd; s++){
       emitAtrial(aT, retroMode, 0.9); aT += Math.max(pcl, tcl - aaStep*(s+1));
     }
-    // entrained phase: for atypavnrt stop before A1 region (post-stop emits A1 explicitly)
-    const entrainEnd = sc==='atypavnrt' ? lastV + VA_FAST_AT - pcl/2 : lastV+VA_PACE+pcl/2;
+    // entrained phase: atypavnrtはA1手前(lastV+136-pcl)まで、avnrtはVA_PACE+pcl/2まで
+    const entrainEnd = sc==='atypavnrt' ? lastV + 66 + VA_FAST_AT - pcl : lastV+VA_PACE+pcl/2;
     for(let tA=aT; tA<=entrainEnd; tA+=pcl){
       emitAtrial(tA, retroMode, 0.9);
     }
