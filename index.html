@@ -1110,7 +1110,10 @@ function buildVentricularEntrainment(sc){
   const steadyFrac = Math.max(0.85, Math.min(0.98, 0.85 + (tcl-pcl)/tcl * 0.4));
   // 乗っ取り（QS到達）までの拍数＝レート連動：速いレートほど少ない拍で完全捕捉へ。
   //   TCL−20(Δ20)≈10拍、250ms(Δ100)≈3拍。
-  const onsetStep = Math.max(0.09, Math.min(0.45, (tcl-pcl)/tcl * 1.6));
+  // AVNRT：QRSをstableBeat_A=8拍で一定に合わせる（AA=PCL開始と同期）
+  const onsetStep = sc==='avnrt'
+    ? 0.88 / 8
+    : Math.max(0.09, Math.min(0.45, (tcl-pcl)/tcl * 1.6));
   // fast-slow AVNRT の pseudo V-A-A-V（本 p112）：
   //   刺激中は fast pathway 逆伝導が顕在化＝A1（concentric, retro_rv, 短VA）のみ出現。
   //   slow pathway→A2 は A1+PCL（次VよりVA_FAST_AT後）→ ペーシング中は次Vに隠れて不可視。
@@ -1123,16 +1126,15 @@ function buildVentricularEntrainment(sc){
     // 開始の数拍は「回路に入りきるまでの過渡」：自己QRS優位から定常融合へ収束。
     //   → 体表QRSは R → rS → … → QS と徐々に移行（いきなりQSにはならない）。
     const onset = Math.min(1, 0.12 + beat*onsetStep);   // 速いレートほど早く定常へ収束＝早く乗っ取る
-    // AVNRT：Stim→V(CS)がQRS一定拍(stableBeat_A)まで15ms→上限値まで徐々に延長し、以降一定。
-    //   stvDelayをキャップせずにランプ→CS V・CS A両方がシフトするためVA(CS)=tp.va-66=一定。
-    //   AA = PCL + Δstv = PCL + (tcl-pcl) = TCL（ランプ中）→ PCL（一定後）。
+    // AVNRT：VもAも同じstvDelay（キャップなし）を使う→VA=tp.va-66=一定。
+    //   8拍分ランプ後キャップ→AA=TCL×8拍→PCL。QRS onsetも8拍で一定に合わせる。
     // ORT/AT：Stim→V(CS)が15ms→66msに徐々に延長（rate-dependent RV→LV伝導遅延）
     const usePerV = sc==='avnrt' || isAVRT(sc) || sc==='at';
-    const stableBeat_A = 10;  // 11拍目からAA=PCL（10拍分はAA=TCL）
+    const stableBeat_A = 8;
     const stvDelay = sc==='avnrt'
       ? Math.min(15 + beat*(tcl-pcl), 15 + stableBeat_A*(tcl-pcl))
       : (usePerV ? Math.min(15 + beat*(tcl-pcl), 66) : 70);
-    emitVentFusion(t, steadyFrac*onset, sc==='avnrt' ? Math.min(stvDelay, 66) : stvDelay);
+    emitVentFusion(t, steadyFrac*onset, stvDelay);
     // His電極：逆行H は先に出る（実測 Stim→H 47ms）＝H-V-A（V は emitVentFusion の +66）。
     emitHis(t+47, 0.6);
     // AVNRT/ORT/AT：A波をCS V位置基準(stv+VA)でper-V emit → VA一定・V-A即座
