@@ -567,7 +567,7 @@ function apConfig(sc){
 function tachyParams(sc){
   if(isAVRT(sc)){ const c=apConfig(sc); return {tcl:330, inCircuit:true, retro:c.retro, va:135, label:c.label}; }
   switch(sc){
-    case 'avnrt':     return {tcl:350, inCircuit:true,  retro:'retro_rv', va:70,  label:'通常型AVNRT'};
+    case 'avnrt':     return {tcl:350, inCircuit:true,  retro:'retro_rv', va:20,  label:'通常型AVNRT'};
     case 'atypavnrt': return {tcl:360, inCircuit:true,  retro:'retro_rv', va:135, label:'非典型AVNRT'};
     case 'avrt':      return {tcl:330, inCircuit:true,  retro:'avrt_left',va:135, label:'正方向性AVRT'};
     case 'at':        return {tcl:360, inCircuit:false, retro:'retro_rv', va:150, label:'リエントリー性AT'};
