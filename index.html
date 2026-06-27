@@ -1123,17 +1123,17 @@ function buildVentricularEntrainment(sc){
     // 開始の数拍は「回路に入りきるまでの過渡」：自己QRS優位から定常融合へ収束。
     //   → 体表QRSは R → rS → … → QS と徐々に移行（いきなりQSにはならない）。
     const onset = Math.min(1, 0.12 + beat*onsetStep);   // 速いレートほど早く定常へ収束＝早く乗っ取る
-    // AVNRT/ORT：Stim→V(CS)が15ms→66msに徐々に延長（rate-dependent RV→LV伝導遅延）
-    const usePerV = sc==='avnrt' || isAVRT(sc) || sc==='at';
-    const stvDelay = usePerV ? Math.min(15 + beat*(tcl-pcl), 66) : 70;
+    // ORT/AT：Stim→V(CS)が15ms→66msに徐々に延長（rate-dependent RV→LV伝導遅延）
+    const usePerV = isAVRT(sc) || sc==='at';
+    const stvDelay = (usePerV || sc==='avnrt') ? Math.min(15 + beat*(tcl-pcl), 66) : 70;
     emitVentFusion(t, steadyFrac*onset, stvDelay);
     // His電極：逆行H は先に出る（実測 Stim→H 47ms）＝H-V-A（V は emitVentFusion の +66）。
     emitHis(t+47, 0.6);
-    // AVNRT/ORT/AT：A波をCS V位置基準(stv+VA)でper-V emit → VA一定・V-A即座
+    // ORT/AT：A波をCS V位置基準(stv+VA)でper-V emit → VA一定・V-A即座
     if(usePerV && t + stvDelay + tp.va <= paceEnd){
       emitAtrial(t + stvDelay + tp.va, tp.retro, 0.9);
     }
-    // atypavnrt の心房出力は遷移ゾーンブロックで一括処理
+    // avnrt/atypavnrt の心房出力は遷移ゾーンブロックで一括処理
     lastV=t; beat++;
   }
   // ---- 心房の加速（本 p165 図22/23）----
@@ -1147,16 +1147,16 @@ function buildVentricularEntrainment(sc){
   const ppiTclRef = isAVRT(sc) ? 50 : 128;
   const vaTachy   = isAVRT(sc) ? 120 : 5;
   const VA_PACE   = ppiTclRef + vaTachy;     // ORT 170 / AVNRT 133（=逆行A位置 lastV+VA_PACE）
-  // AVNRT/ORTはVループ内でper-V emit済みのため遷移ゾーンブロックをスキップ
-  if(sc==='atypavnrt'){
+  // avnrt/atypavnrt：遷移ゾーンブロックで心房を一括処理（ORTはVループ内per-V emit済み）
+  if(sc==='atypavnrt' || sc==='avnrt'){
     // 遷移ゾーン：TCL→PCL を 10ms ステップで短縮（EPSの本 p163-166）。
-    // 例：TCL=350, PCL=330 → AA: TCL, TCL, …, TCL-10, TCL-20(=PCL), PCL, …
-    const stableBeat = Math.max(1, Math.ceil((1-0.12)/onsetStep));
+    // avnrt：1〜14拍目TCL→15拍目TCL-10→16拍目以降PCL（nPre=14固定）
+    // atypavnrt：同様にnPre=3（短い頻拍周期）
     const aaStep  = 10;
     const nTrans  = Math.max(1, Math.ceil((tcl - pcl) / aaStep));
-    const nPre    = sc==='atypavnrt' ? 3 : (stableBeat+2);
-    const retroMode = sc==='atypavnrt' ? 'retro_rv' : tp.retro;
-    let aT = tOn;
+    const nPre    = sc==='atypavnrt' ? 3 : 14;
+    const retroMode = 'retro_rv';
+    let aT = sc==='atypavnrt' ? tOn : tOn + 80;
     // ペーシング中のみ emit（paceEnd を超えたら打ち切り→停止後 V-A-A-V 領域を汚染しない）
     for(let i=0; i<nPre && aT <= paceEnd; i++){
       emitAtrial(aT, retroMode, 0.9);
@@ -1172,7 +1172,8 @@ function buildVentricularEntrainment(sc){
         emitAtrial(tA, retroMode, 0.9);
       }
     } else {
-      for(let tA = aT; tA <= lastV + VA_PACE + pcl/2; tA += pcl){
+      // avnrt：paceEnd まで PCL 刻みで emit（停止後の V-A-V を汚染しない）
+      for(let tA = aT; tA <= paceEnd; tA += pcl){
         emitAtrial(tA, retroMode, 0.9);
       }
     }
