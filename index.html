@@ -862,7 +862,7 @@ function buildEntrainment(sc){
 }
 
 // 融合QRS：frac=0で自己(narrow)、1で完全ペース(wide)。中間で両成分を重畳。
-function emitVentFusion(tV, frac){
+function emitVentFusion(tV, frac, beat=99){
   frac=Math.max(0,Math.min(1,frac));
   // 心内は通常通り（心室は実際に脱分極する）。RVペースは全電極でスパイク(tV)の右側から。
   ev('RVA', tV+18, 'V', 1.0);
@@ -870,7 +870,9 @@ function emitVentFusion(tV, frac){
   //   逆行Hが先(+47)、その19ms後に遠位far-field V(+66)、67ms後にA(+133, lock loopでemit)。
   //   CSのVはHis Vから連続（少し後）。HRA電極にはV波を出さない。
   ev('HISd',tV+66,'Vsp',0.9); ev('HISm',tV+66,'Vsp',0.95); ev('HISp',tV+67,'Vsp',0.8);
-  for(let i=0;i<CSIDS.length;i++) ev(CSIDS[i], tV+70+i*3,'Vdull'); // RVペース：幅広・鈍いCS V波
+  // spike-to-V：RVペース開始直後は短く（RV→LV伝導が速い成分残存）、徐々に延長（RV完全ペース）
+  const csVDly = Math.min(55 + beat*5, 70);
+  for(let i=0;i<CSIDS.length;i++) ev(CSIDS[i], tV+csVDly+i*3,'Vdull'); // RVペース：幅広・鈍いCS V波
   ev('HRA', tV+74,'Vff',0.22);   // HRAにも小さくV波（実機で僅かに出る）
   const c=tV+18;
   // 体表QRS（paced QS成分）は His far-field V と同時刻(tV+66)＝His Vの延長線上に揃える。
@@ -1125,7 +1127,7 @@ function buildVentricularEntrainment(sc){
     // 開始の数拍は「回路に入りきるまでの過渡」：自己QRS優位から定常融合へ収束。
     //   → 体表QRSは R → rS → … → QS と徐々に移行（いきなりQSにはならない）。
     const onset = Math.min(1, 0.12 + beat*onsetStep);   // 速いレートほど早く定常へ収束＝早く乗っ取る
-    emitVentFusion(t, steadyFrac*onset);
+    emitVentFusion(t, steadyFrac*onset, beat);
     // His電極：逆行H は先に出る（実測 Stim→H 47ms）＝H-V-A（V は emitVentFusion の +66）。
     emitHis(t+47, 0.6);
     if(sc==='at') emitAtrial(t+tp.va,'retro_rv',0.9);  // AT：心房も逆行性(AVN経由＝concentric)にPCLで捕捉（entrain）
