@@ -1123,17 +1123,18 @@ function buildVentricularEntrainment(sc){
     // 開始の数拍は「回路に入りきるまでの過渡」：自己QRS優位から定常融合へ収束。
     //   → 体表QRSは R → rS → … → QS と徐々に移行（いきなりQSにはならない）。
     const onset = Math.min(1, 0.12 + beat*onsetStep);   // 速いレートほど早く定常へ収束＝早く乗っ取る
-    // AVNRT/ORT：Stim→V(CS)が15ms→66msに徐々に延長（rate-dependent RV→LV伝導遅延）
-    const usePerV = sc==='avnrt' || isAVRT(sc) || sc==='at';
-    const stvDelay = usePerV ? Math.min(15 + beat*(tcl-pcl), 66) : 70;
+    // 全シナリオ：Stim→V(CS)が15ms→66msに徐々に延長（rate-dependent RV→LV伝導遅延）
+    const stvDelay = Math.min(15 + beat*(tcl-pcl), 66);
     emitVentFusion(t, steadyFrac*onset, stvDelay);
-    // His電極：逆行H は先に出る（実測 Stim→H 47ms）＝H-V-A（V は emitVentFusion の +66）。
+    // His電極：逆行H は先に出る（実測 Stim→H 47ms）
     emitHis(t+47, 0.6);
-    // AVNRT/ORT/AT：A波をCS V位置基準(stv+VA)でper-V emit → VA一定・V-A即座
-    if(usePerV && t + stvDelay + tp.va <= paceEnd){
-      emitAtrial(t + stvDelay + tp.va, tp.retro, 0.9);
+    // A波をCS V位置基準(stv+VA)でper-V emit → VA一定・V-A即座
+    // atypavnrt：バースト中はfast pathway逆行（VA=VA_FAST_AT=70ms, concentric）
+    const vaForA   = sc==='atypavnrt' ? VA_FAST_AT : tp.va;
+    const retroForA = sc==='atypavnrt' ? 'retro_rv'  : tp.retro;
+    if(t + stvDelay + vaForA <= paceEnd){
+      emitAtrial(t + stvDelay + vaForA, retroForA, 0.9);
     }
-    // atypavnrt の心房出力は遷移ゾーンブロックで一括処理
     lastV=t; beat++;
   }
   // ---- 心房の加速（本 p165 図22/23）----
@@ -1147,36 +1148,7 @@ function buildVentricularEntrainment(sc){
   const ppiTclRef = isAVRT(sc) ? 50 : 128;
   const vaTachy   = isAVRT(sc) ? 120 : 5;
   const VA_PACE   = ppiTclRef + vaTachy;     // ORT 170 / AVNRT 133（=逆行A位置 lastV+VA_PACE）
-  // AVNRT/ORTはVループ内でper-V emit済みのため遷移ゾーンブロックをスキップ
-  if(sc==='atypavnrt'){
-    // 遷移ゾーン：TCL→PCL を 10ms ステップで短縮（EPSの本 p163-166）。
-    // 例：TCL=350, PCL=330 → AA: TCL, TCL, …, TCL-10, TCL-20(=PCL), PCL, …
-    const stableBeat = Math.max(1, Math.ceil((1-0.12)/onsetStep));
-    const aaStep  = 10;
-    const nTrans  = Math.max(1, Math.ceil((tcl - pcl) / aaStep));
-    const nPre    = sc==='atypavnrt' ? 3 : (stableBeat+2);
-    const retroMode = sc==='atypavnrt' ? 'retro_rv' : tp.retro;
-    let aT = tOn;
-    // ペーシング中のみ emit（paceEnd を超えたら打ち切り→停止後 V-A-A-V 領域を汚染しない）
-    for(let i=0; i<nPre && aT <= paceEnd; i++){
-      emitAtrial(aT, retroMode, 0.9);
-      aT += tcl;
-    }
-    for(let s=0; s<nTrans && aT <= paceEnd; s++){
-      emitAtrial(aT, retroMode, 0.9);
-      aT += Math.max(pcl, tcl - aaStep*(s+1));
-    }
-    if(sc==='atypavnrt'){
-      // エントレイン後：aT ベースで PCL 刻み（隙間なし）。paceEnd 内かつ A1 手前で打ち切る。
-      for(let tA = aT; tA <= Math.min(paceEnd, lastV + VA_FAST_AT - pcl/2); tA += pcl){
-        emitAtrial(tA, retroMode, 0.9);
-      }
-    } else {
-      for(let tA = aT; tA <= lastV + VA_PACE + pcl/2; tA += pcl){
-        emitAtrial(tA, retroMode, 0.9);
-      }
-    }
-  }
+  // 全シナリオ：VループでA波をper-V emit済み。遷移ゾーンブロック不要。
   // AT：ペーシング中は心房も逆行性にPCLで捕捉済み（上ループでemit）。
   //     リエントリー回路は心室ペーシング中も継続（抑制されない）。
   //     停止後、逆行A（A1）の次に回路の自己A（A2）が来る＝V-A-A-V。
