@@ -635,6 +635,22 @@ function parseJSON(raw){
   const tp=s=>{ try{ return JSON.parse(s); }catch(e){ return null; } };
   let o=tp(raw); if(!o){ const m=raw.match(/\{[\s\S]*\}/); if(m) o=tp(m[0]); } return o;
 }
+function apiErrMsg(e){
+  const s=e.status; let detail='';
+  try{ const j=JSON.parse(e.body); detail=(j.error&&j.error.message)||''; }catch(_){ detail=(e.body||'').slice(0,180); }
+  let hint='';
+  if(S.provider==='gemini'){
+    if(s===400) hint='キー形式を確認（AIza… で始まる）';
+    else if(s===403) hint='キー無効、またはGenerative Language APIが未有効';
+    else if(s===404) hint='モデル名が無効の可能性';
+    else if(s===429) hint='無料枠の上限。少し待って再試行';
+  }else{
+    if(s===401) hint='Claudeキーが無効（sk-ant… を確認）';
+    else if(s===400) hint='リクエスト不正、または残高不足';
+    else if(s===429) hint='レート上限。少し待って再試行';
+  }
+  return 'APIエラー'+(s?' ('+s+')':'')+(hint?'：'+hint:'')+(detail?'\n› '+detail:'');
+}
 
 /* ================= Navigation ================= */
 document.querySelectorAll('.mode').forEach(b=>{
@@ -780,8 +796,7 @@ async function convReply(){
     if(S.hands) convListen();
   }catch(e){
     typing.remove();
-    if(e.status) bubble('convStream','sys','APIエラー ('+e.status+')。キーや通信を確認してください。');
-    else bubble('convStream','sys','通信エラーが発生しました。');
+    bubble('convStream','sys', e.status ? apiErrMsg(e) : '通信エラーが発生しました（ネット接続を確認）。');
     $('convMicLabel').textContent='タップして話す'; console.warn(e.body||e);
   }
 }
@@ -832,7 +847,7 @@ Limit fixes to at most 4 (only real mistakes; empty array if none). Always give 
     (r.phrases||[]).forEach(p=>{ if(p.en && deckAdd({type:'phrase', en:p.en, ja:p.ja||''})) n++; });
     if(n) toast('復習デッキに'+n+'件追加しました');
   }catch(e){
-    $('reportBody').innerHTML='<p class="tip">レポート生成でエラー（'+(e.status||'通信')+'）。キーや通信を確認してください。</p>';
+    $('reportBody').innerHTML='<p class="tip" style="white-space:pre-wrap">'+esc(e.status?apiErrMsg(e):'通信エラーが発生しました（ネット接続を確認）。')+'</p>';
     console.warn(e.body||e);
   }
 }
