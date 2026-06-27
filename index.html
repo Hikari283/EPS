@@ -1128,15 +1128,10 @@ function buildVentricularEntrainment(sc){
     emitVentFusion(t, steadyFrac*onset, stvDelay);
     // His電極：逆行H は先に出る（実測 Stim→H 47ms）
     emitHis(t+47, 0.6);
-    // ORT/AT/atypavnrt：per-V A emission
+    // ORT/AT：per-V A emission（AVNRT・atypavnrt は遷移ゾーンブロックで別途処理）
     if(isAVRT(sc) || sc==='at'){
       if(t + stvDelay + tp.va <= paceEnd){
         emitAtrial(t + stvDelay + tp.va, tp.retro, 0.9);
-      }
-    }
-    if(sc==='atypavnrt'){
-      if(t + stvDelay + VA_FAST_AT <= paceEnd){
-        emitAtrial(t + stvDelay + VA_FAST_AT, 'retro_rv', 0.9);
       }
     }
     lastV=t; beat++;
@@ -1155,7 +1150,7 @@ function buildVentricularEntrainment(sc){
   // AVNRT / fast-slow AVNRT：絶対時刻 TCL→PCL 遷移ゾーン
   // 心室は傍観者＝stable QRS になった後に初めて AA=PCL になる。
   // atypavnrt も同様（fast pathway 逆行 VA が短い＝VA_FAST_AT, aT=tOn+VA_FAST_AT+66）。
-  if(sc==='avnrt'){
+  if(sc==='avnrt' || sc==='atypavnrt'){
     const stableBeat = Math.max(1, Math.ceil((1-0.12)/onsetStep));
     const nPre  = stableBeat + 2;
     const aaStep = 10;
