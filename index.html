@@ -1152,8 +1152,7 @@ function buildVentricularEntrainment(sc){
   // atypavnrt も同様（fast pathway 逆行 VA が短い＝VA_FAST_AT, aT=tOn+VA_FAST_AT+66）。
   if(sc==='avnrt' || sc==='atypavnrt'){
     const stableBeat = Math.max(1, Math.ceil((1-0.12)/onsetStep));
-    // atypavnrt: nPre=2（少なめ）でA波が消えないようにしつつ遷移ゾーンを確保
-    const nPre  = sc==='atypavnrt' ? 2 : stableBeat + 2;
+    const nPre  = stableBeat + 2;
     const aaStep = 10;
     const nTrans = Math.max(1, Math.ceil((tcl - pcl) / aaStep));
     const retroMode = 'retro_rv';
