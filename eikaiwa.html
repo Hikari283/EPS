@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#0b1220">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>こえ英会話 — ハンズフリー英会話</title>
+<style>
+  :root{
+    --bg:#0b1220; --panel:#121a2b; --panel2:#0e1626; --line:#22304a;
+    --txt:#eaf0fb; --muted:#93a4c3; --accent:#5fb3f6; --accent2:#34d399;
+    --warm:#f6b26b; --danger:#f87171; --me:#1f3a5f; --ai:#15243b;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP",system-ui,sans-serif;
+    overscroll-behavior:none;}
+  body{display:flex;flex-direction:column;min-height:100dvh;}
+  header{padding:14px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#101a2e,#0b1220);position:sticky;top:0;z-index:10}
+  header .logo{font-weight:800;font-size:18px;letter-spacing:.02em}
+  header .logo span{color:var(--accent)}
+  header .sp{flex:1}
+  .iconbtn{background:var(--panel);border:1px solid var(--line);color:var(--txt);
+    width:42px;height:42px;border-radius:12px;font-size:18px;display:flex;align-items:center;justify-content:center}
+  main{flex:1;display:flex;flex-direction:column;padding:16px;gap:14px;max-width:680px;width:100%;margin:0 auto}
+  .hidden{display:none!important}
+
+  /* Home */
+  .hero{padding:8px 4px 0}
+  .hero h1{font-size:22px;margin:0 0 4px}
+  .hero p{color:var(--muted);margin:0;font-size:14px;line-height:1.6}
+  .modes{display:grid;grid-template-columns:1fr;gap:12px;margin-top:6px}
+  .mode{display:flex;align-items:center;gap:14px;padding:18px;border-radius:18px;border:1px solid var(--line);
+    background:var(--panel);text-align:left;color:var(--txt);font-size:17px;font-weight:700;cursor:pointer}
+  .mode:active{transform:scale(.99)}
+  .mode .emo{font-size:30px;width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;
+    background:var(--panel2);border:1px solid var(--line)}
+  .mode small{display:block;color:var(--muted);font-weight:500;font-size:13px;margin-top:3px}
+  .tip{font-size:12px;color:var(--muted);text-align:center;line-height:1.6}
+
+  /* Conversation / practice screen */
+  .screen{flex:1;display:flex;flex-direction:column;gap:12px}
+  .sub{display:flex;align-items:center;gap:8px}
+  .back{background:none;border:none;color:var(--accent);font-size:15px;font-weight:700;padding:6px 0}
+  .title{font-size:16px;font-weight:800;flex:1}
+  .chip{font-size:12px;color:var(--muted);background:var(--panel2);border:1px solid var(--line);padding:4px 10px;border-radius:999px}
+
+  .stream{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:4px 2px;min-height:120px}
+  .bubble{max-width:88%;padding:12px 14px;border-radius:16px;line-height:1.55;font-size:16px;white-space:pre-wrap;word-break:break-word}
+  .bubble.ai{background:var(--ai);border:1px solid var(--line);border-bottom-left-radius:6px;align-self:flex-start}
+  .bubble.me{background:var(--me);border:1px solid #2b4b73;border-bottom-right-radius:6px;align-self:flex-end}
+  .bubble .ja{display:block;color:var(--muted);font-size:13px;margin-top:6px;border-top:1px dashed var(--line);padding-top:6px}
+  .bubble .corr{display:block;color:var(--warm);font-size:13px;margin-top:6px}
+  .bubble.sys{align-self:center;background:none;color:var(--muted);font-size:13px;text-align:center;max-width:100%}
+
+  /* Card (vocab / phrase) */
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:22px 18px;text-align:center;
+    display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;min-height:230px}
+  .card .en{font-size:30px;font-weight:800;line-height:1.25}
+  .card .pho{color:var(--muted);font-size:14px}
+  .card .ja2{font-size:18px;color:var(--accent)}
+  .card .ex{font-size:15px;color:var(--txt);line-height:1.5;margin-top:4px}
+  .card .exja{font-size:13px;color:var(--muted)}
+  .card .cat{font-size:12px;color:var(--muted);background:var(--panel2);border:1px solid var(--line);padding:3px 10px;border-radius:999px}
+  .progress{font-size:12px;color:var(--muted);text-align:center}
+
+  /* Controls */
+  .controls{display:flex;flex-direction:column;gap:12px;align-items:center;padding-bottom:8px}
+  .heard{min-height:22px;font-size:14px;color:var(--warm);text-align:center}
+  .mic{width:104px;height:104px;border-radius:50%;border:none;font-size:40px;color:#06121f;
+    background:radial-gradient(circle at 30% 30%,#8fd0ff,#3a8fe0);box-shadow:0 10px 30px rgba(58,143,224,.4);
+    display:flex;align-items:center;justify-content:center;position:relative;transition:transform .1s}
+  .mic:active{transform:scale(.96)}
+  .mic.live{background:radial-gradient(circle at 30% 30%,#7ef0c0,#16a06b);box-shadow:0 0 0 0 rgba(52,211,153,.6);
+    animation:pulse 1.4s infinite}
+  .mic.speaking{background:radial-gradient(circle at 30% 30%,#ffd79a,#e0903a)}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(52,211,153,.55)}70%{box-shadow:0 0 0 22px rgba(52,211,153,0)}100%{box-shadow:0 0 0 0 rgba(52,211,153,0)}}
+  .miclabel{font-size:13px;color:var(--muted);min-height:18px}
+  .row{display:flex;gap:10px;width:100%;justify-content:center;flex-wrap:wrap}
+  .btn{flex:1;min-width:120px;max-width:200px;padding:14px;border-radius:14px;border:1px solid var(--line);
+    background:var(--panel);color:var(--txt);font-size:16px;font-weight:700}
+  .btn:active{transform:scale(.98)}
+  .btn.alt{background:var(--panel2)}
+  .btn.acc{background:#163a52;border-color:#1d4d6e;color:#bfe5ff}
+
+  /* Settings sheet */
+  .sheet{position:fixed;inset:0;background:rgba(4,8,16,.6);display:flex;align-items:flex-end;z-index:50}
+  .sheet .inner{background:var(--panel);width:100%;max-width:680px;margin:0 auto;border-radius:20px 20px 0 0;
+    border:1px solid var(--line);padding:20px;display:flex;flex-direction:column;gap:14px}
+  .sheet h3{margin:0;font-size:18px}
+  .field label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+  .field input,.field select{width:100%;padding:12px;border-radius:12px;border:1px solid var(--line);
+    background:var(--panel2);color:var(--txt);font-size:15px}
+  .field .help{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.5}
+  .field .help a{color:var(--accent)}
+  .seg{display:flex;gap:8px}
+  .seg button{flex:1;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--txt);font-size:14px}
+  .seg button.on{background:#163a52;border-color:#1d4d6e;color:#bfe5ff}
+  .warn{font-size:12px;color:var(--warm);line-height:1.5;background:#2a1f12;border:1px solid #4a371d;padding:10px;border-radius:10px}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">こえ<span>英会話</span></div>
+  <div class="sp"></div>
+  <button class="iconbtn" id="btnSettings" title="設定">⚙️</button>
+</header>
+
+<main>
+  <!-- HOME -->
+  <section id="home">
+    <div class="hero">
+      <h1>声だけで英語を練習</h1>
+      <p>運転中でもハンズフリー。マイクに話しかけ、アプリが読み上げます。モードを選んでください。</p>
+    </div>
+    <div class="modes">
+      <button class="mode" data-mode="talk">
+        <div class="emo">💬</div>
+        <div>自由に英会話
+          <small>AIと自由に話す・添削つき（要APIキー）</small></div>
+      </button>
+      <button class="mode" data-mode="phrase">
+        <div class="emo">🗣️</div>
+        <div>フレーズ練習
+          <small>場面別の定番フレーズを聞いて真似る</small></div>
+      </button>
+      <button class="mode" data-mode="word">
+        <div class="emo">📚</div>
+        <div>単語を覚える
+          <small>単語・意味・例文を声で反復</small></div>
+      </button>
+    </div>
+    <p class="tip" id="homeTip">※ Android Chrome 推奨。iPhoneは音声認識が不安定な場合があります。</p>
+  </section>
+
+  <!-- TALK (AI conversation) -->
+  <section id="talk" class="screen hidden">
+    <div class="sub">
+      <button class="back" data-back>‹ もどる</button>
+      <div class="title">自由に英会話</div>
+      <div class="chip" id="talkLevel">初級</div>
+    </div>
+    <div class="stream" id="talkStream"></div>
+    <div class="controls">
+      <div class="heard" id="talkHeard"></div>
+      <button class="mic" id="talkMic">🎤</button>
+      <div class="miclabel" id="talkMicLabel">タップして話す</div>
+      <div class="row">
+        <button class="btn alt" id="talkHands">🚗 ハンズフリー: OFF</button>
+        <button class="btn alt" id="talkRepeat">🔁 もう一度</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- PHRASE / WORD shared practice -->
+  <section id="practice" class="screen hidden">
+    <div class="sub">
+      <button class="back" data-back>‹ もどる</button>
+      <div class="title" id="pracTitle">フレーズ練習</div>
+      <div class="chip" id="pracCat">—</div>
+    </div>
+    <div class="card" id="pracCard">
+      <div class="cat" id="cCat">—</div>
+      <div class="en" id="cEn">—</div>
+      <div class="pho" id="cPho"></div>
+      <div class="ja2" id="cJa">—</div>
+      <div class="ex" id="cEx"></div>
+      <div class="exja" id="cExJa"></div>
+    </div>
+    <div class="progress" id="pracProg">1 / 1</div>
+    <div class="controls">
+      <div class="heard" id="pracHeard"></div>
+      <button class="mic" id="pracMic">🔊</button>
+      <div class="miclabel" id="pracMicLabel">タップで読み上げ</div>
+      <div class="row">
+        <button class="btn acc" id="pracSpeak">🔊 聞く</button>
+        <button class="btn" id="pracRepeat">🎤 真似る</button>
+      </div>
+      <div class="row">
+        <button class="btn alt" id="pracPrev">‹ 前へ</button>
+        <button class="btn alt" id="pracAuto">▶ 自動再生</button>
+        <button class="btn alt" id="pracNext">次へ ›</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- SETTINGS -->
+<div class="sheet hidden" id="settings">
+  <div class="inner">
+    <h3>設定</h3>
+    <div class="field">
+      <label>レベル（読み上げ速度・AIの難易度）</label>
+      <div class="seg" id="segLevel">
+        <button data-lvl="beginner">初級</button>
+        <button data-lvl="intermediate">中級</button>
+        <button data-lvl="advanced">上級</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>英語の音声（読み上げ）</label>
+      <select id="voiceSel"><option>読み込み中…</option></select>
+    </div>
+    <div class="field">
+      <label>Claude API キー（自由会話に必要）</label>
+      <input id="apiKey" type="password" placeholder="sk-ant-..." autocomplete="off">
+      <div class="help">ブラウザ内のみに保存され、サーバーには送りません。キーは <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Anthropic Console</a> で発行できます。</div>
+    </div>
+    <div class="warn">フレーズ練習・単語学習はキーなしで使えます。自由会話だけAIを使うためキーが必要です。</div>
+    <div class="row">
+      <button class="btn acc" id="saveSettings">保存して閉じる</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ============ Data ============ */
+const PHRASES = [
+  {cat:"あいさつ", en:"How's it going?", ja:"調子はどう？", ex:"How's it going? — Pretty good, thanks.", exja:"調子どう？ーまあまあだよ、ありがとう。"},
+  {cat:"あいさつ", en:"Long time no see.", ja:"久しぶり。", ex:"Long time no see! How have you been?", exja:"久しぶり！元気にしてた？"},
+  {cat:"あいさつ", en:"Take care.", ja:"気をつけてね。", ex:"See you next week. Take care!", exja:"また来週。気をつけてね！"},
+  {cat:"あいさつ", en:"Nice to meet you.", ja:"はじめまして。", ex:"Nice to meet you. I'm Ken.", exja:"はじめまして。ケンです。"},
+  {cat:"リアクション", en:"That makes sense.", ja:"なるほど、納得。", ex:"Oh, that makes sense now.", exja:"なるほど、それで分かったよ。"},
+  {cat:"リアクション", en:"No way!", ja:"まさか！／うそでしょ！", ex:"No way! Are you serious?", exja:"うそでしょ！本気なの？"},
+  {cat:"リアクション", en:"I see what you mean.", ja:"言いたいこと分かるよ。", ex:"I see what you mean, but I disagree.", exja:"言いたいことは分かるけど、僕は反対。"},
+  {cat:"リアクション", en:"That's a good point.", ja:"いい指摘だね。", ex:"That's a good point. Let's think about it.", exja:"いい指摘だね。考えてみよう。"},
+  {cat:"お願い", en:"Could you do me a favor?", ja:"お願いしてもいい？", ex:"Could you do me a favor and call him?", exja:"お願いがあるんだけど、彼に電話してくれる？"},
+  {cat:"お願い", en:"Would you mind helping me?", ja:"手伝ってもらえますか？", ex:"Would you mind helping me with this?", exja:"これを手伝ってもらえますか？"},
+  {cat:"お願い", en:"Can you say that again?", ja:"もう一回言ってくれる？", ex:"Sorry, can you say that again?", exja:"ごめん、もう一回言ってくれる？"},
+  {cat:"レストラン", en:"I'll have the same.", ja:"私も同じものを。", ex:"I'll have the same, please.", exja:"私も同じものをお願いします。"},
+  {cat:"レストラン", en:"Could I get the check?", ja:"お会計をお願いします。", ex:"Excuse me, could I get the check?", exja:"すみません、お会計をお願いできますか？"},
+  {cat:"レストラン", en:"Is this seat taken?", ja:"この席空いてますか？", ex:"Excuse me, is this seat taken?", exja:"すみません、この席空いてますか？"},
+  {cat:"旅行", en:"How do I get to the station?", ja:"駅へはどう行きますか？", ex:"Excuse me, how do I get to the station?", exja:"すみません、駅へはどう行きますか？"},
+  {cat:"旅行", en:"Could you take a picture of us?", ja:"写真を撮ってもらえますか？", ex:"Could you take a picture of us, please?", exja:"私たちの写真を撮ってもらえますか？"},
+  {cat:"旅行", en:"I'd like to check in.", ja:"チェックインしたいです。", ex:"Hi, I'd like to check in, please.", exja:"こんにちは、チェックインをお願いします。"},
+  {cat:"仕事", en:"Let me get back to you.", ja:"後で返事します。", ex:"Let me get back to you on that tomorrow.", exja:"その件は明日お返事します。"},
+  {cat:"仕事", en:"Can we set up a meeting?", ja:"打ち合わせを設定できますか？", ex:"Can we set up a meeting next week?", exja:"来週、打ち合わせを設定できますか？"},
+  {cat:"仕事", en:"I'm just following up.", ja:"念のため確認です。", ex:"I'm just following up on my last email.", exja:"先日のメールの確認の連絡です。"},
+  {cat:"仕事", en:"Sounds good to me.", ja:"いいと思います。", ex:"Friday at 3? Sounds good to me.", exja:"金曜の3時？いいと思います。"},
+  {cat:"気持ち", en:"I can't wait.", ja:"待ちきれない。", ex:"I can't wait for the trip!", exja:"旅行が待ちきれない！"},
+  {cat:"気持ち", en:"That's too bad.", ja:"それは残念。", ex:"You're sick? That's too bad.", exja:"具合悪いの？それは残念。"},
+  {cat:"気持ち", en:"I'm proud of you.", ja:"あなたを誇りに思う。", ex:"You passed the exam? I'm proud of you!", exja:"試験に受かったの？誇りに思うよ！"},
+];
+
+const WORDS = [
+  {cat:"日常", en:"appreciate", pho:"/əˈpriːʃieɪt/", ja:"〜に感謝する、よさが分かる", ex:"I really appreciate your help.", exja:"あなたの助けに本当に感謝します。"},
+  {cat:"日常", en:"available", pho:"/əˈveɪləbl/", ja:"利用できる、手が空いている", ex:"Are you available tomorrow?", exja:"明日は空いていますか？"},
+  {cat:"日常", en:"convenient", pho:"/kənˈviːniənt/", ja:"便利な、都合のよい", ex:"Is Monday convenient for you?", exja:"月曜はご都合いいですか？"},
+  {cat:"日常", en:"actually", pho:"/ˈæktʃuəli/", ja:"実は、実際には", ex:"Actually, I changed my mind.", exja:"実は、気が変わったんだ。"},
+  {cat:"日常", en:"probably", pho:"/ˈprɑːbəbli/", ja:"たぶん、おそらく", ex:"I'll probably be late.", exja:"たぶん遅れると思う。"},
+  {cat:"気持ち", en:"exhausted", pho:"/ɪɡˈzɔːstɪd/", ja:"へとへとに疲れた", ex:"I'm exhausted after work.", exja:"仕事の後でへとへとだ。"},
+  {cat:"気持ち", en:"nervous", pho:"/ˈnɜːrvəs/", ja:"緊張している、不安な", ex:"I'm a little nervous about the test.", exja:"テストが少し不安です。"},
+  {cat:"気持ち", en:"relieved", pho:"/rɪˈliːvd/", ja:"ほっとした、安心した", ex:"I was relieved to hear the news.", exja:"その知らせを聞いてほっとした。"},
+  {cat:"気持ち", en:"confident", pho:"/ˈkɑːnfɪdənt/", ja:"自信のある", ex:"She's confident about the plan.", exja:"彼女はその計画に自信がある。"},
+  {cat:"仕事", en:"deadline", pho:"/ˈdedlaɪn/", ja:"締め切り", ex:"The deadline is next Friday.", exja:"締め切りは来週の金曜だ。"},
+  {cat:"仕事", en:"schedule", pho:"/ˈskedʒuːl/", ja:"予定、スケジュール", ex:"Let's check our schedule.", exja:"予定を確認しよう。"},
+  {cat:"仕事", en:"in charge", pho:"/ɪn tʃɑːrdʒ/", ja:"担当して、責任を持って", ex:"Who's in charge here?", exja:"ここの担当は誰ですか？"},
+  {cat:"仕事", en:"figure out", pho:"/ˈfɪɡjər aʊt/", ja:"理解する、解決する", ex:"Let's figure out the problem.", exja:"その問題を解決しよう。"},
+  {cat:"動き", en:"hang out", pho:"/hæŋ aʊt/", ja:"ぶらぶら過ごす、遊ぶ", ex:"Let's hang out this weekend.", exja:"今週末、遊ぼうよ。"},
+  {cat:"動き", en:"show up", pho:"/ʃoʊ ʌp/", ja:"現れる、来る", ex:"He didn't show up.", exja:"彼は来なかった。"},
+  {cat:"動き", en:"give up", pho:"/ɡɪv ʌp/", ja:"あきらめる", ex:"Don't give up!", exja:"あきらめないで！"},
+  {cat:"動き", en:"look forward to", pho:"/lʊk ˈfɔːrwərd tuː/", ja:"〜を楽しみにする", ex:"I look forward to seeing you.", exja:"お会いするのを楽しみにしています。"},
+  {cat:"性質", en:"reliable", pho:"/rɪˈlaɪəbl/", ja:"頼りになる、信頼できる", ex:"He's a reliable friend.", exja:"彼は頼れる友達だ。"},
+  {cat:"性質", en:"generous", pho:"/ˈdʒenərəs/", ja:"気前のよい、寛大な", ex:"She's very generous.", exja:"彼女はとても気前がいい。"},
+  {cat:"性質", en:"honest", pho:"/ˈɑːnɪst/", ja:"正直な", ex:"To be honest, I disagree.", exja:"正直に言うと、反対です。"},
+];
+
+/* ============ State ============ */
+const S = {
+  level: localStorage.getItem('ee_level') || 'beginner',
+  apiKey: localStorage.getItem('ee_apikey') || '',
+  voiceURI: localStorage.getItem('ee_voice') || '',
+  voices: [], enVoice: null,
+  mode: null,
+  hands: false,
+  talkHistory: [],
+  pracList: [], pracIdx: 0, pracKind: 'phrase', pracAuto: false, pracAutoTimer: null,
+  recog: null, recActive: false, recPurpose: null,
+};
+const rates = {beginner:0.82, intermediate:0.95, advanced:1.05};
+const levelJa = {beginner:'初級', intermediate:'中級', advanced:'上級'};
+
+/* ============ DOM ============ */
+const $ = id => document.getElementById(id);
+const sections = {home:$('home'), talk:$('talk'), practice:$('practice')};
+
+/* ============ Speech synthesis ============ */
+function loadVoices(){
+  S.voices = window.speechSynthesis ? speechSynthesis.getVoices() : [];
+  const en = S.voices.filter(v => /^en(-|_)/i.test(v.lang));
+  const sel = $('voiceSel');
+  sel.innerHTML = '';
+  if(!en.length){ sel.innerHTML = '<option>英語音声が見つかりません</option>'; S.enVoice=null; return; }
+  en.forEach(v=>{
+    const o = document.createElement('option');
+    o.value = v.voiceURI; o.textContent = `${v.name} (${v.lang})`;
+    sel.appendChild(o);
+  });
+  let pick = en.find(v=>v.voiceURI===S.voiceURI)
+    || en.find(v=>/female|samantha|google us english|aria|jenny/i.test(v.name))
+    || en.find(v=>/en-US/i.test(v.lang)) || en[0];
+  S.enVoice = pick; sel.value = pick.voiceURI;
+}
+if(window.speechSynthesis){
+  loadVoices();
+  speechSynthesis.onvoiceschanged = loadVoices;
+}
+function speak(text, {onend, rate}={}){
+  return new Promise(res=>{
+    if(!window.speechSynthesis){ onend&&onend(); res(); return; }
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    if(S.enVoice){ u.voice = S.enVoice; u.lang = S.enVoice.lang; } else u.lang='en-US';
+    u.rate = rate || rates[S.level] || 0.9;
+    u.onend = ()=>{ onend&&onend(); res(); };
+    u.onerror = ()=>{ onend&&onend(); res(); };
+    speechSynthesis.speak(u);
+  });
+}
+function stopSpeak(){ if(window.speechSynthesis) speechSynthesis.cancel(); }
+
+/* ============ Speech recognition ============ */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+function recogSupported(){ return !!SR; }
+
+function startRecog(purpose, {onfinal, onheard, onend}={}){
+  if(!SR) return;
+  try{ if(S.recog) S.recog.abort(); }catch(e){}
+  const r = new SR();
+  r.lang = 'en-US';
+  r.interimResults = true;
+  r.continuous = false;
+  r.maxAlternatives = 1;
+  let finalText = '';
+  r.onresult = e=>{
+    let interim='', fin='';
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const t = e.results[i][0].transcript;
+      if(e.results[i].isFinal) fin += t; else interim += t;
+    }
+    if(interim) onheard&&onheard(interim);
+    if(fin){ finalText = fin.trim(); }
+  };
+  r.onerror = ev=>{ /* no-mic / not-allowed / no-speech */ S.recActive=false; onend&&onend(ev.error); };
+  r.onend = ()=>{
+    S.recActive=false;
+    if(finalText){ onfinal&&onfinal(finalText); }
+    else { onend&&onend(null); }
+  };
+  S.recog = r; S.recActive = true; S.recPurpose = purpose;
+  try{ r.start(); }catch(e){ S.recActive=false; }
+}
+function stopRecog(){ try{ if(S.recog) S.recog.stop(); }catch(e){} S.recActive=false; }
+
+/* ============ Navigation ============ */
+function show(name){
+  Object.values(sections).forEach(s=>s.classList.add('hidden'));
+  sections[name].classList.remove('hidden');
+  S.mode = name;
+}
+document.querySelectorAll('.mode').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    const m = b.dataset.mode;
+    if(m==='talk') openTalk();
+    else if(m==='phrase') openPractice('phrase');
+    else openPractice('word');
+  });
+});
+document.querySelectorAll('[data-back]').forEach(b=>{
+  b.addEventListener('click', ()=>{ leaveAll(); show('home'); });
+});
+function leaveAll(){
+  stopSpeak(); stopRecog();
+  S.hands=false; S.pracAuto=false;
+  if(S.pracAutoTimer){ clearTimeout(S.pracAutoTimer); S.pracAutoTimer=null; }
+  $('talkHands').textContent='🚗 ハンズフリー: OFF';
+  $('talkMic').classList.remove('live','speaking');
+  $('pracMic').classList.remove('live','speaking');
+  $('talkMicLabel').textContent='タップして話す';
+  $('pracMicLabel').textContent='タップで読み上げ';
+  $('pracAuto').textContent='▶ 自動再生';
+}
+
+/* ============ TALK mode ============ */
+function bubble(streamEl, cls, text, extra){
+  const b = document.createElement('div');
+  b.className = 'bubble '+cls;
+  b.textContent = text;
+  if(extra && extra.ja){ const s=document.createElement('span'); s.className='ja'; s.textContent=extra.ja; b.appendChild(s); }
+  if(extra && extra.corr){ const s=document.createElement('span'); s.className='corr'; s.textContent='✏️ '+extra.corr; b.appendChild(s); }
+  streamEl.appendChild(b);
+  streamEl.scrollTop = streamEl.scrollHeight;
+  return b;
+}
+function openTalk(){
+  show('talk');
+  $('talkLevel').textContent = levelJa[S.level];
+  $('talkStream').innerHTML='';
+  S.talkHistory=[];
+  if(!S.apiKey){
+    bubble($('talkStream'),'sys','自由会話にはClaude APIキーが必要です。右上の⚙️から設定してください。\n（フレーズ・単語モードはキー不要です）');
+    return;
+  }
+  const greet = "Hi! Let's chat in English. How are you today?";
+  bubble($('talkStream'),'ai',greet,{ja:'こんにちは！英語で話しましょう。今日の調子はどう？'});
+  S.talkHistory.push({role:'assistant', content:greet});
+  speak(greet, {onend:()=>{ if(S.hands) talkListen(); }});
+}
+$('talkMic').addEventListener('click', ()=>{
+  if(!S.apiKey){ $('btnSettings').click(); return; }
+  if(S.recActive){ stopRecog(); return; }
+  stopSpeak(); talkListen();
+});
+function talkListen(){
+  if(!recogSupported()){ bubble($('talkStream'),'sys','この端末は音声認識に対応していません。Android Chromeをお試しください。'); return; }
+  $('talkHeard').textContent='';
+  $('talkMic').classList.add('live'); $('talkMic').classList.remove('speaking');
+  $('talkMicLabel').textContent='聞いています…（話してください）';
+  startRecog('talk',{
+    onheard:t=>{ $('talkHeard').textContent='“'+t+'”'; },
+    onfinal:t=>{
+      $('talkMic').classList.remove('live'); $('talkMicLabel').textContent='考え中…';
+      $('talkHeard').textContent='';
+      bubble($('talkStream'),'me',t);
+      S.talkHistory.push({role:'user', content:t});
+      talkReply();
+    },
+    onend:err=>{
+      $('talkMic').classList.remove('live'); $('talkMicLabel').textContent='タップして話す';
+      if(err==='not-allowed') bubble($('talkStream'),'sys','マイクの使用が許可されていません。ブラウザの設定を確認してください。');
+      else if(S.hands && err==='no-speech'){ talkListen(); }
+    }
+  });
+}
+async function talkReply(){
+  const sysPrompt = `You are a friendly English conversation partner for a Japanese learner (level: ${S.level}).
+Keep the conversation going naturally with short, spoken-style replies (1-3 sentences). Ask a follow-up question.
+${S.level==='beginner'?'Use simple vocabulary and short sentences.':S.level==='advanced'?'Use natural, native-level English.':'Use everyday natural English.'}
+Always reply with a JSON object only: {"reply":"<your English reply>","ja":"<Japanese translation of your reply>","correction":"<a brief, gentle correction of the learner's last English if it had a clear mistake, otherwise empty string>"}`;
+  try{
+    const msgs = S.talkHistory.slice(-12).map(m=>({role:m.role, content:m.content}));
+    const res = await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{
+        'content-type':'application/json',
+        'x-api-key':S.apiKey,
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-direct-browser-access':'true'
+      },
+      body:JSON.stringify({
+        model:'claude-opus-4-8',
+        max_tokens:400,
+        system:sysPrompt,
+        messages:msgs
+      })
+    });
+    if(!res.ok){
+      const t = await res.text();
+      bubble($('talkStream'),'sys','APIエラー ('+res.status+')。キーや通信を確認してください。');
+      console.warn(t);
+      $('talkMicLabel').textContent='タップして話す';
+      return;
+    }
+    const data = await res.json();
+    let raw = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('').trim();
+    let obj = parseReply(raw);
+    bubble($('talkStream'),'ai',obj.reply,{ja:obj.ja, corr:obj.correction});
+    S.talkHistory.push({role:'assistant', content:obj.reply});
+    $('talkMic').classList.add('speaking'); $('talkMicLabel').textContent='読み上げ中…';
+    await speak(obj.reply);
+    $('talkMic').classList.remove('speaking'); $('talkMicLabel').textContent='タップして話す';
+    if(S.hands) talkListen();
+  }catch(e){
+    bubble($('talkStream'),'sys','通信エラーが発生しました。');
+    $('talkMicLabel').textContent='タップして話す';
+    console.warn(e);
+  }
+}
+function parseReply(raw){
+  // try direct JSON, then extract braces
+  const tryParse = s=>{ try{ return JSON.parse(s); }catch(e){ return null; } };
+  let o = tryParse(raw);
+  if(!o){ const m = raw.match(/\{[\s\S]*\}/); if(m) o = tryParse(m[0]); }
+  if(o && o.reply) return {reply:o.reply, ja:o.ja||'', correction:(o.correction||'').trim()};
+  return {reply:raw, ja:'', correction:''};
+}
+$('talkHands').addEventListener('click', ()=>{
+  S.hands = !S.hands;
+  $('talkHands').textContent = '🚗 ハンズフリー: '+(S.hands?'ON':'OFF');
+  if(S.hands && !S.recActive && !speechSynthesis.speaking) talkListen();
+  if(!S.hands) stopRecog();
+});
+$('talkRepeat').addEventListener('click', ()=>{
+  const last = [...S.talkHistory].reverse().find(m=>m.role==='assistant');
+  if(last){ stopRecog(); speak(last.content); }
+});
+
+/* ============ PRACTICE (phrase / word) ============ */
+function openPractice(kind){
+  show('practice');
+  S.pracKind = kind;
+  S.pracList = (kind==='phrase'?PHRASES:WORDS).slice();
+  S.pracIdx = 0;
+  $('pracTitle').textContent = kind==='phrase'?'フレーズ練習':'単語を覚える';
+  $('cPho').style.display = kind==='word'?'block':'none';
+  renderPrac();
+  // auto-speak first item shortly after entering
+  setTimeout(()=>speakPrac(), 300);
+}
+function curItem(){ return S.pracList[S.pracIdx]; }
+function renderPrac(){
+  const it = curItem();
+  $('cCat').textContent = it.cat;
+  $('pracCat').textContent = it.cat;
+  $('cEn').textContent = it.en;
+  $('cPho').textContent = it.pho || '';
+  $('cJa').textContent = it.ja;
+  $('cEx').textContent = it.ex || '';
+  $('cExJa').textContent = it.exja || '';
+  $('pracProg').textContent = (S.pracIdx+1)+' / '+S.pracList.length;
+  $('pracHeard').textContent='';
+}
+async function speakPrac(){
+  const it = curItem();
+  stopRecog();
+  $('pracMic').classList.add('speaking'); $('pracMicLabel').textContent='読み上げ中…';
+  await speak(it.en);
+  if(it.ex){ await speak(it.ex); }
+  $('pracMic').classList.remove('speaking'); $('pracMicLabel').textContent='タップで読み上げ';
+  if(S.pracAuto){
+    S.pracAutoTimer = setTimeout(()=>{ nextPrac(true); }, 1200);
+  }
+}
+function nextPrac(auto){
+  if(S.pracIdx < S.pracList.length-1) S.pracIdx++;
+  else if(S.pracAuto){ S.pracIdx=0; } // loop in auto
+  else return;
+  renderPrac();
+  if(auto || S.pracAuto) speakPrac();
+}
+function prevPrac(){
+  if(S.pracIdx>0){ S.pracIdx--; renderPrac(); speakPrac(); }
+}
+function repeatPrac(){
+  if(!recogSupported()){ $('pracHeard').textContent='この端末は音声認識に未対応です'; return; }
+  stopSpeak();
+  $('pracMic').classList.add('live'); $('pracMicLabel').textContent='どうぞ、真似して話して…';
+  startRecog('prac',{
+    onheard:t=>{ $('pracHeard').textContent='“'+t+'”'; },
+    onfinal:t=>{
+      $('pracMic').classList.remove('live'); $('pracMicLabel').textContent='タップで読み上げ';
+      const target = curItem().en.toLowerCase().replace(/[^a-z ]/g,'').trim();
+      const said = t.toLowerCase().replace(/[^a-z ]/g,'').trim();
+      const score = similarity(target, said);
+      if(score>=0.7) $('pracHeard').textContent='✅ いいね！ “'+t+'”';
+      else $('pracHeard').textContent='🔁 もう一度: “'+t+'” （お手本: '+curItem().en+'）';
+    },
+    onend:err=>{
+      $('pracMic').classList.remove('live'); $('pracMicLabel').textContent='タップで読み上げ';
+      if(err==='not-allowed') $('pracHeard').textContent='マイクが許可されていません';
+    }
+  });
+}
+function similarity(a,b){
+  if(!a||!b) return 0;
+  const wa=a.split(/\s+/), wb=new Set(b.split(/\s+/));
+  let hit=0; wa.forEach(w=>{ if(wb.has(w)) hit++; });
+  return hit/wa.length;
+}
+$('pracSpeak').addEventListener('click', ()=>{ S.pracAuto=false; $('pracAuto').textContent='▶ 自動再生'; speakPrac(); });
+$('pracMic').addEventListener('click', ()=>{ if(S.recActive) stopRecog(); else speakPrac(); });
+$('pracRepeat').addEventListener('click', repeatPrac);
+$('pracNext').addEventListener('click', ()=>{ S.pracAuto=false; $('pracAuto').textContent='▶ 自動再生'; nextPrac(false); });
+$('pracPrev').addEventListener('click', ()=>{ S.pracAuto=false; $('pracAuto').textContent='▶ 自動再生'; prevPrac(); });
+$('pracAuto').addEventListener('click', ()=>{
+  S.pracAuto = !S.pracAuto;
+  $('pracAuto').textContent = S.pracAuto?'⏸ 停止':'▶ 自動再生';
+  if(S.pracAuto) speakPrac();
+  else if(S.pracAutoTimer){ clearTimeout(S.pracAutoTimer); S.pracAutoTimer=null; stopSpeak(); }
+});
+
+/* ============ Settings ============ */
+function paintLevelSeg(){
+  document.querySelectorAll('#segLevel button').forEach(b=>{
+    b.classList.toggle('on', b.dataset.lvl===S.level);
+  });
+}
+$('btnSettings').addEventListener('click', ()=>{
+  $('apiKey').value = S.apiKey;
+  paintLevelSeg();
+  if(S.enVoice) $('voiceSel').value = S.enVoice.voiceURI;
+  $('settings').classList.remove('hidden');
+});
+document.querySelectorAll('#segLevel button').forEach(b=>{
+  b.addEventListener('click', ()=>{ S.level=b.dataset.lvl; paintLevelSeg(); });
+});
+$('voiceSel').addEventListener('change', e=>{
+  const v = S.voices.find(x=>x.voiceURI===e.target.value);
+  if(v){ S.enVoice=v; speak('Hello, this is your voice.'); }
+});
+$('saveSettings').addEventListener('click', ()=>{
+  S.apiKey = $('apiKey').value.trim();
+  S.voiceURI = S.enVoice?S.enVoice.voiceURI:'';
+  localStorage.setItem('ee_level', S.level);
+  localStorage.setItem('ee_apikey', S.apiKey);
+  localStorage.setItem('ee_voice', S.voiceURI);
+  $('settings').classList.add('hidden');
+  if(S.mode==='talk') $('talkLevel').textContent = levelJa[S.level];
+});
+$('settings').addEventListener('click', e=>{ if(e.target.id==='settings') $('settings').classList.add('hidden'); });
+
+/* ============ Init ============ */
+(function init(){
+  paintLevelSeg();
+  if(!recogSupported()){
+    $('homeTip').textContent = '⚠️ この端末/ブラウザは音声認識に未対応です（読み上げのみ可）。Android Chromeを推奨します。';
+  }
+})();
+</script>
+</body>
+</html>
