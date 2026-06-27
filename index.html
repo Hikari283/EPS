@@ -1124,13 +1124,12 @@ function buildVentricularEntrainment(sc){
     //   → 体表QRSは R → rS → … → QS と徐々に移行（いきなりQSにはならない）。
     const onset = Math.min(1, 0.12 + beat*onsetStep);   // 速いレートほど早く定常へ収束＝早く乗っ取る
     // AVNRT/ORT：Stim→V(CS)が15ms→66msに徐々に延長（rate-dependent RV→LV伝導遅延）
-    const usePerV = sc==='avnrt' || isAVRT(sc);
+    const usePerV = sc==='avnrt' || isAVRT(sc) || sc==='at';
     const stvDelay = usePerV ? Math.min(15 + beat*(tcl-pcl), 66) : 70;
     emitVentFusion(t, steadyFrac*onset, stvDelay);
     // His電極：逆行H は先に出る（実測 Stim→H 47ms）＝H-V-A（V は emitVentFusion の +66）。
     emitHis(t+47, 0.6);
-    if(sc==='at') emitAtrial(t+tp.va,'retro_rv',0.9);  // AT：心房も逆行性(AVN経由＝concentric)にPCLで捕捉（entrain）
-    // AVNRT/ORT：A波をCS V位置基準(stv+VA)でper-V emit → VA一定・V-A即座
+    // AVNRT/ORT/AT：A波をCS V位置基準(stv+VA)でper-V emit → VA一定・V-A即座
     if(usePerV && t + stvDelay + tp.va <= paceEnd){
       emitAtrial(t + stvDelay + tp.va, tp.retro, 0.9);
     }
@@ -1245,8 +1244,9 @@ function buildVentricularEntrainment(sc){
     res.notes.push(`<b>A1A2 = PCL（${pcl}ms）</b>：最終Vが slow pathway 経由で A2 を捕捉。<b>A1とA2の興奮順序の違い</b>（concentric vs eccentric）が fast-slow AVNRT の決め手。`);
     res.notes.push(`<b>A1A2 = ${A1A2_AT}ms</b>。ΔAA = TCL−A1A2 = ${dAA}ms（金古2022, 本 p114 図8：AVNRT は通常 ΔAA&gt;26ms を満たす）。`);
   }else{
-    // V-A-A-V：#1 逆行A（最終ペース由来・AA=PCLでペーシング依存／上ループでemit済）
-    //          → #2 リエントリー回路自己A（return・at_reentryパターン）→ 順行V
+    // V-A-A-V：#1 逆行A（最終ペース由来）→ #2 リエントリー回路自己A → 順行V
+    // AT：最終VのA波をpaceEnd後にemit（VループでpaceEnd超のためカット済み）
+    emitAtrial(lastV + 66 + tp.va, tp.retro, 0.9);
     const atA=atNext;                                                 // #2 AT focus再開
     emitTachyBeat('at', atA);
     fillTachyFrom('at', atA+tcl, state.duration);
