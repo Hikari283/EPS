@@ -1153,7 +1153,10 @@ function buildVentricularEntrainment(sc){
                   : sc==='atypavnrt' ? 3
                   : (stableBeat+2);
     const retroMode = sc==='atypavnrt' ? 'retro_rv' : tp.retro;
-    let aT = tOn;
+    // RVペーシング時の逆行VA：tachyのtp.va(50ms)より長い（RV→His逆行伝導+約30ms）
+    // → CS V波(+70ms)よりA波が後になるよう80msオフセット
+    const VA_BURST = Math.max(tp.va + 30, 75);
+    let aT = tOn + VA_BURST;
     // ペーシング中のみ emit（paceEnd を超えたら打ち切り→停止後 V-A-A-V 領域を汚染しない）
     for(let i=0; i<nPre && aT <= paceEnd; i++){
       emitAtrial(aT, retroMode, 0.9);
