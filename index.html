@@ -865,9 +865,10 @@ function emitVentFusion(tV, frac, csVDelay=70){
   frac=Math.max(0,Math.min(1,frac));
   // 心内は通常通り（心室は実際に脱分極する）。RVペースは全電極でスパイク(tV)の右側から。
   ev('RVA', tV+18, 'V', 1.0);
-  // His電極：逆行H(+47)→far-field V(+66)→A(+133)＝H-V-A（頻拍時）。
-  // バースト時はcsVDelayが15→66msに延長（Stim-V延長）→CS上でV-A順になる。
-  ev('HISd',tV+66,'Vsp',0.9); ev('HISm',tV+66,'Vsp',0.95); ev('HISp',tV+67,'Vsp',0.8);
+  // His電極：far-field V はcsVDelayに追従（66msまで）し、振幅はfrac増加で徐々に減少→連続性。
+  const hisVt = tV + Math.min(66, csVDelay);
+  const hisVsc = 0.5 + 0.5*(1-frac);   // frac=0→1.0, frac=1→0.5
+  ev('HISd',hisVt,'Vsp',0.9*hisVsc); ev('HISm',hisVt,'Vsp',0.95*hisVsc); ev('HISp',hisVt+1,'Vsp',0.8*hisVsc);
   for(let i=0;i<CSIDS.length;i++) ev(CSIDS[i], tV+csVDelay+i*3,'Vff');
   ev('HRA', tV+Math.max(csVDelay+4,74),'Vff',0.22);
   const c=tV+18;
