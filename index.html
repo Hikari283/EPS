@@ -1167,8 +1167,13 @@ function buildVentricularEntrainment(sc){
       aT += Math.max(pcl, tcl - aaStep*(s+1));
     }
     if(sc==='atypavnrt'){
-      // エントレイン後：aT ベースで PCL 刻み（隙間なし）。paceEnd 内かつ A1 手前で打ち切る。
-      for(let tA = aT; tA <= Math.min(paceEnd, lastV + 190 - pcl); tA += pcl){
+      // エントレイン後：aTがA1(lastV+190)を超えた場合はPCL単位で巻き戻して再アライン。
+      const A1ref = lastV + 190;
+      if(aT > A1ref){
+        const n = Math.ceil((aT - A1ref) / pcl);
+        aT -= n * pcl;
+      }
+      for(let tA = aT; tA < A1ref && tA <= paceEnd; tA += pcl){
         emitAtrial(tA, retroMode, 0.9);
       }
     } else {
