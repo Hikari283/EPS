@@ -1148,7 +1148,9 @@ function buildVentricularEntrainment(sc){
     const stableBeat = Math.max(1, Math.ceil((1-0.12)/onsetStep));
     const aaStep  = 10;
     const nTrans  = Math.max(1, Math.ceil((tcl - pcl) / aaStep));
-    const nPre    = isAVRT(sc) ? Math.max(1, Math.round(stableBeat*0.5)) : (stableBeat+2);
+    const nPre    = isAVRT(sc) ? Math.max(1, Math.round(stableBeat*0.5))
+                  : sc==='atypavnrt' ? 3
+                  : (stableBeat+2);
     const retroMode = sc==='atypavnrt' ? 'retro_rv' : tp.retro;
     let aT = tOn;
     // ペーシング中のみ emit（paceEnd を超えたら打ち切り→停止後 V-A-A-V 領域を汚染しない）
