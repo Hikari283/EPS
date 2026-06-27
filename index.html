@@ -1123,15 +1123,16 @@ function buildVentricularEntrainment(sc){
     // 開始の数拍は「回路に入りきるまでの過渡」：自己QRS優位から定常融合へ収束。
     //   → 体表QRSは R → rS → … → QS と徐々に移行（いきなりQSにはならない）。
     const onset = Math.min(1, 0.12 + beat*onsetStep);   // 速いレートほど早く定常へ収束＝早く乗っ取る
-    // AVNRT：Stim→V(CS)が15ms→66msに徐々に延長（rate-dependent RV→LV伝導遅延）
-    const stvDelay = sc==='avnrt' ? Math.min(15 + beat*(tcl-pcl), 66) : 70;
+    // AVNRT/ORT：Stim→V(CS)が15ms→66msに徐々に延長（rate-dependent RV→LV伝導遅延）
+    const usePerV = sc==='avnrt' || isAVRT(sc);
+    const stvDelay = usePerV ? Math.min(15 + beat*(tcl-pcl), 66) : 70;
     emitVentFusion(t, steadyFrac*onset, stvDelay);
     // His電極：逆行H は先に出る（実測 Stim→H 47ms）＝H-V-A（V は emitVentFusion の +66）。
     emitHis(t+47, 0.6);
     if(sc==='at') emitAtrial(t+tp.va,'retro_rv',0.9);  // AT：心房も逆行性(AVN経由＝concentric)にPCLで捕捉（entrain）
-    // AVNRT：A波をCS V位置基準(stv+67ms)でper-V emit → VA=67ms一定・V-H-A即座
-    if(sc==='avnrt' && t + stvDelay + 67 <= paceEnd){
-      emitAtrial(t + stvDelay + 67, tp.retro, 0.9);
+    // AVNRT/ORT：A波をCS V位置基準(stv+VA)でper-V emit → VA一定・V-A即座
+    if(usePerV && t + stvDelay + tp.va <= paceEnd){
+      emitAtrial(t + stvDelay + tp.va, tp.retro, 0.9);
     }
     // atypavnrt の心房出力は遷移ゾーンブロックで一括処理
     lastV=t; beat++;
@@ -1147,16 +1148,14 @@ function buildVentricularEntrainment(sc){
   const ppiTclRef = isAVRT(sc) ? 50 : 128;
   const vaTachy   = isAVRT(sc) ? 120 : 5;
   const VA_PACE   = ppiTclRef + vaTachy;     // ORT 170 / AVNRT 133（=逆行A位置 lastV+VA_PACE）
-  // AVNRTはVループ内でper-V emit済みのため遷移ゾーンブロックをスキップ
-  if(isAVRT(sc) || sc==='atypavnrt'){
+  // AVNRT/ORTはVループ内でper-V emit済みのため遷移ゾーンブロックをスキップ
+  if(sc==='atypavnrt'){
     // 遷移ゾーン：TCL→PCL を 10ms ステップで短縮（EPSの本 p163-166）。
     // 例：TCL=350, PCL=330 → AA: TCL, TCL, …, TCL-10, TCL-20(=PCL), PCL, …
     const stableBeat = Math.max(1, Math.ceil((1-0.12)/onsetStep));
     const aaStep  = 10;
     const nTrans  = Math.max(1, Math.ceil((tcl - pcl) / aaStep));
-    const nPre    = isAVRT(sc) ? Math.max(1, Math.round(stableBeat*0.5))
-                  : sc==='atypavnrt' ? 3
-                  : (stableBeat+2);
+    const nPre    = sc==='atypavnrt' ? 3 : (stableBeat+2);
     const retroMode = sc==='atypavnrt' ? 'retro_rv' : tp.retro;
     let aT = tOn;
     // ペーシング中のみ emit（paceEnd を超えたら打ち切り→停止後 V-A-A-V 領域を汚染しない）
