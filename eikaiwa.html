@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#0b1220">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>こえ英会話 — 話せるようになる実践英会話</title>
+<style>
+  :root{
+    --bg:#0b1220; --panel:#121a2b; --panel2:#0e1626; --line:#22304a;
+    --txt:#eaf0fb; --muted:#93a4c3; --accent:#5fb3f6; --accent2:#34d399;
+    --warm:#f6b26b; --danger:#f87171; --me:#1f3a5f; --ai:#15243b; --gold:#ffd479;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP",system-ui,sans-serif;
+    overscroll-behavior:none;}
+  body{display:flex;flex-direction:column;min-height:100dvh;}
+  header{padding:14px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#101a2e,#0b1220);position:sticky;top:0;z-index:10}
+  header .logo{font-weight:800;font-size:18px;letter-spacing:.02em}
+  header .logo span{color:var(--accent)}
+  header .sp{flex:1}
+  .iconbtn{background:var(--panel);border:1px solid var(--line);color:var(--txt);
+    width:42px;height:42px;border-radius:12px;font-size:18px;display:flex;align-items:center;justify-content:center}
+  main{flex:1;display:flex;flex-direction:column;padding:16px;gap:14px;max-width:680px;width:100%;margin:0 auto}
+  .hidden{display:none!important}
+
+  /* Home */
+  .hero h1{font-size:21px;margin:0 0 4px}
+  .hero p{color:var(--muted);margin:0;font-size:13.5px;line-height:1.6}
+  .stats{display:flex;gap:8px;margin-top:4px}
+  .stat{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 8px;text-align:center}
+  .stat b{display:block;font-size:22px;color:var(--accent2)}
+  .stat small{color:var(--muted);font-size:11px}
+  .modes{display:grid;grid-template-columns:1fr;gap:12px;margin-top:4px}
+  .mode{display:flex;align-items:center;gap:14px;padding:18px;border-radius:18px;border:1px solid var(--line);
+    background:var(--panel);text-align:left;color:var(--txt);font-size:17px;font-weight:700;cursor:pointer;position:relative}
+  .mode:active{transform:scale(.99)}
+  .mode .emo{font-size:28px;width:50px;height:50px;border-radius:14px;display:flex;align-items:center;justify-content:center;
+    background:var(--panel2);border:1px solid var(--line);flex:none}
+  .mode small{display:block;color:var(--muted);font-weight:500;font-size:12.5px;margin-top:3px}
+  .mode .badge{position:absolute;top:12px;right:14px;background:var(--danger);color:#fff;font-size:12px;font-weight:800;
+    min-width:22px;height:22px;border-radius:11px;display:flex;align-items:center;justify-content:center;padding:0 6px}
+  .tip{font-size:12px;color:var(--muted);text-align:center;line-height:1.6}
+
+  .screen{flex:1;display:flex;flex-direction:column;gap:12px}
+  .sub{display:flex;align-items:center;gap:8px}
+  .back{background:none;border:none;color:var(--accent);font-size:15px;font-weight:700;padding:6px 0}
+  .title{font-size:16px;font-weight:800;flex:1}
+  .chip{font-size:12px;color:var(--muted);background:var(--panel2);border:1px solid var(--line);padding:4px 10px;border-radius:999px}
+
+  /* Setup (topic/scenario picker) */
+  .tabs{display:flex;gap:8px}
+  .tabs button{flex:1;padding:11px;border-radius:12px;border:1px solid var(--line);background:var(--panel2);color:var(--txt);font-size:15px;font-weight:700}
+  .tabs button.on{background:#163a52;border-color:#1d4d6e;color:#bfe5ff}
+  .list{display:flex;flex-direction:column;gap:10px;overflow-y:auto}
+  .item{display:flex;align-items:center;gap:12px;padding:14px;border-radius:14px;border:1px solid var(--line);background:var(--panel);text-align:left;color:var(--txt)}
+  .item:active{transform:scale(.99)}
+  .item .emo{font-size:24px;flex:none}
+  .item .t{font-size:15.5px;font-weight:700}
+  .item .d{font-size:12.5px;color:var(--muted);margin-top:2px;line-height:1.5}
+
+  /* Conversation */
+  .stream{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:4px 2px;min-height:120px}
+  .bubble{max-width:90%;padding:12px 14px;border-radius:16px;line-height:1.55;font-size:16px;white-space:pre-wrap;word-break:break-word}
+  .bubble.ai{background:var(--ai);border:1px solid var(--line);border-bottom-left-radius:6px;align-self:flex-start}
+  .bubble.me{background:var(--me);border:1px solid #2b4b73;border-bottom-right-radius:6px;align-self:flex-end}
+  .bubble .ja{display:block;color:var(--muted);font-size:13px;margin-top:6px;border-top:1px dashed var(--line);padding-top:6px}
+  .bubble .corr{display:block;color:var(--warm);font-size:13.5px;margin-top:6px;line-height:1.5}
+  .bubble .bet{display:block;color:var(--accent2);font-size:13.5px;margin-top:5px;line-height:1.5}
+  .bubble.sys{align-self:center;background:none;color:var(--muted);font-size:13px;text-align:center;max-width:100%}
+  .typing{align-self:flex-start;color:var(--muted);font-size:14px;padding:6px 4px}
+
+  /* Card (vocab / phrase / review) */
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:22px 18px;text-align:center;
+    display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;min-height:220px}
+  .card .en{font-size:29px;font-weight:800;line-height:1.25}
+  .card .pho{color:var(--muted);font-size:14px}
+  .card .ja2{font-size:18px;color:var(--accent)}
+  .card .ex{font-size:15px;color:var(--txt);line-height:1.5;margin-top:4px}
+  .card .exja{font-size:13px;color:var(--muted)}
+  .card .cat{font-size:12px;color:var(--muted);background:var(--panel2);border:1px solid var(--line);padding:3px 10px;border-radius:999px}
+  .card .reveal{font-size:13px;color:var(--muted)}
+  .progress{font-size:12px;color:var(--muted);text-align:center}
+
+  .controls{display:flex;flex-direction:column;gap:12px;align-items:center;padding-bottom:8px}
+  .heard{min-height:22px;font-size:14px;color:var(--warm);text-align:center;line-height:1.4}
+  .mic{width:100px;height:100px;border-radius:50%;border:none;font-size:38px;color:#06121f;
+    background:radial-gradient(circle at 30% 30%,#8fd0ff,#3a8fe0);box-shadow:0 10px 30px rgba(58,143,224,.4);
+    display:flex;align-items:center;justify-content:center;position:relative;transition:transform .1s}
+  .mic:active{transform:scale(.96)}
+  .mic.live{background:radial-gradient(circle at 30% 30%,#7ef0c0,#16a06b);animation:pulse 1.4s infinite}
+  .mic.speaking{background:radial-gradient(circle at 30% 30%,#ffd79a,#e0903a)}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(52,211,153,.55)}70%{box-shadow:0 0 0 20px rgba(52,211,153,0)}100%{box-shadow:0 0 0 0 rgba(52,211,153,0)}}
+  .miclabel{font-size:13px;color:var(--muted);min-height:18px;text-align:center}
+  .row{display:flex;gap:10px;width:100%;justify-content:center;flex-wrap:wrap}
+  .btn{flex:1;min-width:110px;max-width:220px;padding:14px;border-radius:14px;border:1px solid var(--line);
+    background:var(--panel);color:var(--txt);font-size:15.5px;font-weight:700}
+  .btn:active{transform:scale(.98)}
+  .btn.alt{background:var(--panel2)}
+  .btn.acc{background:#163a52;border-color:#1d4d6e;color:#bfe5ff}
+  .btn.go{background:#15402c;border-color:#1d5e3e;color:#bff0d4}
+  .btn.warn2{background:#3a2a12;border-color:#5e451d;color:#ffd9a8}
+  .btn.ng{background:#3a1820;border-color:#5e2330;color:#ffc2cc}
+
+  /* Report */
+  .report{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:14px;padding-bottom:8px}
+  .scorebox{text-align:center;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:18px}
+  .scorebox .num{font-size:46px;font-weight:800;color:var(--gold);line-height:1}
+  .scorebox small{color:var(--muted);font-size:12px}
+  .rsec{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 16px}
+  .rsec h4{margin:0 0 8px;font-size:14px;color:var(--accent)}
+  .rsec ul{margin:0;padding-left:18px;line-height:1.7;font-size:14px}
+  .fix{border-top:1px solid var(--line);padding:8px 0;font-size:14px}
+  .fix:first-of-type{border-top:none}
+  .fix .b{color:var(--danger)} .fix .a{color:var(--accent2)} .fix .n{color:var(--muted);font-size:12.5px;margin-top:2px}
+  .rsec .ph{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px solid var(--line);font-size:14px}
+  .rsec .ph:first-of-type{border-top:none}
+  .rsec .ph .e{font-weight:700} .rsec .ph .j{color:var(--muted);font-size:13px;text-align:right}
+
+  /* Settings */
+  .sheet{position:fixed;inset:0;background:rgba(4,8,16,.6);display:flex;align-items:flex-end;z-index:50}
+  .sheet .inner{background:var(--panel);width:100%;max-width:680px;margin:0 auto;border-radius:20px 20px 0 0;
+    border:1px solid var(--line);padding:20px;display:flex;flex-direction:column;gap:14px;max-height:88dvh;overflow-y:auto}
+  .sheet h3{margin:0;font-size:18px}
+  .field label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+  .field input,.field select{width:100%;padding:12px;border-radius:12px;border:1px solid var(--line);
+    background:var(--panel2);color:var(--txt);font-size:15px}
+  .field .help{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.5}
+  .field .help a{color:var(--accent)}
+  .seg{display:flex;gap:8px}
+  .seg button{flex:1;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--txt);font-size:14px}
+  .seg button.on{background:#163a52;border-color:#1d4d6e;color:#bfe5ff}
+  .warn{font-size:12px;color:var(--warm);line-height:1.5;background:#2a1f12;border:1px solid #4a371d;padding:10px;border-radius:10px}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#15402c;border:1px solid #1d5e3e;
+    color:#bff0d4;padding:10px 16px;border-radius:999px;font-size:13px;z-index:60;opacity:0;transition:opacity .25s;pointer-events:none}
+  .toast.show{opacity:1}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">こえ<span>英会話</span></div>
+  <div class="sp"></div>
+  <button class="iconbtn" id="btnSettings" title="設定">⚙️</button>
+</header>
+
+<main>
+  <!-- HOME -->
+  <section id="home">
+    <div class="hero">
+      <h1>話して、直されて、定着する。</h1>
+      <p>AIと実際に英語で会話 → その場で添削 → 終了後にレポート → 弱点を復習。話せるようになるための実践ループ。</p>
+    </div>
+    <div class="stats">
+      <div class="stat"><b id="stStreak">0</b><small>連続日数</small></div>
+      <div class="stat"><b id="stSess">0</b><small>会話セッション</small></div>
+      <div class="stat"><b id="stRev">0</b><small>復習デッキ</small></div>
+    </div>
+    <div class="modes">
+      <button class="mode" data-mode="conv">
+        <div class="emo">💬</div>
+        <div>AIと英会話（実践）
+          <small>ロールプレイ／フリートーク・添削＆レポートつき（要APIキー）</small></div>
+      </button>
+      <button class="mode" data-mode="review">
+        <div class="emo">🔁</div>
+        <div>復習（間隔反復）
+          <small>会話で出た間違い・表現を声で覚え直す</small></div>
+        <div class="badge hidden" id="revBadge">0</div>
+      </button>
+      <button class="mode" data-mode="phrase">
+        <div class="emo">🗣️</div>
+        <div>フレーズ練習
+          <small>場面別の定番フレーズをシャドーイング</small></div>
+      </button>
+      <button class="mode" data-mode="word">
+        <div class="emo">📚</div>
+        <div>単語を覚える
+          <small>使える単語を例文ごと声で反復</small></div>
+      </button>
+    </div>
+    <p class="tip" id="homeTip">※ Android Chrome 推奨。iPhoneは音声認識が不安定な場合があります（読み上げは可）。</p>
+  </section>
+
+  <!-- CONVERSATION SETUP -->
+  <section id="setup" class="screen hidden">
+    <div class="sub">
+      <button class="back" data-back>‹ もどる</button>
+      <div class="title">会話を始める</div>
+      <div class="chip" id="setupLevel">初級</div>
+    </div>
+    <div class="tabs">
+      <button id="tabRole" class="on">🎭 ロールプレイ</button>
+      <button id="tabFree">💭 フリートーク</button>
+    </div>
+    <p class="tip" id="setupHint">場面を選ぶと、AIが相手役になりきって会話します。ゴール達成を目指しましょう。</p>
+    <div class="list" id="setupList"></div>
+  </section>
+
+  <!-- CONVERSATION -->
+  <section id="conv" class="screen hidden">
+    <div class="sub">
+      <button class="back" data-back>‹ 終了</button>
+      <div class="title" id="convTitle">英会話</div>
+      <div class="chip" id="convLevel">初級</div>
+    </div>
+    <div class="stream" id="convStream"></div>
+    <div class="controls">
+      <div class="heard" id="convHeard"></div>
+      <button class="mic" id="convMic">🎤</button>
+      <div class="miclabel" id="convMicLabel">タップして話す</div>
+      <div class="row">
+        <button class="btn alt" id="convHands">🚗 ハンズフリー: OFF</button>
+        <button class="btn alt" id="convRepeat">🔁 もう一度聞く</button>
+      </div>
+      <div class="row">
+        <button class="btn go" id="convFeedback">📝 終了してレポート</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- REPORT -->
+  <section id="report" class="screen hidden">
+    <div class="sub">
+      <button class="back" id="reportBack">‹ ホーム</button>
+      <div class="title">セッション・レポート</div>
+    </div>
+    <div class="report" id="reportBody">
+      <p class="tip">レポートを作成中…</p>
+    </div>
+    <div class="row" style="padding-bottom:8px">
+      <button class="btn acc" id="reportAgain">💬 もう一度会話する</button>
+      <button class="btn" id="reportHome">🏠 ホームへ</button>
+    </div>
+  </section>
+
+  <!-- PRACTICE (phrase / word) -->
+  <section id="practice" class="screen hidden">
+    <div class="sub">
+      <button class="back" data-back>‹ もどる</button>
+      <div class="title" id="pracTitle">フレーズ練習</div>
+      <div class="chip" id="pracCat">—</div>
+    </div>
+    <div class="card" id="pracCard">
+      <div class="cat" id="cCat">—</div>
+      <div class="en" id="cEn">—</div>
+      <div class="pho" id="cPho"></div>
+      <div class="ja2" id="cJa">—</div>
+      <div class="ex" id="cEx"></div>
+      <div class="exja" id="cExJa"></div>
+    </div>
+    <div class="progress" id="pracProg">1 / 1</div>
+    <div class="controls">
+      <div class="heard" id="pracHeard"></div>
+      <button class="mic" id="pracMic">🔊</button>
+      <div class="miclabel" id="pracMicLabel">タップで読み上げ</div>
+      <div class="row">
+        <button class="btn acc" id="pracSpeak">🔊 聞く</button>
+        <button class="btn" id="pracRepeat">🎤 真似る</button>
+        <button class="btn alt" id="pracSave">⭐ 復習に追加</button>
+      </div>
+      <div class="row">
+        <button class="btn alt" id="pracPrev">‹ 前へ</button>
+        <button class="btn alt" id="pracAuto">▶ 自動再生</button>
+        <button class="btn alt" id="pracNext">次へ ›</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- REVIEW (SRS) -->
+  <section id="review" class="screen hidden">
+    <div class="sub">
+      <button class="back" data-back>‹ もどる</button>
+      <div class="title">復習</div>
+      <div class="chip" id="revCount">0</div>
+    </div>
+    <div class="card" id="revCard">
+      <div class="cat" id="rCat">復習</div>
+      <div class="ja2" id="rJa">—</div>
+      <div class="en hidden" id="rEn">—</div>
+      <div class="ex hidden" id="rEx"></div>
+      <div class="reveal" id="rHint">日本語の意味を見て、英語で言ってみよう</div>
+    </div>
+    <div class="progress" id="revProg"></div>
+    <div class="controls">
+      <button class="mic" id="revMic">🔊</button>
+      <div class="miclabel" id="revMicLabel">タップで答えを表示</div>
+      <div class="row" id="revRevealRow">
+        <button class="btn acc" id="revShow">答えを見る・聞く</button>
+      </div>
+      <div class="row hidden" id="revJudgeRow">
+        <button class="btn ng" id="revAgain">もう一度</button>
+        <button class="btn warn2" id="revHard">むずい</button>
+        <button class="btn go" id="revGood">できた</button>
+      </div>
+      <div class="row"><button class="btn alt" id="revDelete">🗑 この項目を削除</button></div>
+    </div>
+  </section>
+</main>
+
+<!-- SETTINGS -->
+<div class="sheet hidden" id="settings">
+  <div class="inner">
+    <h3>設定</h3>
+    <div class="field">
+      <label>レベル（読み上げ速度・AIの難易度）</label>
+      <div class="seg" id="segLevel">
+        <button data-lvl="beginner">初級</button>
+        <button data-lvl="intermediate">中級</button>
+        <button data-lvl="advanced">上級</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>英語の音声（読み上げ）</label>
+      <select id="voiceSel"><option>読み込み中…</option></select>
+    </div>
+    <div class="field">
+      <label>Claude API キー（AI会話に必要）</label>
+      <input id="apiKey" type="password" placeholder="sk-ant-..." autocomplete="off">
+      <div class="help">ブラウザ内のみに保存され、サーバーには送りません。キーは <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Anthropic Console</a> で発行できます。</div>
+    </div>
+    <div class="warn">フレーズ・単語・復習はキーなしで使えます。AI会話と終了レポートだけキーが必要です。</div>
+    <div class="row">
+      <button class="btn acc" id="saveSettings">保存して閉じる</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* ================= Content ================= */
+const SCENARIOS = [
+  {id:"cafe", emo:"☕", title:"カフェで注文する", lvl:"初級",
+   situation:"You are a barista at a coffee shop. The learner is a customer ordering a drink and a snack.",
+   you:"a customer", ai:"a friendly barista", goal:"飲み物と軽食を注文し、サイズや会計まで終える",
+   start:"Hi there! Welcome to Blue Cup Coffee. What can I get for you today?"},
+  {id:"hotel", emo:"🏨", title:"ホテルのチェックイン", lvl:"初級",
+   situation:"You are a hotel receptionist. The learner is a guest checking in with a reservation.",
+   you:"a hotel guest", ai:"a hotel receptionist", goal:"予約を伝え、チェックインを済ませて部屋の情報を聞く",
+   start:"Good evening, and welcome to The Grand Hotel. Do you have a reservation with us?"},
+  {id:"direction", emo:"🗺️", title:"道を尋ねる", lvl:"初級",
+   situation:"You are a friendly local on the street. The learner is a tourist asking for directions to the train station.",
+   you:"a tourist", ai:"a helpful local", goal:"駅までの行き方を聞き、所要時間まで確認する",
+   start:"Oh hello! You look a little lost. Do you need some help finding something?"},
+  {id:"smalltalk", emo:"😊", title:"同僚と雑談", lvl:"中級",
+   situation:"You are a coworker chatting by the coffee machine before a meeting. Keep it light and friendly.",
+   you:"a coworker", ai:"a friendly coworker", goal:"週末の話など雑談を自然に続け、会話を気持ちよく終える",
+   start:"Hey! Good morning. Did you have a good weekend?"},
+  {id:"restaurant", emo:"🍝", title:"レストランで食事", lvl:"中級",
+   situation:"You are a waiter at a restaurant. The learner is a customer ordering dinner.",
+   you:"a diner", ai:"a waiter", goal:"おすすめを聞き、料理と飲み物を注文し、最後に会計を頼む",
+   start:"Good evening! Welcome. Here are your menus. Can I start you off with something to drink?"},
+  {id:"doctor", emo:"🏥", title:"病院で症状を伝える", lvl:"中級",
+   situation:"You are a doctor at a clinic. The learner is a patient describing symptoms.",
+   you:"a patient", ai:"a doctor", goal:"症状（いつから・どんな感じか）を伝え、アドバイスをもらう",
+   start:"Hello, please have a seat. So, what seems to be the problem today?"},
+  {id:"shopping", emo:"🛍️", title:"買い物・サイズ交換", lvl:"中級",
+   situation:"You are a shop assistant in a clothing store. The learner wants to try on and possibly exchange an item.",
+   you:"a shopper", ai:"a shop assistant", goal:"試着を頼み、サイズや色を相談して購入か交換を決める",
+   start:"Hi! Let me know if you need any help. Is there anything you're looking for today?"},
+  {id:"interview", emo:"💼", title:"英語の面接", lvl:"上級",
+   situation:"You are a hiring manager interviewing the learner for a job. Ask common interview questions.",
+   you:"a job candidate", ai:"an interviewer", goal:"自己紹介・強み・志望理由を答え、逆質問を1つする",
+   start:"Thanks for coming in today. To start, could you tell me a little about yourself?"},
+  {id:"phone", emo:"📞", title:"電話で予約", lvl:"上級",
+   situation:"You answer the phone at a restaurant. The learner is calling to make a dinner reservation.",
+   you:"a caller", ai:"a restaurant host on the phone", goal:"日付・人数・時間を伝えて予約を完了する",
+   start:"Thank you for calling Bella Italia, this is Marco speaking. How can I help you?"},
+  {id:"airport", emo:"✈️", title:"空港・入国審査", lvl:"上級",
+   situation:"You are an immigration officer at an airport. The learner is a traveler going through passport control.",
+   you:"a traveler", ai:"an immigration officer", goal:"渡航目的・滞在期間・滞在先を答えて通過する",
+   start:"Next, please. Good afternoon. May I see your passport, please? What's the purpose of your visit?"},
+];
+const TOPICS = [
+  {id:"day", emo:"🌤️", title:"今日の出来事", q:"So, tell me — how was your day today? Anything interesting happen?"},
+  {id:"hobby", emo:"🎸", title:"趣味・好きなこと", q:"Let's talk about your hobbies. What do you enjoy doing in your free time?"},
+  {id:"travel", emo:"🧳", title:"旅行の思い出", q:"I love travel stories! What's the most memorable trip you've ever taken?"},
+  {id:"food", emo:"🍜", title:"食べ物の話", q:"Food is always fun to talk about. What's your favorite food, and why do you like it?"},
+  {id:"work", emo:"🏢", title:"仕事・勉強", q:"Tell me about what you do. How's work (or study) going these days?"},
+  {id:"movie", emo:"🎬", title:"映画・音楽", q:"Have you watched any good movies or listened to any music lately?"},
+  {id:"dream", emo:"⭐", title:"将来の夢・目標", q:"Let's dream a little. If you could do anything, what would you love to achieve?"},
+  {id:"city", emo:"🏙️", title:"住んでいる街", q:"Tell me about where you live. What do you like about your town or city?"},
+  {id:"weekend", emo:"🌈", title:"週末の予定", q:"The weekend is coming up! Do you have any fun plans?"},
+  {id:"opinion", emo:"💡", title:"意見を言う練習", q:"Here's a question: do you think social media makes life better or worse? What do you think?"},
+];
+
+const PHRASES = [
+  {cat:"あいさつ", en:"How's it going?", ja:"調子はどう？", ex:"How's it going? — Pretty good, thanks.", exja:"調子どう？ーまあまあだよ、ありがとう。"},
+  {cat:"あいさつ", en:"Long time no see.", ja:"久しぶり。", ex:"Long time no see! How have you been?", exja:"久しぶり！元気にしてた？"},
+  {cat:"あいさつ", en:"Take care.", ja:"気をつけてね。", ex:"See you next week. Take care!", exja:"また来週。気をつけてね！"},
+  {cat:"あいさつ", en:"Nice to meet you.", ja:"はじめまして。", ex:"Nice to meet you. I'm Ken.", exja:"はじめまして。ケンです。"},
+  {cat:"あいさつ", en:"What have you been up to?", ja:"最近どうしてた？", ex:"Hey! What have you been up to lately?", exja:"やあ！最近どうしてた？"},
+  {cat:"リアクション", en:"That makes sense.", ja:"なるほど、納得。", ex:"Oh, that makes sense now.", exja:"なるほど、それで分かったよ。"},
+  {cat:"リアクション", en:"No way!", ja:"まさか！／うそでしょ！", ex:"No way! Are you serious?", exja:"うそでしょ！本気なの？"},
+  {cat:"リアクション", en:"I see what you mean.", ja:"言いたいこと分かるよ。", ex:"I see what you mean, but I disagree.", exja:"言いたいことは分かるけど、僕は反対。"},
+  {cat:"リアクション", en:"That's a good point.", ja:"いい指摘だね。", ex:"That's a good point. Let's think about it.", exja:"いい指摘だね。考えてみよう。"},
+  {cat:"リアクション", en:"Same here.", ja:"私も同じ。", ex:"I'm exhausted. — Same here.", exja:"へとへとだよ。ー私も同じ。"},
+  {cat:"つなぎ", en:"Let me think for a second.", ja:"ちょっと考えさせて。", ex:"Hmm, let me think for a second.", exja:"うーん、ちょっと考えさせて。"},
+  {cat:"つなぎ", en:"How can I put this?", ja:"なんて言えばいいかな。", ex:"It's like... how can I put this?", exja:"それは…なんて言えばいいかな。"},
+  {cat:"つなぎ", en:"What I mean is...", ja:"つまり私が言いたいのは…", ex:"What I mean is, I'm not sure yet.", exja:"つまり、まだ分からないってこと。"},
+  {cat:"お願い", en:"Could you do me a favor?", ja:"お願いしてもいい？", ex:"Could you do me a favor and call him?", exja:"お願いがあるんだけど、彼に電話してくれる？"},
+  {cat:"お願い", en:"Would you mind helping me?", ja:"手伝ってもらえますか？", ex:"Would you mind helping me with this?", exja:"これを手伝ってもらえますか？"},
+  {cat:"お願い", en:"Can you say that again?", ja:"もう一回言ってくれる？", ex:"Sorry, can you say that again?", exja:"ごめん、もう一回言ってくれる？"},
+  {cat:"お願い", en:"Could you speak more slowly?", ja:"もう少しゆっくり話してくれますか？", ex:"Sorry, could you speak more slowly, please?", exja:"すみません、もう少しゆっくり話してもらえますか？"},
+  {cat:"レストラン", en:"I'll have the same.", ja:"私も同じものを。", ex:"I'll have the same, please.", exja:"私も同じものをお願いします。"},
+  {cat:"レストラン", en:"Could I get the check?", ja:"お会計をお願いします。", ex:"Excuse me, could I get the check?", exja:"すみません、お会計をお願いできますか？"},
+  {cat:"レストラン", en:"Is this seat taken?", ja:"この席空いてますか？", ex:"Excuse me, is this seat taken?", exja:"すみません、この席空いてますか？"},
+  {cat:"レストラン", en:"What do you recommend?", ja:"おすすめは何ですか？", ex:"It all looks good. What do you recommend?", exja:"どれも美味しそう。おすすめは何ですか？"},
+  {cat:"旅行", en:"How do I get to the station?", ja:"駅へはどう行きますか？", ex:"Excuse me, how do I get to the station?", exja:"すみません、駅へはどう行きますか？"},
+  {cat:"旅行", en:"Could you take a picture of us?", ja:"写真を撮ってもらえますか？", ex:"Could you take a picture of us, please?", exja:"私たちの写真を撮ってもらえますか？"},
+  {cat:"旅行", en:"I'd like to check in.", ja:"チェックインしたいです。", ex:"Hi, I'd like to check in, please.", exja:"こんにちは、チェックインをお願いします。"},
+  {cat:"旅行", en:"How much is it?", ja:"いくらですか？", ex:"This one, please. How much is it?", exja:"これをください。いくらですか？"},
+  {cat:"仕事", en:"Let me get back to you.", ja:"後で返事します。", ex:"Let me get back to you on that tomorrow.", exja:"その件は明日お返事します。"},
+  {cat:"仕事", en:"Can we set up a meeting?", ja:"打ち合わせを設定できますか？", ex:"Can we set up a meeting next week?", exja:"来週、打ち合わせを設定できますか？"},
+  {cat:"仕事", en:"I'm just following up.", ja:"念のため確認です。", ex:"I'm just following up on my last email.", exja:"先日のメールの確認の連絡です。"},
+  {cat:"仕事", en:"Sounds good to me.", ja:"いいと思います。", ex:"Friday at 3? Sounds good to me.", exja:"金曜の3時？いいと思います。"},
+  {cat:"仕事", en:"Let's touch base later.", ja:"あとで状況共有しよう。", ex:"Let's touch base later this week.", exja:"今週のうちに状況を共有しよう。"},
+  {cat:"気持ち", en:"I can't wait.", ja:"待ちきれない。", ex:"I can't wait for the trip!", exja:"旅行が待ちきれない！"},
+  {cat:"気持ち", en:"That's too bad.", ja:"それは残念。", ex:"You're sick? That's too bad.", exja:"具合悪いの？それは残念。"},
+  {cat:"気持ち", en:"I'm proud of you.", ja:"あなたを誇りに思う。", ex:"You passed the exam? I'm proud of you!", exja:"試験に受かったの？誇りに思うよ！"},
+  {cat:"気持ち", en:"I'm not sure about that.", ja:"それはどうかな。", ex:"Hmm, I'm not sure about that.", exja:"うーん、それはどうかな。"},
+  {cat:"気持ち", en:"That works for me.", ja:"それで大丈夫です。", ex:"Lunch at noon? That works for me.", exja:"お昼12時？それで大丈夫です。"},
+  {cat:"気持ち", en:"I feel the same way.", ja:"私も同じ気持ち。", ex:"I feel the same way about it.", exja:"その件、私も同じ気持ちだよ。"},
+];
+
+const WORDS = [
+  {cat:"会話の必須", en:"appreciate", pho:"/əˈpriːʃieɪt/", ja:"〜に感謝する", ex:"I really appreciate your help.", exja:"あなたの助けに本当に感謝します。"},
+  {cat:"会話の必須", en:"available", pho:"/əˈveɪləbl/", ja:"利用できる、手が空いている", ex:"Are you available tomorrow?", exja:"明日は空いていますか？"},
+  {cat:"会話の必須", en:"convenient", pho:"/kənˈviːniənt/", ja:"便利な、都合のよい", ex:"Is Monday convenient for you?", exja:"月曜はご都合いいですか？"},
+  {cat:"会話の必須", en:"actually", pho:"/ˈæktʃuəli/", ja:"実は、実際には", ex:"Actually, I changed my mind.", exja:"実は、気が変わったんだ。"},
+  {cat:"会話の必須", en:"probably", pho:"/ˈprɑːbəbli/", ja:"たぶん、おそらく", ex:"I'll probably be late.", exja:"たぶん遅れると思う。"},
+  {cat:"会話の必須", en:"definitely", pho:"/ˈdefɪnətli/", ja:"間違いなく、絶対に", ex:"I'll definitely be there.", exja:"絶対に行くよ。"},
+  {cat:"会話の必須", en:"maybe", pho:"/ˈmeɪbi/", ja:"たぶん、かもね", ex:"Maybe we can meet later.", exja:"たぶん後で会えるよ。"},
+  {cat:"会話の必須", en:"especially", pho:"/ɪˈspeʃəli/", ja:"特に、とりわけ", ex:"I love sweets, especially chocolate.", exja:"甘い物、特にチョコが大好き。"},
+  {cat:"会話の必須", en:"instead", pho:"/ɪnˈsted/", ja:"その代わりに", ex:"Let's go tomorrow instead.", exja:"代わりに明日行こう。"},
+  {cat:"会話の必須", en:"anyway", pho:"/ˈeniweɪ/", ja:"とにかく、それはさておき", ex:"Anyway, what were you saying?", exja:"とにかく、何の話だっけ？"},
+  {cat:"会話の必須", en:"prefer", pho:"/prɪˈfɜːr/", ja:"〜の方を好む", ex:"I prefer tea to coffee.", exja:"コーヒーより紅茶の方が好き。"},
+  {cat:"会話の必須", en:"suppose", pho:"/səˈpoʊz/", ja:"〜だと思う、仮定する", ex:"I suppose you're right.", exja:"君が正しいんだと思う。"},
+  {cat:"気持ち", en:"exhausted", pho:"/ɪɡˈzɔːstɪd/", ja:"へとへとに疲れた", ex:"I'm exhausted after work.", exja:"仕事の後でへとへとだ。"},
+  {cat:"気持ち", en:"nervous", pho:"/ˈnɜːrvəs/", ja:"緊張している、不安な", ex:"I'm a little nervous about the test.", exja:"テストが少し不安です。"},
+  {cat:"気持ち", en:"relieved", pho:"/rɪˈliːvd/", ja:"ほっとした、安心した", ex:"I was relieved to hear the news.", exja:"その知らせを聞いてほっとした。"},
+  {cat:"気持ち", en:"confident", pho:"/ˈkɑːnfɪdənt/", ja:"自信のある", ex:"She's confident about the plan.", exja:"彼女はその計画に自信がある。"},
+  {cat:"気持ち", en:"disappointed", pho:"/ˌdɪsəˈpɔɪntɪd/", ja:"がっかりした", ex:"I was disappointed with the movie.", exja:"その映画にはがっかりした。"},
+  {cat:"気持ち", en:"embarrassed", pho:"/ɪmˈbærəst/", ja:"恥ずかしい、きまり悪い", ex:"I felt so embarrassed.", exja:"とても恥ずかしかった。"},
+  {cat:"気持ち", en:"excited", pho:"/ɪkˈsaɪtɪd/", ja:"わくわくした", ex:"I'm so excited about the trip.", exja:"旅行が楽しみでわくわくする。"},
+  {cat:"気持ち", en:"worried", pho:"/ˈwɜːrid/", ja:"心配している", ex:"I'm worried about my exam.", exja:"試験が心配だ。"},
+  {cat:"気持ち", en:"grateful", pho:"/ˈɡreɪtfl/", ja:"ありがたく思う", ex:"I'm grateful for your support.", exja:"あなたの支えに感謝しています。"},
+  {cat:"気持ち", en:"frustrated", pho:"/ˈfrʌstreɪtɪd/", ja:"いらだった、もどかしい", ex:"I get frustrated when it's slow.", exja:"遅いとイライラする。"},
+  {cat:"仕事", en:"deadline", pho:"/ˈdedlaɪn/", ja:"締め切り", ex:"The deadline is next Friday.", exja:"締め切りは来週の金曜だ。"},
+  {cat:"仕事", en:"schedule", pho:"/ˈskedʒuːl/", ja:"予定、スケジュール", ex:"Let's check our schedule.", exja:"予定を確認しよう。"},
+  {cat:"仕事", en:"in charge", pho:"/ɪn tʃɑːrdʒ/", ja:"担当して、責任を持って", ex:"Who's in charge here?", exja:"ここの担当は誰ですか？"},
+  {cat:"仕事", en:"figure out", pho:"/ˈfɪɡjər aʊt/", ja:"理解する、解決する", ex:"Let's figure out the problem.", exja:"その問題を解決しよう。"},
+  {cat:"仕事", en:"deal with", pho:"/diːl wɪð/", ja:"対処する、扱う", ex:"I'll deal with it later.", exja:"後で対処するよ。"},
+  {cat:"仕事", en:"come up with", pho:"/kʌm ʌp wɪð/", ja:"思いつく、考え出す", ex:"She came up with a great idea.", exja:"彼女はいいアイデアを思いついた。"},
+  {cat:"仕事", en:"in advance", pho:"/ɪn ədˈvæns/", ja:"前もって、事前に", ex:"Please let me know in advance.", exja:"事前に知らせてください。"},
+  {cat:"仕事", en:"on time", pho:"/ɑːn taɪm/", ja:"時間どおりに", ex:"The train arrived on time.", exja:"電車は時間どおりに来た。"},
+  {cat:"仕事", en:"point out", pho:"/pɔɪnt aʊt/", ja:"指摘する", ex:"He pointed out my mistake.", exja:"彼は私のミスを指摘した。"},
+  {cat:"仕事", en:"keep in mind", pho:"/kiːp ɪn maɪnd/", ja:"心に留めておく", ex:"Keep in mind that it's expensive.", exja:"高いということを覚えておいて。"},
+  {cat:"句動詞", en:"hang out", pho:"/hæŋ aʊt/", ja:"ぶらぶら過ごす、遊ぶ", ex:"Let's hang out this weekend.", exja:"今週末、遊ぼうよ。"},
+  {cat:"句動詞", en:"show up", pho:"/ʃoʊ ʌp/", ja:"現れる、来る", ex:"He didn't show up.", exja:"彼は来なかった。"},
+  {cat:"句動詞", en:"give up", pho:"/ɡɪv ʌp/", ja:"あきらめる", ex:"Don't give up!", exja:"あきらめないで！"},
+  {cat:"句動詞", en:"look forward to", pho:"/lʊk ˈfɔːrwərd tuː/", ja:"〜を楽しみにする", ex:"I look forward to seeing you.", exja:"お会いするのを楽しみにしています。"},
+  {cat:"句動詞", en:"find out", pho:"/faɪnd aʊt/", ja:"分かる、知る", ex:"I'll find out and tell you.", exja:"調べて教えるよ。"},
+  {cat:"句動詞", en:"put off", pho:"/pʊt ɔːf/", ja:"延期する、後回しにする", ex:"Let's not put it off.", exja:"後回しにしないでおこう。"},
+  {cat:"句動詞", en:"get along", pho:"/ɡet əˈlɔːŋ/", ja:"仲良くやる", ex:"They get along well.", exja:"彼らは仲が良い。"},
+  {cat:"句動詞", en:"run out of", pho:"/rʌn aʊt əv/", ja:"〜を切らす、使い果たす", ex:"We ran out of milk.", exja:"牛乳を切らしちゃった。"},
+  {cat:"句動詞", en:"look up", pho:"/lʊk ʌp/", ja:"（辞書などで）調べる", ex:"I looked up the word.", exja:"その単語を調べた。"},
+  {cat:"句動詞", en:"end up", pho:"/end ʌp/", ja:"結局〜になる", ex:"We ended up staying home.", exja:"結局、家にいることになった。"},
+  {cat:"句動詞", en:"work out", pho:"/wɜːrk aʊt/", ja:"うまくいく／運動する", ex:"I hope it works out.", exja:"うまくいくといいね。"},
+  {cat:"性質", en:"reliable", pho:"/rɪˈlaɪəbl/", ja:"頼りになる、信頼できる", ex:"He's a reliable friend.", exja:"彼は頼れる友達だ。"},
+  {cat:"性質", en:"generous", pho:"/ˈdʒenərəs/", ja:"気前のよい、寛大な", ex:"She's very generous.", exja:"彼女はとても気前がいい。"},
+  {cat:"性質", en:"honest", pho:"/ˈɑːnɪst/", ja:"正直な", ex:"To be honest, I disagree.", exja:"正直に言うと、反対です。"},
+  {cat:"性質", en:"patient", pho:"/ˈpeɪʃnt/", ja:"忍耐強い", ex:"Please be patient with me.", exja:"気長に付き合ってね。"},
+  {cat:"性質", en:"polite", pho:"/pəˈlaɪt/", ja:"礼儀正しい", ex:"He's always polite.", exja:"彼はいつも礼儀正しい。"},
+  {cat:"性質", en:"curious", pho:"/ˈkjʊriəs/", ja:"好奇心が強い", ex:"I'm curious about other cultures.", exja:"他の文化に興味がある。"},
+  {cat:"性質", en:"stubborn", pho:"/ˈstʌbərn/", ja:"頑固な", ex:"He can be a bit stubborn.", exja:"彼はちょっと頑固なところがある。"},
+  {cat:"性質", en:"easygoing", pho:"/ˌiːziˈɡoʊɪŋ/", ja:"おおらかな、のんびりした", ex:"She's pretty easygoing.", exja:"彼女はけっこうおおらかだ。"},
+  {cat:"形容詞", en:"amazing", pho:"/əˈmeɪzɪŋ/", ja:"すごい、素晴らしい", ex:"The view was amazing.", exja:"景色が素晴らしかった。"},
+  {cat:"形容詞", en:"awful", pho:"/ˈɔːfl/", ja:"ひどい、最悪な", ex:"The weather was awful.", exja:"天気は最悪だった。"},
+  {cat:"形容詞", en:"huge", pho:"/hjuːdʒ/", ja:"巨大な、ものすごい", ex:"It's a huge difference.", exja:"ものすごい差だよ。"},
+  {cat:"形容詞", en:"tiny", pho:"/ˈtaɪni/", ja:"とても小さい", ex:"It's a tiny apartment.", exja:"とても小さなアパートだ。"},
+  {cat:"形容詞", en:"weird", pho:"/wɪrd/", ja:"変な、奇妙な", ex:"That's a bit weird.", exja:"それはちょっと変だね。"},
+  {cat:"形容詞", en:"gorgeous", pho:"/ˈɡɔːrdʒəs/", ja:"とても美しい、見事な", ex:"You look gorgeous!", exja:"すごく素敵だよ！"},
+  {cat:"形容詞", en:"boring", pho:"/ˈbɔːrɪŋ/", ja:"退屈な", ex:"The movie was boring.", exja:"その映画は退屈だった。"},
+  {cat:"形容詞", en:"worth", pho:"/wɜːrθ/", ja:"〜の価値がある", ex:"It's worth a try.", exja:"試す価値はあるよ。"},
+  {cat:"時間・頻度", en:"hardly ever", pho:"/ˈhɑːrdli ˈevər/", ja:"めったに〜ない", ex:"I hardly ever eat out.", exja:"めったに外食しない。"},
+  {cat:"時間・頻度", en:"once in a while", pho:"/wʌns ɪn ə waɪl/", ja:"たまに", ex:"We meet once in a while.", exja:"私たちはたまに会う。"},
+  {cat:"時間・頻度", en:"right away", pho:"/raɪt əˈweɪ/", ja:"すぐに", ex:"I'll do it right away.", exja:"すぐにやります。"},
+  {cat:"時間・頻度", en:"these days", pho:"/ðiːz deɪz/", ja:"最近、近頃", ex:"I'm busy these days.", exja:"最近忙しいんだ。"},
+  {cat:"時間・頻度", en:"sooner or later", pho:"/ˈsuːnər ɔːr ˈleɪtər/", ja:"遅かれ早かれ", ex:"He'll find out sooner or later.", exja:"彼も遅かれ早かれ気づくよ。"},
+  {cat:"会話の必須", en:"recommend", pho:"/ˌrekəˈmend/", ja:"勧める、推薦する", ex:"What would you recommend?", exja:"何がおすすめですか？"},
+  {cat:"会話の必須", en:"depend on", pho:"/dɪˈpend ɑːn/", ja:"〜次第だ、〜に頼る", ex:"It depends on the weather.", exja:"天気次第だね。"},
+  {cat:"会話の必須", en:"on purpose", pho:"/ɑːn ˈpɜːrpəs/", ja:"わざと", ex:"I didn't do it on purpose.", exja:"わざとやったんじゃないよ。"},
+  {cat:"会話の必須", en:"by the way", pho:"/baɪ ðə weɪ/", ja:"ところで", ex:"By the way, are you free Friday?", exja:"ところで、金曜は空いてる？"},
+  {cat:"会話の必須", en:"make sure", pho:"/meɪk ʃʊr/", ja:"確実にする、確認する", ex:"Make sure to lock the door.", exja:"必ずドアに鍵をかけてね。"},
+  {cat:"会話の必須", en:"on second thought", pho:"/ɑːn ˈsekənd θɔːt/", ja:"やっぱり、考え直すと", ex:"On second thought, let's stay.", exja:"やっぱり、ここにいよう。"},
+];
+
+/* ================= State ================= */
+const S = {
+  level: localStorage.getItem('ee_level') || 'beginner',
+  apiKey: localStorage.getItem('ee_apikey') || '',
+  voiceURI: localStorage.getItem('ee_voice') || '',
+  voices: [], enVoice: null,
+  mode: null, hands: false,
+  conv: null,            // {kind:'role'|'free', meta, history:[], starter}
+  recog: null, recActive: false,
+  pracList: [], pracIdx: 0, pracKind: 'phrase', pracAuto: false, pracAutoTimer: null,
+  rev: [], revIdx: 0, revShown: false,
+};
+const rates = {beginner:0.82, intermediate:0.95, advanced:1.05};
+const levelJa = {beginner:'初級', intermediate:'中級', advanced:'上級'};
+const cefr = {beginner:'A2 (beginner)', intermediate:'B1 (intermediate)', advanced:'B2-C1 (advanced)'};
+
+/* ================= Persistence ================= */
+function deck(){ try{ return JSON.parse(localStorage.getItem('ee_deck')||'[]'); }catch(e){ return []; } }
+function saveDeck(d){ localStorage.setItem('ee_deck', JSON.stringify(d)); }
+function deckAdd(item){ // {type, en, ja, ex}
+  const d = deck();
+  const key = (item.en||'').toLowerCase().trim();
+  if(!key) return false;
+  if(d.some(x=>(x.en||'').toLowerCase().trim()===key)) return false;
+  d.push({type:item.type||'phrase', en:item.en, ja:item.ja||'', ex:item.ex||'', box:0, due:Date.now()});
+  saveDeck(d); return true;
+}
+function stats(){ try{ return JSON.parse(localStorage.getItem('ee_stats')||'{}'); }catch(e){ return {}; } }
+function saveStats(s){ localStorage.setItem('ee_stats', JSON.stringify(s)); }
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+function bumpStreak(){
+  const s = stats(); const t = todayStr();
+  if(s.lastDay===t){ return s; }
+  const y = new Date(Date.now()-86400000).toISOString().slice(0,10);
+  s.streak = (s.lastDay===y)?(s.streak||0)+1:1;
+  s.lastDay = t; saveStats(s); return s;
+}
+function incSessions(){ const s=stats(); s.sessions=(s.sessions||0)+1; saveStats(s); }
+
+/* ================= DOM ================= */
+const $ = id => document.getElementById(id);
+const sections = {home:$('home'), setup:$('setup'), conv:$('conv'), report:$('report'), practice:$('practice'), review:$('review')};
+function show(name){ Object.values(sections).forEach(s=>s.classList.add('hidden')); sections[name].classList.remove('hidden'); S.mode=name; }
+let toastTimer;
+function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'),1800); }
+
+/* ================= Speech synthesis ================= */
+function loadVoices(){
+  S.voices = window.speechSynthesis ? speechSynthesis.getVoices() : [];
+  const en = S.voices.filter(v => /^en(-|_)/i.test(v.lang));
+  const sel = $('voiceSel'); sel.innerHTML='';
+  if(!en.length){ sel.innerHTML='<option>英語音声が見つかりません</option>'; S.enVoice=null; return; }
+  en.forEach(v=>{ const o=document.createElement('option'); o.value=v.voiceURI; o.textContent=`${v.name} (${v.lang})`; sel.appendChild(o); });
+  let pick = en.find(v=>v.voiceURI===S.voiceURI)
+    || en.find(v=>/female|samantha|google us english|aria|jenny/i.test(v.name))
+    || en.find(v=>/en-US/i.test(v.lang)) || en[0];
+  S.enVoice = pick; sel.value = pick.voiceURI;
+}
+if(window.speechSynthesis){ loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
+function speak(text,{rate}={}){
+  return new Promise(res=>{
+    if(!window.speechSynthesis || !text){ res(); return; }
+    speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(text);
+    if(S.enVoice){ u.voice=S.enVoice; u.lang=S.enVoice.lang; } else u.lang='en-US';
+    u.rate = rate || rates[S.level] || 0.9;
+    u.onend=()=>res(); u.onerror=()=>res();
+    speechSynthesis.speak(u);
+  });
+}
+function stopSpeak(){ if(window.speechSynthesis) speechSynthesis.cancel(); }
+
+/* ================= Speech recognition ================= */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+function recogSupported(){ return !!SR; }
+function startRecog({onfinal,onheard,onend}={}){
+  if(!SR) return;
+  try{ if(S.recog) S.recog.abort(); }catch(e){}
+  const r=new SR(); r.lang='en-US'; r.interimResults=true; r.continuous=false; r.maxAlternatives=1;
+  let finalText='';
+  r.onresult=e=>{ let interim='',fin='';
+    for(let i=e.resultIndex;i<e.results.length;i++){ const t=e.results[i][0].transcript; if(e.results[i].isFinal) fin+=t; else interim+=t; }
+    if(interim) onheard&&onheard(interim);
+    if(fin) finalText=fin.trim();
+  };
+  r.onerror=ev=>{ S.recActive=false; onend&&onend(ev.error); };
+  r.onend=()=>{ S.recActive=false; if(finalText) onfinal&&onfinal(finalText); else onend&&onend(null); };
+  S.recog=r; S.recActive=true; try{ r.start(); }catch(e){ S.recActive=false; }
+}
+function stopRecog(){ try{ if(S.recog) S.recog.stop(); }catch(e){} S.recActive=false; }
+
+/* ================= Claude API ================= */
+async function claude(system, messages, max_tokens){
+  const res = await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{'content-type':'application/json','x-api-key':S.apiKey,
+      'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+    body:JSON.stringify({model:'claude-opus-4-8', max_tokens:max_tokens||500, system, messages})
+  });
+  if(!res.ok){ const t=await res.text().catch(()=>'' ); const e=new Error('api'); e.status=res.status; e.body=t; throw e; }
+  const data = await res.json();
+  return (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('').trim();
+}
+function parseJSON(raw){
+  const tp=s=>{ try{ return JSON.parse(s); }catch(e){ return null; } };
+  let o=tp(raw); if(!o){ const m=raw.match(/\{[\s\S]*\}/); if(m) o=tp(m[0]); } return o;
+}
+
+/* ================= Navigation ================= */
+document.querySelectorAll('.mode').forEach(b=>{
+  b.addEventListener('click',()=>{
+    const m=b.dataset.mode;
+    if(m==='conv') openSetup();
+    else if(m==='review') openReview();
+    else if(m==='phrase') openPractice('phrase');
+    else openPractice('word');
+  });
+});
+document.querySelectorAll('[data-back]').forEach(b=>b.addEventListener('click',()=>{ leaveAll(); refreshHome(); show('home'); }));
+function leaveAll(){
+  stopSpeak(); stopRecog(); S.hands=false; S.pracAuto=false;
+  if(S.pracAutoTimer){ clearTimeout(S.pracAutoTimer); S.pracAutoTimer=null; }
+  $('convHands').textContent='🚗 ハンズフリー: OFF';
+  ['convMic','pracMic','revMic'].forEach(id=>$(id).classList.remove('live','speaking'));
+  $('convMicLabel').textContent='タップして話す';
+  $('pracMicLabel').textContent='タップで読み上げ';
+  $('pracAuto').textContent='▶ 自動再生';
+}
+
+/* ================= SETUP (topic/scenario picker) ================= */
+let setupTab='role';
+function openSetup(){
+  show('setup'); $('setupLevel').textContent=levelJa[S.level];
+  setupTab='role'; paintSetup();
+}
+$('tabRole').addEventListener('click',()=>{ setupTab='role'; paintSetup(); });
+$('tabFree').addEventListener('click',()=>{ setupTab='free'; paintSetup(); });
+function paintSetup(){
+  $('tabRole').classList.toggle('on', setupTab==='role');
+  $('tabFree').classList.toggle('on', setupTab==='free');
+  $('setupHint').textContent = setupTab==='role'
+    ? '場面を選ぶと、AIが相手役になりきって会話します。ゴール達成を目指しましょう。'
+    : '話したいテーマを選ぶと、AIが質問を投げかけて会話を広げてくれます。';
+  const list=$('setupList'); list.innerHTML='';
+  const data = setupTab==='role'?SCENARIOS:TOPICS;
+  data.forEach(it=>{
+    const b=document.createElement('button'); b.className='item';
+    if(setupTab==='role'){
+      b.innerHTML=`<div class="emo">${it.emo}</div><div><div class="t">${it.title} <span style="color:var(--muted);font-weight:500;font-size:12px">・${it.lvl}</span></div><div class="d">🎯 ${it.goal}</div></div>`;
+      b.addEventListener('click',()=>startRole(it));
+    }else{
+      b.innerHTML=`<div class="emo">${it.emo}</div><div><div class="t">${it.title}</div></div>`;
+      b.addEventListener('click',()=>startFree(it));
+    }
+    list.appendChild(b);
+  });
+}
+
+/* ================= CONVERSATION ================= */
+function needKey(){
+  if(S.apiKey) return false;
+  toast('設定でAPIキーを入れてください'); $('btnSettings').click(); return true;
+}
+function startRole(sc){
+  if(needKey()) return;
+  S.conv={kind:'role', meta:sc, history:[], starter:sc.start};
+  openConv(sc.title);
+}
+function startFree(tp){
+  if(needKey()) return;
+  S.conv={kind:'free', meta:tp, history:[], starter:tp.q};
+  openConv(tp.title);
+}
+function openConv(title){
+  show('conv'); bumpStreak();
+  $('convTitle').textContent=title; $('convLevel').textContent=levelJa[S.level];
+  $('convStream').innerHTML=''; $('convHeard').textContent='';
+  if(S.conv.kind==='role'){
+    const g=S.conv.meta.goal;
+    bubble('convStream','sys','🎯 ゴール: '+g+'\nあなたの役: '+roleJa(S.conv.meta.you));
+  }
+  const greet=S.conv.starter;
+  bubble('convStream','ai',greet,{});
+  S.conv.history.push({role:'assistant', content:greet});
+  speak(greet).then(()=>{ if(S.hands) convListen(); });
+}
+function roleJa(s){ return s; }
+function bubble(streamId,cls,text,extra){
+  const el=$(streamId); const b=document.createElement('div'); b.className='bubble '+cls; b.textContent=text;
+  if(extra){
+    if(extra.ja){ const s=document.createElement('span'); s.className='ja'; s.textContent=extra.ja; b.appendChild(s); }
+    if(extra.corr){ const s=document.createElement('span'); s.className='corr'; s.textContent='✏️ 直し: '+extra.corr; b.appendChild(s); }
+    if(extra.bet){ const s=document.createElement('span'); s.className='bet'; s.textContent='💡 自然な言い方: '+extra.bet; b.appendChild(s); }
+  }
+  el.appendChild(b); el.scrollTop=el.scrollHeight; return b;
+}
+$('convMic').addEventListener('click',()=>{ if(needKey()) return; if(S.recActive){ stopRecog(); return; } stopSpeak(); convListen(); });
+function convListen(){
+  if(!recogSupported()){ bubble('convStream','sys','この端末は音声認識に未対応です。Android Chromeをお試しください。'); return; }
+  $('convHeard').textContent=''; $('convMic').classList.add('live'); $('convMic').classList.remove('speaking');
+  $('convMicLabel').textContent='聞いています…（英語で話してください）';
+  startRecog({
+    onheard:t=>$('convHeard').textContent='“'+t+'”',
+    onfinal:t=>{ $('convMic').classList.remove('live'); $('convMicLabel').textContent='考え中…'; $('convHeard').textContent='';
+      bubble('convStream','me',t); S.conv.history.push({role:'user',content:t}); convReply(); },
+    onend:err=>{ $('convMic').classList.remove('live'); $('convMicLabel').textContent='タップして話す';
+      if(err==='not-allowed') bubble('convStream','sys','マイクが許可されていません。設定を確認してください。');
+      else if(S.hands && err==='no-speech') convListen(); }
+  });
+}
+function convSystem(){
+  const lv=cefr[S.level];
+  if(S.conv.kind==='role'){
+    const m=S.conv.meta;
+    return `You are role-playing to help a Japanese learner practice real spoken English (level: ${lv}).
+SITUATION: ${m.situation}
+You play: ${m.ai}. The learner plays: ${m.you}.
+The learner's goal for this roleplay: ${m.goal}.
+Stay fully in character and move the scene forward naturally. Keep each reply short and spoken (1-2 sentences) and usually ask something so the learner keeps talking. Match the learner's level (${lv}); ${S.level==='beginner'?'use simple words and short sentences.':S.level==='advanced'?'use natural native-level English.':'use everyday natural English.'}
+If the learner's last message has a clear English mistake, give one short gentle correction. If it is understandable but unnatural, suggest a more natural phrasing.
+When the goal is clearly achieved, set "done" to true and wrap up the scene warmly.
+Reply ONLY with a JSON object (no extra text):
+{"reply":"<your in-character English line>","ja":"<natural Japanese translation of reply>","correction":"<learner's wrong phrase → better phrase, one short line; empty string if none>","better":"<a more natural way to say what the learner meant; empty string if none>","done":true or false}`;
+  }
+  return `You are an encouraging expert English conversation tutor for a Japanese learner (level: ${lv}).
+Have a natural spoken conversation about: ${S.conv.meta.title}.
+Keep each reply short and spoken (1-2 sentences) and ALWAYS end with one follow-up question to keep the learner talking. Match their level (${lv}); ${S.level==='beginner'?'use simple words and short sentences.':S.level==='advanced'?'use natural native-level English.':'use everyday natural English.'}
+If the learner's last message has a clear English mistake, give one short gentle correction. If understandable but unnatural, suggest a more natural phrasing.
+Reply ONLY with a JSON object (no extra text):
+{"reply":"<your English reply>","ja":"<natural Japanese translation>","correction":"<wrong → better, one short line; empty if none>","better":"<more natural phrasing of what they meant; empty if none>","done":false}`;
+}
+async function convReply(){
+  const typing=document.createElement('div'); typing.className='typing'; typing.textContent='…'; $('convStream').appendChild(typing);
+  $('convStream').scrollTop=$('convStream').scrollHeight;
+  try{
+    const msgs=S.conv.history.slice(-14).map(m=>({role:m.role,content:m.content}));
+    const raw=await claude(convSystem(), msgs, 500);
+    typing.remove();
+    const o=parseJSON(raw)||{reply:raw};
+    const reply=o.reply||raw;
+    bubble('convStream','ai',reply,{ja:o.ja||'', corr:(o.correction||'').trim(), bet:(o.better||'').trim()});
+    S.conv.history.push({role:'assistant',content:reply});
+    // auto-save learning points to review deck
+    autoSaveLearning(o);
+    $('convMic').classList.add('speaking'); $('convMicLabel').textContent='読み上げ中…';
+    await speak(reply);
+    $('convMic').classList.remove('speaking'); $('convMicLabel').textContent='タップして話す';
+    if(o.done){ bubble('convStream','sys','🎉 ゴール達成！「📝 終了してレポート」で講評を受け取れます。'); S.hands=false; $('convHands').textContent='🚗 ハンズフリー: OFF'; return; }
+    if(S.hands) convListen();
+  }catch(e){
+    typing.remove();
+    if(e.status) bubble('convStream','sys','APIエラー ('+e.status+')。キーや通信を確認してください。');
+    else bubble('convStream','sys','通信エラーが発生しました。');
+    $('convMicLabel').textContent='タップして話す'; console.warn(e.body||e);
+  }
+}
+function autoSaveLearning(o){
+  let n=0;
+  const corr=(o.correction||'').trim();
+  if(corr){
+    // take the corrected (right) side after an arrow if present
+    const parts=corr.split(/→|->|=>/); const en=(parts[parts.length-1]||'').replace(/["'.]/g,'').trim();
+    if(en && deckAdd({type:'correction', en, ja:'（会話での直し）'+(parts[0]||'').trim()})) n++;
+  }
+  const bet=(o.better||'').trim();
+  if(bet && deckAdd({type:'phrase', en:bet, ja:'（自然な言い方）'})) n++;
+  if(n) toast('復習に'+n+'件追加しました');
+}
+$('convHands').addEventListener('click',()=>{
+  S.hands=!S.hands; $('convHands').textContent='🚗 ハンズフリー: '+(S.hands?'ON':'OFF');
+  if(S.hands && !S.recActive && !speechSynthesis.speaking) convListen();
+  if(!S.hands) stopRecog();
+});
+$('convRepeat').addEventListener('click',()=>{ const last=[...S.conv.history].reverse().find(m=>m.role==='assistant'); if(last){ stopRecog(); speak(last.content); } });
+
+/* ================= FEEDBACK REPORT ================= */
+$('convFeedback').addEventListener('click',()=>{
+  if(!S.conv || S.conv.history.filter(m=>m.role==='user').length===0){ toast('まず少し会話してみましょう'); return; }
+  leaveAll(); makeReport();
+});
+async function makeReport(){
+  show('report'); incSessions();
+  $('reportBody').innerHTML='<p class="tip">レポートを作成中…（数秒）</p>';
+  const transcript=S.conv.history.map(m=>(m.role==='user'?'Learner: ':'Partner: ')+m.content).join('\n');
+  const sys=`You are an expert English tutor. A Japanese learner (level: ${cefr[S.level]}) just finished a spoken English ${S.conv.kind==='role'?'roleplay':'conversation'}. Give concise, honest but encouraging feedback IN JAPANESE aimed at helping them speak better.
+Reply ONLY with a JSON object:
+{"score": <integer 0-100 overall speaking score>,
+"good": ["<良かった点を日本語で2-3個>"],
+"fixes": [{"before":"<the learner's actual phrase>","after":"<corrected / natural English>","note":"<日本語の短い説明>"}],
+"phrases": [{"en":"<a useful expression they could have used, level-appropriate>","ja":"<日本語の意味>"}],
+"comment":"<総合コメントを日本語で2-3文、励ましつつ次に意識すべき1点>"}
+Limit fixes to at most 4 (only real mistakes; empty array if none). Always give 3 phrases.`;
+  try{
+    const raw=await claude(sys, [{role:'user', content:'Transcript:\n'+transcript}], 900);
+    const r=parseJSON(raw);
+    if(!r){ $('reportBody').innerHTML='<p class="tip">レポートの解析に失敗しました。もう一度お試しください。</p>'; return; }
+    renderReport(r);
+    // save fixes + phrases to deck
+    let n=0;
+    (r.fixes||[]).forEach(f=>{ if(f.after && deckAdd({type:'correction', en:f.after, ja:f.note||'', ex:f.before?('× '+f.before):''})) n++; });
+    (r.phrases||[]).forEach(p=>{ if(p.en && deckAdd({type:'phrase', en:p.en, ja:p.ja||''})) n++; });
+    if(n) toast('復習デッキに'+n+'件追加しました');
+  }catch(e){
+    $('reportBody').innerHTML='<p class="tip">レポート生成でエラー（'+(e.status||'通信')+'）。キーや通信を確認してください。</p>';
+    console.warn(e.body||e);
+  }
+}
+function esc(s){ return (s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+function renderReport(r){
+  let h='';
+  h+=`<div class="scorebox"><div class="num">${r.score!=null?r.score:'--'}</div><small>スピーキング・スコア</small></div>`;
+  if(r.comment) h+=`<div class="rsec"><h4>総合コメント</h4><div style="font-size:14px;line-height:1.7">${esc(r.comment)}</div></div>`;
+  if((r.good||[]).length){ h+='<div class="rsec"><h4>👍 良かった点</h4><ul>'+r.good.map(g=>'<li>'+esc(g)+'</li>').join('')+'</ul></div>'; }
+  if((r.fixes||[]).length){ h+='<div class="rsec"><h4>✏️ ここを直すともっと良い</h4>'+r.fixes.map(f=>
+    `<div class="fix"><span class="b">× ${esc(f.before)}</span><br><span class="a">○ ${esc(f.after)}</span>${f.note?'<div class="n">'+esc(f.note)+'</div>':''}</div>`).join('')+'</div>'; }
+  if((r.phrases||[]).length){ h+='<div class="rsec"><h4>💡 使えるとよかった表現</h4>'+r.phrases.map(p=>
+    `<div class="ph"><span class="e">${esc(p.en)}</span><span class="j">${esc(p.ja)}</span></div>`).join('')+'</div>'; }
+  h+='<p class="tip">間違い・表現は自動で復習デッキに追加されました。ホームの「復習」で定着させましょう。</p>';
+  $('reportBody').innerHTML=h;
+}
+$('reportBack').addEventListener('click',()=>{ refreshHome(); show('home'); });
+$('reportHome').addEventListener('click',()=>{ refreshHome(); show('home'); });
+$('reportAgain').addEventListener('click',()=>{ if(S.conv){ if(S.conv.kind==='role') startRole(S.conv.meta); else startFree(S.conv.meta); } else openSetup(); });
+
+/* ================= PRACTICE (phrase / word) ================= */
+function openPractice(kind){
+  show('practice'); S.pracKind=kind; S.pracList=(kind==='phrase'?PHRASES:WORDS).slice(); S.pracIdx=0;
+  $('pracTitle').textContent=kind==='phrase'?'フレーズ練習':'単語を覚える';
+  $('cPho').style.display=kind==='word'?'block':'none';
+  renderPrac(); setTimeout(speakPrac,300);
+}
+function curItem(){ return S.pracList[S.pracIdx]; }
+function renderPrac(){
+  const it=curItem();
+  $('cCat').textContent=it.cat; $('pracCat').textContent=it.cat;
+  $('cEn').textContent=it.en; $('cPho').textContent=it.pho||''; $('cJa').textContent=it.ja;
+  $('cEx').textContent=it.ex||''; $('cExJa').textContent=it.exja||'';
+  $('pracProg').textContent=(S.pracIdx+1)+' / '+S.pracList.length; $('pracHeard').textContent='';
+}
+async function speakPrac(){
+  const it=curItem(); stopRecog();
+  $('pracMic').classList.add('speaking'); $('pracMicLabel').textContent='読み上げ中…';
+  await speak(it.en); if(it.ex) await speak(it.ex);
+  $('pracMic').classList.remove('speaking'); $('pracMicLabel').textContent='タップで読み上げ';
+  if(S.pracAuto) S.pracAutoTimer=setTimeout(()=>nextPrac(true),1200);
+}
+function nextPrac(auto){
+  if(S.pracIdx<S.pracList.length-1) S.pracIdx++;
+  else if(S.pracAuto) S.pracIdx=0; else return;
+  renderPrac(); if(auto||S.pracAuto) speakPrac();
+}
+function prevPrac(){ if(S.pracIdx>0){ S.pracIdx--; renderPrac(); speakPrac(); } }
+function repeatPrac(){
+  if(!recogSupported()){ $('pracHeard').textContent='この端末は音声認識に未対応です'; return; }
+  stopSpeak(); $('pracMic').classList.add('live'); $('pracMicLabel').textContent='どうぞ、真似して話して…';
+  startRecog({
+    onheard:t=>$('pracHeard').textContent='“'+t+'”',
+    onfinal:t=>{ $('pracMic').classList.remove('live'); $('pracMicLabel').textContent='タップで読み上げ';
+      const tgt=curItem().en.toLowerCase().replace(/[^a-z ]/g,'').trim(), said=t.toLowerCase().replace(/[^a-z ]/g,'').trim();
+      $('pracHeard').textContent = similarity(tgt,said)>=0.7 ? '✅ いいね！ “'+t+'”' : '🔁 もう一度: “'+t+'”（お手本: '+curItem().en+'）'; },
+    onend:err=>{ $('pracMic').classList.remove('live'); $('pracMicLabel').textContent='タップで読み上げ';
+      if(err==='not-allowed') $('pracHeard').textContent='マイクが許可されていません'; }
+  });
+}
+function similarity(a,b){ if(!a||!b) return 0; const wa=a.split(/\s+/), wb=new Set(b.split(/\s+/)); let h=0; wa.forEach(w=>{ if(wb.has(w)) h++; }); return h/wa.length; }
+$('pracSpeak').addEventListener('click',()=>{ S.pracAuto=false; $('pracAuto').textContent='▶ 自動再生'; speakPrac(); });
+$('pracMic').addEventListener('click',()=>{ if(S.recActive) stopRecog(); else speakPrac(); });
+$('pracRepeat').addEventListener('click',repeatPrac);
+$('pracSave').addEventListener('click',()=>{ const it=curItem(); toast(deckAdd({type:S.pracKind==='word'?'word':'phrase', en:it.en, ja:it.ja, ex:it.ex})?'復習に追加しました':'すでに追加済みです'); });
+$('pracNext').addEventListener('click',()=>{ S.pracAuto=false; $('pracAuto').textContent='▶ 自動再生'; nextPrac(false); });
+$('pracPrev').addEventListener('click',()=>{ S.pracAuto=false; $('pracAuto').textContent='▶ 自動再生'; prevPrac(); });
+$('pracAuto').addEventListener('click',()=>{ S.pracAuto=!S.pracAuto; $('pracAuto').textContent=S.pracAuto?'⏸ 停止':'▶ 自動再生';
+  if(S.pracAuto) speakPrac(); else if(S.pracAutoTimer){ clearTimeout(S.pracAutoTimer); S.pracAutoTimer=null; stopSpeak(); } });
+
+/* ================= REVIEW (SRS) ================= */
+const SRS_INTERVALS=[0, 1, 2, 4, 8, 16]; // days by box
+function dueItems(){ const now=Date.now(); return deck().filter(x=>(x.due||0)<=now); }
+function openReview(){
+  show('review');
+  S.rev=dueItems(); S.revIdx=0; S.revShown=false;
+  if(!S.rev.length){
+    const total=deck().length;
+    $('revCard').innerHTML='<div class="ja2" style="line-height:1.6">'+(total? '🎉 今日の復習は完了！\n<span style="font-size:14px;color:var(--muted)">またあとで来てください（全'+total+'件）</span>' : 'まだ復習項目がありません。\n<span style="font-size:14px;color:var(--muted)">会話やフレーズ練習で「⭐復習に追加」すると、ここに貯まります。</span>')+'</div>';
+    $('revRevealRow').classList.add('hidden'); $('revJudgeRow').classList.add('hidden');
+    $('revCount').textContent='0'; $('revProg').textContent=''; $('revMicLabel').textContent=''; return;
+  }
+  renderRev();
+}
+function renderRev(){
+  const it=S.rev[S.revIdx]; S.revShown=false;
+  $('rCat').textContent = it.type==='word'?'単語':it.type==='correction'?'直し':'表現';
+  $('rJa').textContent = it.ja || '（意味メモなし）';
+  $('rEn').textContent = it.en; $('rEx').textContent = it.ex||'';
+  $('rEn').classList.add('hidden'); $('rEx').classList.add('hidden');
+  $('rHint').textContent='日本語の意味を見て、英語で言ってみよう';
+  $('revCount').textContent=S.rev.length+'件';
+  $('revProg').textContent=(S.revIdx+1)+' / '+S.rev.length;
+  $('revRevealRow').classList.remove('hidden'); $('revJudgeRow').classList.add('hidden');
+  $('revMicLabel').textContent='タップで答えを表示';
+  $('revCard').innerHTML='<div class="cat" id="rCat">'+(it.type==='word'?'単語':it.type==='correction'?'直し':'表現')+'</div><div class="ja2" id="rJa">'+esc(it.ja||'（意味メモなし）')+'</div><div class="en hidden" id="rEn">'+esc(it.en)+'</div>'+(it.ex?'<div class="ex hidden" id="rEx">'+esc(it.ex)+'</div>':'')+'<div class="reveal" id="rHint">日本語の意味を見て、英語で言ってみよう</div>';
+}
+function revealRev(){
+  const it=S.rev[S.revIdx]; S.revShown=true;
+  const en=$('rEn'); if(en){ en.classList.remove('hidden'); } const ex=$('rEx'); if(ex) ex.classList.remove('hidden');
+  const hint=$('rHint'); if(hint) hint.textContent='言えた？ 自己判定してください';
+  $('revRevealRow').classList.add('hidden'); $('revJudgeRow').classList.remove('hidden');
+  $('revMicLabel').textContent='読み上げ中…';
+  speak(it.en).then(()=>$('revMicLabel').textContent='もう一度聞く: 🔊');
+}
+function judgeRev(result){
+  const it=S.rev[S.revIdx]; const d=deck();
+  const idx=d.findIndex(x=>(x.en||'').toLowerCase().trim()===(it.en||'').toLowerCase().trim());
+  if(idx>=0){
+    let box=d[idx].box||0;
+    if(result==='again') box=0; else if(result==='hard') box=Math.max(0,box); else box=Math.min(SRS_INTERVALS.length-1, box+1);
+    const days=SRS_INTERVALS[box]||0;
+    d[idx].box=box; d[idx].due=Date.now()+ (result==='again'? 60*1000 : days*86400000);
+    saveDeck(d);
+    const s=stats(); s.reviews=(s.reviews||0)+1; saveStats(s);
+  }
+  if(S.revIdx<S.rev.length-1){ S.revIdx++; renderRev(); }
+  else { S.rev=dueItems(); if(S.rev.length){ S.revIdx=0; renderRev(); } else openReview(); }
+}
+$('revShow').addEventListener('click',revealRev);
+$('revMic').addEventListener('click',()=>{ const it=S.rev[S.revIdx]; if(!it) return; if(S.revShown) speak(it.en); else revealRev(); });
+$('revAgain').addEventListener('click',()=>judgeRev('again'));
+$('revHard').addEventListener('click',()=>judgeRev('hard'));
+$('revGood').addEventListener('click',()=>judgeRev('good'));
+$('revDelete').addEventListener('click',()=>{
+  const it=S.rev[S.revIdx]; if(!it) return;
+  const d=deck().filter(x=>(x.en||'').toLowerCase().trim()!==(it.en||'').toLowerCase().trim()); saveDeck(d);
+  S.rev.splice(S.revIdx,1); toast('削除しました');
+  if(!S.rev.length) openReview(); else { if(S.revIdx>=S.rev.length) S.revIdx=S.rev.length-1; renderRev(); }
+});
+
+/* ================= Settings ================= */
+function paintLevelSeg(){ document.querySelectorAll('#segLevel button').forEach(b=>b.classList.toggle('on', b.dataset.lvl===S.level)); }
+$('btnSettings').addEventListener('click',()=>{ $('apiKey').value=S.apiKey; paintLevelSeg(); if(S.enVoice)$('voiceSel').value=S.enVoice.voiceURI; $('settings').classList.remove('hidden'); });
+document.querySelectorAll('#segLevel button').forEach(b=>b.addEventListener('click',()=>{ S.level=b.dataset.lvl; paintLevelSeg(); }));
+$('voiceSel').addEventListener('change',e=>{ const v=S.voices.find(x=>x.voiceURI===e.target.value); if(v){ S.enVoice=v; speak('Hello, this is your English voice.'); } });
+$('saveSettings').addEventListener('click',()=>{
+  S.apiKey=$('apiKey').value.trim(); S.voiceURI=S.enVoice?S.enVoice.voiceURI:'';
+  localStorage.setItem('ee_level',S.level); localStorage.setItem('ee_apikey',S.apiKey); localStorage.setItem('ee_voice',S.voiceURI);
+  $('settings').classList.add('hidden');
+  $('setupLevel').textContent=levelJa[S.level]; $('convLevel').textContent=levelJa[S.level];
+});
+$('settings').addEventListener('click',e=>{ if(e.target.id==='settings') $('settings').classList.add('hidden'); });
+
+/* ================= Home refresh / init ================= */
+function refreshHome(){
+  const s=stats(); $('stStreak').textContent=s.streak||0; $('stSess').textContent=s.sessions||0;
+  const d=deck().length; $('stRev').textContent=d;
+  const due=dueItems().length; const badge=$('revBadge');
+  if(due>0){ badge.textContent=due; badge.classList.remove('hidden'); } else badge.classList.add('hidden');
+}
+(function init(){
+  paintLevelSeg(); refreshHome();
+  if(!recogSupported()) $('homeTip').textContent='⚠️ この端末/ブラウザは音声認識に未対応です（読み上げのみ可）。Android Chromeを推奨します。';
+})();
+</script>
+</body>
+</html>
