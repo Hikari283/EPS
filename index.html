@@ -1171,8 +1171,8 @@ function buildVentricularEntrainment(sc){
         emitAtrial(tA, retroMode, 0.9);
       }
     } else {
-      // avnrt：paceEnd まで PCL 刻みで emit
-      for(let tA = aT; tA <= paceEnd; tA += pcl){
+      // avnrt：停止後のV-A-V用A波（lastV+201ms）を汚染しないようpaceEnd手前で打ち切る
+      for(let tA = aT; tA <= Math.min(paceEnd, lastV + 66 + tp.va - pcl/2); tA += pcl){
         emitAtrial(tA, retroMode, 0.9);
       }
     }
