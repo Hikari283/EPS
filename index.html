@@ -1123,10 +1123,16 @@ function buildVentricularEntrainment(sc){
     // 開始の数拍は「回路に入りきるまでの過渡」：自己QRS優位から定常融合へ収束。
     //   → 体表QRSは R → rS → … → QS と徐々に移行（いきなりQSにはならない）。
     const onset = Math.min(1, 0.12 + beat*onsetStep);   // 速いレートほど早く定常へ収束＝早く乗っ取る
-    // AVNRT/ORT：Stim→V(CS)が15ms→66msに徐々に延長（rate-dependent RV→LV伝導遅延）
+    // AVNRT：Stim→V(CS)がQRS一定拍(stableBeat_A)まで15ms→上限値まで徐々に延長し、以降一定。
+    //   stvDelayをキャップせずにランプ→CS V・CS A両方がシフトするためVA(CS)=tp.va-66=一定。
+    //   AA = PCL + Δstv = PCL + (tcl-pcl) = TCL（ランプ中）→ PCL（一定後）。
+    // ORT/AT：Stim→V(CS)が15ms→66msに徐々に延長（rate-dependent RV→LV伝導遅延）
     const usePerV = sc==='avnrt' || isAVRT(sc) || sc==='at';
-    const stvDelay = usePerV ? Math.min(15 + beat*(tcl-pcl), 66) : 70;
-    emitVentFusion(t, steadyFrac*onset, stvDelay);
+    const stableBeat_A = 10;  // 11拍目からAA=PCL（10拍分はAA=TCL）
+    const stvDelay = sc==='avnrt'
+      ? Math.min(15 + beat*(tcl-pcl), 15 + stableBeat_A*(tcl-pcl))
+      : (usePerV ? Math.min(15 + beat*(tcl-pcl), 66) : 70);
+    emitVentFusion(t, steadyFrac*onset, sc==='avnrt' ? Math.min(stvDelay, 66) : stvDelay);
     // His電極：逆行H は先に出る（実測 Stim→H 47ms）＝H-V-A（V は emitVentFusion の +66）。
     emitHis(t+47, 0.6);
     // AVNRT/ORT/AT：A波をCS V位置基準(stv+VA)でper-V emit → VA一定・V-A即座
