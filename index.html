@@ -372,7 +372,6 @@ const KIND = {
   A:   {fn:dog,  s:4,   a:1.05},  // 心内 心房電位（鋭い高周波スパイク）
   V:   {fn:vmulti, s:7,  a:1.05},  // 心内 心室電位（多相性・じゃみじゃみ）
   Vff: {fn:vmulti, s:6.5,a:0.34},  // 遠位 far-field 心室（多相性）
-  Vdull:{fn:vmulti, s:13, a:0.40}, // RVペース時CS far-field：幅広・鈍いV波（RV→LV遅延伝導）
   Vsp: {fn:vmulti, s:3.6,a:1.0},   // His電極のV：鋭い多相性スパイク（実機準拠, RVペース時）
   Aff: {fn:dog,  s:7,   a:0.30},
   H:   {fn:dog,  s:2.6, a:0.5},   // His束電位
@@ -450,7 +449,7 @@ function emitVent(tV, preex=false, rate=null, rvPaced=false, surfaceKind=null){
   }
   // RVペース時：His(66)→CS で連続。HRAにも小さくV波。
   if(rvPaced){
-    for(let i=0;i<CSIDS.length;i++) ev(CSIDS[i], tV+70+i*3,'Vdull');
+    for(let i=0;i<CSIDS.length;i++) ev(CSIDS[i], tV+70+i*3,'Vff');
     ev('HRA', tV+74,'Vff',0.22);
   } else {
     for(const id of CSIDS) ev(id, tV+16,'Vff');
@@ -870,7 +869,7 @@ function emitVentFusion(tV, frac){
   //   逆行Hが先(+47)、その19ms後に遠位far-field V(+66)、67ms後にA(+133, lock loopでemit)。
   //   CSのVはHis Vから連続（少し後）。HRA電極にはV波を出さない。
   ev('HISd',tV+66,'Vsp',0.9); ev('HISm',tV+66,'Vsp',0.95); ev('HISp',tV+67,'Vsp',0.8);
-  for(let i=0;i<CSIDS.length;i++) ev(CSIDS[i], tV+70+i*3,'Vdull'); // RVペース：幅広・鈍いCS V波
+  for(let i=0;i<CSIDS.length;i++) ev(CSIDS[i], tV+70+i*3,'Vff');   // His(66)→CS で連続
   ev('HRA', tV+74,'Vff',0.22);   // HRAにも小さくV波（実機で僅かに出る）
   const c=tV+18;
   // 体表QRS（paced QS成分）は His far-field V と同時刻(tV+66)＝His Vの延長線上に揃える。
@@ -1153,10 +1152,7 @@ function buildVentricularEntrainment(sc){
                   : sc==='atypavnrt' ? 3
                   : (stableBeat+2);
     const retroMode = sc==='atypavnrt' ? 'retro_rv' : tp.retro;
-    // RVペーシング時の逆行VA：tachyのtp.va(50ms)より長い（RV→His逆行伝導+約30ms）
-    // → CS V波(+70ms)よりA波が後になるよう80msオフセット
-    const VA_BURST = Math.max(tp.va + 30, 75);
-    let aT = tOn + VA_BURST;
+    let aT = tOn;
     // ペーシング中のみ emit（paceEnd を超えたら打ち切り→停止後 V-A-A-V 領域を汚染しない）
     for(let i=0; i<nPre && aT <= paceEnd; i++){
       emitAtrial(aT, retroMode, 0.9);
