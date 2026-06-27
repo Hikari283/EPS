@@ -1142,23 +1142,19 @@ function buildVentricularEntrainment(sc){
   const ppiTclRef = isAVRT(sc) ? 50 : 128;
   const vaTachy   = isAVRT(sc) ? 120 : 5;
   const VA_PACE   = ppiTclRef + vaTachy;     // ORT 170 / AVNRT 133（=逆行A位置 lastV+VA_PACE）
-  if(sc==='avnrt'){
-    // AVNRT：バースト1拍目から即座にV-H-A（V波がA波より先）。
-    // A波を各Vビートに対して相対的に emit（AA=PCL 固定）。
-    // RVペース時の実効VA：fast pathway 逆行（50ms）+ RV→His 逆行余分（+30ms）= 80ms
-    const VA_RV = tp.va + 30;
-    for(let t=tOn; t<=lastV+VA_PACE+pcl/2; t+=pcl){
-      if(t + VA_RV <= paceEnd) emitAtrial(t + VA_RV, tp.retro, 0.9);
-    }
-  } else if(isAVRT(sc) || sc==='atypavnrt'){
+  if(sc==='avnrt' || isAVRT(sc) || sc==='atypavnrt'){
     // 遷移ゾーン：TCL→PCL を 10ms ステップで短縮（EPSの本 p163-166）。
-    // 例：TCL=360, PCL=330 → AA: TCL, TCL, …, TCL-10, TCL-20, TCL-30(=PCL), PCL, …
+    // 例：TCL=350, PCL=330 → AA: TCL, TCL, …, TCL-10, TCL-20(=PCL), PCL, …
     const stableBeat = Math.max(1, Math.ceil((1-0.12)/onsetStep));
     const aaStep  = 10;
     const nTrans  = Math.max(1, Math.ceil((tcl - pcl) / aaStep));
-    const nPre    = isAVRT(sc) ? Math.max(1, Math.round(stableBeat*0.5)) : 3;
+    const nPre    = isAVRT(sc) ? Math.max(1, Math.round(stableBeat*0.5))
+                  : sc==='atypavnrt' ? 3
+                  : (stableBeat+2);
     const retroMode = sc==='atypavnrt' ? 'retro_rv' : tp.retro;
-    let aT = tOn;
+    // RVペース時の実効VA：tp.va + RV→His逆行余分(+30ms) → A波がCS V波(+70ms)より必ず後になる
+    const VA_RV = sc==='avnrt' ? tp.va + 30 : 0;
+    let aT = tOn + VA_RV;
     // ペーシング中のみ emit（paceEnd を超えたら打ち切り→停止後 V-A-A-V 領域を汚染しない）
     for(let i=0; i<nPre && aT <= paceEnd; i++){
       emitAtrial(aT, retroMode, 0.9);
