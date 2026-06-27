@@ -600,8 +600,28 @@ function startRecog({onfinal,onheard,onend}={}){
 function stopRecog(){ try{ if(S.recog) S.recog.stop(); }catch(e){} S.recActive=false; }
 
 /* ================= AI API (Claude / Gemini) ================= */
-async function askAI(system, messages, max_tokens){
-  return S.provider==='gemini' ? geminiCall(system, messages, max_tokens) : claudeCall(system, messages, max_tokens);
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+function retryDelayMs(e){
+  try{ const j=JSON.parse(e.body); const d=(j.error&&j.error.details)||[];
+    for(const x of d){ if(x['@type']&&/RetryInfo/.test(x['@type'])&&x.retryDelay){ const m=/([\d.]+)s/.exec(x.retryDelay); if(m) return Math.min(9000, Math.ceil(parseFloat(m[1])*1000)); } }
+  }catch(_){}
+  return 0;
+}
+async function askAI(system, messages, max_tokens, onWait){
+  let last;
+  for(let attempt=0; attempt<3; attempt++){
+    try{ return await (S.provider==='gemini' ? geminiCall(system,messages,max_tokens) : claudeCall(system,messages,max_tokens)); }
+    catch(e){
+      last=e;
+      if(e.status===429 && attempt<2){
+        const w = retryDelayMs(e) || 2500*(attempt+1);
+        onWait && onWait(Math.ceil(w/1000), attempt+1);
+        await sleep(w); continue;
+      }
+      throw e;
+    }
+  }
+  throw last;
 }
 async function claudeCall(system, messages, max_tokens){
   const res = await fetch('https://api.anthropic.com/v1/messages',{
@@ -781,7 +801,7 @@ async function convReply(){
   $('convStream').scrollTop=$('convStream').scrollHeight;
   try{
     const msgs=S.conv.history.slice(-14).map(m=>({role:m.role,content:m.content}));
-    const raw=await askAI(convSystem(), msgs, 500);
+    const raw=await askAI(convSystem(), msgs, 500, (sec,n)=>{ typing.textContent='混雑中… '+sec+'秒待って再試行('+n+'/2)'; });
     typing.remove();
     const o=parseJSON(raw)||{reply:raw};
     const reply=o.reply||raw;
