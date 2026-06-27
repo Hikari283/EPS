@@ -1128,12 +1128,13 @@ function buildVentricularEntrainment(sc){
     emitVentFusion(t, steadyFrac*onset, stvDelay);
     // His電極：逆行H は先に出る（実測 Stim→H 47ms）
     emitHis(t+47, 0.6);
-    // A波をCS V位置基準(stv+VA)でper-V emit → VA一定・V-A即座
-    // atypavnrt：バースト中はfast pathway逆行（VA=VA_FAST_AT=70ms, concentric）
-    const vaForA   = sc==='atypavnrt' ? VA_FAST_AT : tp.va;
-    const retroForA = sc==='atypavnrt' ? 'retro_rv'  : tp.retro;
-    if(t + stvDelay + vaForA <= paceEnd){
-      emitAtrial(t + stvDelay + vaForA, retroForA, 0.9);
+    // ORT/AT/atypavnrt：per-V A emission（AVNRT は遷移ゾーンブロックで別途処理）
+    if(sc!=='avnrt'){
+      const vaForA    = sc==='atypavnrt' ? VA_FAST_AT : tp.va;
+      const retroForA = sc==='atypavnrt' ? 'retro_rv'  : tp.retro;
+      if(t + stvDelay + vaForA <= paceEnd){
+        emitAtrial(t + stvDelay + vaForA, retroForA, 0.9);
+      }
     }
     lastV=t; beat++;
   }
@@ -1148,7 +1149,25 @@ function buildVentricularEntrainment(sc){
   const ppiTclRef = isAVRT(sc) ? 50 : 128;
   const vaTachy   = isAVRT(sc) ? 120 : 5;
   const VA_PACE   = ppiTclRef + vaTachy;     // ORT 170 / AVNRT 133（=逆行A位置 lastV+VA_PACE）
-  // 全シナリオ：VループでA波をper-V emit済み。遷移ゾーンブロック不要。
+  // AVNRT：絶対時刻 TCL→PCL 遷移ゾーン（心室は傍観者＝stable QRS 後に初めてAA=PCL）
+  // CS V視覚は V ループの stvDelay で延長済み。A波タイミングは独立してTCL→PCL。
+  if(sc==='avnrt'){
+    const stableBeat = Math.max(1, Math.ceil((1-0.12)/onsetStep));
+    const nPre  = stableBeat + 2;
+    const aaStep = 10;
+    const nTrans = Math.max(1, Math.ceil((tcl - pcl) / aaStep));
+    // aT=tOn+80 → CS V(+66ms)より後にA波が来る（V-H-A 即座）
+    let aT = tOn + 80;
+    for(let i=0; i<nPre && aT<=paceEnd; i++){
+      emitAtrial(aT, tp.retro, 0.9); aT += tcl;
+    }
+    for(let s=0; s<nTrans && aT<=paceEnd; s++){
+      emitAtrial(aT, tp.retro, 0.9); aT += Math.max(pcl, tcl - aaStep*(s+1));
+    }
+    for(let tA=aT; tA<=lastV+VA_PACE+pcl/2; tA+=pcl){
+      emitAtrial(tA, tp.retro, 0.9);
+    }
+  }
   // AT：ペーシング中は心房も逆行性にPCLで捕捉済み（上ループでemit）。
   //     リエントリー回路は心室ペーシング中も継続（抑制されない）。
   //     停止後、逆行A（A1）の次に回路の自己A（A2）が来る＝V-A-A-V。
@@ -1204,9 +1223,9 @@ function buildVentricularEntrainment(sc){
     //   superior slow pathway→A2（eccentric, atyp）の両方を伝導＝二重応答 → 一見 V-A-A-V。
     //   A1とA2は心房興奮順序が違う（A1=刺激中のA/fast、A2=頻拍再開後のA/slow）。A1A2は短い。
     //   鑑別＝ΔAA = TCL − A1A2（金古2022 図8）：AVNRT は >26ms（A1A2短）、AT は <−80ms（A1A2長）。
-    const A1 = lastV + VA_FAST_AT;
-    emitAtrial(A1, 'retro_rv', 0.9);                  // A1：fast pathway 逆行
-    const A2 = A1 + A1A2_AT;                          // A1A2 = PCL（ペーシングSL）→ A2 = lastV+70+PCL
+    // A1はVループ内でlastV+66+VA_FAST_AT(=lastV+136ms)として既emit済み
+    const A1 = lastV + 66 + VA_FAST_AT;
+    const A2 = A1 + A1A2_AT;                          // A1A2 = PCL ✓
     emitAtrial(A2, 'atyp_vaav', 0.9);                 // A2：His=6ms(A1と違う)、CS=retro_rv準拠でA1A2=PCL on all CS ch
     fillTachyAtypAVNRT(A2 + 175, state.duration);     // A2→fast順行→V→slow逆行→…で頻拍再開
     const dAA = tcl - A1A2_AT;                        // ΔAA = TCL − A1A2
