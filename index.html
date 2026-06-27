@@ -1165,9 +1165,8 @@ function buildVentricularEntrainment(sc){
     for(let s=0; s<nTrans && aT<=paceEnd; s++){
       emitAtrial(aT, retroMode, 0.9); aT += Math.max(pcl, tcl - aaStep*(s+1));
     }
-    // entrained phase: for atypavnrt stop at A1-1PCL so last loop A is at lastV+136-pcl,
-    // then post-stop emits A1 at lastV+136 → AA = pcl (no gap).
-    const entrainEnd = sc==='atypavnrt' ? lastV + 66 + VA_FAST_AT - pcl : lastV+VA_PACE+pcl/2;
+    // entrained phase: for atypavnrt stop before A1 region (post-stop emits A1 explicitly)
+    const entrainEnd = sc==='atypavnrt' ? lastV + VA_FAST_AT - pcl/2 : lastV+VA_PACE+pcl/2;
     for(let tA=aT; tA<=entrainEnd; tA+=pcl){
       emitAtrial(tA, retroMode, 0.9);
     }
