@@ -1112,10 +1112,12 @@ function buildVentricularEntrainment(sc){
   // 乗っ取り（QS到達）までの拍数＝レート連動：速いレートほど少ない拍で完全捕捉へ。
   //   TCL−20(Δ20)≈10拍、250ms(Δ100)≈3拍。
   const onsetStep = Math.max(0.09, Math.min(0.45, (tcl-pcl)/tcl * 1.6));
-  // AVNRT：per-V方式、stvDelay=15ms固定・VA=66ms固定 → AA=PCL一定、VA一定。
+  // AVNRT：per-V方式でstvDelayをランプ → AA=TCL（QRS融合中）→ AA=PCL（QRS安定後）、VA=81ms一定。
+  //   AA = PCL + ΔstvDelay = PCL + (tcl-pcl) = tcl（ランプ中）→ PCL（キャップ後）。
+  //   キャップ = 15 + (stableQRSBeat+1)*Δ → QRS安定の次拍からAA=PCL。
   const stableQRSBeat = Math.ceil(0.88 / onsetStep);  // onset≥1となる最初のbeat index
   const AVNRT_PACE_VA = 66;  // RVAペーシング中の fast pathway 逆行VA（ms）
-  const AVNRT_STV     = 15;  // AVNRT用 stim-to-V（固定）
+  const avnrtStvCap   = 15 + (stableQRSBeat + 1) * (tcl - pcl); // ランプキャップ値
   // fast-slow AVNRT の pseudo V-A-A-V（本 p112）：
   //   刺激中は fast pathway 逆伝導が顕在化＝A1（concentric, retro_rv, 短VA）のみ出現。
   //   slow pathway→A2 は A1+PCL（次VよりVA_FAST_AT後）→ ペーシング中は次Vに隠れて不可視。
@@ -1129,10 +1131,11 @@ function buildVentricularEntrainment(sc){
     //   → 体表QRSは R → rS → … → QS と徐々に移行（いきなりQSにはならない）。
     const onset = Math.min(1, 0.12 + beat*onsetStep);   // 速いレートほど早く定常へ収束＝早く乗っ取る
     // ORT/AT：Stim→V(CS)が15ms→66msに徐々に延長（rate-dependent RV→LV伝導遅延）。
-    // AVNRT：stvDelay=15ms固定・VA=66ms固定のper-V。atypavnrt：ブロック方式のためper-V不要。
+    // AVNRT：stvDelayランプでAA=TCL→PCLを実現。atypavnrt：ブロック方式のためper-V不要。
     const usePerV = isAVRT(sc) || sc==='at' || sc==='avnrt';
-    const stvDelay = sc==='avnrt' ? AVNRT_STV
-                   : (usePerV ? Math.min(15 + beat*(tcl-pcl), 66) : 70);
+    const stvDelay = sc==='avnrt'
+      ? Math.min(15 + beat*(tcl-pcl), avnrtStvCap)
+      : (usePerV ? Math.min(15 + beat*(tcl-pcl), 66) : 70);
     emitVentFusion(t, steadyFrac*onset, stvDelay);
     // His電極：逆行H は先に出る（実測 Stim→H 47ms）＝H-V-A（V は emitVentFusion の +66）。
     emitHis(t+47, 0.6);
@@ -1147,7 +1150,7 @@ function buildVentricularEntrainment(sc){
   }
   // ---- 心房の加速（本 p165 図22/23）----
   // QRSが一定になる拍（onset≥1＝stable QRS）。AAがPCLに到達するのは：
-  //   AVNRT：ペーシング開始からAA=PCL（VA=66ms固定のper-V）
+  //   AVNRT：stable QRS の後（心室は傍観者＝ランプキャップ後にAA=PCL）
   //   ORT  ：transition zone 中（心室が回路近く＝融合の途中で心房加速）
   // 逆行VA（RVペース）：停止後に「逆行A→次の自己A＝TCL」かつ PPI−TCL が所定値になるよう
   //   VA_pacing = ppiTcl(表示) + VA_tachy。ORTは短い（心室が回路に近い）／AVNRTは長い（心室は遠い）。
