@@ -1218,7 +1218,14 @@ function buildVentricularEntrainment(sc){
     const saVa   = isORT ? 20 : 135;   // ORT<85（実例≈10）/ AVNRT>85（実例≈140）
     const ppi = tcl + ppiTcl;
     const tRetV = lastV + ppi;
-    fillTachyFromV(sc, tRetV, state.duration);
+    if(sc==='avnrt'){
+      // VAV AがトリガーとなりAVN slow路を下行→return V。A重複なし。
+      emitHis(tRetV - 46, 0.6);
+      emitVent(tRetV, false);
+      fillTachyFrom(sc, tRetV + 4 + tcl, state.duration);
+    } else {
+      fillTachyFromV(sc, tRetV, state.duration);
+    }
     res.vaav={pattern:'V-A-V', ppi, tcl, diff:ppiTcl, saVa, inCircuit:isORT};
     res.entrain={tcl, ppi, diff:ppiTcl, saVa, inCircuit:isORT, label:tp.label, pcl, fusion:true};
     res.notes.push(`RVA ${pcl}ms オーバードライブ → 心房1:1逆行（VA一定）でエントレイン。`);
