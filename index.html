@@ -1154,7 +1154,10 @@ function buildVentricularEntrainment(sc){
   if(sc==='atypavnrt' || sc==='avnrt'){
     const aaStep  = 10;
     const nTrans  = Math.max(1, Math.ceil((tcl - pcl) / aaStep));
-    const nPre    = 3;
+    // AA=TCL を維持する拍数：QRS安定（onset≥1）と同期させる。
+    // onset = 0.12 + beat*onsetStep ≥ 1  →  beat ≥ 0.88/onsetStep
+    const stableQRSBeat = Math.ceil(0.88 / onsetStep);
+    const nPre    = stableQRSBeat + 1;   // QRS安定の翌拍から AA を下げ始める
     const retroMode = 'retro_rv';
     let aT = tOn, lastA = -Infinity;
     for(let i=0; i<nPre && aT <= paceEnd; i++){
