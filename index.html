@@ -1112,6 +1112,13 @@ function buildVentricularEntrainment(sc){
   // 乗っ取り（QS到達）までの拍数＝レート連動：速いレートほど少ない拍で完全捕捉へ。
   //   TCL−20(Δ20)≈10拍、250ms(Δ100)≈3拍。
   const onsetStep = Math.max(0.09, Math.min(0.45, (tcl-pcl)/tcl * 1.6));
+  // AVNRT：stvDelayをΔずつランプさせることでAA=TCLを自然に実現し、キャップでAA→PCLに切替。
+  //   AA = PCL + ΔstvDelay/beat = PCL + Δ = TCL（ランプ中）→ PCL（キャップ後）。
+  //   キャップ拍 = stable QRS beat + 1 → QRS一定の直後にAA=PCLへ。
+  //   逆行VA（fast pathway）= 66ms（RVA→His-V +66ms）を固定で使用（tp.va=135は頻拍用）。
+  const stableQRSBeat = Math.ceil(0.88 / onsetStep);  // onset≥1となる最初のbeat index
+  const avnrtStvCap   = 15 + (stableQRSBeat + 1) * (tcl - pcl); // AVNRTのststDelayキャップ値
+  const AVNRT_PACE_VA = 66;  // RVAペーシング中の fast pathway 逆行VA（ms, Stim→V 15ms+VA=81ms）
   // fast-slow AVNRT の pseudo V-A-A-V（本 p112）：
   //   刺激中は fast pathway 逆伝導が顕在化＝A1（concentric, retro_rv, 短VA）のみ出現。
   //   slow pathway→A2 は A1+PCL（次VよりVA_FAST_AT後）→ ペーシング中は次Vに隠れて不可視。
@@ -1124,23 +1131,28 @@ function buildVentricularEntrainment(sc){
     // 開始の数拍は「回路に入りきるまでの過渡」：自己QRS優位から定常融合へ収束。
     //   → 体表QRSは R → rS → … → QS と徐々に移行（いきなりQSにはならない）。
     const onset = Math.min(1, 0.12 + beat*onsetStep);   // 速いレートほど早く定常へ収束＝早く乗っ取る
-    // ORT/AT：Stim→V(CS)が15ms→66msに徐々に延長（rate-dependent RV→LV伝導遅延）
-    // avnrt/atypavnrt は遷移ゾーンブロックでA波を一括処理するためper-V不要
-    const usePerV = isAVRT(sc) || sc==='at';
-    const stvDelay = usePerV ? Math.min(15 + beat*(tcl-pcl), 66) : 70;
+    // AVNRT：stvDelayランプ（Δ/beat）でAA=TCLを実現、avnrtStvCapでAA→PCLに切替。
+    // ORT/AT：Stim→V(CS)が15ms→66msに徐々に延長（rate-dependent RV→LV伝導遅延）。
+    // atypavnrt：遷移ゾーンブロックでA波を一括処理するためper-V不要。
+    const usePerV = isAVRT(sc) || sc==='at' || sc==='avnrt';
+    const stvDelay = sc==='avnrt'
+      ? Math.min(15 + beat*(tcl-pcl), avnrtStvCap)
+      : (usePerV ? Math.min(15 + beat*(tcl-pcl), 66) : 70);
     emitVentFusion(t, steadyFrac*onset, stvDelay);
     // His電極：逆行H は先に出る（実測 Stim→H 47ms）＝H-V-A（V は emitVentFusion の +66）。
     emitHis(t+47, 0.6);
     // AVNRT/ORT/AT：A波をCS V位置基準(stv+VA)でper-V emit → VA一定・V-A即座
-    if(usePerV && t + stvDelay + tp.va <= paceEnd){
-      emitAtrial(t + stvDelay + tp.va, tp.retro, 0.9);
+    if(usePerV){
+      const aVA = sc==='avnrt' ? AVNRT_PACE_VA : tp.va;
+      if(t + stvDelay + aVA <= paceEnd){
+        emitAtrial(t + stvDelay + aVA, tp.retro, 0.9);
+      }
     }
-    // atypavnrt の心房出力は遷移ゾーンブロックで一括処理
     lastV=t; beat++;
   }
   // ---- 心房の加速（本 p165 図22/23）----
   // QRSが一定になる拍（onset≥1＝stable QRS）。AAがPCLに到達するのは：
-  //   AVNRT：stable QRS の後（心室は傍観者＝transition zone 後に初めて心房捕捉）
+  //   AVNRT：stable QRS の後（心室は傍観者＝stvDelayキャップ後にAA=PCL）
   //   ORT  ：transition zone 中（心室が回路近く＝融合の途中で心房加速）
   // それまでAAは頻拍周期(TCL)のまま＝「最初からPCLにはならない」。
   // 逆行VA（RVペース）：停止後に「逆行A→次の自己A＝TCL」かつ PPI−TCL が所定値になるよう
@@ -1149,14 +1161,10 @@ function buildVentricularEntrainment(sc){
   const ppiTclRef = isAVRT(sc) ? 50 : 128;
   const vaTachy   = isAVRT(sc) ? 120 : 5;
   const VA_PACE   = ppiTclRef + vaTachy;     // ORT 170 / AVNRT 133（=逆行A位置 lastV+VA_PACE）
-  // avnrt/atypavnrt：遷移ゾーンブロックでA波を一括処理（F/S同様の絶対時間制御）
-  let avnrtLastA = -Infinity;
-  if(sc==='atypavnrt' || sc==='avnrt'){
+  // atypavnrt：遷移ゾーンブロックでA波を一括処理（F/S同様の絶対時間制御）
+  if(sc==='atypavnrt'){
     const aaStep  = 10;
     const nTrans  = Math.max(1, Math.ceil((tcl - pcl) / aaStep));
-    // AA=TCL を維持する拍数：QRS安定（onset≥1）と同期させる。
-    // onset = 0.12 + beat*onsetStep ≥ 1  →  beat ≥ 0.88/onsetStep
-    const stableQRSBeat = Math.ceil(0.88 / onsetStep);
     const nPre    = stableQRSBeat + 1;   // QRS安定の翌拍から AA を下げ始める
     const retroMode = 'retro_rv';
     let aT = tOn, lastA = -Infinity;
@@ -1167,17 +1175,9 @@ function buildVentricularEntrainment(sc){
       emitAtrial(aT, retroMode, 0.9); lastA=aT;
       aT += Math.max(pcl, tcl - aaStep*(s+1));
     }
-    if(sc==='atypavnrt'){
-      for(let tA = aT; tA <= Math.min(paceEnd, lastV + VA_FAST_AT - pcl/2); tA += pcl){
-        emitAtrial(tA, retroMode, 0.9); lastA=tA;
-      }
-    } else {
-      // avnrt：paceEnd まで PCL 刻み。lastA+PCL が停止後A波位置になる。
-      for(let tA = aT; tA <= paceEnd; tA += pcl){
-        emitAtrial(tA, retroMode, 0.9); lastA=tA;
-      }
+    for(let tA = aT; tA <= Math.min(paceEnd, lastV + VA_FAST_AT - pcl/2); tA += pcl){
+      emitAtrial(tA, retroMode, 0.9); lastA=tA;
     }
-    if(sc==='avnrt') avnrtLastA = lastA;
   }
   // AT：ペーシング中は心房も逆行性にPCLで捕捉済み（上ループでemit）。
   //     リエントリー回路は心室ペーシング中も継続（抑制されない）。
@@ -1213,7 +1213,7 @@ function buildVentricularEntrainment(sc){
     // PPI−TCL と SA−VA で AVNRT（心室は傍観者＝長い）と AVRT（心室が回路近く＝短い）を鑑別。
     // 基準（永嶋『EPSとSVT』p152, González-Torrecilla 2006 / Nagashima 2024）：
     //   PPI−TCL 115ms・corrected PPI−TCL 110ms・SA−VA 85ms。ORT は下回る（rule in）、AVNRTは上回る（除外診断）。
-    // avnrt：遷移ゾーン最終A（avnrtLastA）が逆行A＝VAV A。追加emit不要。
+    // avnrt：per-V ループの最終A（stvDelayCap拍後, AA=PCL位相）が逆行A＝VAV A。追加emit不要。
     // ort/avrt：最終VからVA遅延後にVAV Aをemit。
     const isORT=isAVRT(sc);
     if(isORT){
