@@ -1150,32 +1150,31 @@ function buildVentricularEntrainment(sc){
   const vaTachy   = isAVRT(sc) ? 120 : 5;
   const VA_PACE   = ppiTclRef + vaTachy;     // ORT 170 / AVNRT 133（=逆行A位置 lastV+VA_PACE）
   // avnrt/atypavnrt：遷移ゾーンブロックでA波を一括処理（F/S同様の絶対時間制御）
+  let avnrtLastA = -Infinity;
   if(sc==='atypavnrt' || sc==='avnrt'){
     const aaStep  = 10;
     const nTrans  = Math.max(1, Math.ceil((tcl - pcl) / aaStep));
     const nPre    = 3;
     const retroMode = 'retro_rv';
-    let aT = tOn;
-    // ペーシング中のみ emit（paceEnd を超えたら打ち切り→停止後 V-A-A-V 領域を汚染しない）
+    let aT = tOn, lastA = -Infinity;
     for(let i=0; i<nPre && aT <= paceEnd; i++){
-      emitAtrial(aT, retroMode, 0.9);
-      aT += tcl;
+      emitAtrial(aT, retroMode, 0.9); lastA=aT; aT += tcl;
     }
     for(let s=0; s<nTrans && aT <= paceEnd; s++){
-      emitAtrial(aT, retroMode, 0.9);
+      emitAtrial(aT, retroMode, 0.9); lastA=aT;
       aT += Math.max(pcl, tcl - aaStep*(s+1));
     }
     if(sc==='atypavnrt'){
-      // エントレイン後：aT ベースで PCL 刻み（隙間なし）。paceEnd 内かつ A1 手前で打ち切る。
       for(let tA = aT; tA <= Math.min(paceEnd, lastV + VA_FAST_AT - pcl/2); tA += pcl){
-        emitAtrial(tA, retroMode, 0.9);
+        emitAtrial(tA, retroMode, 0.9); lastA=tA;
       }
     } else {
-      // avnrt：停止後のV-A-V用A波（lastV+201ms）を汚染しないようpaceEnd手前で打ち切る
-      for(let tA = aT; tA <= Math.min(paceEnd, lastV + 66 + tp.va - pcl/2); tA += pcl){
-        emitAtrial(tA, retroMode, 0.9);
+      // avnrt：paceEnd まで PCL 刻み。lastA+PCL が停止後A波位置になる。
+      for(let tA = aT; tA <= paceEnd; tA += pcl){
+        emitAtrial(tA, retroMode, 0.9); lastA=tA;
       }
     }
+    if(sc==='avnrt') avnrtLastA = lastA;
   }
   // AT：ペーシング中は心房も逆行性にPCLで捕捉済み（上ループでemit）。
   //     リエントリー回路は心室ペーシング中も継続（抑制されない）。
@@ -1211,8 +1210,9 @@ function buildVentricularEntrainment(sc){
     // PPI−TCL と SA−VA で AVNRT（心室は傍観者＝長い）と AVRT（心室が回路近く＝短い）を鑑別。
     // 基準（永嶋『EPSとSVT』p152, González-Torrecilla 2006 / Nagashima 2024）：
     //   PPI−TCL 115ms・corrected PPI−TCL 110ms・SA−VA 85ms。ORT は下回る（rule in）、AVNRTは上回る（除外診断）。
-    // stv定常値(66ms) + tp.va で最終VのA波をemit（VループでpaceEnd超のためカット済み）
-    emitAtrial(lastV + 66 + tp.va, tp.retro, 0.9);
+    // avnrt：一つ前のA（遷移ゾーン最終A）からPCL後にV-A-VのA波を配置
+    const avnrtAtime = (sc==='avnrt' && avnrtLastA > 0) ? avnrtLastA + pcl : lastV + 66 + tp.va;
+    emitAtrial(avnrtAtime, tp.retro, 0.9);
     const isORT=isAVRT(sc);
     const ppiTcl = isORT ? 50 : 128;   // ORT<115（実例≈45）/ AVNRT>115（実機≈128）
     const saVa   = isORT ? 20 : 135;   // ORT<85（実例≈10）/ AVNRT>85（実例≈140）
