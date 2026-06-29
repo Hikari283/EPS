@@ -1218,11 +1218,12 @@ function buildVentricularEntrainment(sc){
     // PPI−TCL と SA−VA で AVNRT（心室は傍観者＝長い）と AVRT（心室が回路近く＝短い）を鑑別。
     // 基準（永嶋『EPSとSVT』p152, González-Torrecilla 2006 / Nagashima 2024）：
     //   PPI−TCL 115ms・corrected PPI−TCL 110ms・SA−VA 85ms。ORT は下回る（rule in）、AVNRTは上回る（除外診断）。
-    // avnrt：per-V ループの最終A（stvDelayCap拍後, AA=PCL位相）が逆行A＝VAV A。追加emit不要。
-    // ort/avrt：最終VからVA遅延後にVAV Aをemit。
+    // avnrt/ort/avrt：最終VからVA遅延後にVAV Aをemit。
     const isORT=isAVRT(sc);
     if(isORT){
       emitAtrial(lastV + 66 + tp.va, tp.retro, 0.9);
+    } else if(sc==='avnrt'){
+      emitAtrial(lastV + avnrtStvCap + avnrtVaCap, tp.retro, 0.9);
     }
     const ppiTcl = isORT ? 50 : 128;   // ORT<115（実例≈45）/ AVNRT>115（実機≈128）
     const saVa   = isORT ? 20 : 135;   // ORT<85（実例≈10）/ AVNRT>85（実例≈140）
