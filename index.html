@@ -1117,12 +1117,13 @@ function buildVentricularEntrainment(sc){
   //   AA = PCL + Δ = TCL（ランプ中）→ PCL（キャップ後）。QRS安定の次拍でAA=PCLに切替。
   //   A波位置: beat0でStim+81ms, beat中盤でStim+約PCL/2（サイクル中央付近）→ 実測に一致。
   const stableQRSBeat  = Math.ceil(0.88 / onsetStep);
+  const avnrtCapBeat   = 7;                                      // 実測に基づき7拍でQRS一定、8拍目からAA=PCL
   const avnrtDelta     = tcl - pcl;                              // Δ per beat（tcl-pcl）
   const avnrtStvStep   = Math.round(avnrtDelta / 2);            // stim→V側のランプ量
   const avnrtVaStep    = avnrtDelta - avnrtStvStep;             // VA側のランプ量（端数を吸収）
-  const avnrtStvCap    = 15 + (stableQRSBeat + 1) * avnrtStvStep;
+  const avnrtStvCap    = 15 + (avnrtCapBeat + 1) * avnrtStvStep;
   const avnrtVaInit    = 66;                                     // 初期VA（ms）
-  const avnrtVaCap     = avnrtVaInit + (stableQRSBeat + 1) * avnrtVaStep;
+  const avnrtVaCap     = avnrtVaInit + (avnrtCapBeat + 1) * avnrtVaStep;
   // fast-slow AVNRT の pseudo V-A-A-V（本 p112）：
   //   刺激中は fast pathway 逆伝導が顕在化＝A1（concentric, retro_rv, 短VA）のみ出現。
   //   slow pathway→A2 は A1+PCL（次VよりVA_FAST_AT後）→ ペーシング中は次Vに隠れて不可視。
