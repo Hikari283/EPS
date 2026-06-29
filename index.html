@@ -1146,7 +1146,9 @@ function buildVentricularEntrainment(sc){
     // His電極：逆行H は先に出る（実測 Stim→H 47ms）＝H-V-A（V は emitVentFusion の +66）。
     emitHis(t+47, 0.6);
     // AVNRT/ORT/AT：A波をper-V emit。AVNRTはstim→V・VAとも毎拍デクリメント。
-    if(usePerV){
+    // 最終拍（t+pcl>=paceEnd かつ stopAt有）はpost-stopコードに任せてサプレス→重複防止。
+    const isLastBeat = p.stopAt != null && t + pcl >= paceEnd;
+    if(usePerV && !isLastBeat){
       const aVA = sc==='avnrt'
         ? Math.min(avnrtVaInit + beat * avnrtVaStep, avnrtVaCap)
         : tp.va;
@@ -1263,7 +1265,9 @@ function buildVentricularEntrainment(sc){
     res.notes.push(`<b>A1A2 = ${A1A2_AT}ms</b>。ΔAA = TCL−A1A2 = ${dAA}ms（金古2022, 本 p114 図8：AVNRT は通常 ΔAA&gt;26ms を満たす）。`);
   }else{
     // V-A-A-V：#1 逆行A（最終ペース由来）→ #2 リエントリー回路自己A（AA=TCL）→ 順行V
-    const A1time = lastV + 66 + tp.va;
+    // A1タイミング = per-Vが最終拍に出すはずだったもの（stvDelay上限66ms）
+    const lastStvDelay = Math.min(15 + (beat - 1) * (tcl - pcl), 66);
+    const A1time = lastV + lastStvDelay + tp.va;
     emitAtrial(A1time, tp.retro, 0.9);
     const atA = A1time + tcl;                                        // AA = TCL = 360ms
     emitTachyBeat('at', atA);
