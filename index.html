@@ -1112,12 +1112,17 @@ function buildVentricularEntrainment(sc){
   // 乗っ取り（QS到達）までの拍数＝レート連動：速いレートほど少ない拍で完全捕捉へ。
   //   TCL−20(Δ20)≈10拍、250ms(Δ100)≈3拍。
   const onsetStep = Math.max(0.09, Math.min(0.45, (tcl-pcl)/tcl * 1.6));
-  // AVNRT：per-V方式でstvDelayをランプ → AA=TCL（QRS融合中）→ AA=PCL（QRS安定後）、VA=81ms一定。
-  //   AA = PCL + ΔstvDelay = PCL + (tcl-pcl) = tcl（ランプ中）→ PCL（キャップ後）。
-  //   キャップ = 15 + (stableQRSBeat+1)*Δ → QRS安定の次拍からAA=PCL。
-  const stableQRSBeat = Math.ceil(0.88 / onsetStep);  // onset≥1となる最初のbeat index
-  const AVNRT_PACE_VA = 66;  // RVAペーシング中の fast pathway 逆行VA（ms）
-  const avnrtStvCap   = 15 + (stableQRSBeat + 1) * (tcl - pcl); // ランプキャップ値
+  // AVNRT：stim→VとVAの両方がデクリメント（実測に基づく）。
+  //   Δ=(tcl-pcl)を半分ずつに分けてランプ → stim→V増加 + VA増加 = Δ/beat。
+  //   AA = PCL + Δ = TCL（ランプ中）→ PCL（キャップ後）。QRS安定の次拍でAA=PCLに切替。
+  //   A波位置: beat0でStim+81ms, beat中盤でStim+約PCL/2（サイクル中央付近）→ 実測に一致。
+  const stableQRSBeat  = Math.ceil(0.88 / onsetStep);
+  const avnrtDelta     = tcl - pcl;                              // Δ per beat（tcl-pcl）
+  const avnrtStvStep   = Math.round(avnrtDelta / 2);            // stim→V側のランプ量
+  const avnrtVaStep    = avnrtDelta - avnrtStvStep;             // VA側のランプ量（端数を吸収）
+  const avnrtStvCap    = 15 + (stableQRSBeat + 1) * avnrtStvStep;
+  const avnrtVaInit    = 66;                                     // 初期VA（ms）
+  const avnrtVaCap     = avnrtVaInit + (stableQRSBeat + 1) * avnrtVaStep;
   // fast-slow AVNRT の pseudo V-A-A-V（本 p112）：
   //   刺激中は fast pathway 逆伝導が顕在化＝A1（concentric, retro_rv, 短VA）のみ出現。
   //   slow pathway→A2 は A1+PCL（次VよりVA_FAST_AT後）→ ペーシング中は次Vに隠れて不可視。
@@ -1134,14 +1139,16 @@ function buildVentricularEntrainment(sc){
     // AVNRT：stvDelayランプでAA=TCL→PCLを実現。atypavnrt：ブロック方式のためper-V不要。
     const usePerV = isAVRT(sc) || sc==='at' || sc==='avnrt';
     const stvDelay = sc==='avnrt'
-      ? Math.min(15 + beat*(tcl-pcl), avnrtStvCap)
+      ? Math.min(15 + beat * avnrtStvStep, avnrtStvCap)
       : (usePerV ? Math.min(15 + beat*(tcl-pcl), 66) : 70);
     emitVentFusion(t, steadyFrac*onset, stvDelay);
     // His電極：逆行H は先に出る（実測 Stim→H 47ms）＝H-V-A（V は emitVentFusion の +66）。
     emitHis(t+47, 0.6);
-    // AVNRT/ORT/AT：A波をper-V emit。AVNRTはVA=66ms固定。
+    // AVNRT/ORT/AT：A波をper-V emit。AVNRTはstim→V・VAとも毎拍デクリメント。
     if(usePerV){
-      const aVA = sc==='avnrt' ? AVNRT_PACE_VA : tp.va;
+      const aVA = sc==='avnrt'
+        ? Math.min(avnrtVaInit + beat * avnrtVaStep, avnrtVaCap)
+        : tp.va;
       if(t + stvDelay + aVA <= paceEnd){
         emitAtrial(t + stvDelay + aVA, tp.retro, 0.9);
       }
