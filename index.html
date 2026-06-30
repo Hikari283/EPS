@@ -1862,7 +1862,7 @@ function renderTabs(){
   if(!bar) return;
   let html=`<div class="tab live${activeTab==='live'?' active':''}" data-tab="live">● ライブ</div>`;
   if(recordings.length) html+=`<span class="tab-hint">│</span>`;
-  for(let i=0;i<recordings.length;i++){
+  for(let i=recordings.length-1;i>=0;i--){
     const rec=recordings[i];
     const isActive=(activeTab===rec.id);
     html+=`<div class="tab rec${isActive?' active':''}" data-tab="${rec.id}">`
