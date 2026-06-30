@@ -1227,7 +1227,7 @@ function buildVentricularEntrainment(sc){
     } else if(sc==='avnrt'){
       emitAtrial(lastV + avnrtStvCap + avnrtVaCap, tp.retro, 0.9);
     }
-    const ppiTcl = isORT ? 50 : 128;   // ORT<115（実例≈45）/ AVNRT>115（実機≈128）
+    const ppiTcl = isORT ? 50 : 220;   // ORT<115（実例≈45）/ AVNRT>115（実機≈220, PPI≈570ms）
     const saVa   = isORT ? 20 : 135;   // ORT<85（実例≈10）/ AVNRT>85（実例≈140）
     const ppi = tcl + ppiTcl;
     const tRetV = lastV + ppi;
