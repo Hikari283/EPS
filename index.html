@@ -1172,7 +1172,7 @@ function buildVentricularEntrainment(sc){
   if(sc==='atypavnrt'){
     const aaStep  = 10;
     const nTrans  = Math.max(1, Math.ceil((tcl - pcl) / aaStep));
-    const nPre    = stableQRSBeat + 1;   // QRS安定の翌拍から AA を下げ始める
+    const nPre    = 8;   // atypavnrt は7拍でQRS安定（固定）
     const retroMode = 'retro_rv';
     let aT = tOn, lastA = -Infinity;
     for(let i=0; i<nPre && aT <= paceEnd; i++){
