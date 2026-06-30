@@ -1235,6 +1235,7 @@ function buildVentricularEntrainment(sc){
       // 遷移ゾーン最終AがトリガーとなりAVN slow路を下行→return V。
       emitHis(tRetV - 46, 0.6);
       emitVent(tRetV, false);
+      emitAtrial(tRetV + 4, 'avnrt', 1.0);   // return beat のA波（V+4ms、頻拍再開1拍目）
       fillTachyFrom(sc, tRetV + 4 + tcl, state.duration);
     } else {
       fillTachyFromV(sc, tRetV, state.duration);
