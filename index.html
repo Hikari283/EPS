@@ -1227,10 +1227,10 @@ function buildVentricularEntrainment(sc){
     } else if(sc==='avnrt'){
       emitAtrial(lastV + avnrtStvCap + avnrtVaCap, tp.retro, 0.9);
     }
-    // ORT: ppi=tcl+66 → VAVのA(+66+va)から頻拍再開A(+ppi+va)までのAA=tcl（回路依存）
-    const ppiTcl = isORT ? 66 : 220;   // ORT: PPI-TCL=66ms(<115 rule-in) / AVNRT>115
-    const saVa   = isORT ? 6 : 135;    // ORT: SA-VA=6ms(<85 rule-in) / AVNRT>85
-    const ppi = tcl + ppiTcl;
+    // ORT: ppi=pcl+66 → VAVのA(lastV+66+va)から頻拍再開A(lastV+ppi+va)までのAA=pcl（心室が回路内）
+    const ppi    = isORT ? pcl + 66 : tcl + 220;
+    const ppiTcl = ppi - tcl;
+    const saVa   = isORT ? Math.round(2*(66 + tp.va) - ppi) : 135;
     const tRetV = lastV + ppi;
     if(sc==='avnrt'){
       // 遷移ゾーン最終AがトリガーとなりAVN slow路を下行→return V。
