@@ -1227,8 +1227,9 @@ function buildVentricularEntrainment(sc){
     } else if(sc==='avnrt'){
       emitAtrial(lastV + avnrtStvCap + avnrtVaCap, tp.retro, 0.9);
     }
-    const ppiTcl = isORT ? 50 : 220;   // ORT<115（実例≈45）/ AVNRT>115（実機≈220, PPI≈570ms）
-    const saVa   = isORT ? 20 : 135;   // ORT<85（実例≈10）/ AVNRT>85（実例≈140）
+    // ORT: ppi=tcl+66 → VAVのA(+66+va)から頻拍再開A(+ppi+va)までのAA=tcl（回路依存）
+    const ppiTcl = isORT ? 66 : 220;   // ORT: PPI-TCL=66ms(<115 rule-in) / AVNRT>115
+    const saVa   = isORT ? 6 : 135;    // ORT: SA-VA=6ms(<85 rule-in) / AVNRT>85
     const ppi = tcl + ppiTcl;
     const tRetV = lastV + ppi;
     if(sc==='avnrt'){
