@@ -1227,9 +1227,10 @@ function buildVentricularEntrainment(sc){
     } else if(sc==='avnrt'){
       emitAtrial(lastV + avnrtStvCap + avnrtVaCap, tp.retro, 0.9);
     }
-    // ORT: 頻拍再開Aは fillTachyFromV 内部で tRetV+tachyVoff(sc) に出る（tachyVoffはvaとは別の固定値）。
-    // VAVのA(lastV+66+va)からこの頻拍再開Aまでの間隔=pcl になるよう ppi を逆算。
-    const ppi    = isORT ? pcl + 66 + tp.va - tachyVoff(sc) : tcl + 220;
+    // ORT: VAVのA(lastV+66+va)はペーシング依存（直前AAと同じPCL）。
+    // VAVのA→頻拍再開Aはもうペーシングでなく回路自走＝TCLにすべき。
+    // 頻拍再開Aは fillTachyFromV 内部で tRetV+tachyVoff(sc) に出る（tachyVoffはvaとは別の固定値）ので逆算。
+    const ppi    = isORT ? tcl - tachyVoff(sc) + 66 + tp.va : tcl + 220;
     const ppiTcl = ppi - tcl;
     const saVa   = isORT ? Math.round(2*(66 + tp.va) - ppi) : 135;
     const tRetV = lastV + ppi;
