@@ -1182,13 +1182,16 @@ function buildVentricularEntrainment(sc){
       emitAtrial(aT, retroMode, 0.9); lastA=aT;
       aT += Math.max(pcl, tcl - aaStep*(s+1));
     }
-    // 前進ループでバーストを継続。最後のAをA1-pclに固定してA(-1)→A1=PCLを保証。
+    // 終端4拍前からA1に位相固定してPCL間隔を保証。前進ループは固定ゾーン手前まで。
     const A1 = lastV + VA_FAST_AT;
-    for(let tA = aT; tA < A1 - pcl; tA += pcl){
+    const nPin = 4;
+    const pinStart = A1 - nPin * pcl;
+    for(let tA = aT; tA < pinStart; tA += pcl){
       emitAtrial(tA, retroMode, 0.9); lastA=tA;
     }
-    if(A1 - pcl >= aT && A1 - pcl <= paceEnd){
-      emitAtrial(A1 - pcl, retroMode, 0.9); lastA = A1 - pcl;
+    for(let k = nPin; k >= 1; k--){
+      const t = A1 - k * pcl;
+      if(t >= aT && t <= paceEnd){ emitAtrial(t, retroMode, 0.9); lastA=t; }
     }
   }
   // AT：ペーシング中は心房も逆行性にPCLで捕捉済み（上ループでemit）。
