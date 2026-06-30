@@ -1182,9 +1182,12 @@ function buildVentricularEntrainment(sc){
       emitAtrial(aT, retroMode, 0.9); lastA=aT;
       aT += Math.max(pcl, tcl - aaStep*(s+1));
     }
-    for(let tA = aT; tA <= Math.min(paceEnd, lastV + VA_FAST_AT - pcl/2); tA += pcl){
-      emitAtrial(tA, retroMode, 0.9); lastA=tA;
-    }
+    // A1（最終V+VA_FAST_AT）から逆算してPCL間隔で配置 → 最後の通常AとA1のAA=PCLを保証
+    const A1 = lastV + VA_FAST_AT;
+    const steadyTimes = [];
+    for(let t = A1 - pcl; t >= aT && t <= paceEnd; t -= pcl) steadyTimes.push(t);
+    steadyTimes.reverse();
+    for(const t of steadyTimes){ emitAtrial(t, retroMode, 0.9); lastA=t; }
   }
   // AT：ペーシング中は心房も逆行性にPCLで捕捉済み（上ループでemit）。
   //     リエントリー回路は心室ペーシング中も継続（抑制されない）。
