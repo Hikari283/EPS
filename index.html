@@ -1222,9 +1222,10 @@ function buildVentricularEntrainment(sc){
     //   PPI−TCL 115ms・corrected PPI−TCL 110ms・SA−VA 85ms。ORT は下回る（rule in）、AVNRTは上回る（除外診断）。
     // avnrt/ort/avrt：最終VからVA遅延後にVAV Aをemit。
     const isORT=isAVRT(sc);
-    const ppiTcl = isORT ? pcl - tcl + 100 : 270;  // ORT: PPI=SL+100ms → PPI-TCL=PCL-TCL+100 / AVNRT: PPI-TCL=270
     const saVa   = isORT ? 20 : 135;   // ORT<85（実例≈10）/ AVNRT>85（実例≈140）
-    const ppi = isORT ? pcl + 100 : tcl + ppiTcl + 50;
+    // ORT: PPI=2*(TCL-VA)+saVa → SA-VA=saVa かつ return AA=TCL（心室が回路内）
+    const ppi    = isORT ? 2*(tcl - tp.va) + saVa : tcl + 270;
+    const ppiTcl = ppi - tcl;          // ORT≈80ms(<115 rule-in) / AVNRT=270ms(>115)
     const tRetV = lastV + ppi;
     // SA-VAを実測値通りに固定: SA = (ppi+saVa)/2, VA_return = (ppi-saVa)/2, SA-VA = saVa
     if(isORT){
