@@ -562,7 +562,7 @@ function renderTachy(sc, start, end){
 // ORT（正方向性AVRT）のシナリオ判定と副伝導路（Kent束）タイプ設定
 function isAVRT(sc){ return sc==='avrt' || sc==='avrtB' || sc==='avrtC'; }
 // 誘発で開始する頻拍シナリオ（選択時は洞調律、誘発ボタンで頻拍に）
-function isInducible(sc){ return sc==='avnrt'||isAVRT(sc)||sc==='at'||sc==='atypavnrt'||sc==='aflutter'||sc==='coumel_pos'||sc==='coumel_neg'; }
+function isInducible(sc){ return sc==='avnrt'||isAVRT(sc)||sc==='at'||sc==='atypavnrt'||sc==='avnrt_noretro'||sc==='at_noretro'||sc==='coumel_pos'||sc==='coumel_neg'; }
 function apConfig(sc){
   // retro=逆行心房マップ, v1/ii=予防興奮δ波の極性, side=副路部位, label=表示名
   switch(sc){
@@ -1355,13 +1355,13 @@ function buildStraightPace(){
 
   // ════ 頻拍中の RVA バースト → 心室エントレインメント ════
   // 誘発済み頻拍（tachyArmed）に対する心室オーバードライブ＝エントレインメント
-  const entrainable = (sc==='at'||sc==='atypavnrt'||sc==='avnrt'||isAVRT(sc)) && state.tachyArmed;
+  const entrainable = (sc==='at'||sc==='atypavnrt'||sc==='avnrt'||sc==='avnrt_noretro'||sc==='at_noretro'||isAVRT(sc)) && state.tachyArmed;
   if(p.site==='RVA' && capt && entrainable){ return buildVentricularEntrainment(sc); }
 
   // ════ 誘発済み頻拍シナリオ（AT / 非典型AVNRT / 粗動）への心房/心室オーバードライブ ════
   const tachyCL = state.tachyArmed ? getBaselineTachyCL(sc) : null;
   if(tachyCL){
-    const tLabel={at:'リエントリー性AT',atypavnrt:'非典型AVNRT',aflutter:'心房粗動'}[sc];
+    const tLabel={at:'リエントリー性AT',atypavnrt:'非典型AVNRT',avnrt_noretro:'AVNRT（室房伝導なし）',at_noretro:'AT（室房伝導なし）'}[sc];
     const tBpm=Math.round(60000/tachyCL);
     const pBpm=Math.round(60000/cl);
 
@@ -3230,7 +3230,7 @@ $('induceTachy').onclick=()=>{
     state.tachyArmed=true;
     generateTimeline();                 // 誘発済み頻拍として描画（else分岐がtachyArmedを参照）
     state.playing=true; setPlayBtn(); updatePaceButtons();
-    const nm={at:'リエントリー性AT',atypavnrt:'非典型AVNRT',aflutter:'心房粗動',coumel_pos:'ORT（Coumel陽性）',coumel_neg:'ORT（Coumel陰性）'}[sc] || (tachyParams(sc)?tachyParams(sc).label:'頻拍');
+    const nm={at:'リエントリー性AT',atypavnrt:'非典型AVNRT',avnrt_noretro:'AVNRT（室房伝導なし）',at_noretro:'AT（室房伝導なし）',coumel_pos:'ORT（Coumel陽性）',coumel_neg:'ORT（Coumel陰性）'}[sc] || (tachyParams(sc)?tachyParams(sc).label:'頻拍');
     showToast(`${nm} を誘発しました`);
   } else {
     showToast('この症例は頻拍を誘発できません（洞調律）');
