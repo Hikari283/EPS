@@ -780,7 +780,7 @@ function buildPaced(){
   const AVN_ERP    = 260;   // 房室結節ERP（ahForCoupling と一致）：これ未満は結節もブロック
   let induce=null;
   // AT / AT noRetro：心房S2が回路の不応期を超えて再入できる窓（280〜360ms）で誘発
-  if((sc==='at'||sc==='at_noretro') && p.site!=='RVA' && res.a2h2!=null){
+  if(sc==='at' && p.site!=='RVA' && res.a2h2!=null){
     if(p.s2>=280 && p.s2<360){ induce=sc; }
     else if(p.s2<280){ res.notes.push(`S2 ${p.s2}ms は心房ERP未満 → 心房捕捉不全。<b>連結期を 280ms 以上</b>に。`); }
     else { res.notes.push(`S2 ${p.s2}ms では回路の脆弱窓に入らず誘発されず（目安：280〜360ms）。`); }
