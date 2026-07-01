@@ -1756,22 +1756,14 @@ function fillTachyAVNRT(start, end){
   }
 }
 function fillTachyAVNRTNoRetro(start, end){
-  // 室房伝導なしAVNRT：Vと同時刻にAが出るが逆行A不可視（心房は洞調律で乖離）
-  // → 心室だけ頻拍。AはAVNRT同様にVとほぼ同時に見えるが逆行捕捉なし
-  const cl=350;
-  for(let t=start;t<end;t+=cl){
-    emitHis(t-50); emitVent(t-4,false);
-    // 心房は独立した洞調律（buildBaseline上で洞P波が別途描画される）
-  }
+  // 頻拍中の見た目は通常AVNRTと同じ（回路内でAは活性化される）
+  // 違いは心室ペーシング中に逆行Aが出ないこと（ペーシング処理側で制御）
+  fillTachyAVNRT(start, end);
 }
 function fillTachyATNoRetro(start, end){
-  // 室房伝導なしAT：心房頻拍＋独立した洞調律のV（房室解離様）
-  // 実際は心房頻拍→AVN→V で心室伝導あり。ここでは通常AT同様（室房逆行なし）
-  const cl=360;
-  for(let t=start;t<end;t+=cl){
-    const tHisA=emitAtrial(t,'at_reentry',0.9);
-    emitHis(tHisA+92); emitVent(tHisA+92+45,false);
-  }
+  // 頻拍中の見た目は通常ATと同じ
+  // 違いは心室ペーシング中に逆行Aが出ないこと
+  fillTachyAT(start, end);
 }
 function fillTachyAVRT(start,end,sc='avrt'){
   const cl=330, VA=120, retro=apConfig(sc).retro;
