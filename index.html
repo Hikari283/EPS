@@ -986,7 +986,8 @@ function buildVaLinking(sc){
 function emitTachyBeat(sc, tA){
   if(sc==='avnrt'){ emitAtrial(tA,'avnrt',1.0); emitHis(tA-50); emitVent(tA-4,false); }  // VA≒0：A と V がほぼ同時。HV≒48ms（順行は正常）
   else if(isAVRT(sc)){ const V=tA-120; emitHis(V-48); emitVent(V,false); emitAtrial(tA,apConfig(sc).retro,0.9); }
-  else if(sc==='at'){ emitAtrial(tA,'at_reentry',0.9); emitHis(tA+92); emitVent(tA+92+50,false); }
+  else if(sc==='at'||sc==='at_noretro'){ emitAtrial(tA,'at_reentry',0.9); emitHis(tA+92); emitVent(tA+92+50,false); }
+  else if(sc==='avnrt_noretro'){ emitAtrial(tA,'avnrt',1.0); emitHis(tA-50); emitVent(tA-4,false); }
   else if(sc==='atypavnrt'){ const V=tA-185; emitHis(V-48); emitVent(V,false); emitAtrial(tA,'atyp',0.9); }
 }
 // tA から duration まで頻拍を連ねる
@@ -1159,6 +1160,12 @@ function buildVentricularEntrainment(sc){
       }
     }
     lastV=t; beat++;
+  }
+  // AT noRetro：心室ペーシング中もAT回路は独立してTCLで継続（VAなし）
+  if(sc==='at_noretro'){
+    const atPhase = tOn % tcl;
+    const firstAT = tOn + (atPhase === 0 ? 0 : tcl - atPhase);
+    for(let tA=firstAT; tA<paceEnd; tA+=tcl) emitTachyBeat('at', tA);
   }
   // ---- 心房の加速（本 p165 図22/23）----
   // QRSが一定になる拍（onset≥1＝stable QRS）。AAがPCLに到達するのは：
