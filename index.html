@@ -1374,6 +1374,37 @@ function buildStraightPace(){
     return true;
   }
 
+  // ════ HRAバーストで at_noretro を誘発（CL ≤ 450ms）════
+  if(sc==='at_noretro' && !state.tachyArmed && p.site==='HRA' && capt && p.stopAt!=null){
+    if(cl<=450){
+      const driveStart=Math.round(2*state.sinusCL);
+      state.pace.paceOnAt=driveStart;
+      buildBaseline('sinus',0,driveStart-200);
+      for(let t=driveStart;t<paceEnd;t+=cl){
+        const tHisA=emitAtrial(t,'hra');
+        const AH=ahForCoupling(cl,sc); if(AH!=null){ emitHis(tHisA+AH); emitVent(tHisA+AH+45,false); }
+      }
+      fillTachyAT(paceEnd+360, state.duration);
+      state.tachyArmed=true;
+      state.result={site:'HRA',induced:true,mechanism:tachyParams(sc).label,a2h2:null,jump:false,narrow:false,
+        notes:[`HRAバースト ${cl}ms（≤450ms）で<b>AT（室房伝導なし）誘発</b>。頻拍中は逆行Aなし。`,
+               '→ <b>頻拍進行中</b>。心室オーバードライブで鑑別が可能。']};
+      return true;
+    } else {
+      const driveStart=Math.round(2*state.sinusCL);
+      state.pace.paceOnAt=driveStart;
+      buildBaseline('sinus',0,driveStart-200);
+      for(let t=driveStart;t<paceEnd;t+=cl){
+        const tHisA=emitAtrial(t,'hra');
+        const AH=ahForCoupling(cl,sc); if(AH!=null){ emitHis(tHisA+AH); emitVent(tHisA+AH+45,false); }
+      }
+      buildBaseline('sinus',paceEnd+state.sinusCL,state.duration);
+      state.result={site:'HRA',induced:false,mechanism:null,a2h2:null,jump:false,narrow:false,
+        notes:[`HRAバースト ${cl}ms では誘発されず（目安：<b>450ms 以下</b>で誘発）。`]};
+      return true;
+    }
+  }
+
   // ════ 頻拍中の RVA バースト → 心室エントレインメント ════
   // 誘発済み頻拍（tachyArmed）に対する心室オーバードライブ＝エントレインメント
   const entrainable = (sc==='at'||sc==='atypavnrt'||sc==='avnrt'||sc==='avnrt_noretro'||sc==='at_noretro'||isAVRT(sc)) && state.tachyArmed;
