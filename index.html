@@ -97,7 +97,10 @@
 <div class="app">
   <!-- ============ サイドバー操作パネル ============ -->
   <div class="side">
-    <h1>EPS Trainer</h1>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+      <h1 style="margin:0">EPS Trainer</h1>
+      <button id="downloadBtn" title="HTMLファイルをダウンロード" style="flex-shrink:0;padding:5px 11px;background:#1a2a40;border:1px solid #2a3a55;border-radius:6px;color:#7ab0e0;font-size:12px;cursor:pointer;white-space:nowrap">⬇ DL</button>
+    </div>
     <div class="sub">心内電位を読み・ペーシングを組み・キャリパーで診断する電気生理トレーニング</div>
 
     <div class="card">
@@ -3173,6 +3176,11 @@ function loop(now){
 // ===================================================================
 const $=id=>document.getElementById(id);
 
+$('downloadBtn').onclick=()=>{
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([document.documentElement.outerHTML],{type:'text/html'}));
+  a.download='eps-trainer.html'; a.click(); URL.revokeObjectURL(a.href);
+};
 $('scenario').onchange=e=>{ state.scenario=e.target.value; state.pace.active=false; state.pace.running=false; state.tachyArmed=false; setScenNote(); generateTimeline(); updatePaceButtons(); };
 $('scl').oninput=e=>{ state.sinusCL=+e.target.value; $('sclv').textContent=e.target.value+' ms'; if(!state.pace.active) generateTimeline(); };
 $('site').onchange=e=>{ state.pace.site=e.target.value; };
