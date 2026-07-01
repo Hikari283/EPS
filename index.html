@@ -78,6 +78,10 @@
   .kbd{font-size:10px;color:#6b7280;margin-top:8px;line-height:1.6}
   /* ---- 録画タブバー ---- */
   .tabbar{display:flex;align-items:center;gap:4px;padding:5px 10px;background:#0a0f18;border-bottom:1px solid var(--line);overflow-x:auto;min-height:34px;flex-shrink:0}
+  #memo-bar{padding:4px 10px;background:#0d1320;border-bottom:1px solid var(--line);flex-shrink:0}
+  #memo-input{width:100%;box-sizing:border-box;background:#111827;border:1px solid #2a3a55;border-radius:4px;color:#c8d8f0;font-size:13px;padding:5px 10px;outline:none}
+  #memo-input::placeholder{color:#4a5a70}
+  #memo-input:focus{border-color:#4a7aaa}
   .tab{display:flex;align-items:center;gap:5px;padding:4px 11px;border-radius:7px;border:1px solid transparent;font-size:11px;cursor:pointer;white-space:nowrap;transition:background .12s}
   .tab.live{background:#0e1420;border-color:var(--line);color:var(--accent)}
   .tab.live.active{background:var(--accent);color:#04222e;font-weight:700;border-color:var(--accent)}
@@ -302,6 +306,7 @@
       </div>
     </div>
     <div class="tabbar" id="tabbar"></div>
+    <div id="memo-bar"><input id="memo-input" type="text" placeholder="📝 メモ（診断・所見など）" spellcheck="false"/></div>
     <div class="cv-wrap" id="cvwrap">
       <canvas id="cv"></canvas>
     </div>
