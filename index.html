@@ -672,22 +672,27 @@ function buildBaseline(scenario, startT, endT){
 function buildPaced(){
   const p = state.pace, sc = state.scenario;
   // 誘発済み頻拍シナリオのみバースト同様の物理（頻拍を背景に流す）で扱う
-  if(getBaselineTachyCL(sc) && state.tachyArmed) return buildPacedTachy();
+  // at_noretro は除外：AT回路が独立しているのでS1S2は通常HRAペーシングとして処理
+  if(getBaselineTachyCL(sc) && state.tachyArmed && sc!=='at_noretro') return buildPacedTachy();
   const noRetro = !!(tachyParams(sc)||{}).noRetro;  // 室房伝導なしシナリオ
   const preexDrive = (isAVRT(sc) && p.site!=='RVA');
   const baseAH = ahForCoupling(p.s1cl, sc) ?? 95;
 
   // ---- センス（同期）：自己心拍を1拍検出してから駆動列を開始 ----
   // sense=none → 即時開始。sense指定 → 自己周期の格子上の1拍をセンスし、その拍からS1で駆動開始。
+  // at_noretro 誘発中のS1S2：AT回路をバックグラウンドに流してからS1S2を重畳
+  const atNoRetroOngoing = (sc==='at_noretro' && state.tachyArmed);
   let driveStart;
   if(p.sense!=='none'){
     // センスあり：自己心拍を1拍検出してから駆動列
     const cl = (sc==='aflutter') ? 240 : state.sinusCL;
     const senseT = Math.ceil(1400/cl) * cl;
-    buildBaseline(sc, 0, senseT + 1);
+    if(atNoRetroOngoing) renderTachy(sc, 0, senseT + 1);
+    else buildBaseline(sc, 0, senseT + 1);
     driveStart = senseT + p.s1cl;
   }else{
     // センスなし：即時開始（洞拍を挟まない）
+    if(atNoRetroOngoing) renderTachy(sc, 0, 200);
     driveStart = 200;
   }
 
@@ -824,8 +829,14 @@ function buildPaced(){
     state.tachyArmed=true;
   }else{
     res.mechanism = null;
-    state.tachyArmed=false;
-    buildBaseline(sc, lastEventV + state.sinusCL, state.duration);
+    if(atNoRetroOngoing){
+      // AT回路は継続（誘発状態を保持）、S1S2後もAT背景を表示
+      renderTachy(sc, lastEventV + state.sinusCL, state.duration);
+      res.notes.push('AT（室房伝導なし）継続中。HRA S1S2は正常AVN伝導。AT回路はS1S2と独立。');
+    } else {
+      state.tachyArmed=false;
+      buildBaseline(sc, lastEventV + state.sinusCL, state.duration);
+    }
   }
   state.result = res;
 }
@@ -1173,11 +1184,11 @@ function buildVentricularEntrainment(sc){
     }
     lastV=t; beat++;
   }
-  // AT noRetro：心室ペーシング中もAT回路は独立してTCLで継続（VAなし）
+  // AT noRetro：心室ペーシング中もAT回路は独立してTCLで継続（A波のみ; VはRVAペース）
   if(sc==='at_noretro'){
     const atPhase = tOn % tcl;
     const firstAT = tOn + (atPhase === 0 ? 0 : tcl - atPhase);
-    for(let tA=firstAT; tA<paceEnd; tA+=tcl) emitTachyBeat('at', tA);
+    for(let tA=firstAT; tA<paceEnd; tA+=tcl) emitAtrial(tA,'at_reentry',0.9);
   }
   // ---- 心房の加速（本 p165 図22/23）----
   // QRSが一定になる拍（onset≥1＝stable QRS）。AAがPCLに到達するのは：
@@ -1374,35 +1385,39 @@ function buildStraightPace(){
     return true;
   }
 
-  // ════ HRAバーストで at_noretro を誘発（CL ≤ 450ms）════
-  if(sc==='at_noretro' && !state.tachyArmed && p.site==='HRA' && capt && p.stopAt!=null){
-    if(cl<=450){
-      const driveStart=Math.round(2*state.sinusCL);
-      state.pace.paceOnAt=driveStart;
-      buildBaseline('sinus',0,driveStart-200);
-      for(let t=driveStart;t<paceEnd;t+=cl){
-        const tHisA=emitAtrial(t,'hra');
-        const AH=ahForCoupling(cl,sc); if(AH!=null){ emitHis(tHisA+AH); emitVent(tHisA+AH+45,false); }
-      }
-      fillTachyAT(paceEnd+360, state.duration);
-      state.tachyArmed=true;
-      state.result={site:'HRA',induced:true,mechanism:tachyParams(sc).label,a2h2:null,jump:false,narrow:false,
-        notes:[`HRAバースト ${cl}ms（≤450ms）で<b>AT（室房伝導なし）誘発</b>。頻拍中は逆行Aなし。`,
-               '→ <b>頻拍進行中</b>。心室オーバードライブで鑑別が可能。']};
-      return true;
-    } else {
-      const driveStart=Math.round(2*state.sinusCL);
-      state.pace.paceOnAt=driveStart;
-      buildBaseline('sinus',0,driveStart-200);
-      for(let t=driveStart;t<paceEnd;t+=cl){
-        const tHisA=emitAtrial(t,'hra');
-        const AH=ahForCoupling(cl,sc); if(AH!=null){ emitHis(tHisA+AH); emitVent(tHisA+AH+45,false); }
-      }
-      buildBaseline('sinus',paceEnd+state.sinusCL,state.duration);
-      state.result={site:'HRA',induced:false,mechanism:null,a2h2:null,jump:false,narrow:false,
-        notes:[`HRAバースト ${cl}ms では誘発されず（目安：<b>450ms 以下</b>で誘発）。`]};
-      return true;
+  // ════ HRA バーストによる AT（室房伝導なし）誘発 ════
+  // HRAから450ms以下のバーストで誘発（S1S2では誘発されない）。未誘発時のみ有効。
+  if(sc==='at_noretro' && !state.tachyArmed && p.site!=='RVA' && cl<=450 && capt){
+    const tcl=360;
+    const driveStart=Math.round(5*state.sinusCL);
+    state.pace.paceOnAt = driveStart;
+    buildBaseline('sinus', 0, driveStart-200);
+    let lastHis=driveStart-state.sinusCL+120, prevAH=120;
+    const ADAPT=0.32;
+    for(let t=driveStart; t<paceEnd; t+=cl){
+      emitStim(t, p.site);
+      const tHisA=emitAtrial(t,'hra');
+      const rec=tHisA-lastHis;
+      const node=AVNODE;
+      if(rec>=node.ERP){
+        const rawAH=Math.round(node.AHmin+node.K/(1+(rec-node.ERP)/node.tau));
+        const AH=Math.round(prevAH*(1-ADAPT)+rawAH*ADAPT);
+        prevAH=AH; emitHis(tHisA+AH); emitVent(tHisA+AH+45,false);
+        lastHis=tHisA+AH;
+      } else { prevAH=Math.max(120,Math.round(prevAH*0.75)); }
     }
+    if(p.stopAt!=null){
+      state.tachyArmed=true;
+      const recov=paceEnd+Math.round(cl*0.65);
+      fillTachyAT(recov, state.duration);
+      state.result={site:p.site,induced:true,mechanism:'AT（室房伝導なし）',a2h2:null,jump:false,narrow:false,straight:true,
+        notes:[`HRAバースト ${cl}ms（≤450ms）でAT（室房伝導なし）を誘発。`,
+               '→ <b>頻拍進行中</b>。心室オーバードライブ（RVA）で鑑別が可能。']};
+    } else {
+      state.result={site:p.site,induced:false,mechanism:'連続ペーシング（バースト）',a2h2:null,jump:false,narrow:false,straight:true,
+        notes:[`HRAバースト ${cl}ms（≤450ms）。停止ボタンでAT誘発。`]};
+    }
+    return true;
   }
 
   // ════ 頻拍中の RVA バースト → 心室エントレインメント ════
@@ -1626,7 +1641,7 @@ const VSCAN_LEAD = 1000;
 function buildVScan(){
   const p=state.pace, sc=state.scenario;
   // 進行中頻拍：背景に頻拍を流し、スキャン刺激は速ければ捕捉・遅ければ非捕捉
-  if(getBaselineTachyCL(sc)) return buildVScanTachy();
+  if(getBaselineTachyCL(sc) && state.tachyArmed) return buildVScanTachy();
   // AVNRT/AVRT が誘発済み（tachyArmed）→ 進行中頻拍に対するリセット確認手技
   if((sc==='avnrt'||isAVRT(sc)) && state.tachyArmed) return buildVScanResetArmed();
   // 洞調律ベース：背景は洞調律、単発刺激を「1セグメント1発・画面上で固定位置」に置く
@@ -3508,6 +3523,8 @@ function updateModeLabel(){
     if(isAVRT(state.scenario)) txt='正方向性AVRT';
     if(state.scenario==='coumel_pos') txt='ORT＋脚ブロック（Coumel陽性）';
     if(state.scenario==='coumel_neg') txt='ORT＋脚ブロック（Coumel陰性）';
+    if(state.scenario==='avnrt_noretro') txt='AVNRT（室房伝導なし）';
+    if(state.scenario==='at_noretro') txt='AT（室房伝導なし）';
   }
   if(state.scenario==='avblock_wenck') txt='2度AVブロック Wenckebach';
   if(state.scenario==='avblock_21') txt='2度AVブロック 2:1';
