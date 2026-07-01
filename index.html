@@ -673,6 +673,7 @@ function buildPaced(){
   const p = state.pace, sc = state.scenario;
   // 進行中頻拍シナリオはバースト同様の物理（頻拍を背景に流す）で扱う
   if(getBaselineTachyCL(sc)) return buildPacedTachy();
+  const noRetro = !!(tachyParams(sc)||{}).noRetro;  // 室房伝導なしシナリオ
   const preexDrive = (isAVRT(sc) && p.site!=='RVA');
   const baseAH = ahForCoupling(p.s1cl, sc) ?? 95;
 
@@ -701,7 +702,7 @@ function buildPaced(){
         // 心室ペーシング：逆行伝導（VA漸減曲線を適用）
         emitVent(tS, false, null, true);
         const vaS1=vaForCoupling(p.s1cl);
-        if(vaS1!=null){ emitHis(tS+50,1.6); emitAtrial(tS+vaS1,'retro_rv',0.9); }
+        if(vaS1!=null && !noRetro){ emitHis(tS+50,1.6); emitAtrial(tS+vaS1,'retro_rv',0.9); }
       }else{
         const mode = (p.site==='HRA'?'hra':p.site);
         const AH = ahForCoupling(p.s1cl, sc);
@@ -732,12 +733,12 @@ function buildPaced(){
   if(p.site==='RVA'){
     emitVent(tS2,false,null,true);
     const vaS2=vaForCoupling(p.s2);
-    if(vaS2!=null){
+    if(vaS2!=null && !noRetro){
       emitHis(tS2+50,1.6); emitAtrial(tS2+vaS2,'retro_rv',0.9);
       res.notes.push(`心室S2：VA = ${vaS2}ms（逆行伝導あり）`);
       lastEventV = tS2+vaS2;
-    }else{
-      res.notes.push('心室S2：室房ブロック（逆行不応期）');
+    }else if(vaS2==null || noRetro){
+      res.notes.push(noRetro ? '心室S2：室房伝導なし（逆行A出現せず）' : '心室S2：室房ブロック（逆行不応期）');
       lastEventV = tS2+300;
     }
   }else{
@@ -950,7 +951,8 @@ function buildVaLinking(sc){
   let lastV;
   for(let i=0;i<nPace;i++){
     const ts=tPaceStart+i*pcl;
-    emitStim(ts,'RVA'); emitVent(ts,false,null,true); emitHis(ts+50,1.6); emitAtrial(ts+tp.va, tp.retro, 0.9);
+    emitStim(ts,'RVA'); emitVent(ts,false,null,true); emitHis(ts+50,1.6);
+    if(!tp.noRetro) emitAtrial(ts+tp.va, tp.retro, 0.9);
     lastV=ts;
   }
 
@@ -1447,6 +1449,7 @@ function buildStraightPace(){
   }
   buildBaseline(sc, 0, driveStart-200);
   const preex=(isAVRT(sc)&&p.site!=='RVA');
+  const noRetroS1 = !!(tachyParams(sc)||{}).noRetro;
   let lastT=driveStart;
   // 房室結節：回復時間ベースの漸減伝導（速い心房バースト→Wenckebach→2:1→ブロック）
   const node=AVNODE, ATRIAL_ERP=190;
@@ -1466,8 +1469,8 @@ function buildStraightPace(){
         const rec=t-lastAretro;                   // 逆行路の回復時間
         if(rec>=RNODE.ERP){
           const VA=Math.round(RNODE.VAmin + RNODE.K/(1+(rec-RNODE.ERP)/RNODE.tau));
-          emitHis(t+50,1.6); emitAtrial(t+VA,'retro_rv',0.9);
-          lastAretro=t+VA; vaConducted++;
+          if(!noRetroS1){ emitHis(t+50,1.6); emitAtrial(t+VA,'retro_rv',0.9); lastAretro=t+VA; }
+          vaConducted++;
         } else { vaBlocked++; }                    // 逆行ブロック（VA Wenckebach/2:1）
       }else{
         const mode=p.site==='HRA'?'hra':p.site;
