@@ -793,7 +793,7 @@ function buildPaced(){
     else if(p.s2<280){ res.notes.push(`S2 ${p.s2}ms は心房ERP未満 → 心房捕捉不全。<b>連結期を 280ms 以上</b>に。`); }
     else { res.notes.push(`S2 ${p.s2}ms では回路の脆弱窓に入らず誘発されず（目安：280〜360ms）。`); }
   }
-  if(sc==='avnrt' && res.jump && p.site!=='RVA'){ induce='avnrt'; }
+  if((sc==='avnrt'||sc==='avnrt_noretro') && res.jump && p.site!=='RVA'){ induce=sc; }
   else if(isAVRT(sc) && p.site!=='RVA'){
     const avnConducts = (res.a2h2!=null);          // ②房室結節が順伝導したか
     const apBlockedAnt = (p.s2 < AP_ERP_ANT);      // ③副路が順行ブロック＝一方向性ブロック成立
@@ -816,11 +816,12 @@ function buildPaced(){
     res.notes.push('→ <b>頻拍進行中</b>。心室オーバードライブで鑑別が可能。');
     fillTachyAT(lastEventV+360, state.duration);
     state.tachyArmed=true;
-  }else if(induce==='avnrt'){
-    res.induced=true; res.mechanism='AVNRT（通常型 slow-fast）';
+  }else if(induce==='avnrt'||induce==='avnrt_noretro'){
+    res.induced=true; res.mechanism=induce==='avnrt_noretro'?'AVNRT（室房伝導なし）':'AVNRT（通常型 slow-fast）';
     res.notes.push('AHのjump後にエコー→AVNRT誘発。心房と心室がほぼ同時、室房間隔ごく短く中隔最早期（求心性）。');
+    if(induce==='avnrt_noretro') res.notes.push('室房伝導なし：心室ペーシング中に逆行Aは出現しない。');
     res.notes.push('→ <b>頻拍進行中</b>。バースト（部位RVA）で心室オーバードライブ／His不応期PVC等の鑑別が可能。');
-    fillTachyAVNRT(lastEventV+350, state.duration);
+    fillTachyAVNRTNoRetro(lastEventV+350, state.duration);
     state.tachyArmed=true;
   }else if(induce==='avrt'){
     const cfg=apConfig(sc);
