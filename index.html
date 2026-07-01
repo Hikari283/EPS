@@ -671,8 +671,8 @@ function buildBaseline(scenario, startT, endT){
 
 function buildPaced(){
   const p = state.pace, sc = state.scenario;
-  // 進行中頻拍シナリオはバースト同様の物理（頻拍を背景に流す）で扱う
-  if(getBaselineTachyCL(sc)) return buildPacedTachy();
+  // 誘発済み頻拍シナリオのみバースト同様の物理（頻拍を背景に流す）で扱う
+  if(getBaselineTachyCL(sc) && state.tachyArmed) return buildPacedTachy();
   const noRetro = !!(tachyParams(sc)||{}).noRetro;  // 室房伝導なしシナリオ
   const preexDrive = (isAVRT(sc) && p.site!=='RVA');
   const baseAH = ahForCoupling(p.s1cl, sc) ?? 95;
@@ -779,6 +779,12 @@ function buildPaced(){
   const AP_ERP_ANT = 310;   // 副伝導路(Kent束)の順行有効不応期：これ未満で順行ブロック
   const AVN_ERP    = 260;   // 房室結節ERP（ahForCoupling と一致）：これ未満は結節もブロック
   let induce=null;
+  // AT / AT noRetro：心房S2が回路の不応期を超えて再入できる窓（280〜360ms）で誘発
+  if((sc==='at'||sc==='at_noretro') && p.site!=='RVA' && res.a2h2!=null){
+    if(p.s2>=280 && p.s2<360){ induce=sc; }
+    else if(p.s2<280){ res.notes.push(`S2 ${p.s2}ms は心房ERP未満 → 心房捕捉不全。<b>連結期を 280ms 以上</b>に。`); }
+    else { res.notes.push(`S2 ${p.s2}ms では回路の脆弱窓に入らず誘発されず（目安：280〜360ms）。`); }
+  }
   if(sc==='avnrt' && res.jump && p.site!=='RVA'){ induce='avnrt'; }
   else if(isAVRT(sc) && p.site!=='RVA'){
     const avnConducts = (res.a2h2!=null);          // ②房室結節が順伝導したか
@@ -796,7 +802,13 @@ function buildPaced(){
     else { res.notes.push(`心室S2 ${p.s2}ms では逆行が副路に十分先行せず<b>ORT誘発されず</b>。<b>連結期を 330ms 未満</b>に。`); }
   }
 
-  if(induce==='avnrt'){
+  if(induce==='at'||induce==='at_noretro'){
+    res.induced=true; res.mechanism=tachyParams(sc).label;
+    res.notes.push(`S2 ${p.s2}ms が回路の脆弱窓に入り<b>リエントリー性AT誘発</b>。心房先行の長RP頻拍。`);
+    res.notes.push('→ <b>頻拍進行中</b>。心室オーバードライブで鑑別が可能。');
+    fillTachyAT(lastEventV+360, state.duration);
+    state.tachyArmed=true;
+  }else if(induce==='avnrt'){
     res.induced=true; res.mechanism='AVNRT（通常型 slow-fast）';
     res.notes.push('AHのjump後にエコー→AVNRT誘発。心房と心室がほぼ同時、室房間隔ごく短く中隔最早期（求心性）。');
     res.notes.push('→ <b>頻拍進行中</b>。バースト（部位RVA）で心室オーバードライブ／His不応期PVC等の鑑別が可能。');
