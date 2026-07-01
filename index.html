@@ -1203,7 +1203,7 @@ function buildVentricularEntrainment(sc){
   //     リエントリー回路は心室ペーシング中も継続（抑制されない）。
   //     停止後、逆行A（A1）の次に回路の自己A（A2）が来る＝V-A-A-V。
   //     リエントリー性ATのreturn cycle ≈ TCL（回路継続、overdrive抑制なし）。
-  const AT_RETURN_EXTRA = 20;                                   // return cycle ≈ TCL + 20ms（リエントリー回路継続）
+  const AT_RETURN_EXTRA = 100;                                  // return cycle ≈ TCL + 100ms → ΔAA = −100ms（基準 < −80ms 満たす）
   let atNext = (sc==='at') ? (lastV + tp.va + tcl + AT_RETURN_EXTRA) : null;
 
   const res={site:'RVA',induced:true,mechanism:tp.label,a2h2:null,jump:false,narrow:false,notes:[]};
@@ -1286,13 +1286,14 @@ function buildVentricularEntrainment(sc){
     const lastStvDelay = Math.min(15 + (beat - 1) * (tcl - pcl), 66);
     const A1time = lastV + lastStvDelay + tp.va;
     emitAtrial(A1time, tp.retro, 0.9);
-    const atA = A1time + tcl;                                        // AA = TCL = 360ms
+    const atA = A1time + tcl + AT_RETURN_EXTRA;                       // A1A2 = TCL + 100ms → ΔAA = −100ms
     emitTachyBeat('at', atA);
     fillTachyFrom('at', atA+tcl, state.duration);
     const tRetV=atA+92+45, ppi=tRetV-lastV;
     res.vaav={pattern:'V-A-A-V', ppi, tcl, diff:ppi-tcl, inCircuit:false};
     res.notes.push(`ペーシング中は心房も<b>逆行性に AA=PCL（${pcl}ms）で捕捉</b>（最終Vの逆行A＝VAまでがペーシング依存）。`);
-    res.notes.push(`停止後 <b>V-A-A-V</b>：最終Vの逆行A（PCL・concentric）→ リエントリー回路自己A（偏心性・CS近位最早期）→ 順行V。return cycle <b>A1→A2 ${tcl+AT_RETURN_EXTRA}ms ≈ TCL(${tcl})</b>（リエントリー回路継続・overdrive抑制なし）、以降は <b>TCL=${tcl}ms</b>。PPI−TCL ${ppi-tcl}ms（&gt;115ms＝心室は回路外＝<b>リエントリー性AT</b>）。`);
+    const dAA_AT = tcl - (tcl + AT_RETURN_EXTRA);
+    res.notes.push(`停止後 <b>V-A-A-V</b>：最終Vの逆行A（PCL・concentric）→ リエントリー回路自己A（偏心性・CS近位最早期）→ 順行V。A1A2 <b>${tcl+AT_RETURN_EXTRA}ms</b>、<b>ΔAA = TCL−A1A2 = ${dAA_AT}ms</b>（基準 &lt;−80ms → <b>AT</b>）。以降は <b>TCL=${tcl}ms</b>。PPI−TCL ${ppi-tcl}ms（&gt;115ms＝心室は回路外）。`);
   }
   state.result=res;
   return true;
