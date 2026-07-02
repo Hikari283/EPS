@@ -1640,7 +1640,10 @@ function buildVScan(){
   }
   const capt=captures();
   const couplings=[];
-  buildBaseline(sc, 0, state.duration);                  // 背景：洞調律を全期間
+  const noRetro = !!(tachyParams(sc)||{}).noRetro;
+  // AT・AVNRT系（誘発前）は洞調律ベース。V Scanは誘発しない（単発刺激スキャンのみ）。
+  const baseSc = (sc==='at'||sc==='at_noretro'||sc==='avnrt_noretro') ? 'sinus' : sc;
+  buildBaseline(baseSc, 0, state.duration);              // 背景：洞調律を全期間
   for(let k=0;k<nSteps;k++){
     const coupling = start - k*DEC; couplings.push(coupling);
     const segStart = LEAD + k*GAP;
@@ -1648,7 +1651,7 @@ function buildVScan(){
     if(stopAt!=null && tExtra > stopAt) break;           // 停止位置を越える刺激は打たない
     emitStim(tExtra, p.site);
     if(capt){
-      if(isRVA){ emitVent(tExtra,false,null,true); const va=vaForCoupling(coupling); if(va!=null){ emitHis(tExtra+50,1.6); emitAtrial(tExtra+va,'retro_rv',0.9); } }
+      if(isRVA){ emitVent(tExtra,false,null,true); const va=vaForCoupling(coupling); if(va!=null && !noRetro){ emitHis(tExtra+50,1.6); emitAtrial(tExtra+va,'retro_rv',0.9); } }
       else { const AH=ahForCoupling(coupling,sc); emitConductedFromPace(tExtra,mode,AH,45,preex); }
     }
   }
