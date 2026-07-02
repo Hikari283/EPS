@@ -774,6 +774,14 @@ function buildPaced(){
     else{ const tH=emitAtrial(tS3,mode,0.95); emitHis(tH+A3H3); emitVent(tH+A3H3+45,false); lastEventV=tH+A3H3+45; }
   }
 
+  // ---- 室房伝導なし + 心室ペーシング：VA解離（心房は自己調律で独立）----
+  // 逆行Aは出ないが心房が消えるわけではない。洞調律のA波がペーシングと無関係に等間隔で流れる。
+  if(p.site==='RVA' && noRetro){
+    const acl = state.sinusCL;
+    for(let ta=Math.ceil(driveStart/acl)*acl; ta<=lastEventV; ta+=acl) emitAtrial(ta,'hra',0.9);
+    res.notes.push('心室ペーシング中も心房は洞調律で独立（<b>VA解離</b>）＝室房伝導なし。A波はペーシングに依存せず等間隔で継続。');
+  }
+
   // ---- 誘発判定 → 頻拍 or 洞調律復帰 ----
   // リエントリー3条件（本 p89-90, Coumel 1975）：①回路 ②緩徐伝導(房室結節) ③一方向性ブロック。
   // ORT誘発（図2）：心房S2が副路の順行不応期(AP_ERP_ANT)以下 → 副路が順行ブロック（＝一方向性ブロック）
@@ -1176,11 +1184,12 @@ function buildVentricularEntrainment(sc){
     }
     lastV=t; beat++;
   }
-  // AT noRetro：心室ペーシング中もAT回路は独立してTCLで継続（A波のみ; VはRVAペース）
-  if(sc==='at_noretro'){
+  // 室房伝導なし：心室ペーシング中も心房は独立して継続（A波のみ; VはRVAペース）＝VA解離
+  if(tp.noRetro){
+    const aMode = sc==='at_noretro' ? 'at_reentry' : 'avnrt';
     const atPhase = tOn % tcl;
     const firstAT = tOn + (atPhase === 0 ? 0 : tcl - atPhase);
-    for(let tA=firstAT; tA<paceEnd; tA+=tcl) emitAtrial(tA,'at_reentry',0.9);
+    for(let tA=firstAT; tA<paceEnd; tA+=tcl) emitAtrial(tA,aMode,0.9);
   }
   // ---- 心房の加速（本 p165 図22/23）----
   // QRSが一定になる拍（onset≥1＝stable QRS）。AAがPCLに到達するのは：
@@ -1460,16 +1469,18 @@ function buildStraightPace(){
   // ペーシング前に洞調律を約5拍見せる（録画で前の波形が残るように）
   const driveStart=Math.round(5*state.sinusCL);
   state.pace.paceOnAt = driveStart;   // ライブ掃引はここから（手前リードインは録画用）
+  // AT・AVNRT系（誘発なし）は洞調律ベース
+  const baseSc = (sc==='at'||sc==='at_noretro'||sc==='avnrt_noretro') ? 'sinus' : sc;
   // 捕捉不全：自己調律は継続（全期間描画）、非捕捉の刺激スパイクのみ重畳
   if(!capt){
-    buildBaseline(sc, 0, state.duration);
+    buildBaseline(baseSc, 0, state.duration);
     for(let t=driveStart; t<paceEnd; t+=cl){ ev('STIM',t,'S',1.0); ev(p.site,t,'S',0.55); }
     state.result={site:p.site, induced:false, mechanism:'捕捉不全（loss of capture）',
       a2h2:null, jump:false, narrow:false, straight:true,
       notes:[`出力 ${state.pace.output}V < 閾値 ${CAPTURE_THRESH}V → 捕捉せず。自己調律は継続し、刺激スパイクのみ（脱分極なし）。`]};
     return true;
   }
-  buildBaseline(sc, 0, driveStart-200);
+  buildBaseline(baseSc, 0, driveStart-200);
   const preex=(isAVRT(sc)&&p.site!=='RVA');
   const noRetroS1 = !!(tachyParams(sc)||{}).noRetro;
   let lastT=driveStart;
@@ -1517,9 +1528,16 @@ function buildStraightPace(){
     }
     lastT=t;
   }
-  if(p.stopAt!=null) buildBaseline(sc, lastT+Math.round(cl*0.6), state.duration);
+  // 室房伝導なし + 心室バースト：VA解離（心房は洞調律で独立してマーチ）
+  if(capt && p.site==='RVA' && noRetroS1){
+    const acl=state.sinusCL;
+    for(let ta=Math.ceil(driveStart/acl)*acl; ta<=lastT; ta+=acl) emitAtrial(ta,'hra',0.9);
+  }
+  if(p.stopAt!=null) buildBaseline(baseSc, lastT+Math.round(cl*0.6), state.duration);
   let condNote=null;
-  if(capt && p.site!=='RVA' && (avBlocked>0||aBlocked>0)){
+  if(capt && p.site==='RVA' && noRetroS1){
+    condNote='心室ペーシング中も心房は洞調律で独立（<b>VA解離</b>）＝室房伝導なし。逆行Aは出現しない。';
+  } else if(capt && p.site!=='RVA' && (avBlocked>0||aBlocked>0)){
     condNote=`房室伝導 ${conducted}拍 / ブロック ${avBlocked}拍`
       + (avBlocked>0 ? `（速いレートで漸減伝導→${conducted>=avBlocked*1.5?'Wenckebach':'2:1ブロック'}）` : '')
       + (aBlocked>0 ? `。心房ERPで ${aBlocked}拍は心房も非捕捉。` : '。');
