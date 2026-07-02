@@ -480,9 +480,11 @@ function emitVent(tV, preex=false, rate=null, rvPaced=false, surfaceKind=null){
   if(tAmp>0.05){ ev('II', c+tOff,'T',1.0*tAmp); ev('V1', c+tOff,'T',0.7*tAmp); }
 }
 
+// 刺激スパイクは捕捉波形より PACE_LATENCY だけ手前に描画（スパイク→少し遅れて脱分極波形）。
+const PACE_LATENCY = 14; // 刺激→捕捉（局所脱分極）の潜時(ms)
 function emitStim(tS, site){
-  ev('STIM', tS, 'S', 1.0);
-  ev(site, tS, 'S', 0.55); // 刺激アーチファクトを刺激部位にも
+  ev('STIM', tS-PACE_LATENCY, 'S', 1.0);
+  ev(site, tS-PACE_LATENCY, 'S', 0.55); // 刺激アーチファクトを刺激部位にも
 }
 // 捕捉判定：出力が閾値以上なら捕捉（脱分極を起こす）。未満なら刺激スパイクのみ（loss of capture）
 const CAPTURE_THRESH = 1.5; // 捕捉閾値（V）
@@ -1403,7 +1405,7 @@ function buildStraightPace(){
       buildBaseline(sc, 0, state.duration);   // 頻拍を全期間埋める
       const pStart=200;
       for(let t=pStart; t<paceEnd; t+=cl){
-        ev('STIM',t,'S',1.0); ev(p.site,t,'S',0.55);
+        emitStim(t, p.site);
       }
       const why = !capt
         ? `出力 ${state.pace.output}V < 閾値 ${CAPTURE_THRESH}V → 捕捉せず（loss of capture）。頻拍は継続。`
@@ -1491,7 +1493,7 @@ function buildStraightPace(){
   // 捕捉不全：自己調律は継続（全期間描画）、非捕捉の刺激スパイクのみ重畳
   if(!capt){
     buildBaseline(baseSc, 0, state.duration);
-    for(let t=driveStart; t<paceEnd; t+=cl){ ev('STIM',t,'S',1.0); ev(p.site,t,'S',0.55); }
+    for(let t=driveStart; t<paceEnd; t+=cl){ emitStim(t, p.site); }
     state.result={site:p.site, induced:false, mechanism:'捕捉不全（loss of capture）',
       a2h2:null, jump:false, narrow:false, straight:true,
       notes:[`出力 ${state.pace.output}V < 閾値 ${CAPTURE_THRESH}V → 捕捉せず。自己調律は継続し、刺激スパイクのみ（脱分極なし）。`]};
@@ -1592,9 +1594,9 @@ function buildPacedTachy(){
     buildBaseline(sc, 0, state.duration);
     const driveStart=200;
     let lastA=driveStart;
-    for(let i=0;i<p.n1;i++){ const tS=driveStart+i*p.s1cl; lastA=tS; ev('STIM',tS,'S',1.0); ev(p.site,tS,'S',0.55); }
-    const tS2=lastA+p.s2; ev('STIM',tS2,'S',1.0); ev(p.site,tS2,'S',0.55);
-    if(p.s3on && !isRVA){ const tS3=tS2+p.s3; ev('STIM',tS3,'S',1.0); ev(p.site,tS3,'S',0.55); }
+    for(let i=0;i<p.n1;i++){ const tS=driveStart+i*p.s1cl; lastA=tS; emitStim(tS, p.site); }
+    const tS2=lastA+p.s2; emitStim(tS2, p.site);
+    if(p.s3on && !isRVA){ const tS3=tS2+p.s3; emitStim(tS3, p.site); }
     res.notes.push(!capt
       ? `出力 ${state.pace.output}V < 閾値 ${CAPTURE_THRESH}V → 捕捉せず（loss of capture）。頻拍は継続。`
       : `S1 ${p.s1cl}ms（${pBpm} bpm）< 頻拍レート ${tBpm} bpm（TCL ${tachyCL}ms）→ 駆動が頻拍を上回れず非捕捉。頻拍は継続。`);
@@ -1698,9 +1700,9 @@ function buildVScanTachy(){
     const segStart=LEAD+k*STEP_GAP;
     const coupling=start-k*DEC; couplings.push(coupling);
     const tS1=segStart+600;          // S1 単発スキャン刺激
-    ev('STIM',tS1,'S',1.0); ev(p.site,tS1,'S',0.55);
+    emitStim(tS1, p.site);
     const tS2=tS1+coupling;          // S2 早期刺激
-    ev('STIM',tS2,'S',1.0); ev(p.site,tS2,'S',0.55);
+    emitStim(tS2, p.site);
   }
   state.result={ site:p.site, induced:true, mechanism:tLabel,
     a2h2:null, jump:false, narrow:false,
