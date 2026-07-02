@@ -672,27 +672,24 @@ function buildBaseline(scenario, startT, endT){
 function buildPaced(){
   const p = state.pace, sc = state.scenario;
   // 誘発済み頻拍シナリオのみバースト同様の物理（頻拍を背景に流す）で扱う
-  // at_noretro は除外：AT回路が独立しているのでS1S2は通常HRAペーシングとして処理
-  if(getBaselineTachyCL(sc) && state.tachyArmed && sc!=='at_noretro') return buildPacedTachy();
+  if(getBaselineTachyCL(sc) && state.tachyArmed) return buildPacedTachy();
   const noRetro = !!(tachyParams(sc)||{}).noRetro;  // 室房伝導なしシナリオ
   const preexDrive = (isAVRT(sc) && p.site!=='RVA');
   const baseAH = ahForCoupling(p.s1cl, sc) ?? 95;
+  // AT・AVNRT系は誘発前は洞調律ベース（誘発失敗時も洞調律へ戻す）
+  const baseSc = (sc==='at'||sc==='at_noretro'||sc==='avnrt_noretro') ? 'sinus' : sc;
 
   // ---- センス（同期）：自己心拍を1拍検出してから駆動列を開始 ----
   // sense=none → 即時開始。sense指定 → 自己周期の格子上の1拍をセンスし、その拍からS1で駆動開始。
-  // at_noretro 誘発中のS1S2：AT回路をバックグラウンドに流してからS1S2を重畳
-  const atNoRetroOngoing = (sc==='at_noretro' && state.tachyArmed);
   let driveStart;
   if(p.sense!=='none'){
     // センスあり：自己心拍を1拍検出してから駆動列
     const cl = (sc==='aflutter') ? 240 : state.sinusCL;
     const senseT = Math.ceil(1400/cl) * cl;
-    if(atNoRetroOngoing) renderTachy(sc, 0, senseT + 1);
-    else buildBaseline(sc, 0, senseT + 1);
+    buildBaseline(baseSc, 0, senseT + 1);
     driveStart = senseT + p.s1cl;
   }else{
     // センスなし：即時開始（洞拍を挟まない）
-    if(atNoRetroOngoing) renderTachy(sc, 0, 200);
     driveStart = 200;
   }
 
@@ -724,7 +721,7 @@ function buildPaced(){
     const tS2nc = lastA + p.s2;
     emitStim(tS2nc, p.site);
     if(p.s3on && p.site!=='RVA') emitStim(tS2nc + p.s3, p.site);
-    buildBaseline(sc, 0, state.duration);   // 自己調律を全期間に描画（His等が平坦にならない）
+    buildBaseline(baseSc, 0, state.duration);   // 自己調律を全期間に描画（His等が平坦にならない）
     res.notes.push(`出力 ${state.pace.output}V < 閾値 ${CAPTURE_THRESH}V → 捕捉せず（loss of capture）。自己調律は継続し脱分極なし。`);
     res.mechanism='捕捉不全（loss of capture）';
     state.result=res;
@@ -785,7 +782,7 @@ function buildPaced(){
   const AVN_ERP    = 260;   // 房室結節ERP（ahForCoupling と一致）：これ未満は結節もブロック
   let induce=null;
   // AT / AT noRetro：心房S2が回路の不応期を超えて再入できる窓（280〜360ms）で誘発
-  if(sc==='at' && p.site!=='RVA' && res.a2h2!=null){
+  if((sc==='at'||sc==='at_noretro') && p.site!=='RVA' && res.a2h2!=null){
     if(p.s2>=280 && p.s2<360){ induce=sc; }
     else if(p.s2<280){ res.notes.push(`S2 ${p.s2}ms は心房ERP未満 → 心房捕捉不全。<b>連結期を 280ms 以上</b>に。`); }
     else { res.notes.push(`S2 ${p.s2}ms では回路の脆弱窓に入らず誘発されず（目安：280〜360ms）。`); }
@@ -830,14 +827,8 @@ function buildPaced(){
     state.tachyArmed=true;
   }else{
     res.mechanism = null;
-    if(atNoRetroOngoing){
-      // AT回路は継続（誘発状態を保持）、S1S2後もAT背景を表示
-      renderTachy(sc, lastEventV + state.sinusCL, state.duration);
-      res.notes.push('AT（室房伝導なし）継続中。HRA S1S2は正常AVN伝導。AT回路はS1S2と独立。');
-    } else {
-      state.tachyArmed=false;
-      buildBaseline(sc, lastEventV + state.sinusCL, state.duration);
-    }
+    state.tachyArmed=false;
+    buildBaseline(baseSc, lastEventV + state.sinusCL, state.duration);
   }
   state.result = res;
 }
@@ -1383,41 +1374,6 @@ function buildStraightPace(){
       mechanism: info.ap?'副路（extranodal）パターン':'結節性（nodal）パターン',
       a2h2:null, jump:false, narrow:false, notes:info.notes,
       paraHis:{ap:info.ap, saCap:info.saCap, saNon:info.saNon, dSA:info.dSA, output:p.output, hisCapture:info.hisCapture, myoCapture:info.myoCapture} };
-    return true;
-  }
-
-  // ════ HRA バーストによる AT（室房伝導なし）誘発 ════
-  // HRAから450ms以下のバーストで誘発（S1S2では誘発されない）。未誘発時のみ有効。
-  if(sc==='at_noretro' && !state.tachyArmed && p.site!=='RVA' && cl<=450 && capt){
-    const tcl=360;
-    const driveStart=Math.round(5*state.sinusCL);
-    state.pace.paceOnAt = driveStart;
-    buildBaseline('sinus', 0, driveStart-200);
-    let lastHis=driveStart-state.sinusCL+120, prevAH=120;
-    const ADAPT=0.32;
-    for(let t=driveStart; t<paceEnd; t+=cl){
-      emitStim(t, p.site);
-      const tHisA=emitAtrial(t,'hra');
-      const rec=tHisA-lastHis;
-      const node=AVNODE;
-      if(rec>=node.ERP){
-        const rawAH=Math.round(node.AHmin+node.K/(1+(rec-node.ERP)/node.tau));
-        const AH=Math.round(prevAH*(1-ADAPT)+rawAH*ADAPT);
-        prevAH=AH; emitHis(tHisA+AH); emitVent(tHisA+AH+45,false);
-        lastHis=tHisA+AH;
-      } else { prevAH=Math.max(120,Math.round(prevAH*0.75)); }
-    }
-    if(p.stopAt!=null){
-      state.tachyArmed=true;
-      const recov=paceEnd+Math.round(cl*0.65);
-      fillTachyAT(recov, state.duration);
-      state.result={site:p.site,induced:true,mechanism:'AT（室房伝導なし）',a2h2:null,jump:false,narrow:false,straight:true,
-        notes:[`HRAバースト ${cl}ms（≤450ms）でAT（室房伝導なし）を誘発。`,
-               '→ <b>頻拍進行中</b>。心室オーバードライブ（RVA）で鑑別が可能。']};
-    } else {
-      state.result={site:p.site,induced:false,mechanism:'連続ペーシング（バースト）',a2h2:null,jump:false,narrow:false,straight:true,
-        notes:[`HRAバースト ${cl}ms（≤450ms）。停止ボタンでAT誘発。`]};
-    }
     return true;
   }
 
