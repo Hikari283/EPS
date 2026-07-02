@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#0b1220">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>せどり帳 — 利益計算・価格差チェック・損益管理</title>
+<style>
+  :root{
+    --bg:#0b1220; --panel:#121a2b; --panel2:#0e1626; --line:#22304a;
+    --txt:#eaf0fb; --muted:#93a4c3; --accent:#5fb3f6; --accent2:#34d399;
+    --warm:#f6b26b; --danger:#f87171; --gold:#ffd479;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP",system-ui,sans-serif;
+    overscroll-behavior:none;font-size:14px}
+  body{display:flex;flex-direction:column;min-height:100dvh}
+  header{padding:14px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#101a2e,#0b1220);position:sticky;top:0;z-index:10}
+  header .logo{font-weight:800;font-size:18px;letter-spacing:.02em}
+  header .logo span{color:var(--accent)}
+  header .sp{flex:1}
+  main{flex:1;display:flex;flex-direction:column;padding:14px 14px 90px;gap:14px;max-width:680px;width:100%;margin:0 auto}
+  .hidden{display:none!important}
+
+  .tabs{display:flex;gap:8px;position:sticky;top:57px;z-index:9;background:var(--bg);padding:6px 0}
+  .tabs button{flex:1;padding:11px 4px;border-radius:12px;border:1px solid var(--line);background:var(--panel2);
+    color:var(--muted);font-size:13px;font-weight:700}
+  .tabs button.on{background:#163a52;border-color:#1d4d6e;color:#bfe5ff}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px}
+  .card h2{font-size:13px;margin:0 0 12px;color:var(--accent);text-transform:uppercase;letter-spacing:.04em}
+  label{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px}
+  label:first-of-type{margin-top:0}
+  input[type=text],input[type=number],select{width:100%;background:#0a0f18;border:1px solid var(--line);color:var(--txt);
+    border-radius:8px;padding:10px 10px;font-size:15px}
+  input:focus,select:focus{outline:1px solid var(--accent)}
+  .row{display:flex;gap:8px}
+  .row>div{flex:1}
+  button.btn{width:100%;background:var(--accent);color:#04222e;border:none;border-radius:10px;padding:12px;
+    font-size:14px;font-weight:800;margin-top:12px;cursor:pointer}
+  button.btn:active{filter:brightness(.95)}
+  button.btn.ghost{background:#1f2937;color:var(--txt);border:1px solid var(--line)}
+  button.btn.danger{background:#3a1620;color:#fca5a5;border:1px solid #5c2230}
+
+  .result{margin-top:14px;padding:14px;border-radius:12px;background:var(--panel2);border:1px solid var(--line)}
+  .result .big{font-size:26px;font-weight:800}
+  .result .big.pos{color:var(--accent2)}
+  .result .big.neg{color:var(--danger)}
+  .result .sub{color:var(--muted);font-size:12px;margin-top:2px}
+  .breakdown{margin-top:10px;display:flex;flex-direction:column;gap:5px;font-size:12.5px}
+  .breakdown div{display:flex;justify-content:space-between;color:var(--muted)}
+  .breakdown div b{color:var(--txt);font-weight:600}
+
+  /* price checker */
+  .cand{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:10px}
+  .cand .hd{display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .cand .hd input[type=text]{font-weight:700;font-size:14px}
+  .cand .rm{background:none;border:none;color:var(--danger);font-size:18px;padding:4px 8px;flex:none}
+  .cand .rowv{display:flex;justify-content:space-between;font-size:12.5px;color:var(--muted);margin-top:8px}
+  .cand .rowv b{color:var(--txt)}
+  .cand.best{border-color:var(--accent2);box-shadow:0 0 0 1px var(--accent2) inset}
+  .cand .rank{font-size:11px;color:var(--gold);font-weight:800}
+
+  /* ledger */
+  .ledgeritem{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:10px}
+  .ledgeritem .hd{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+  .ledgeritem .name{font-weight:700;font-size:14.5px}
+  .ledgeritem .date{color:var(--muted);font-size:11px;margin-top:2px}
+  .ledgeritem .profit{font-weight:800;font-size:15px;flex:none;text-align:right}
+  .ledgeritem .profit.pos{color:var(--accent2)}
+  .ledgeritem .profit.neg{color:var(--danger)}
+  .ledgeritem .detail{margin-top:8px;font-size:12px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap}
+  .ledgeritem .del{background:none;border:none;color:var(--danger);font-size:12px;margin-top:8px;padding:0}
+
+  .stats{display:flex;gap:8px}
+  .stat{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 8px;text-align:center}
+  .stat b{display:block;font-size:19px;color:var(--accent2)}
+  .stat b.neg{color:var(--danger)}
+  .stat small{color:var(--muted);font-size:10.5px}
+
+  .empty{color:var(--muted);font-size:13px;text-align:center;padding:24px 8px}
+  .footnote{color:var(--muted);font-size:11px;text-align:center;line-height:1.6;margin-top:4px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">せどり<span>帳</span></div>
+  <div class="sp"></div>
+  <div class="footnote" style="margin:0">メルカリ手数料10%想定</div>
+</header>
+
+<main>
+  <div class="tabs">
+    <button data-tab="calc" class="on">利益計算</button>
+    <button data-tab="check">価格差</button>
+    <button data-tab="ledger">台帳</button>
+  </div>
+
+  <!-- 利益計算機 -->
+  <section id="tab-calc">
+    <div class="card">
+      <h2>利益計算機</h2>
+      <label>商品名（任意）</label>
+      <input type="text" id="c_name" placeholder="例）〇〇 フィギュア">
+      <div class="row">
+        <div>
+          <label>仕入れ値（円）</label>
+          <input type="number" id="c_cost" inputmode="decimal" placeholder="0">
+        </div>
+        <div>
+          <label>販売価格（円）</label>
+          <input type="number" id="c_price" inputmode="decimal" placeholder="0">
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>販売手数料率（%）</label>
+          <input type="number" id="c_feepct" inputmode="decimal" value="10">
+        </div>
+        <div>
+          <label>送料（円）</label>
+          <input type="number" id="c_ship" inputmode="decimal" value="0">
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>その他経費（円）</label>
+          <input type="number" id="c_other" inputmode="decimal" value="0">
+        </div>
+        <div>
+          <label>数量</label>
+          <input type="number" id="c_qty" inputmode="numeric" value="1" min="1">
+        </div>
+      </div>
+      <button class="btn" id="c_calc">計算する</button>
+
+      <div class="result hidden" id="c_result">
+        <div class="big" id="c_profit">¥0</div>
+        <div class="sub" id="c_margin">利益率 0%</div>
+        <div class="breakdown">
+          <div><span>販売価格</span><b id="c_b_price">¥0</b></div>
+          <div><span>手数料</span><b id="c_b_fee">−¥0</b></div>
+          <div><span>送料</span><b id="c_b_ship">−¥0</b></div>
+          <div><span>その他経費</span><b id="c_b_other">−¥0</b></div>
+          <div><span>仕入れ値</span><b id="c_b_cost">−¥0</b></div>
+          <div><span>数量</span><b id="c_b_qty">×1</b></div>
+        </div>
+      </div>
+      <button class="btn ghost hidden" id="c_add_ledger">この結果を台帳に記録</button>
+    </div>
+  </section>
+
+  <!-- 価格差チェッカー -->
+  <section id="tab-check" class="hidden">
+    <div class="card">
+      <h2>価格差チェッカー</h2>
+      <label>販売予定価格（円）</label>
+      <input type="number" id="chk_price" inputmode="decimal" placeholder="この価格で売る予定">
+      <label>販売手数料率（%）</label>
+      <input type="number" id="chk_feepct" inputmode="decimal" value="10">
+      <label>送料（円・共通）</label>
+      <input type="number" id="chk_ship" inputmode="decimal" value="0">
+      <button class="btn ghost" id="chk_addcand">仕入れ候補を追加</button>
+      <div id="chk_list"></div>
+      <div class="footnote">複数の仕入れ先候補を入力すると、最も利益が大きい候補が自動でハイライトされます。</div>
+    </div>
+  </section>
+
+  <!-- 台帳 -->
+  <section id="tab-ledger" class="hidden">
+    <div class="card">
+      <h2>売上・損益サマリー</h2>
+      <div class="stats">
+        <div class="stat"><b id="l_total_profit">¥0</b><small>累計利益</small></div>
+        <div class="stat"><b id="l_total_sales">¥0</b><small>累計売上</small></div>
+        <div class="stat"><b id="l_count">0</b><small>件数</small></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>記録を追加</h2>
+      <label>商品名</label>
+      <input type="text" id="l_name" placeholder="例）〇〇 フィギュア">
+      <div class="row">
+        <div>
+          <label>仕入れ値（円）</label>
+          <input type="number" id="l_cost" inputmode="decimal" placeholder="0">
+        </div>
+        <div>
+          <label>販売価格（円）</label>
+          <input type="number" id="l_price" inputmode="decimal" placeholder="0">
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>手数料率（%）</label>
+          <input type="number" id="l_feepct" inputmode="decimal" value="10">
+        </div>
+        <div>
+          <label>送料＋経費（円）</label>
+          <input type="number" id="l_ship" inputmode="decimal" value="0">
+        </div>
+      </div>
+      <label>販売日</label>
+      <input type="text" id="l_date" placeholder="YYYY-MM-DD">
+      <button class="btn" id="l_add">台帳に記録する</button>
+    </div>
+    <div id="l_list"></div>
+    <button class="btn danger hidden" id="l_clear">台帳を全削除</button>
+  </section>
+</main>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- utils ----------
+  function yen(n){ n = Math.round(n); return (n<0?'−':'') + '¥' + Math.abs(n).toLocaleString('ja-JP'); }
+  function num(el){ var v = parseFloat(el.value); return isNaN(v) ? 0 : v; }
+  function todayStr(){
+    var d = new Date();
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
+  function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+
+  function computeProfit(price, cost, feePct, ship, other, qty){
+    qty = qty || 1;
+    var fee = price * (feePct/100);
+    var revenuePerUnit = price - fee - ship - other;
+    var profitPerUnit = revenuePerUnit - cost;
+    return {
+      fee: fee, profitPerUnit: profitPerUnit, totalProfit: profitPerUnit*qty,
+      margin: price>0 ? (profitPerUnit/price*100) : 0
+    };
+  }
+
+  // ---------- tabs ----------
+  var tabs = document.querySelectorAll('.tabs button');
+  tabs.forEach(function(b){
+    b.addEventListener('click', function(){
+      tabs.forEach(function(x){ x.classList.remove('on'); });
+      b.classList.add('on');
+      ['calc','check','ledger'].forEach(function(t){
+        document.getElementById('tab-'+t).classList.toggle('hidden', t !== b.dataset.tab);
+      });
+      if(b.dataset.tab === 'ledger') renderLedger();
+    });
+  });
+
+  // ---------- 利益計算機 ----------
+  var lastCalc = null;
+  document.getElementById('c_calc').addEventListener('click', function(){
+    var name = document.getElementById('c_name').value.trim();
+    var cost = num(document.getElementById('c_cost'));
+    var price = num(document.getElementById('c_price'));
+    var feePct = num(document.getElementById('c_feepct'));
+    var ship = num(document.getElementById('c_ship'));
+    var other = num(document.getElementById('c_other'));
+    var qty = Math.max(1, num(document.getElementById('c_qty')) || 1);
+
+    var r = computeProfit(price, cost, feePct, ship, other, qty);
+    lastCalc = { name: name, cost: cost, price: price, feePct: feePct, ship: ship+other, qty: qty };
+
+    var box = document.getElementById('c_result');
+    box.classList.remove('hidden');
+    var profitEl = document.getElementById('c_profit');
+    profitEl.textContent = yen(r.totalProfit);
+    profitEl.className = 'big ' + (r.totalProfit >= 0 ? 'pos' : 'neg');
+    document.getElementById('c_margin').textContent = '利益率 ' + r.margin.toFixed(1) + '%（1点あたり ' + yen(r.profitPerUnit) + '）';
+
+    document.getElementById('c_b_price').textContent = yen(price);
+    document.getElementById('c_b_fee').textContent = '−' + yen(r.fee);
+    document.getElementById('c_b_ship').textContent = '−' + yen(ship);
+    document.getElementById('c_b_other').textContent = '−' + yen(other);
+    document.getElementById('c_b_cost').textContent = '−' + yen(cost);
+    document.getElementById('c_b_qty').textContent = '×' + qty;
+
+    document.getElementById('c_add_ledger').classList.remove('hidden');
+  });
+
+  document.getElementById('c_add_ledger').addEventListener('click', function(){
+    if(!lastCalc) return;
+    var entries = loadLedger();
+    entries.push({
+      id: uid(), name: lastCalc.name || '(名称未設定)', cost: lastCalc.cost, price: lastCalc.price,
+      feePct: lastCalc.feePct, ship: lastCalc.ship, qty: lastCalc.qty, date: todayStr()
+    });
+    saveLedger(entries);
+    tabs.forEach(function(x){ x.classList.remove('on'); });
+    document.querySelector('.tabs button[data-tab="ledger"]').classList.add('on');
+    ['calc','check','ledger'].forEach(function(t){
+      document.getElementById('tab-'+t).classList.toggle('hidden', t !== 'ledger');
+    });
+    renderLedger();
+  });
+
+  // ---------- 価格差チェッカー ----------
+  var candidates = [];
+  function chkInputs(){
+    return {
+      price: num(document.getElementById('chk_price')),
+      feePct: num(document.getElementById('chk_feepct')),
+      ship: num(document.getElementById('chk_ship'))
+    };
+  }
+  function renderCandidates(){
+    var list = document.getElementById('chk_list');
+    list.innerHTML = '';
+    var inp = chkInputs();
+    if(candidates.length === 0){
+      list.innerHTML = '<div class="empty">仕入れ候補を追加してください</div>';
+      return;
+    }
+    var results = candidates.map(function(c){
+      var r = computeProfit(inp.price, c.cost, inp.feePct, inp.ship, 0, 1);
+      return { c: c, r: r };
+    });
+    var bestId = null, bestProfit = -Infinity;
+    results.forEach(function(x){
+      if(x.r.profitPerUnit > bestProfit){ bestProfit = x.r.profitPerUnit; bestId = x.c.id; }
+    });
+    results.forEach(function(x){
+      var div = document.createElement('div');
+      div.className = 'cand' + (x.c.id === bestId && inp.price > 0 ? ' best' : '');
+      div.innerHTML =
+        '<div class="hd">' +
+          (x.c.id === bestId && inp.price > 0 ? '<span class="rank">★おすすめ</span>' : '<span></span>') +
+          '<button class="rm" data-id="'+x.c.id+'">×</button>' +
+        '</div>' +
+        '<label>仕入れ先名</label><input type="text" class="cand_name" data-id="'+x.c.id+'" value="'+escapeHtml(x.c.label)+'" placeholder="例）店舗A">' +
+        '<label>仕入れ値（円）</label><input type="number" class="cand_cost" data-id="'+x.c.id+'" value="'+x.c.cost+'" inputmode="decimal">' +
+        '<div class="rowv"><span>利益</span><b style="color:'+(x.r.profitPerUnit>=0?'var(--accent2)':'var(--danger)')+'">'+yen(x.r.profitPerUnit)+'</b></div>' +
+        '<div class="rowv"><span>利益率</span><b>'+x.r.margin.toFixed(1)+'%</b></div>';
+      list.appendChild(div);
+    });
+    list.querySelectorAll('.rm').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        candidates = candidates.filter(function(c){ return c.id !== btn.dataset.id; });
+        renderCandidates();
+      });
+    });
+    list.querySelectorAll('.cand_name').forEach(function(el){
+      el.addEventListener('input', function(){
+        var c = candidates.find(function(x){ return x.id === el.dataset.id; });
+        if(c) c.label = el.value;
+      });
+    });
+    list.querySelectorAll('.cand_cost').forEach(function(el){
+      el.addEventListener('input', function(){
+        var c = candidates.find(function(x){ return x.id === el.dataset.id; });
+        if(c){ c.cost = num(el); renderCandidates(); }
+      });
+    });
+  }
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, function(ch){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];
+    });
+  }
+  document.getElementById('chk_addcand').addEventListener('click', function(){
+    candidates.push({ id: uid(), label: '仕入れ先'+(candidates.length+1), cost: 0 });
+    renderCandidates();
+  });
+  ['chk_price','chk_feepct','chk_ship'].forEach(function(id){
+    document.getElementById(id).addEventListener('input', renderCandidates);
+  });
+  renderCandidates();
+
+  // ---------- 台帳 ----------
+  function loadLedger(){ try{ return JSON.parse(localStorage.getItem('sedori_ledger')||'[]'); }catch(e){ return []; } }
+  function saveLedger(l){ localStorage.setItem('sedori_ledger', JSON.stringify(l)); }
+
+  document.getElementById('l_date').value = todayStr();
+
+  document.getElementById('l_add').addEventListener('click', function(){
+    var name = document.getElementById('l_name').value.trim();
+    var cost = num(document.getElementById('l_cost'));
+    var price = num(document.getElementById('l_price'));
+    var feePct = num(document.getElementById('l_feepct'));
+    var ship = num(document.getElementById('l_ship'));
+    var date = document.getElementById('l_date').value.trim() || todayStr();
+    if(!name){ alert('商品名を入力してください'); return; }
+
+    var entries = loadLedger();
+    entries.push({ id: uid(), name: name, cost: cost, price: price, feePct: feePct, ship: ship, qty: 1, date: date });
+    saveLedger(entries);
+
+    document.getElementById('l_name').value = '';
+    document.getElementById('l_cost').value = '';
+    document.getElementById('l_price').value = '';
+    document.getElementById('l_ship').value = '0';
+    document.getElementById('l_date').value = todayStr();
+
+    renderLedger();
+  });
+
+  document.getElementById('l_clear').addEventListener('click', function(){
+    if(confirm('台帳の記録をすべて削除します。よろしいですか？')){
+      saveLedger([]);
+      renderLedger();
+    }
+  });
+
+  function renderLedger(){
+    var entries = loadLedger().slice().sort(function(a,b){ return (b.date||'').localeCompare(a.date||'') || b.id.localeCompare(a.id); });
+    var list = document.getElementById('l_list');
+    var clearBtn = document.getElementById('l_clear');
+    list.innerHTML = '';
+
+    var totalProfit = 0, totalSales = 0;
+    entries.forEach(function(e){
+      var r = computeProfit(e.price, e.cost, e.feePct, e.ship, 0, e.qty||1);
+      totalProfit += r.totalProfit;
+      totalSales += e.price * (e.qty||1);
+    });
+
+    var profitEl = document.getElementById('l_total_profit');
+    profitEl.textContent = yen(totalProfit);
+    profitEl.className = totalProfit >= 0 ? '' : 'neg';
+    document.getElementById('l_total_sales').textContent = yen(totalSales);
+    document.getElementById('l_count').textContent = entries.length;
+
+    if(entries.length === 0){
+      list.innerHTML = '<div class="empty">まだ記録がありません</div>';
+      clearBtn.classList.add('hidden');
+      return;
+    }
+    clearBtn.classList.remove('hidden');
+
+    entries.forEach(function(e){
+      var r = computeProfit(e.price, e.cost, e.feePct, e.ship, 0, e.qty||1);
+      var div = document.createElement('div');
+      div.className = 'ledgeritem';
+      div.innerHTML =
+        '<div class="hd">' +
+          '<div><div class="name">'+escapeHtml(e.name)+'</div><div class="date">'+escapeHtml(e.date||'')+'</div></div>' +
+          '<div class="profit '+(r.totalProfit>=0?'pos':'neg')+'">'+yen(r.totalProfit)+'</div>' +
+        '</div>' +
+        '<div class="detail">' +
+          '<span>仕入 '+yen(e.cost)+'</span>' +
+          '<span>販売 '+yen(e.price)+'</span>' +
+          '<span>手数料 '+(e.feePct||0)+'%</span>' +
+          '<span>利益率 '+r.margin.toFixed(1)+'%</span>' +
+        '</div>' +
+        '<button class="del" data-id="'+e.id+'">削除</button>';
+      list.appendChild(div);
+    });
+    list.querySelectorAll('.del').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var entries2 = loadLedger().filter(function(e){ return e.id !== btn.dataset.id; });
+        saveLedger(entries2);
+        renderLedger();
+      });
+    });
+  }
+
+  renderLedger();
+})();
+</script>
+</body>
+</html>
