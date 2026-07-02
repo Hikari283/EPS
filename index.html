@@ -1423,7 +1423,15 @@ function buildStraightPace(){
     const tPaceOn = (p.sense==='none') ? 150 : tachyCL*4;
     renderTachy(sc, 0, tPaceOn);
 
-    let lastT=tPaceOn;
+    // 心房オーバードライブの乗っ取り：頻拍側の心房興奮順序から刺激部位の順序へ数拍で移行。
+    // AHも頻拍レート相当→ペーシングレート相当へwarmup（QRS位置が徐々に変化）。
+    const modeFrom = (sc==='at'||sc==='at_noretro') ? 'at_reentry'
+                   : (sc==='avnrt'||sc==='avnrt_noretro') ? 'avnrt'
+                   : (sc==='atypavnrt') ? 'atyp' : 'at_reentry';
+    const TAKEOVER = 5;                                   // 乗っ取り完了までの拍数
+    const ahFrom = ahForCoupling(tachyCL, sc) ?? 90;     // 頻拍レート相当のAH
+    const ahTo   = ahForCoupling(cl, sc) ?? 90;          // ペーシングレート相当のAH（速い＝延長）
+    let lastT=tPaceOn, beat=0;
     for(let t=tPaceOn; t<paceEnd; t+=cl){
       emitStim(t, p.site);
       if(p.site==='RVA'){
@@ -1431,10 +1439,11 @@ function buildStraightPace(){
         const va=vaForCoupling(cl); if(va!=null){ emitHis(t+50,1.6); emitAtrial(t+va,'retro_rv',0.9); }
       } else {
         const mode=p.site==='HRA'?'hra':p.site;
-        const AH=(ahForCoupling(cl,sc)??90);
-        emitConductedFromPace(t, mode, AH, 45, false);
+        const frac=Math.min(1, beat/TAKEOVER);           // 0→1（心房興奮順序の移行）
+        const AH=Math.round(ahFrom + (ahTo-ahFrom)*frac);// AHのwarmup
+        emitConductedFusion(t, modeFrom, mode, frac, AH, 45, false);
       }
-      lastT=t;
+      lastT=t; beat++;
     }
 
     // 停止後の波形
@@ -1459,8 +1468,9 @@ function buildStraightPace(){
       a2h2:null, jump:false, narrow:false, straight:true,
       notes:[
         `S1 ${cl}ms（${pBpm} bpm）で${tLabel}（TCL ${tachyCL}ms / ${tBpm} bpm）をオーバードライブ。`,
+        p.site!=='RVA' ? '心房興奮順序が頻拍パターンから刺激部位パターンへ徐々に移行（心房fusion→<b>完全捕捉＝乗っ取り</b>）。AHもwarmupで漸増。' : null,
         postNote
-      ]
+      ].filter(Boolean)
     };
     return true;
   }
@@ -1788,6 +1798,29 @@ function buildVScanResetArmed(){
 // ペーシング由来の順行拍（部位別モード）
 function emitConductedFromPace(tS, mode, AH, HV, preex){
   const tHisA = emitAtrial(tS, mode);
+  if(AH==null) return;
+  const tH=tHisA+AH; emitHis(tH); emitVent(tH+HV, preex);
+}
+
+// 心房興奮順序の融合（オーバードライブの乗っ取り）：
+// frac=0で頻拍側の興奮順序、frac=1で刺激部位の興奮順序へ線形に移行（心房fusion→完全捕捉）。
+function emitAtrialFusion(t, modeFrom, modeTo, frac, scale=1){
+  frac=Math.max(0,Math.min(1,frac));
+  const a=atrialOffsets(modeFrom), b=atrialOffsets(modeTo);
+  const L=(x,y)=>x+(y-x)*frac;
+  ev('HRA', t+L(a.HRA,b.HRA), 'A', scale);
+  const his=L(a.His,b.His);
+  ev('HISd',t+his,   'A', 0.85*scale);
+  ev('HISm',t+his+1, 'A', 0.75*scale);
+  ev('HISp',t+his+2, 'A', 0.65*scale);
+  for(let i=0;i<CSIDS.length;i++) ev(CSIDS[i], t+L(a.cs[i],b.cs[i]), 'A', scale);
+  const P=L(a.P,b.P);
+  ev('I', t+P,'P',0.7); ev('II', t+P,'P',1.0); ev('V1', t+P,'P',0.6);
+  return t+his;
+}
+// オーバードライブ乗っ取り拍：心房fusion＋房室伝導（QRSは伝導なので narrow、AHのwarmupで位置が漸増）
+function emitConductedFusion(tS, modeFrom, modeTo, frac, AH, HV, preex){
+  const tHisA = emitAtrialFusion(tS, modeFrom, modeTo, frac);
   if(AH==null) return;
   const tH=tHisA+AH; emitHis(tH); emitVent(tH+HV, preex);
 }
