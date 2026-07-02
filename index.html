@@ -1454,13 +1454,27 @@ function buildStraightPace(){
     const TERM_CL = 300;                                  // これ以下で頻拍停止
     const isAtrialOD = (p.site!=='RVA');
     const terminates = (sc!=='aflutter') && (!isAtrialOD || cl<=TERM_CL);
+    // VAリンキング（differential atrial overdrive）：継続時の復帰VAを測定。
+    // ペーシング依存の最終V → 復帰する自己頻拍のA の間隔。
+    //   AVNRT：同一回路がVとAを連動 → 部位を変えてもVA一定（リンク）
+    //   AT   ：心房は独立起源 → 部位でVが動きVAが変動（アンリンク、20ms以上の差）
+    const linkedTachy = (sc==='avnrt'||sc==='avnrt_noretro'||isAVRT(sc)||sc==='atypavnrt');
+    let vaLink=null;
     if(p.stopAt!=null){
       const recov=lastT+Math.round(cl*0.65);
       if(terminates){
         buildSinusFill(recov, state.duration);           // 頻拍停止 → 洞調律復帰
         state.tachyArmed=false;                           // ライブも頻拍を終了
+      } else if(isAtrialOD){
+        // 継続（エントレインのみ）→ VAリンキング測定
+        const mode2=p.site==='HRA'?'hra':p.site;
+        const lastV = lastT + atrialOffsets(mode2).His + ahTo + 45;   // ペーシング依存の最終V
+        // 復帰VA：AVNRT系＝一定(40ms)、AT＝部位依存でHRA/CSに30msの差（>20ms）
+        const vaRet = linkedTachy ? 40 : (p.site==='HRA' ? 40 : 70);
+        const tReturnA = lastV + vaRet;
+        renderTachy(sc, tReturnA, state.duration);        // 復帰A以降を頻拍で描画
+        vaLink = { site:p.site, va:vaRet, linked:linkedTachy };
       } else {
-        // 330など：エントレインのみ（乗っ取るが停止しない）→ 停止後も頻拍継続
         renderTachy(sc, recov+tachyCL, state.duration);
       }
     }
@@ -1472,12 +1486,19 @@ function buildStraightPace(){
               ? `停止後：粗動が再開（PPI ≈ TCL = ${tachyCL}ms）。完全エントレインメント。`
               : `停止後：頻拍が継続（PPI ≈ TCL = ${tachyCL}ms）。S1 ${cl}ms ではエントレインのみで<b>停止せず</b>。停止を狙うには <b>${TERM_CL}ms 以下</b>に。`))
       : `停止ボタンを押すとペーシング終了・結果が確認できます。`;
+    const vaNote = vaLink
+      ? `<b>VAリンキング</b>：ペーシング依存V→復帰A ＝ <b>${vaLink.va}ms</b>（部位 ${vaLink.site}）。`
+        + (vaLink.linked
+            ? 'AVNRT/AVRTは同一回路でVとAが連動 → <b>HRAとCSでVA差＜20ms（リンク）</b>。'
+            : 'ATは心房が独立起源 → <b>HRAとCSでVA差≥20ms（アンリンク）</b>。2部位で測って比較を。')
+      : null;
     state.result={
       site:p.site, induced:true, mechanism:tLabel,
       a2h2:null, jump:false, narrow:false, straight:true,
       notes:[
         `S1 ${cl}ms（${pBpm} bpm）で${tLabel}（TCL ${tachyCL}ms / ${tBpm} bpm）をオーバードライブ。`,
         p.site!=='RVA' ? '心房興奮順序が頻拍パターンから刺激部位パターンへ徐々に移行（心房fusion→<b>完全捕捉＝乗っ取り</b>）。AHもwarmupで漸増。' : null,
+        vaNote,
         postNote
       ].filter(Boolean)
     };
