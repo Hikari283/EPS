@@ -3228,6 +3228,9 @@ function clearMvHighlight(){ document.querySelectorAll('.mvbtn').forEach(x=>x.cl
 $('deliver').onclick=()=>{
   clearMvHighlight();
   state.pace.active=true; state.pace.maneuver=null;
+  // S1S2は誘発プロトコル：毎回S2連結期で誘発判定をやり直す（前回の誘発状態はリセット）。
+  // バースト/V Scanは進行中頻拍のオーバードライブ手技なのでtachyArmedを維持。
+  if(state.pace.mode==='s1s2') state.tachyArmed=false;
   state.pace.running = (state.pace.mode!=='s1s2'); // バースト/V Scanは継続モード
   // ペーシングは頭出し（一番左から）。startAtは使わない。
   state.pace.startAt = null;
