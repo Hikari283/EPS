@@ -1446,22 +1446,29 @@ function buildStraightPace(){
       lastT=t; beat++;
     }
 
-    // 停止後の波形
+    // 停止後の波形（differential atrial overdrive pacing）
+    // 心房オーバードライブは TCL より速いだけではエントレインのみ。TERM_CL 以下の
+    // 十分速いレートで初めて回路に深く侵入して停止（洞調律復帰）する。
+    const TERM_CL = 300;                                  // これ以下で頻拍停止
+    const isAtrialOD = (p.site!=='RVA');
+    const terminates = (sc!=='aflutter') && (!isAtrialOD || cl<=TERM_CL);
     if(p.stopAt!=null){
       const recov=lastT+Math.round(cl*0.65);
-      if(sc==='aflutter'){
-        // 粗動は停止後も再開（エントレインメント：PPI≒TCL）
-        renderTachy(sc, recov+tachyCL, state.duration);
+      if(terminates){
+        buildSinusFill(recov, state.duration);           // 頻拍停止 → 洞調律復帰
+        state.tachyArmed=false;                           // ライブも頻拍を終了
       } else {
-        // AT/非典型AVNRT → オーバードライブで終了 → 洞調律復帰
-        buildSinusFill(recov, state.duration);
+        // 330など：エントレインのみ（乗っ取るが停止しない）→ 停止後も頻拍継続
+        renderTachy(sc, recov+tachyCL, state.duration);
       }
     }
 
     const postNote = p.stopAt!=null
-      ? (sc==='aflutter'
-          ? `停止後：粗動が再開（PPI ≈ TCL = ${tachyCL}ms）。完全エントレインメントを確認できます。`
-          : `停止後：頻拍終了・洞調律復帰。PPI（停止後間隔）> TCL の場合は非回路性（AT様）を示唆。`)
+      ? (terminates
+          ? `停止後：頻拍終了・洞調律復帰（S1 ${cl}ms ≤ ${TERM_CL}ms で回路に侵入し停止）。`
+          : (sc==='aflutter'
+              ? `停止後：粗動が再開（PPI ≈ TCL = ${tachyCL}ms）。完全エントレインメント。`
+              : `停止後：頻拍が継続（PPI ≈ TCL = ${tachyCL}ms）。S1 ${cl}ms ではエントレインのみで<b>停止せず</b>。停止を狙うには <b>${TERM_CL}ms 以下</b>に。`))
       : `停止ボタンを押すとペーシング終了・結果が確認できます。`;
     state.result={
       site:p.site, induced:true, mechanism:tLabel,
