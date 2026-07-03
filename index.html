@@ -1464,14 +1464,17 @@ function buildStraightPace(){
       } else if(isAtrialOD && sc!=='aflutter'){
         // HRA刺激＝A2を順方向性捕捉 → A1A2＝刺激周期（評価可）。
         // CS刺激＝A2を逆方向性捕捉 → A1A2＞刺激周期（評価不可）。
-        // A1A2は「A1の最早期部位＝刺激部位HRA」で計測する。A1(ペースHRA)はlastTでHRA=0。
-        // A2は頻拍極性（HRA以外が最早期）なので、HRAチャネルでlastT+a1a2に来るよう基準時刻を補正。
+        // A1A2は「His電極のA」で計測する。刺激部位（HRA等）のAは刺激スパイクに埋もれ
+        // 計測に使えないため除外（本 P124 でもA1/A2はHB電極で計測）。
+        // A1(ペース)のHis-A ＝ lastT+off1His、A2(頻拍極性)のHis-Aが a1a2 後に来るよう補正。
         const antegrade = (p.site==='HRA');
         const isAT = (sc==='at'||sc==='at_noretro');
         const seqMode = isAT ? 'at_reentry' : (sc==='avnrt'||sc==='avnrt_noretro') ? 'avnrt' : 'atyp';
+        const pacedMode = p.site==='HRA'?'hra':p.site;
         const a1a2 = antegrade ? cl : cl+55;             // 順行=刺激周期 / 逆行=延長
-        const off2HRA = atrialOffsets(seqMode).HRA;      // A2のHRAオフセット（頻拍極性）
-        const tA2 = lastT + a1a2 - off2HRA;              // HRAでA1A2＝a1a2になるよう補正
+        const off1His = atrialOffsets(pacedMode).His;    // A1(ペース)のHis-Aオフセット
+        const off2His = atrialOffsets(seqMode).His;      // A2(頻拍極性)のHis-Aオフセット
+        const tA2 = lastT + off1His + a1a2 - off2His;    // His電極でA1A2＝a1a2になるよう補正
         emitTachyBeat(sc, tA2);                          // A2複合体（シナリオ固有のA-H-V順序）
         renderTachy(sc, tA2 + tachyCL, state.duration);  // 以降 頻拍再開（PPI≈TCL）
         les = { antegrade, a1a2, pcl:cl, isAT, seq: isAT?'A2-H*-V*':'H*-V*-A2' };
@@ -1489,7 +1492,7 @@ function buildStraightPace(){
       : `停止ボタンを押すとペーシング終了・結果が確認できます。`;
     const lesNote = les
       ? (les.antegrade
-          ? `<b>last entrainment sequence</b>：A1A2 ＝ <b>${les.a1a2}ms</b>（刺激周期 ${les.pcl}ms、<b>HRA最早期で計測</b>）＝一致 → A2を<b>順方向性捕捉</b>。並び <b>${les.seq}</b> → <b>${les.isAT?'AT':'AVNRT/ORT'}</b>。`
+          ? `<b>last entrainment sequence</b>：A1A2 ＝ <b>${les.a1a2}ms</b>（刺激周期 ${les.pcl}ms、<b>His電極のAで計測</b>／刺激部位のAはスパイクのため除外）＝一致 → A2を<b>順方向性捕捉</b>。並び <b>${les.seq}</b> → <b>${les.isAT?'AT':'AVNRT/ORT'}</b>。`
           : `<b>last entrainment sequence</b>：A1A2 ＝ <b>${les.a1a2}ms</b> ＞ 刺激周期 ${les.pcl}ms → A2を<b>逆方向性捕捉</b>のため<b>評価不可</b>。刺激部位を <b>HRA</b> へ変えて再評価を。`)
       : null;
     state.result={
