@@ -1466,15 +1466,18 @@ function buildStraightPace(){
         // CS刺激＝A2を逆方向性捕捉 → A1A2＞刺激周期（評価不可）。
         // A1A2は「His電極のA」で計測する。刺激部位（HRA等）のAは刺激スパイクに埋もれ
         // 計測に使えないため除外（本 P124 でもA1/A2はHB電極で計測）。
-        // A1(ペース)のHis-A ＝ lastT+off1His、A2(頻拍極性)のHis-Aが a1a2 後に来るよう補正。
+        // A1(最終ペース拍)の実際のHis-A時刻にアンカーし、A2のHis-Aが cl 後に来るよう補正
+        // （乗っ取りfracや刺激部位に依らず A1A2＝刺激周期を保証）。
         const antegrade = true;                          // HRA・CSとも順方向性捕捉（A1A2＝刺激周期）
         const isAT = (sc==='at'||sc==='at_noretro');
         const seqMode = isAT ? 'at_reentry' : (sc==='avnrt'||sc==='avnrt_noretro') ? 'avnrt' : 'atyp';
         const pacedMode = p.site==='HRA'?'hra':p.site;
         const a1a2 = cl;                                 // 全部位で A1A2＝刺激周期（PCL）
-        const off1His = atrialOffsets(pacedMode).His;    // A1(ペース)のHis-Aオフセット
+        const lastFrac = Math.min(1, (beat-1)/TAKEOVER); // 最終拍の乗っ取り度
+        const a1His = lastT + atrialOffsets(modeFrom).His
+                    + (atrialOffsets(pacedMode).His - atrialOffsets(modeFrom).His)*lastFrac; // 実A1のHis-A
         const off2His = atrialOffsets(seqMode).His;      // A2(頻拍極性)のHis-Aオフセット
-        const tA2 = lastT + off1His + a1a2 - off2His;    // His電極でA1A2＝a1a2になるよう補正
+        const tA2 = a1His + a1a2 - off2His;              // His電極でA1A2＝clを保証
         emitTachyBeat(sc, tA2);                          // A2複合体（シナリオ固有のA-H-V順序）
         renderTachy(sc, tA2 + tachyCL, state.duration);  // 以降 頻拍再開（PPI≈TCL）
         les = { antegrade, a1a2, pcl:cl, isAT, seq: isAT?'A2-H*-V*':'H*-V*-A2' };
