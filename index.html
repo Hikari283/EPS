@@ -1476,7 +1476,10 @@ function buildStraightPace(){
           emitVent(a2His + ahTo + 45, false);
         }
         // AVNRT系：H*・V*は最終ペース拍の順行伝導（A1直後・ループ描画済み）→ H*-V*-A2
-        renderTachy(sc, tA2 + tachyCL, state.duration);   // 以降 頻拍再開（PPI≈TCL）
+        // A3以降は頻拍(TCL)へ復帰。A2(ペース極性)→A3(頻拍極性)の極性差を補正し、
+        // His電極で A2A3＝TCL になるよう頻拍再開の位相をアンカーする。
+        const a3Start = a2His + tachyCL - atrialOffsets(modeFrom).His;
+        renderTachy(sc, a3Start, state.duration);         // 以降 頻拍再開（A2A3＝TCL＠His）
         les = { a1a2: cl, pcl:cl, isAT, seq: isAT?'A2-H*-V*':'H*-V*-A2' };
       } else {
         renderTachy(sc, recov+tachyCL, state.duration);
