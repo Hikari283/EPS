@@ -1454,13 +1454,24 @@ function buildStraightPace(){
     const TERM_CL = 300;                                  // これ以下で頻拍停止
     const isAtrialOD = (p.site!=='RVA');
     const terminates = (sc!=='aflutter') && (!isAtrialOD || cl<=TERM_CL);
+    // last entrainment sequence（丸山 2022）：継続時、最終捕捉A1と次拍A2の関係で鑑別。
+    let les=null;
     if(p.stopAt!=null){
       const recov=lastT+Math.round(cl*0.65);
       if(terminates){
         buildSinusFill(recov, state.duration);           // 頻拍停止 → 洞調律復帰
         state.tachyArmed=false;                           // ライブも頻拍を終了
+      } else if(isAtrialOD && sc!=='aflutter'){
+        // HRA刺激＝A2を順方向性捕捉 → A1A2＝刺激周期（評価可）。
+        // CS刺激＝A2を逆方向性捕捉 → A1A2＞刺激周期（評価不可）。
+        const antegrade = (p.site==='HRA');
+        const isAT = (sc==='at'||sc==='at_noretro');
+        const a1a2 = antegrade ? cl : cl+55;             // 順行=刺激周期 / 逆行=延長
+        const tA2 = lastT + a1a2;
+        emitTachyBeat(sc, tA2);                          // A2複合体（シナリオ固有のA-H-V順序）
+        renderTachy(sc, tA2 + tachyCL, state.duration);  // 以降 頻拍再開（PPI≈TCL）
+        les = { antegrade, a1a2, pcl:cl, isAT, seq: isAT?'A2-H*-V*':'H*-V*-A2' };
       } else {
-        // 330など：エントレインのみ（乗っ取るが停止しない）→ 停止後も頻拍継続
         renderTachy(sc, recov+tachyCL, state.duration);
       }
     }
@@ -1470,14 +1481,20 @@ function buildStraightPace(){
           ? `停止後：頻拍終了・洞調律復帰（S1 ${cl}ms ≤ ${TERM_CL}ms で回路に侵入し停止）。`
           : (sc==='aflutter'
               ? `停止後：粗動が再開（PPI ≈ TCL = ${tachyCL}ms）。完全エントレインメント。`
-              : `停止後：頻拍が継続（PPI ≈ TCL = ${tachyCL}ms）。S1 ${cl}ms ではエントレインのみで<b>停止せず</b>。停止を狙うには <b>${TERM_CL}ms 以下</b>に。`))
+              : `停止後：頻拍が継続（PPI ≈ TCL = ${tachyCL}ms）。S1 ${cl}ms ではエントレインのみで<b>停止せず</b>。`))
       : `停止ボタンを押すとペーシング終了・結果が確認できます。`;
+    const lesNote = les
+      ? (les.antegrade
+          ? `<b>last entrainment sequence</b>：A1A2 ＝ <b>${les.a1a2}ms</b>（刺激周期 ${les.pcl}ms）＝一致 → A2を<b>順方向性捕捉</b>。並び <b>${les.seq}</b> → <b>${les.isAT?'AT':'AVNRT/ORT'}</b>。`
+          : `<b>last entrainment sequence</b>：A1A2 ＝ <b>${les.a1a2}ms</b> ＞ 刺激周期 ${les.pcl}ms → A2を<b>逆方向性捕捉</b>のため<b>評価不可</b>。刺激部位を <b>HRA</b> へ変えて再評価を。`)
+      : null;
     state.result={
       site:p.site, induced:true, mechanism:tLabel,
       a2h2:null, jump:false, narrow:false, straight:true,
       notes:[
         `S1 ${cl}ms（${pBpm} bpm）で${tLabel}（TCL ${tachyCL}ms / ${tBpm} bpm）をオーバードライブ。`,
         p.site!=='RVA' ? '心房興奮順序が頻拍パターンから刺激部位パターンへ徐々に移行（心房fusion→<b>完全捕捉＝乗っ取り</b>）。AHもwarmupで漸増。' : null,
+        lesNote,
         postNote
       ].filter(Boolean)
     };
