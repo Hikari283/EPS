@@ -1467,11 +1467,11 @@ function buildStraightPace(){
         // A1A2は「His電極のA」で計測する。刺激部位（HRA等）のAは刺激スパイクに埋もれ
         // 計測に使えないため除外（本 P124 でもA1/A2はHB電極で計測）。
         // A1(ペース)のHis-A ＝ lastT+off1His、A2(頻拍極性)のHis-Aが a1a2 後に来るよう補正。
-        const antegrade = (p.site==='HRA');
+        const antegrade = true;                          // HRA・CSとも順方向性捕捉（A1A2＝刺激周期）
         const isAT = (sc==='at'||sc==='at_noretro');
         const seqMode = isAT ? 'at_reentry' : (sc==='avnrt'||sc==='avnrt_noretro') ? 'avnrt' : 'atyp';
         const pacedMode = p.site==='HRA'?'hra':p.site;
-        const a1a2 = antegrade ? cl : cl+55;             // 順行=刺激周期 / 逆行=延長
+        const a1a2 = cl;                                 // 全部位で A1A2＝刺激周期（PCL）
         const off1His = atrialOffsets(pacedMode).His;    // A1(ペース)のHis-Aオフセット
         const off2His = atrialOffsets(seqMode).His;      // A2(頻拍極性)のHis-Aオフセット
         const tA2 = lastT + off1His + a1a2 - off2His;    // His電極でA1A2＝a1a2になるよう補正
