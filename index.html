@@ -1462,25 +1462,22 @@ function buildStraightPace(){
         buildSinusFill(recov, state.duration);           // 頻拍停止 → 洞調律復帰
         state.tachyArmed=false;                           // ライブも頻拍を終了
       } else if(isAtrialOD && sc!=='aflutter'){
-        // HRA刺激＝A2を順方向性捕捉 → A1A2＝刺激周期（評価可）。
-        // CS刺激＝A2を逆方向性捕捉 → A1A2＞刺激周期（評価不可）。
-        // A1A2は「His電極のA」で計測する。刺激部位（HRA等）のAは刺激スパイクに埋もれ
-        // 計測に使えないため除外（本 P124 でもA1/A2はHB電極で計測）。
-        // A1(最終ペース拍)の実際のHis-A時刻にアンカーし、A2のHis-Aが cl 後に来るよう補正
-        // （乗っ取りfracや刺激部位に依らず A1A2＝刺激周期を保証）。
-        const antegrade = true;                          // HRA・CSとも順方向性捕捉（A1A2＝刺激周期）
+        // A2までペーシングに順行性捕捉されている → 全電極で A1A2＝PCL、V1V2＝PCL。
+        // A2はペーシング極性で描く（A1と同じ興奮順序＝どの電極でもA1A2＝刺激周期）。
+        // 鑑別は A2 と H*・V* の時間順（AT：A2-H*-V* / AVNRT：H*-V*-A2）で行う。
         const isAT = (sc==='at'||sc==='at_noretro');
-        const seqMode = isAT ? 'at_reentry' : (sc==='avnrt'||sc==='avnrt_noretro') ? 'avnrt' : 'atyp';
         const pacedMode = p.site==='HRA'?'hra':p.site;
-        const a1a2 = cl;                                 // 全部位で A1A2＝刺激周期（PCL）
-        const lastFrac = Math.min(1, (beat-1)/TAKEOVER); // 最終拍の乗っ取り度
-        const a1His = lastT + atrialOffsets(modeFrom).His
-                    + (atrialOffsets(pacedMode).His - atrialOffsets(modeFrom).His)*lastFrac; // 実A1のHis-A
-        const off2His = atrialOffsets(seqMode).His;      // A2(頻拍極性)のHis-Aオフセット
-        const tA2 = a1His + a1a2 - off2His;              // His電極でA1A2＝clを保証
-        emitTachyBeat(sc, tA2);                          // A2複合体（シナリオ固有のA-H-V順序）
+        const tA2 = lastT + cl;                          // A1A2＝PCL（全電極）
+        emitAtrial(tA2, pacedMode, 0.95);                // A2：ペーシング極性（順行性捕捉）
+        if(isAT){
+          // AT：A2が先行し順行伝導 → A2-H*-V*（V* が V1+cl＝V1V2もPCL）
+          const a2His = tA2 + atrialOffsets(pacedMode).His;
+          emitHis(a2His + ahTo);
+          emitVent(a2His + ahTo + 45, false);
+        }
+        // AVNRT系：H*・V*は最終ペース拍の順行伝導（A1直後・ループ描画済み）→ H*-V*-A2
         renderTachy(sc, tA2 + tachyCL, state.duration);  // 以降 頻拍再開（PPI≈TCL）
-        les = { antegrade, a1a2, pcl:cl, isAT, seq: isAT?'A2-H*-V*':'H*-V*-A2' };
+        les = { a1a2: cl, pcl:cl, isAT, seq: isAT?'A2-H*-V*':'H*-V*-A2' };
       } else {
         renderTachy(sc, recov+tachyCL, state.duration);
       }
@@ -1494,9 +1491,7 @@ function buildStraightPace(){
               : `停止後：頻拍が継続（PPI ≈ TCL = ${tachyCL}ms）。S1 ${cl}ms ではエントレインのみで<b>停止せず</b>。`))
       : `停止ボタンを押すとペーシング終了・結果が確認できます。`;
     const lesNote = les
-      ? (les.antegrade
-          ? `<b>last entrainment sequence</b>：A1A2 ＝ <b>${les.a1a2}ms</b>（刺激周期 ${les.pcl}ms、<b>His電極のAで計測</b>／刺激部位のAはスパイクのため除外）＝一致 → A2を<b>順方向性捕捉</b>。並び <b>${les.seq}</b> → <b>${les.isAT?'AT':'AVNRT/ORT'}</b>。`
-          : `<b>last entrainment sequence</b>：A1A2 ＝ <b>${les.a1a2}ms</b> ＞ 刺激周期 ${les.pcl}ms → A2を<b>逆方向性捕捉</b>のため<b>評価不可</b>。刺激部位を <b>HRA</b> へ変えて再評価を。`)
+      ? `<b>last entrainment sequence</b>：A1A2 ＝ <b>${les.a1a2}ms</b>（＝刺激周期・全電極）、V1V2 も刺激周期 → <b>A2までペース依存に順行性捕捉</b>。並び <b>${les.seq}</b> → <b>${les.isAT?'AT':'AVNRT/ORT'}</b>。`
       : null;
     state.result={
       site:p.site, induced:true, mechanism:tLabel,
