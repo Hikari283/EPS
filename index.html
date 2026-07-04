@@ -1473,14 +1473,17 @@ function buildStraightPace(){
         // 実A1のHis-A時刻（乗っ取りfusion考慮）
         const a1His = lastT + atrialOffsets(modeFrom).His
                     + (atrialOffsets(pacedMode).His - atrialOffsets(modeFrom).His)*lastFrac;
+        // VAリンキング：ATは心房が独立起源 → 停止後の復帰VAが刺激部位で変動（ΔVA≥20）。
+        //   AVNRT系は房室結節でVとAが連動 → 復帰VAは部位に依らず一定（ΔVA<20）。
+        const vaDelta = isAT ? (p.site==='HRA' ? 0 : 28) : 0;
         if(noOrtho){
           // orthodromic captureなし：A2は順行性に捕捉されず、頻拍の自己Aが逆方向性に出現。
           // → A1A2 ≠ 刺激周期（延長）＝ last entrainment sequence 評価不可。
           const a1a2His = cl + 45;                        // 刺激周期より延長（His計測）
           const tA2 = a1His + a1a2His - atrialOffsets(modeFrom).His;  // A2（頻拍極性）
           emitTachyBeat(sc, tA2);                         // 頻拍極性のA2複合体
-          renderTachy(sc, tA2 + tachyCL, state.duration); // 以降 頻拍(TCL)
-          les = { evaluable:false, a1a2:a1a2His, pcl:cl, isAT };
+          renderTachy(sc, tA2 + tachyCL + vaDelta, state.duration); // 以降 頻拍(TCL)・復帰VAは部位依存
+          les = { evaluable:false, a1a2:a1a2His, pcl:cl, isAT, vaDelta };
         } else {
           // orthodromic captureあり：A2までペース依存に順行性捕捉 → 全電極 A1A2＝PCL、V1V2＝PCL。
           const tA2 = lastT + cl;                         // A1A2＝PCL（全電極）
@@ -1492,9 +1495,10 @@ function buildStraightPace(){
           }
           // AVNRT系：H*・V*は最終ペース拍の順行伝導（A1直後・ループ描画済み）→ H*-V*-A2
           // A3以降は頻拍(TCL)へ復帰。極性差を補正しHis電極で A2A3＝TCL になるようアンカー。
-          const a3Start = a2His + tachyCL - atrialOffsets(modeFrom).His;
+          // ATは vaDelta 分だけ復帰位相がずれる（＝復帰VAが刺激部位で変動）。
+          const a3Start = a2His + tachyCL - atrialOffsets(modeFrom).His + vaDelta;
           renderTachy(sc, a3Start, state.duration);       // 以降 頻拍再開（A2A3＝TCL＠His）
-          les = { evaluable:true, a1a2: cl, pcl:cl, isAT, seq: isAT?'A2-H*-V*':'H*-V*-A2' };
+          les = { evaluable:true, a1a2: cl, pcl:cl, isAT, seq: isAT?'A2-H*-V*':'H*-V*-A2', vaDelta };
         }
       } else {
         renderTachy(sc, recov+tachyCL, state.duration);
@@ -1513,12 +1517,18 @@ function buildStraightPace(){
           ? `<b>last entrainment sequence</b>：A1A2 ＝ <b>${les.a1a2}ms</b> ＞ 刺激周期 ${les.pcl}ms → A2は<b>orthodromic captureされず（逆方向性捕捉）</b>のため<b>評価不可</b>。刺激部位を変えて A1A2＝刺激周期 となる部位で再評価を。`
           : `<b>last entrainment sequence</b>：A1A2 ＝ <b>${les.a1a2}ms</b>（＝刺激周期・全電極）、V1V2 も刺激周期 → <b>A2までペース依存に順行性捕捉</b>。並び <b>${les.seq}</b> → <b>${les.isAT?'AT':'AVNRT/ORT'}</b>。`)
       : null;
+    const vaLinkNote = (les && les.isAT!=null && p.stopAt!=null && !terminates)
+      ? (les.isAT
+          ? `<b>VAリンキング</b>：復帰VAは刺激部位で変動（この部位で基準+${les.vaDelta}ms）。<b>HRAとCSで測って ΔVA≥20ms</b> → 心房が独立起源＝<b>AT</b>。`
+          : `<b>VAリンキング</b>：復帰VAは刺激部位に依らず一定（房室結節で連動）。<b>ΔVA&lt;20ms</b> → <b>AVNRT/ORT</b>。`)
+      : null;
     state.result={
       site:p.site, induced:true, mechanism:tLabel,
       a2h2:null, jump:false, narrow:false, straight:true,
       notes:[
         `S1 ${cl}ms（${pBpm} bpm）で${tLabel}（TCL ${tachyCL}ms / ${tBpm} bpm）をオーバードライブ。`,
         p.site!=='RVA' ? '心房興奮順序が頻拍パターンから刺激部位パターンへ徐々に移行（心房fusion→<b>完全捕捉＝乗っ取り</b>）。AHもwarmupで漸増。' : null,
+        vaLinkNote,
         lesNote,
         postNote
       ].filter(Boolean)
