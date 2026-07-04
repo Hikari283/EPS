@@ -113,6 +113,7 @@
         <optgroup label="── 室房伝導なし ──">
           <option value="avnrt_noretro">AVNRT（室房伝導なし）</option>
           <option value="at_noretro">AT（室房伝導なし）</option>
+          <option value="at_noretro_noortho">AT（室房伝導なし・orthodromic captureなし）</option>
         </optgroup>
         <optgroup label="── Coumel's law（脚ブロック）──">
           <option value="coumel_pos">ORT＋同側脚ブロック → VA/TCL延長（Coumel陽性）</option>
@@ -558,13 +559,15 @@ function renderTachy(sc, start, end){
   if(sc==='coumel_pos') return fillTachyCoumel(start,end,true);
   if(sc==='coumel_neg') return fillTachyCoumel(start,end,false);
   if(sc==='avnrt_noretro') return fillTachyAVNRTNoRetro(start,end);
-  if(sc==='at_noretro')    return fillTachyATNoRetro(start,end);
+  if(isATnoRetro(sc))      return fillTachyATNoRetro(start,end);
 }
 // 頻拍の特性（TCL・心室が回路に含まれるか・逆行心房モード）
 // ORT（正方向性AVRT）のシナリオ判定と副伝導路（Kent束）タイプ設定
 function isAVRT(sc){ return sc==='avrt' || sc==='avrtB' || sc==='avrtC'; }
+// AT（室房伝導なし）系：orthodromic captureあり/なしの2種を共通に扱う
+function isATnoRetro(sc){ return sc==='at_noretro' || sc==='at_noretro_noortho'; }
 // 誘発で開始する頻拍シナリオ（選択時は洞調律、誘発ボタンで頻拍に）
-function isInducible(sc){ return sc==='avnrt'||isAVRT(sc)||sc==='at'||sc==='atypavnrt'||sc==='avnrt_noretro'||sc==='at_noretro'||sc==='coumel_pos'||sc==='coumel_neg'; }
+function isInducible(sc){ return sc==='avnrt'||isAVRT(sc)||sc==='at'||sc==='atypavnrt'||sc==='avnrt_noretro'||isATnoRetro(sc)||sc==='coumel_pos'||sc==='coumel_neg'; }
 function apConfig(sc){
   // retro=逆行心房マップ, v1/ii=予防興奮δ波の極性, side=副路部位, label=表示名
   switch(sc){
@@ -584,6 +587,7 @@ function tachyParams(sc){
     case 'at':            return {tcl:360, inCircuit:false, retro:'retro_rv', va:150, label:'リエントリー性AT'};
     case 'avnrt_noretro': return {tcl:350, inCircuit:true,  retro:null,       va:null, label:'AVNRT（室房伝導なし）', noRetro:true};
     case 'at_noretro':    return {tcl:360, inCircuit:false, retro:null,       va:null, label:'AT（室房伝導なし）',    noRetro:true};
+    case 'at_noretro_noortho': return {tcl:360, inCircuit:false, retro:null,  va:null, label:'AT（室房伝導なし・orthodromic captureなし）', noRetro:true, noOrtho:true};
     default: return null;
   }
 }
@@ -593,7 +597,7 @@ function buildBaseline(scenario, startT, endT){
   if(scenario==='at'){ fillTachyAT(startT,endT); return; }
   if(scenario==='atypavnrt'){ fillTachyAtypAVNRT(startT,endT); return; }
   if(scenario==='avnrt_noretro'){ fillTachyAVNRTNoRetro(startT,endT); return; }
-  if(scenario==='at_noretro'){ fillTachyATNoRetro(startT,endT); return; }
+  if(isATnoRetro(scenario)){ fillTachyATNoRetro(startT,endT); return; }
   if(scenario==='coumel_pos'){ fillTachyCoumel(startT,endT,true); return; }
   if(scenario==='coumel_neg'){ fillTachyCoumel(startT,endT,false); return; }
 
@@ -679,7 +683,7 @@ function buildPaced(){
   const preexDrive = (isAVRT(sc) && p.site!=='RVA');
   const baseAH = ahForCoupling(p.s1cl, sc) ?? 95;
   // AT・AVNRT系は誘発前は洞調律ベース（誘発失敗時も洞調律へ戻す）
-  const baseSc = (sc==='at'||sc==='at_noretro'||sc==='avnrt_noretro') ? 'sinus' : sc;
+  const baseSc = (sc==='at'||isATnoRetro(sc)||sc==='avnrt_noretro') ? 'sinus' : sc;
 
   // ---- センス（同期）：自己心拍を1拍検出してから駆動列を開始 ----
   // sense=none → 即時開始。sense指定 → 自己周期の格子上の1拍をセンスし、その拍からS1で駆動開始。
@@ -792,7 +796,7 @@ function buildPaced(){
   const AVN_ERP    = 260;   // 房室結節ERP（ahForCoupling と一致）：これ未満は結節もブロック
   let induce=null;
   // AT / AT noRetro：心房S2が回路の不応期を超えて再入できる窓（280〜360ms）で誘発
-  if((sc==='at'||sc==='at_noretro') && p.site!=='RVA' && res.a2h2!=null){
+  if((sc==='at'||isATnoRetro(sc)) && p.site!=='RVA' && res.a2h2!=null){
     if(p.s2>=280 && p.s2<360){ induce=sc; }
     else if(p.s2<280){ res.notes.push(`S2 ${p.s2}ms は心房ERP未満 → 心房捕捉不全。<b>連結期を 280ms 以上</b>に。`); }
     else { res.notes.push(`S2 ${p.s2}ms では回路の脆弱窓に入らず誘発されず（目安：280〜360ms）。`); }
@@ -814,7 +818,7 @@ function buildPaced(){
     else { res.notes.push(`心室S2 ${p.s2}ms では逆行が副路に十分先行せず<b>ORT誘発されず</b>。<b>連結期を 330ms 未満</b>に。`); }
   }
 
-  if(induce==='at'||induce==='at_noretro'){
+  if(induce==='at'||isATnoRetro(induce)){
     res.induced=true; res.mechanism=tachyParams(sc).label;
     res.notes.push(`S2 ${p.s2}ms が回路の脆弱窓に入り<b>リエントリー性AT誘発</b>。心房先行の長RP頻拍。`);
     res.notes.push('→ <b>頻拍進行中</b>。心室オーバードライブで鑑別が可能。');
@@ -1011,7 +1015,7 @@ function buildVaLinking(sc){
 function emitTachyBeat(sc, tA){
   if(sc==='avnrt'){ emitAtrial(tA,'avnrt',1.0); emitHis(tA-50); emitVent(tA-4,false); }  // VA≒0：A と V がほぼ同時。HV≒48ms（順行は正常）
   else if(isAVRT(sc)){ const V=tA-120; emitHis(V-48); emitVent(V,false); emitAtrial(tA,apConfig(sc).retro,0.9); }
-  else if(sc==='at'||sc==='at_noretro'){ emitAtrial(tA,'at_reentry',0.9); emitHis(tA+92); emitVent(tA+92+50,false); }
+  else if(sc==='at'||isATnoRetro(sc)){ emitAtrial(tA,'at_reentry',0.9); emitHis(tA+92); emitVent(tA+92+50,false); }
   else if(sc==='avnrt_noretro'){ emitAtrial(tA,'avnrt',1.0); emitHis(tA-50); emitVent(tA-4,false); }
   else if(sc==='atypavnrt'){ const V=tA-185; emitHis(V-48); emitVent(V,false); emitAtrial(tA,'atyp',0.9); }
 }
@@ -1188,7 +1192,7 @@ function buildVentricularEntrainment(sc){
   }
   // 室房伝導なし：心室ペーシング中も心房は独立して継続（A波のみ; VはRVAペース）＝VA解離
   if(tp.noRetro){
-    const aMode = sc==='at_noretro' ? 'at_reentry' : 'avnrt';
+    const aMode = isATnoRetro(sc) ? 'at_reentry' : 'avnrt';
     const atPhase = tOn % tcl;
     const firstAT = tOn + (atPhase === 0 ? 0 : tcl - atPhase);
     for(let tA=firstAT; tA<paceEnd; tA+=tcl) emitAtrial(tA,aMode,0.9);
@@ -1304,7 +1308,7 @@ function buildVentricularEntrainment(sc){
     res.vaav={pattern:'V-V（逆行なし）', ppi, tcl, diff:ppi-tcl, inCircuit:true, noRetro:true};
     res.notes.push(`室房伝導なし → 停止後 <b>逆行Aが出現しない（V-V 応答）</b>。心房は頻拍中も洞調律で独立。`);
     res.notes.push(`室房伝導なしのため通常の PPI・SA-VA 法は使用不可。心室ペーシング中の心房応答を観察して診断する。`);
-  }else if(sc==='at_noretro'){
+  }else if(isATnoRetro(sc)){
     // 室房伝導なしAT：逆行Aなし → V-A-A-V（ただし逆行A1はなく、A2のみ出現）。
     // AT回路は独自に継続するため、lastVの後はAT自己A（A2）→V が出る。
     const atA = lastV + tcl;  // AT回路の次の自己A（頻拍継続）
@@ -1356,7 +1360,7 @@ function getBaselineTachyCL(sc){
   if(sc==='at')           return 360;
   if(sc==='atypavnrt')    return 360;
   if(sc==='avnrt_noretro')return 350;
-  if(sc==='at_noretro')   return 360;
+  if(isATnoRetro(sc))     return 360;
   return null;
 }
 // 洞調律で埋める（頻拍終了後の回復拍）
@@ -1390,13 +1394,13 @@ function buildStraightPace(){
 
   // ════ 頻拍中の RVA バースト → 心室エントレインメント ════
   // 誘発済み頻拍（tachyArmed）に対する心室オーバードライブ＝エントレインメント
-  const entrainable = (sc==='at'||sc==='atypavnrt'||sc==='avnrt'||sc==='avnrt_noretro'||sc==='at_noretro'||isAVRT(sc)) && state.tachyArmed;
+  const entrainable = (sc==='at'||sc==='atypavnrt'||sc==='avnrt'||sc==='avnrt_noretro'||isATnoRetro(sc)||isAVRT(sc)) && state.tachyArmed;
   if(p.site==='RVA' && capt && entrainable){ return buildVentricularEntrainment(sc); }
 
   // ════ 誘発済み頻拍シナリオ（AT / 非典型AVNRT / 粗動）への心房/心室オーバードライブ ════
   const tachyCL = state.tachyArmed ? getBaselineTachyCL(sc) : null;
   if(tachyCL){
-    const tLabel={at:'リエントリー性AT',atypavnrt:'非典型AVNRT',avnrt_noretro:'AVNRT（室房伝導なし）',at_noretro:'AT（室房伝導なし）'}[sc];
+    const tLabel={at:'リエントリー性AT',atypavnrt:'非典型AVNRT',avnrt_noretro:'AVNRT（室房伝導なし）',at_noretro:'AT（室房伝導なし）',at_noretro_noortho:'AT（室房伝導なし・ortho captureなし）'}[sc];
     const tBpm=Math.round(60000/tachyCL);
     const pBpm=Math.round(60000/cl);
 
@@ -1427,7 +1431,7 @@ function buildStraightPace(){
 
     // 心房オーバードライブの乗っ取り：頻拍側の心房興奮順序から刺激部位の順序へ数拍で移行。
     // AHも頻拍レート相当→ペーシングレート相当へwarmup（QRS位置が徐々に変化）。
-    const modeFrom = (sc==='at'||sc==='at_noretro') ? 'at_reentry'
+    const modeFrom = (sc==='at'||isATnoRetro(sc)) ? 'at_reentry'
                    : (sc==='avnrt'||sc==='avnrt_noretro') ? 'avnrt'
                    : (sc==='atypavnrt') ? 'atyp' : 'at_reentry';
     const TAKEOVER = 5;                                   // 乗っ取り完了までの拍数
@@ -1462,25 +1466,36 @@ function buildStraightPace(){
         buildSinusFill(recov, state.duration);           // 頻拍停止 → 洞調律復帰
         state.tachyArmed=false;                           // ライブも頻拍を終了
       } else if(isAtrialOD && sc!=='aflutter'){
-        // A2までペーシングに順行性捕捉されている → 全電極で A1A2＝PCL、V1V2＝PCL。
-        // A2を「最終ペース拍A1と同一の興奮順序（同じfusion）」で cl 後に描く
-        // → どの電極でも A1A2＝刺激周期。鑑別は A2 と H*・V* の時間順で行う。
-        const isAT = (sc==='at'||sc==='at_noretro');
+        const isAT = (sc==='at'||isATnoRetro(sc));
+        const noOrtho = !!(tachyParams(sc)||{}).noOrtho;  // orthodromic captureなし
         const pacedMode = p.site==='HRA'?'hra':p.site;
         const lastFrac = Math.min(1, (beat-1)/TAKEOVER);  // 最終ペース拍の乗っ取り度
-        const tA2 = lastT + cl;                           // A1A2＝PCL（全電極）
-        const a2His = emitAtrialFusion(tA2, modeFrom, pacedMode, lastFrac, 0.95); // A2＝A1と同順序
-        if(isAT){
-          // AT：A2が先行し順行伝導 → A2-H*-V*（V* が V1+cl＝V1V2もPCL）
-          emitHis(a2His + ahTo);
-          emitVent(a2His + ahTo + 45, false);
+        // 実A1のHis-A時刻（乗っ取りfusion考慮）
+        const a1His = lastT + atrialOffsets(modeFrom).His
+                    + (atrialOffsets(pacedMode).His - atrialOffsets(modeFrom).His)*lastFrac;
+        if(noOrtho){
+          // orthodromic captureなし：A2は順行性に捕捉されず、頻拍の自己Aが逆方向性に出現。
+          // → A1A2 ≠ 刺激周期（延長）＝ last entrainment sequence 評価不可。
+          const a1a2His = cl + 45;                        // 刺激周期より延長（His計測）
+          const tA2 = a1His + a1a2His - atrialOffsets(modeFrom).His;  // A2（頻拍極性）
+          emitTachyBeat(sc, tA2);                         // 頻拍極性のA2複合体
+          renderTachy(sc, tA2 + tachyCL, state.duration); // 以降 頻拍(TCL)
+          les = { evaluable:false, a1a2:a1a2His, pcl:cl, isAT };
+        } else {
+          // orthodromic captureあり：A2までペース依存に順行性捕捉 → 全電極 A1A2＝PCL、V1V2＝PCL。
+          const tA2 = lastT + cl;                         // A1A2＝PCL（全電極）
+          const a2His = emitAtrialFusion(tA2, modeFrom, pacedMode, lastFrac, 0.95); // A2＝A1と同順序
+          if(isAT){
+            // AT：A2が先行し順行伝導 → A2-H*-V*（V* が V1+cl＝V1V2もPCL）
+            emitHis(a2His + ahTo);
+            emitVent(a2His + ahTo + 45, false);
+          }
+          // AVNRT系：H*・V*は最終ペース拍の順行伝導（A1直後・ループ描画済み）→ H*-V*-A2
+          // A3以降は頻拍(TCL)へ復帰。極性差を補正しHis電極で A2A3＝TCL になるようアンカー。
+          const a3Start = a2His + tachyCL - atrialOffsets(modeFrom).His;
+          renderTachy(sc, a3Start, state.duration);       // 以降 頻拍再開（A2A3＝TCL＠His）
+          les = { evaluable:true, a1a2: cl, pcl:cl, isAT, seq: isAT?'A2-H*-V*':'H*-V*-A2' };
         }
-        // AVNRT系：H*・V*は最終ペース拍の順行伝導（A1直後・ループ描画済み）→ H*-V*-A2
-        // A3以降は頻拍(TCL)へ復帰。A2(ペース極性)→A3(頻拍極性)の極性差を補正し、
-        // His電極で A2A3＝TCL になるよう頻拍再開の位相をアンカーする。
-        const a3Start = a2His + tachyCL - atrialOffsets(modeFrom).His;
-        renderTachy(sc, a3Start, state.duration);         // 以降 頻拍再開（A2A3＝TCL＠His）
-        les = { a1a2: cl, pcl:cl, isAT, seq: isAT?'A2-H*-V*':'H*-V*-A2' };
       } else {
         renderTachy(sc, recov+tachyCL, state.duration);
       }
@@ -1494,7 +1509,9 @@ function buildStraightPace(){
               : `停止後：頻拍が継続（PPI ≈ TCL = ${tachyCL}ms）。S1 ${cl}ms ではエントレインのみで<b>停止せず</b>。`))
       : `停止ボタンを押すとペーシング終了・結果が確認できます。`;
     const lesNote = les
-      ? `<b>last entrainment sequence</b>：A1A2 ＝ <b>${les.a1a2}ms</b>（＝刺激周期・全電極）、V1V2 も刺激周期 → <b>A2までペース依存に順行性捕捉</b>。並び <b>${les.seq}</b> → <b>${les.isAT?'AT':'AVNRT/ORT'}</b>。`
+      ? (les.evaluable===false
+          ? `<b>last entrainment sequence</b>：A1A2 ＝ <b>${les.a1a2}ms</b> ＞ 刺激周期 ${les.pcl}ms → A2は<b>orthodromic captureされず（逆方向性捕捉）</b>のため<b>評価不可</b>。刺激部位を変えて A1A2＝刺激周期 となる部位で再評価を。`
+          : `<b>last entrainment sequence</b>：A1A2 ＝ <b>${les.a1a2}ms</b>（＝刺激周期・全電極）、V1V2 も刺激周期 → <b>A2までペース依存に順行性捕捉</b>。並び <b>${les.seq}</b> → <b>${les.isAT?'AT':'AVNRT/ORT'}</b>。`)
       : null;
     state.result={
       site:p.site, induced:true, mechanism:tLabel,
@@ -1514,7 +1531,7 @@ function buildStraightPace(){
   const driveStart=Math.round(5*state.sinusCL);
   state.pace.paceOnAt = driveStart;   // ライブ掃引はここから（手前リードインは録画用）
   // AT・AVNRT系（誘発なし）は洞調律ベース
-  const baseSc = (sc==='at'||sc==='at_noretro'||sc==='avnrt_noretro') ? 'sinus' : sc;
+  const baseSc = (sc==='at'||isATnoRetro(sc)||sc==='avnrt_noretro') ? 'sinus' : sc;
   // 捕捉不全：自己調律は継続（全期間描画）、非捕捉の刺激スパイクのみ重畳
   if(!capt){
     buildBaseline(baseSc, 0, state.duration);
@@ -1686,7 +1703,7 @@ function buildVScan(){
   const couplings=[];
   const noRetro = !!(tachyParams(sc)||{}).noRetro;
   // AT・AVNRT系（誘発前）は洞調律ベース。V Scanは誘発しない（単発刺激スキャンのみ）。
-  const baseSc = (sc==='at'||sc==='at_noretro'||sc==='avnrt_noretro') ? 'sinus' : sc;
+  const baseSc = (sc==='at'||isATnoRetro(sc)||sc==='avnrt_noretro') ? 'sinus' : sc;
   buildBaseline(baseSc, 0, state.duration);              // 背景：洞調律を全期間
   for(let k=0;k<nSteps;k++){
     const coupling = start - k*DEC; couplings.push(coupling);
@@ -3573,6 +3590,7 @@ function updateModeLabel(){
     if(state.scenario==='coumel_neg') txt='ORT＋脚ブロック（Coumel陰性）';
     if(state.scenario==='avnrt_noretro') txt='AVNRT（室房伝導なし）';
     if(state.scenario==='at_noretro') txt='AT（室房伝導なし）';
+    if(state.scenario==='at_noretro_noortho') txt='AT（室房伝導なし・ortho captureなし）';
   }
   if(state.scenario==='avblock_wenck') txt='2度AVブロック Wenckebach';
   if(state.scenario==='avblock_21') txt='2度AVブロック 2:1';
@@ -3626,7 +3644,8 @@ function scenarioBaselineHints(){
     case 'at': return 'マクロリエントリー性心房頻拍。心房が先行する長RP頻拍です。CS近位最早期（ペリミトラル）の偏心性活性化を確認し、求心性のAVNRTと区別しましょう。心室刺激でV-A-A-V応答（AVNRTはV-A-V）が鑑別に有用です。';
     case 'atypavnrt': return '非典型AVNRT(fast-slow)。長VAで最早期心房は中隔（CS近位/His）＝求心性。長RPのATとの鑑別が要点です。';
     case 'avnrt_noretro': return '室房伝導なしAVNRT。心室ペーシング中は逆行Aが出ない。停止後 V-V 応答（逆行Aなし）。VV間隔＝頻拍周期ならAVNRT継続を示唆。';
-    case 'at_noretro': return '室房伝導なしAT。心房頻拍あり・逆行伝導なし。心室ペーシング停止後、AT自己Aが独立して継続。停止後 A出現→AT継続（心房がVから独立）。';
+    case 'at_noretro': return '室房伝導なしAT。心房頻拍あり・逆行伝導なし。心室ペーシング停止後、AT自己Aが独立して継続。停止後 A出現→AT継続（心房がVから独立）。丸山法（心房オーバードライブ）では A1A2＝刺激周期で last entrainment sequence 評価可。';
+    case 'at_noretro_noortho': return '室房伝導なしAT（orthodromic captureなし）。丸山法で心房オーバードライブしても A2 が順行性に捕捉されず、A1A2 が刺激周期と一致しない（延長）＝ last entrainment sequence 評価不可の例。刺激部位を変えて A1A2＝刺激周期 となる部位を探す必要がある。';
     case 'avblock_wenck': return 'Wenckebach型2度AVブロック。His distでAH間隔が順次延長し、4拍目でP波がブロック（His/V脱落）します。AH間隔をキャリパーで計測しましょう。';
     case 'avblock_21': return '2:1 AVブロック。奇数拍はAH→V伝導、偶数拍はP波のみ（Hisなし）。His電位の有無で上位/下位の鑑別を確認しましょう。';
     case 'avblock_3sup': return '3度（完全）AVブロック — His束上。P波（洞調律）と接合部補充（narrow QRS）が完全解離。Hisチャネルで洞P後にHis電位がないことを確認しましょう。';
@@ -3699,7 +3718,7 @@ function runAnalyzer(){
   }
 
   // --- 2. 頻拍中：TCL・VA・最早期心房 ---
-  const ongoingTachy = ['at','atypavnrt','avnrt_noretro','at_noretro'].includes(state.scenario) && !state.pace.active;
+  const ongoingTachy = ['at','atypavnrt','avnrt_noretro','at_noretro','at_noretro_noortho'].includes(state.scenario) && !state.pace.active;
   const isTachy = (r && r.induced) || ongoingTachy;
   if(isTachy && Vs.length>=3){
     const tail = Vs.slice(-4);
