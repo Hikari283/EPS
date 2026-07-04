@@ -23,6 +23,8 @@
 ```
 EPS_trainer/
 ├── index.html        ← 本体（これだけで動く）
+├── eikaiwa.html      ← こえ英会話（別ツール・単一HTML）
+├── schedule.html     ← ロック画面スケジュール壁紙ジェネレーター（別ツール・単一HTML）
 ├── NOTES.md          ← このメモ
 └── .claude/          ← 開発補助（任意。使うだけなら不要）
     ├── serve.ps1     ← Windows用の簡易静的HTTPサーバ（PowerShell製）
@@ -33,6 +35,24 @@ EPS_trainer/
 - 開発中はプレビュー同期先として `/private/tmp/eps_preview/index.html` にもコピーして動作確認していた（Mac側）。Windows側ではプレビュー機能で `.claude/serve.ps1`（`eps-ps`）を起動して確認。
 
 ---
+
+## schedule.html — ロック画面スケジュール（2026-07-04追加）
+
+iPhoneのロック画面で予定を見るための単体ツール（EPSトレーナーとは独立）。
+WebからはiOSロック画面ウィジェット（WidgetKit）を作れないため、2方式で代替：
+
+1. **壁紙生成**: 予定（最大4カテゴリー、各項目=タイトル+日付+時刻）を入力すると、
+   iOSウィジェット風レイアウト（ミニ月カレンダー＋サマリー／週間イベントバー／2×2カテゴリーカード）を
+   Canvasで描いたロック画面用PNGを生成。上部25%はiOSの時計用に空けてある。
+   背景写真アップロード可（長辺2000pxに縮小してlocalStorage保存、暗フィルタ付き）。
+   共有ボタン（`navigator.share` files）または画像長押しで写真に保存→壁紙に設定。
+2. **.ics書き出し**: 日付+時刻つき予定をVCALENDARでダウンロード→Appleカレンダーに取込→
+   ロック画面の標準カレンダーウィジェットで表示（こちらは自動更新される）。
+
+- データは `localStorage['lockschedule_v2']`（date / bg / cats[{icon,name,color,items[]}]）。
+- 描画は `drawWallpaper()` → `drawMiniMonth` / `drawSummary` / `drawWeekStrip` / `drawCatCard`。
+  スケールは `u=H/2556` 基準。サイズは端末自動 or iPhoneプリセット。
+- 週間バーは基準日の前日〜5日後。各日チップ最大2、超過は +n 表示。
 
 ## 主要な仕組み（コード地図）
 

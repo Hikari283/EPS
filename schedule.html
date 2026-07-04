@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#0b1220">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>ロック画面スケジュール — 壁紙ジェネレーター</title>
+<style>
+  :root{
+    --bg:#0b1220; --panel:#121a2b; --panel2:#0e1626; --line:#22304a;
+    --txt:#eaf0fb; --muted:#93a4c3; --accent:#5fb3f6; --accent2:#34d399;
+    --warm:#f6b26b; --danger:#f87171;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;min-height:100%;background:var(--bg);color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP",system-ui,sans-serif;}
+  main{max-width:680px;margin:0 auto;padding:16px;display:flex;flex-direction:column;gap:14px}
+  h1{font-size:20px;margin:6px 0 0}
+  h1 span{color:var(--accent)}
+  .lead{color:var(--muted);font-size:13px;line-height:1.7;margin:0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px}
+  .card h2{font-size:15px;margin:0;display:flex;align-items:center;gap:8px}
+  .card h2 .num{background:var(--panel2);border:1px solid var(--line);color:var(--accent);
+    width:24px;height:24px;border-radius:12px;font-size:13px;display:inline-flex;align-items:center;justify-content:center;flex:none}
+  .row{display:flex;gap:6px;align-items:center}
+  input,select{background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+    border-radius:10px;padding:9px 8px;font-size:14px;font-family:inherit;min-width:0}
+  input[type=date]{width:128px;flex:none}
+  input[type=time]{width:88px;flex:none}
+  input[type=color]{width:40px;height:38px;padding:2px;flex:none}
+  input.emoji{width:46px;text-align:center;flex:none;font-size:17px}
+  input.grow{flex:1}
+  select{flex:1}
+  button{background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+    border-radius:12px;padding:11px 13px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}
+  button:active{transform:scale(.98)}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#04101f}
+  button.ghost{font-weight:500;color:var(--muted)}
+  button.del{flex:none;width:34px;padding:9px 0;color:var(--danger);font-weight:400;border-radius:10px}
+  button.small{padding:8px 10px;font-size:13px;font-weight:600}
+  .btnrow{display:flex;gap:8px;flex-wrap:wrap}
+  .btnrow button{flex:1;min-width:140px}
+  .hint{font-size:12px;color:var(--muted);line-height:1.7}
+  .hint b{color:var(--txt)}
+  ol.hint{margin:0;padding-left:18px}
+  .catbox{border:1px solid var(--line);border-radius:14px;padding:12px;background:var(--panel2);
+    display:flex;flex-direction:column;gap:8px}
+  .catbox .items .row{margin-top:6px}
+  #preview{display:none;text-align:center}
+  #preview img{max-width:min(280px,75%);border-radius:18px;border:1px solid var(--line)}
+  details{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--panel2)}
+  summary{font-size:13px;font-weight:700;cursor:pointer;color:var(--muted)}
+  details .hint{margin-top:8px}
+</style>
+</head>
+<body>
+<main>
+  <h1>🗓 ロック画面<span>スケジュール</span></h1>
+  <p class="lead">予定をカテゴリーごとに入力すると、<b>週間バー＋カテゴリー別カード</b>のウィジェット風レイアウトを描き込んだロック画面用の壁紙画像を生成します。データはこの端末（ブラウザ）内にだけ保存されます。</p>
+
+  <div class="card">
+    <h2><span class="num">1</span>基準日と背景写真</h2>
+    <div class="row"><input type="date" id="date"></div>
+    <div class="btnrow">
+      <button id="bgPick">背景写真を選ぶ</button>
+      <button class="ghost" id="bgClear">背景をクリア</button>
+    </div>
+    <input type="file" id="bgFile" accept="image/*" style="display:none">
+    <p class="hint">写真を選ばない場合はダークネイビーのグラデーション背景になります。文字が読めるよう写真には自動で暗めのフィルタをかけます。</p>
+  </div>
+
+  <div class="card">
+    <h2><span class="num">2</span>カテゴリーと予定</h2>
+    <div id="cats"></div>
+    <button id="addCat">＋ カテゴリーを追加（最大4）</button>
+    <p class="hint">カードは最大4枚（2×2）。日付をつけた予定は上部の<b>週間バー</b>（基準日の前日〜5日後）にも表示されます。</p>
+  </div>
+
+  <div class="card">
+    <h2><span class="num">3</span>壁紙画像をつくる</h2>
+    <div class="row"><select id="size">
+      <option value="auto">この端末の画面サイズに合わせる</option>
+      <option value="1290x2796">iPhone 16/15/14 Pro Max（1290×2796）</option>
+      <option value="1179x2556">iPhone 16/15/14 Pro（1179×2556）</option>
+      <option value="1170x2532">iPhone 14/13/12（1170×2532）</option>
+      <option value="750x1334">iPhone SE（750×1334）</option>
+    </select></div>
+    <div class="btnrow">
+      <button class="primary" id="gen">壁紙を生成</button>
+      <button id="share">共有 / 写真に保存</button>
+    </div>
+    <div id="preview">
+      <img id="previewImg" alt="壁紙プレビュー">
+      <p class="hint"><b>画像を長押し → 「写真」に追加</b>（または上の共有ボタン）。<br>
+      iPhoneで：<b>設定 → 壁紙 → 新しい壁紙を追加 → 写真</b> でこの画像を選択。<br>
+      ※上部はiOSの時計と重ならないよう空けてあります。</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="num">4</span>カレンダー(.ics)に書き出す</h2>
+    <p class="hint">日付・時刻つきの予定をAppleカレンダーに取り込めば、ロック画面の<b>標準カレンダーウィジェット</b>でも表示できます（時間が進むと自動更新される「本物の」表示）。</p>
+    <button id="ics">.ics をダウンロード</button>
+    <ol class="hint">
+      <li>schedule.ics をタップ → カレンダーに追加</li>
+      <li>ロック画面を長押し → <b>カスタマイズ</b> → 時計の下の枠をタップ</li>
+      <li><b>カレンダー</b>ウィジェットを追加</li>
+    </ol>
+  </div>
+
+  <details>
+    <summary>なぜ「本物のウィジェット」は作れないの？</summary>
+    <p class="hint">iOSのロック画面ウィジェットは<b>ネイティブアプリ（WidgetKit）専用</b>で、WebページやPWAからは提供できません。そこでこのツールは、(A) ウィジェット風レイアウトを描き込んだ壁紙画像、(B) 標準カレンダーウィジェットへの連携（.ics）、の2方式を用意しています。予定が変わったら壁紙は作り直してください。</p>
+  </details>
+</main>
+
+<canvas id="cv" style="display:none"></canvas>
+
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const KEY='lockschedule_v2';
+const MAXCATS=4;
+const DEFCOLORS=['#f87171','#5fb3f6','#f6b26b','#34d399'];
+
+/* ---------- 状態 ---------- */
+let state=null;
+function todayStr(){const d=new Date(),p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;}
+function defaultState(){
+  return {date:todayStr(), bg:null, cats:[
+    {icon:'🔥', name:'重要＆緊急', color:'#f87171', items:[{title:'',date:todayStr(),time:'09:00'}]},
+    {icon:'📋', name:'今週の予定', color:'#5fb3f6', items:[{title:'',date:'',time:''}]}
+  ]};
+}
+function load(){ try{ const s=JSON.parse(localStorage.getItem(KEY)); if(s&&s.cats) return s; }catch(e){} return defaultState(); }
+function save(){ try{ localStorage.setItem(KEY,JSON.stringify(state)); }catch(e){
+  try{ localStorage.setItem(KEY,JSON.stringify({...state,bg:null})); }catch(e2){}
+} }
+
+/* ---------- エディタ ---------- */
+function renderEditor(){
+  $('date').value=state.date;
+  const wrap=$('cats'); wrap.innerHTML='';
+  state.cats.forEach((cat,ci)=>{
+    const box=document.createElement('div'); box.className='catbox';
+    const head=document.createElement('div'); head.className='row';
+    head.innerHTML='<input class="emoji" maxlength="2"><input class="grow" placeholder="カテゴリー名"><input type="color"><button class="del">×</button>';
+    const [emo,name,col,del]=head.children;
+    emo.value=cat.icon; name.value=cat.name; col.value=cat.color;
+    emo.oninput=()=>{cat.icon=emo.value;save();};
+    name.oninput=()=>{cat.name=name.value;save();};
+    col.oninput=()=>{cat.color=col.value;save();};
+    del.onclick=()=>{ state.cats.splice(ci,1); save(); renderEditor(); };
+    box.appendChild(head);
+    const items=document.createElement('div'); items.className='items';
+    cat.items.forEach((it,ii)=>{
+      const r=document.createElement('div'); r.className='row';
+      r.innerHTML='<input type="date"><input type="time"><input class="grow" placeholder="予定の内容"><button class="del">×</button>';
+      const [dt,tm,ti,dl]=r.children;
+      dt.value=it.date||''; tm.value=it.time||''; ti.value=it.title||'';
+      dt.oninput=()=>{it.date=dt.value;save();};
+      tm.oninput=()=>{it.time=tm.value;save();};
+      ti.oninput=()=>{it.title=ti.value;save();};
+      dl.onclick=()=>{ cat.items.splice(ii,1); save(); renderEditor(); };
+      items.appendChild(r);
+    });
+    box.appendChild(items);
+    const add=document.createElement('button'); add.className='small'; add.textContent='＋ 予定';
+    add.onclick=()=>{ cat.items.push({title:'',date:state.date,time:''}); save(); renderEditor(); };
+    box.appendChild(add);
+    wrap.appendChild(box);
+  });
+  $('addCat').style.display = state.cats.length>=MAXCATS ? 'none':'';
+}
+$('addCat').onclick=()=>{
+  state.cats.push({icon:'⭐️', name:'カテゴリー', color:DEFCOLORS[state.cats.length%4], items:[{title:'',date:'',time:''}]});
+  save(); renderEditor();
+};
+$('date').addEventListener('change',()=>{ state.date=$('date').value||todayStr(); save(); });
+
+/* ---------- 背景写真 ---------- */
+$('bgPick').onclick=()=>$('bgFile').click();
+$('bgClear').onclick=()=>{ state.bg=null; save(); };
+$('bgFile').onchange=e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const img=new Image();
+  img.onload=()=>{
+    // 保存容量対策：長辺2000pxに縮小してJPEGで保持
+    const k=Math.min(1,2000/Math.max(img.width,img.height));
+    const c=document.createElement('canvas');
+    c.width=Math.round(img.width*k); c.height=Math.round(img.height*k);
+    c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+    state.bg=c.toDataURL('image/jpeg',.82);
+    save(); URL.revokeObjectURL(img.src);
+  };
+  img.src=URL.createObjectURL(f);
+};
+
+/* ---------- 日付ユーティリティ ---------- */
+const WD='日月火水木金土';
+function parseD(s){ const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); }
+function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
+function sameYMD(a,b){ return a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate(); }
+function fmtTimeJP(t){ if(!t)return ''; const [h,m]=t.split(':').map(Number);
+  const ap=h<12?'午前':'午後'; let hh=h%12; if(hh===0)hh=12; return `${ap}${hh}:${String(m).padStart(2,'0')}`; }
+function subLabel(it, base){
+  const parts=[];
+  if(it.date){
+    const d=parseD(it.date), diff=Math.round((d-base)/86400000);
+    parts.push(diff===0?'今日':diff===1?'明日':`${d.getMonth()+1}.${d.getDate()}.`);
+  }
+  if(it.time) parts.push(fmtTimeJP(it.time));
+  return parts.join(' ');
+}
+function catItemsSorted(cat){
+  return cat.items.filter(it=>it.title.trim())
+    .slice().sort((a,b)=>((a.date||'9999')+(a.time||'99:99')).localeCompare((b.date||'9999')+(b.time||'99:99')));
+}
+
+/* ---------- 描画ヘルパー ---------- */
+function rr(ctx,x,y,w,h,r){
+  r=Math.min(r,w/2,h/2);
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+}
+function ell(ctx,t,maxW){
+  if(ctx.measureText(t).width<=maxW) return t;
+  while(t.length>1 && ctx.measureText(t+'…').width>maxW) t=t.slice(0,-1);
+  return t+'…';
+}
+const FJ=`-apple-system,'Hiragino Sans','Noto Sans JP',sans-serif`;
+
+/* ---------- 壁紙生成 ---------- */
+function targetSize(){
+  const v=$('size').value;
+  if(v!=='auto'){ const [w,h]=v.split('x').map(Number); return {W:w,H:h}; }
+  const dpr=window.devicePixelRatio||2;
+  let w=screen.width*dpr, h=screen.height*dpr;
+  if(w>h) [w,h]=[h,w];
+  return {W:Math.round(w)||1179, H:Math.round(h)||2556};
+}
+function loadBg(){
+  return new Promise(res=>{
+    if(!state.bg) return res(null);
+    const img=new Image(); img.onload=()=>res(img); img.onerror=()=>res(null); img.src=state.bg;
+  });
+}
+async function drawWallpaper(){
+  const {W,H}=targetSize();
+  const cv=$('cv'); cv.width=W; cv.height=H;
+  const ctx=cv.getContext('2d');
+  const u=H/2556, mx=W*0.045;
+  const base=parseD(state.date||todayStr());
+
+  /* 背景 */
+  const bg=await loadBg();
+  if(bg){
+    const k=Math.max(W/bg.width,H/bg.height);
+    const bw=bg.width*k, bh=bg.height*k;
+    ctx.drawImage(bg,(W-bw)/2,(H-bh)/2,bw,bh);
+    ctx.fillStyle='rgba(6,10,18,.42)'; ctx.fillRect(0,0,W,H);
+  }else{
+    const g=ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0,'#0b1220'); g.addColorStop(.55,'#101a2e'); g.addColorStop(1,'#0b1220');
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    const rg=ctx.createRadialGradient(W*.5,H*.28,0,W*.5,H*.28,H*.55);
+    rg.addColorStop(0,'rgba(95,179,246,.10)'); rg.addColorStop(1,'rgba(95,179,246,0)');
+    ctx.fillStyle=rg; ctx.fillRect(0,0,W,H);
+  }
+  ctx.textBaseline='middle';
+
+  /* レイアウト（上部 25% は iOS の時計用に空ける） */
+  const yA=H*0.25,  hA=H*0.10;   // ミニ月カレンダー＋サマリー
+  const yB=H*0.365, hB=H*0.115;  // 週間バー
+  const yC=H*0.50,  hC=H*0.45;   // カード 2×2
+  drawMiniMonth(ctx, mx, yA, W*0.40, hA, base, u);
+  if(state.cats[0]) drawSummary(ctx, mx+W*0.44, yA, W-mx*2-W*0.44, hA, state.cats[0], base, u);
+  drawWeekStrip(ctx, mx, yB, W-mx*2, hB, base, u);
+
+  const gap=26*u, cardW=(W-mx*2-gap)/2, cardH=(hC-gap)/2;
+  state.cats.slice(0,4).forEach((cat,i)=>{
+    const cx=mx+(i%2)*(cardW+gap), cy=yC+Math.floor(i/2)*(cardH+gap);
+    drawCatCard(ctx, cx, cy, cardW, cardH, cat, base, u);
+  });
+  return cv;
+}
+
+/* ミニ月間カレンダー */
+function drawMiniMonth(ctx,x,y,w,h,base,u){
+  const m0=new Date(base.getFullYear(),base.getMonth(),1);
+  const days=new Date(base.getFullYear(),base.getMonth()+1,0).getDate();
+  const rows=Math.ceil((m0.getDay()+days)/7);
+  ctx.fillStyle='rgba(234,240,251,.9)';
+  ctx.font=`700 ${30*u}px ${FJ}`;
+  ctx.fillText(`${base.getMonth()+1}月`, x, y+16*u);
+  const colW=w/7, headY=y+58*u;
+  ctx.font=`500 ${22*u}px ${FJ}`; ctx.fillStyle='rgba(147,164,195,.85)'; ctx.textAlign='center';
+  for(let i=0;i<7;i++) ctx.fillText(WD[i], x+colW*(i+.5), headY);
+  const rowH=(h-(headY-y)-14*u)/rows;
+  ctx.font=`500 ${25*u}px ${FJ}`;
+  for(let d=1;d<=days;d++){
+    const idx=m0.getDay()+d-1, cx=x+colW*((idx%7)+.5), cy=headY+rowH*(Math.floor(idx/7)+.85);
+    if(d===base.getDate()){
+      ctx.fillStyle='rgba(234,240,251,.95)';
+      ctx.beginPath(); ctx.arc(cx,cy,20*u,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='#0b1220';
+    }else ctx.fillStyle='rgba(234,240,251,.85)';
+    ctx.fillText(String(d), cx, cy);
+  }
+  ctx.textAlign='left';
+}
+
+/* 右上サマリー（カテゴリー1の直近） */
+function drawSummary(ctx,x,y,w,h,cat,base,u){
+  const items=catItemsSorted(cat);
+  ctx.font=`700 ${30*u}px ${FJ}`; ctx.fillStyle='rgba(234,240,251,.92)';
+  ctx.fillText(`${cat.icon} ${ell(ctx,cat.name,w-90*u)}`, x, y+16*u);
+  ctx.textAlign='right'; ctx.fillText(String(items.length), x+w, y+16*u); ctx.textAlign='left';
+  const lineH=Math.min(58*u,(h-50*u)/3);
+  items.slice(0,3).forEach((it,i)=>{
+    const cy=y+64*u+lineH*(i+.4);
+    ctx.strokeStyle='rgba(234,240,251,.75)'; ctx.lineWidth=2.5*u;
+    ctx.beginPath(); ctx.arc(x+14*u,cy,12*u,0,Math.PI*2); ctx.stroke();
+    ctx.font=`500 ${30*u}px ${FJ}`; ctx.fillStyle='rgba(234,240,251,.92)';
+    let right='';
+    if(it.date){ const d=parseD(it.date); right=`${d.getMonth()+1}/${d.getDate()}`; }
+    const rw=right?ctx.measureText(right).width+14*u:0;
+    ctx.fillText(ell(ctx,it.title,w-44*u-rw), x+40*u, cy);
+    if(right){ ctx.textAlign='right'; ctx.fillStyle='rgba(147,164,195,.9)';
+      ctx.fillText(right, x+w, cy); ctx.textAlign='left'; }
+  });
+}
+
+/* 週間バー（基準日の前日〜5日後） */
+function drawWeekStrip(ctx,x,y,w,h,base,u){
+  rr(ctx,x,y,w,h,28*u);
+  ctx.fillStyle='rgba(12,17,28,.55)'; ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,.08)'; ctx.lineWidth=1.5*u; ctx.stroke();
+  const colW=w/7, pad=14*u;
+  const dayEvents=[];
+  for(let i=0;i<7;i++){
+    const d=addDays(base,i-1);
+    const evs=[];
+    state.cats.forEach(cat=>catItemsSorted(cat).forEach(it=>{
+      if(it.date && sameYMD(parseD(it.date),d)) evs.push({title:it.title,color:cat.color,time:it.time||''});
+    }));
+    evs.sort((a,b)=>(a.time||'99').localeCompare(b.time||'99'));
+    dayEvents.push({d,evs});
+  }
+  ctx.textAlign='center';
+  dayEvents.forEach((de,i)=>{
+    const cx=x+colW*(i+.5), isBase=sameYMD(de.d,base);
+    ctx.font=`500 ${24*u}px ${FJ}`;
+    ctx.fillStyle=isBase?'rgba(234,240,251,.95)':'rgba(147,164,195,.85)';
+    ctx.fillText(WD[de.d.getDay()], cx, y+34*u);
+    if(isBase){
+      ctx.fillStyle='rgba(234,240,251,.92)';
+      ctx.beginPath(); ctx.arc(cx,y+82*u,30*u,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='#0b1220';
+    }else ctx.fillStyle='rgba(234,240,251,.92)';
+    ctx.font=`700 ${38*u}px ${FJ}`;
+    ctx.fillText(String(de.d.getDate()), cx, y+84*u);
+  });
+  ctx.textAlign='left';
+  /* イベントチップ（各日最大2、超過は +n） */
+  const chipH=44*u, chipGap=8*u, chipTop=y+122*u;
+  dayEvents.forEach((de,i)=>{
+    const cx0=x+colW*i+6*u, cw=colW-12*u;
+    de.evs.slice(0,2).forEach((ev,j)=>{
+      const cy=chipTop+j*(chipH+chipGap);
+      rr(ctx,cx0,cy,cw,chipH,10*u);
+      ctx.fillStyle=ev.color+'4d'; ctx.fill();          // 30% 透過
+      ctx.fillStyle=ev.color;
+      rr(ctx,cx0,cy,6*u,chipH,3*u); ctx.fill();
+      ctx.font=`600 ${25*u}px ${FJ}`; ctx.fillStyle='rgba(234,240,251,.95)';
+      ctx.fillText(ell(ctx,ev.title,cw-20*u), cx0+13*u, cy+chipH/2);
+    });
+    if(de.evs.length>2){
+      ctx.font=`600 ${22*u}px ${FJ}`; ctx.fillStyle='rgba(147,164,195,.9)'; ctx.textAlign='center';
+      ctx.fillText(`+${de.evs.length-2}`, x+colW*(i+.5), chipTop+2*(chipH+chipGap)+10*u);
+      ctx.textAlign='left';
+    }
+  });
+  void pad;
+}
+
+/* カテゴリーカード */
+function drawCatCard(ctx,x,y,w,h,cat,base,u){
+  rr(ctx,x,y,w,h,34*u);
+  ctx.fillStyle='rgba(12,17,28,.55)'; ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,.08)'; ctx.lineWidth=1.5*u; ctx.stroke();
+  const pad=32*u, items=catItemsSorted(cat);
+  /* ヘッダー */
+  ctx.font=`700 ${36*u}px ${FJ}`; ctx.fillStyle='rgba(234,240,251,.95)';
+  ctx.fillText(`${cat.icon} ${ell(ctx,cat.name,w-pad*2-80*u)}`, x+pad, y+pad+16*u);
+  const bd=String(items.length), bw=Math.max(46*u,ctx.measureText(bd).width+26*u);
+  rr(ctx,x+w-pad-bw,y+pad-8*u,bw,46*u,14*u);
+  ctx.fillStyle=cat.color+'59'; ctx.fill();
+  ctx.font=`700 ${28*u}px ${FJ}`; ctx.fillStyle='rgba(234,240,251,.95)'; ctx.textAlign='center';
+  ctx.fillText(bd, x+w-pad-bw/2, y+pad+16*u); ctx.textAlign='left';
+  /* 項目 */
+  const itemH=104*u, top=y+pad+70*u;
+  const fit=Math.max(1,Math.floor((h-(top-y)-pad*.6)/itemH));
+  items.slice(0,fit).forEach((it,i)=>{
+    const iy=top+itemH*i;
+    ctx.fillStyle=cat.color;
+    ctx.beginPath(); ctx.arc(x+pad+8*u, iy+26*u, 8*u, 0, Math.PI*2); ctx.fill();
+    ctx.font=`600 ${34*u}px ${FJ}`; ctx.fillStyle='rgba(234,240,251,.95)';
+    ctx.fillText(ell(ctx,it.title,w-pad*2-34*u), x+pad+30*u, iy+26*u);
+    const sub=subLabel(it,base);
+    if(sub){ ctx.font=`500 ${27*u}px ${FJ}`; ctx.fillStyle='rgba(147,164,195,.9)';
+      ctx.fillText(sub, x+pad+30*u, iy+68*u); }
+  });
+  if(items.length>fit){
+    ctx.font=`500 ${26*u}px ${FJ}`; ctx.fillStyle='rgba(147,164,195,.8)';
+    ctx.fillText(`ほか ${items.length-fit} 件`, x+pad+30*u, top+itemH*fit+6*u);
+  }
+}
+
+/* ---------- 生成・共有 ---------- */
+async function generate(){
+  const cv=await drawWallpaper();
+  $('previewImg').src=cv.toDataURL('image/png');
+  $('preview').style.display='block';
+  save();
+  return cv;
+}
+$('gen').onclick=generate;
+$('share').onclick=async()=>{
+  const cv=await generate();
+  const blob=await new Promise(r=>cv.toBlob(r,'image/png'));
+  const file=new File([blob],'lockscreen-schedule.png',{type:'image/png'});
+  if(navigator.canShare && navigator.canShare({files:[file]})){
+    try{ await navigator.share({files:[file]}); return; }catch(e){ /* キャンセル */ }
+  }else{
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob); a.download='lockscreen-schedule.png'; a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+  }
+};
+
+/* ---------- .ics 書き出し ---------- */
+function icsEscape(s){ return s.replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\n/g,'\\n'); }
+$('ics').onclick=()=>{
+  const evs=[];
+  state.cats.forEach(cat=>cat.items.forEach(it=>{
+    if(it.title.trim() && it.date && it.time) evs.push({...it,cat:cat.name});
+  }));
+  if(!evs.length){ alert('日付と時刻つきの予定を入力してください'); return; }
+  const pad=n=>String(n).padStart(2,'0');
+  const now=new Date();
+  const stamp=`${now.getUTCFullYear()}${pad(now.getUTCMonth()+1)}${pad(now.getUTCDate())}T${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}Z`;
+  const lines=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//EPS//LockScheduleJP//JA','CALSCALE:GREGORIAN'];
+  evs.forEach((ev,i)=>{
+    const d=ev.date.replace(/-/g,''), [h,m]=ev.time.split(':').map(Number);
+    const end=new Date(2000,0,1,h,m+60);   // 既定60分
+    lines.push('BEGIN:VEVENT',
+      `UID:${d}-${i}-${Date.now()}@lockschedule`,
+      `DTSTAMP:${stamp}`,
+      `DTSTART:${d}T${pad(h)}${pad(m)}00`,
+      `DTEND:${d}T${pad(end.getHours())}${pad(end.getMinutes())}00`,
+      `SUMMARY:${icsEscape(ev.title)}`,
+      `CATEGORIES:${icsEscape(ev.cat)}`,
+      'END:VEVENT');
+  });
+  lines.push('END:VCALENDAR');
+  const blob=new Blob([lines.join('\r\n')],{type:'text/calendar'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download='schedule.ics'; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+};
+
+/* ---------- 起動 ---------- */
+state=load();
+renderEditor();
+</script>
+</body>
+</html>
