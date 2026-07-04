@@ -254,7 +254,7 @@
         · 縦線を<b>左ドラッグ</b>：片側だけ移動<br>
         · 縦線・横線上で<b>右クリック</b>：削除<br>
         · 何もない所で<b>右ドラッグ</b>：画面をパン（過去の波形まで遡る）<br>
-        · Esc：配置中をキャンセル &nbsp;·&nbsp; <b>Shift</b>：フリーズ切替
+        · Esc：配置中をキャンセル &nbsp;·&nbsp; <b>Space</b>：フリーズ切替
       </div>
     </div>
 
@@ -3091,7 +3091,7 @@ window.addEventListener('keydown', e=>{
     if(calPending){ calPending = null; if(!state.playing) draw(); }
     return;
   }
-  if(e.key === 'Shift'){
+  if(e.key === ' ' || e.code === 'Space'){
     if(e.repeat) return;
     e.preventDefault();
     if(activeTab==='live'){ state.playing = !state.playing; setPlayBtn(); }
@@ -3508,14 +3508,14 @@ document.querySelectorAll('#calModeSeg button').forEach(b=>{
         +'· <b>左クリック</b>：マーカー線を置く<br>'
         +'· 線を<b>左ドラッグ</b>：位置を移動<br>'
         +'· 線上で<b>右クリック</b>：削除<br>'
-        +'· <b>Shift</b>：フリーズ切替';
+        +'· <b>Space</b>：フリーズ切替';
     } else {
       help.innerHTML = '<b>❄ フリーズ</b> 中の操作：<br>'
         +'· <b>左クリック</b>：1本目の線を置く → もう1回で確定<br>'
         +'· 横線を<b>左ドラッグ</b>：縦横に移動（間隔固定）<br>'
         +'· 縦線を<b>左ドラッグ</b>：片側だけ移動<br>'
         +'· 縦線・横線上で<b>右クリック</b>：削除<br>'
-        +'· Esc：配置中をキャンセル &nbsp;·&nbsp; <b>Shift</b>：フリーズ切替';
+        +'· Esc：配置中をキャンセル &nbsp;·&nbsp; <b>Space</b>：フリーズ切替';
     }
   };
 });
