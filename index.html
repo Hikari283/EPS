@@ -1695,9 +1695,11 @@ const VSCAN_STEP_GAP = 2000;
 const VSCAN_LEAD = 1000;
 function buildVScan(){
   const p=state.pace, sc=state.scenario;
+  // 心房（CS/HRA）から誘発済み頻拍への単発期外刺激スキャン ＝ 稲葉法（S1CL＝基本周期始まり）
+  if(state.tachyArmed && p.site!=='RVA' && (getBaselineTachyCL(sc)||sc==='avnrt'||isAVRT(sc))) return buildInabaScan();
   // 進行中頻拍：背景に頻拍を流し、スキャン刺激は速ければ捕捉・遅ければ非捕捉
   if(getBaselineTachyCL(sc) && state.tachyArmed) return buildVScanTachy();
-  // AVNRT/AVRT が誘発済み（tachyArmed）→ 進行中頻拍に対するリセット確認手技
+  // AVNRT/AVRT が誘発済み（tachyArmed）→ 進行中頻拍に対するリセット確認手技（RVA）
   if((sc==='avnrt'||isAVRT(sc)) && state.tachyArmed) return buildVScanResetArmed();
   // 洞調律ベース：背景は洞調律、単発刺激を「1セグメント1発・画面上で固定位置」に置く
   const DEC=10, LEAD=VSCAN_LEAD;
@@ -1784,8 +1786,8 @@ function buildVScanTachy(){
 function buildInabaScan(){
   const p=state.pace, sc=state.scenario;
   const STEP_GAP=VSCAN_STEP_GAP, DEC=10, LEAD=VSCAN_LEAD;
-  const tachyCL=getBaselineTachyCL(sc);
   const tp=tachyParams(sc)||{};
+  const tachyCL=getBaselineTachyCL(sc)||tp.tcl||350;
   const inCircuit=!!tp.inCircuit;          // AVNRT/ORT=true, AT=false
   const isAT=!inCircuit;
   const tLabel=tp.label||'頻拍';
@@ -3570,7 +3572,7 @@ document.querySelectorAll('#paceModeSeg button').forEach(b=>{
       state.pace.site='RVA';
       const sel=document.getElementById('site'); if(sel) sel.value='RVA';
       // 頻拍誘発中：稲葉法の基本周期の初期値を頻拍周期に合わせる（そこから−10msスキャン）
-      const tcl0 = state.tachyArmed ? getBaselineTachyCL(state.scenario) : null;
+      const tcl0 = state.tachyArmed ? (getBaselineTachyCL(state.scenario) || (tachyParams(state.scenario)||{}).tcl) : null;
       if(tcl0){ state.pace.s1cl=tcl0; const el=$('s1cl'); if(el) el.value=tcl0; }
       if(!state.playing) draw();
     }
