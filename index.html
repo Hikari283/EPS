@@ -1800,7 +1800,7 @@ function buildInabaScan(){
   const stopAt=p.stopAt;
   if(stopAt!=null){ const kStop=Math.floor((stopAt-LEAD)/STEP_GAP)+1; nSteps=Math.max(1,Math.min(nSteps,kStop)); }
   state.duration=LEAD+nSteps*STEP_GAP;
-  const couplings=[];
+  const couplings=[], segs=[];
   let firstHisReset=null, firstTerm=null;
   for(let k=0;k<nSteps;k++){
     const coupling=start-k*DEC; couplings.push(coupling);
@@ -1811,6 +1811,8 @@ function buildInabaScan(){
     emitTachyBeat(sc, tA); const tAlast=tA;   // 最後のlead頻拍A
     const tExtra=tAlast+coupling;             // 心房期外刺激
     emitStim(tExtra, mode);
+    const phase = coupling>hisResetMax ? 'no-reset' : coupling>termMax ? 'His-reset' : 'stop';
+    segs.push({coupling, t:tExtra, phase});
     if(coupling>hisResetMax){
       // Hisリセットせず：心房捕捉のみ、頻拍は素通り（元スケジュール継続）
       emitAtrial(tExtra, mode, 0.9);
@@ -1850,7 +1852,7 @@ function buildInabaScan(){
       `<b>稲葉法</b>：${p.site}（心房）から頻拍中に単発期外刺激を ${start}→${couplings[couplings.length-1]}ms で短縮スキャン。`,
       dxNote
     ].filter(Boolean),
-    vscan:{start, end:couplings[couplings.length-1], steps:couplings.length} };
+    vscan:{start, end:couplings[couplings.length-1], steps:couplings.length, segs} };
   return true;
 }
 
@@ -2053,7 +2055,7 @@ function recT0(){
   return Math.max(0, state.duration - REC_WIN);
 }
 
-function saveRecording(label){
+function saveRecording(label, t0Override){
   if(!state.wave) return null;
   const id = recordings.length + 1;
   const rec = {
@@ -2064,13 +2066,26 @@ function saveRecording(label){
     hisEvs: state.hisEvs || [],
     duration: state.duration,
     result: state.result ? JSON.parse(JSON.stringify(state.result)) : null,
-    t0: recT0(),  // 最後の刺激直後を中心に表示
+    t0: (t0Override!=null) ? t0Override : recT0(),  // 最後の刺激直後を中心に表示
     paceMode: state.pace.mode,
   };
   recordings.push(rec);
   renderTabs();
   showToast(`📼 ${rec.label} を保存しました`);
   return rec;
+}
+// V Scan の各セグメント（連結期ごと）を個別イベントとして保存
+function saveVScanSegments(baseLabel){
+  const r=state.result;
+  if(!r || !r.vscan || !r.vscan.segs || !r.vscan.segs.length){ return saveRecording(baseLabel); }
+  const stopClock = state.pace.stopAt!=null ? state.pace.stopAt : state.duration;
+  let last=null;
+  r.vscan.segs.forEach(s=>{
+    if(s.t > stopClock) return;                       // 停止位置を越えたセグメントは除外
+    const tag = s.phase==='stop' ? '停止' : s.phase==='His-reset' ? 'Hisリセット' : '非リセット';
+    last = saveRecording(`${baseLabel} ${s.coupling}ms（${tag}）`, s.t);
+  });
+  return last;
 }
 
 function switchToLive(){
@@ -3516,7 +3531,8 @@ $('stopPace').onclick=()=>{
     state.pace.stopAt = savedClock;
     generateTimeline();          // 停止位置までのV Scanを再構築
     if(state.stimTrigger) captureStimReview(savedClock);
-    const rec = saveRecording(`${modeLabel} ${site}`);
+    // 稲葉法など segs を持つスキャンは連結期ごとに個別イベント保存、それ以外は1つ
+    const rec = saveVScanSegments(`${modeLabel} ${site}`);
     state.pace.stopAt = null;
     state.pace.active=false; state.pace.maneuver=null; state.pace.running=false;
     generateTimeline(); updatePaceButtons();
