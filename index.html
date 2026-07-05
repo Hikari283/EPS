@@ -1839,6 +1839,9 @@ function buildInabaScan(){
       }
       // AVNRT/ORT：AHブロック（A→His伝導せず）＝Aのみで停止
       buildSinusFill(tExtra+Math.round(state.sinusCL*0.9), segEnd);
+      // 頻拍が停止したらスキャン終了（以降は頻拍がないのでスキャン不能）
+      nSteps=k+1; state.duration=LEAD+nSteps*STEP_GAP;
+      break;
     }
   }
   const dxNote = isAT
