@@ -1799,9 +1799,11 @@ function buildInabaScan(){
   const floor=Math.max(160, termMax-30);
   let nSteps=Math.floor((start-floor)/DEC)+1;
   if(nSteps>40) nSteps=40; if(nSteps<1) nSteps=1;
-  // 各セグメント＝表示窓1つ分。期外刺激を窓内の固定位置に置く → スパイクが毎回同じ位置に揃う。
+  // 各セグメント＝表示窓1つ分。掃引原点をセグメント先頭に合わせ、期外刺激を窓の中央に置く
+  // → スパイクが毎回「画面中央の固定位置」に揃う。
   const GAP=state.win;
-  const EXTRA_OFF=Math.min(GAP-150, Math.max(Math.round(GAP*0.5), start+250)); // 固定スクリーン位置
+  const EXTRA_OFF=Math.round(GAP*0.5);      // 画面中央
+  state.pace.paceOnAt=LEAD;                 // 掃引ページをセグメント境界に一致させる
   const stopAt=p.stopAt;
   if(stopAt!=null){ const kStop=Math.floor((stopAt-LEAD)/GAP)+1; nSteps=Math.max(1,Math.min(nSteps,kStop)); }
   state.duration=LEAD+nSteps*GAP;
