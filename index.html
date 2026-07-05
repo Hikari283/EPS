@@ -1695,8 +1695,6 @@ const VSCAN_STEP_GAP = 2000;
 const VSCAN_LEAD = 1000;
 function buildVScan(){
   const p=state.pace, sc=state.scenario;
-  // 心房（CS/HRA）から誘発済み頻拍への単発期外刺激スキャン ＝ 稲葉法（全頻拍で基本周期始まり）
-  if(state.tachyArmed && p.site!=='RVA' && (getBaselineTachyCL(sc)||sc==='avnrt'||isAVRT(sc))) return buildInabaScan();
   // 進行中頻拍：背景に頻拍を流し、スキャン刺激は速ければ捕捉・遅ければ非捕捉
   if(getBaselineTachyCL(sc) && state.tachyArmed) return buildVScanTachy();
   // AVNRT/AVRT が誘発済み（tachyArmed）→ 進行中頻拍に対するリセット確認手技
@@ -1786,8 +1784,8 @@ function buildVScanTachy(){
 function buildInabaScan(){
   const p=state.pace, sc=state.scenario;
   const STEP_GAP=VSCAN_STEP_GAP, DEC=10, LEAD=VSCAN_LEAD;
+  const tachyCL=getBaselineTachyCL(sc);
   const tp=tachyParams(sc)||{};
-  const tachyCL=getBaselineTachyCL(sc)||tp.tcl||350;
   const inCircuit=!!tp.inCircuit;          // AVNRT/ORT=true, AT=false
   const isAT=!inCircuit;
   const tLabel=tp.label||'頻拍';
@@ -1795,26 +1793,23 @@ function buildInabaScan(){
   // 位相しきい値（連結期）
   const hisResetMax=tachyCL-20;            // これ以下でHisをリセット
   const termMax    =tachyCL-110;           // これ以下で頻拍停止
-  const start=p.s1cl;                       // 基本周期から開始し、−10msずつ短縮
+  const start=p.s1cl;                      // 基本周期（UIのS1CL）から開始し、−10msずつ短縮
   const floor=Math.max(160, termMax-30);
   let nSteps=Math.floor((start-floor)/DEC)+1;
   if(nSteps>40) nSteps=40; if(nSteps<1) nSteps=1;
-  // 各セグメント＝表示窓1つ分。期外刺激を窓内の固定位置に置く → スパイクが毎回同じ位置に揃う。
-  const GAP=state.win;
-  // 期外刺激の固定スクリーン位置：最大連結期(start)でも直前に頻拍を1〜2拍置ける余裕を確保
-  const EXTRA_OFF=Math.min(GAP-150, Math.max(Math.round(GAP*0.5), start+250));
   const stopAt=p.stopAt;
-  if(stopAt!=null){ const kStop=Math.floor((stopAt-LEAD)/GAP)+1; nSteps=Math.max(1,Math.min(nSteps,kStop)); }
-  state.duration=LEAD+nSteps*GAP;
+  if(stopAt!=null){ const kStop=Math.floor((stopAt-LEAD)/STEP_GAP)+1; nSteps=Math.max(1,Math.min(nSteps,kStop)); }
+  state.duration=LEAD+nSteps*STEP_GAP;
   const couplings=[], segs=[];
   let firstHisReset=null, firstTerm=null;
   for(let k=0;k<nSteps;k++){
     const coupling=start-k*DEC; couplings.push(coupling);
-    const segStart=LEAD+k*GAP, segEnd=segStart+GAP;
-    const tExtra=segStart+EXTRA_OFF;          // 心房期外刺激（固定位置）
-    const tAlast=tExtra-coupling;             // 直前の頻拍A（連結期分だけ手前）
-    // lead頻拍：tAlast を起点に後ろ向きへ、セグメント先頭まで配置
-    for(let t=tAlast; t>=segStart+40; t-=tachyCL) emitTachyBeat(sc, t);
+    const segStart=LEAD+k*STEP_GAP, segEnd=segStart+STEP_GAP-40;
+    // 期外刺激の直前に頻拍を2拍見せる
+    let tA=segStart+200;
+    emitTachyBeat(sc, tA); const tA0=tA; tA+=tachyCL;
+    emitTachyBeat(sc, tA); const tAlast=tA;   // 最後のlead頻拍A
+    const tExtra=tAlast+coupling;             // 心房期外刺激
     emitStim(tExtra, mode);
     const phase = coupling>hisResetMax ? 'no-reset' : coupling>termMax ? 'His-reset' : 'stop';
     segs.push({coupling, t:tExtra, phase});
@@ -1845,7 +1840,7 @@ function buildInabaScan(){
       // AVNRT/ORT：AHブロック（A→His伝導せず）＝Aのみで停止
       buildSinusFill(tExtra+Math.round(state.sinusCL*0.9), segEnd);
       // 頻拍が停止したらスキャン終了（以降は頻拍がないのでスキャン不能）
-      nSteps=k+1; state.duration=LEAD+nSteps*GAP;
+      nSteps=k+1; state.duration=LEAD+nSteps*STEP_GAP;
       break;
     }
   }
@@ -1860,7 +1855,7 @@ function buildInabaScan(){
       `<b>稲葉法</b>：${p.site}（心房）から頻拍中に単発期外刺激を ${start}→${couplings[couplings.length-1]}ms で短縮スキャン。`,
       dxNote
     ].filter(Boolean),
-    vscan:{start, end:couplings[couplings.length-1], steps:couplings.length, gap:GAP, segs} };
+    vscan:{start, end:couplings[couplings.length-1], steps:couplings.length, segs} };
   return true;
 }
 
@@ -3575,7 +3570,7 @@ document.querySelectorAll('#paceModeSeg button').forEach(b=>{
       state.pace.site='RVA';
       const sel=document.getElementById('site'); if(sel) sel.value='RVA';
       // 頻拍誘発中：稲葉法の基本周期の初期値を頻拍周期に合わせる（そこから−10msスキャン）
-      const tcl0 = state.tachyArmed ? (getBaselineTachyCL(state.scenario) || (tachyParams(state.scenario)||{}).tcl) : null;
+      const tcl0 = state.tachyArmed ? getBaselineTachyCL(state.scenario) : null;
       if(tcl0){ state.pace.s1cl=tcl0; const el=$('s1cl'); if(el) el.value=tcl0; }
       if(!state.playing) draw();
     }
