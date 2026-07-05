@@ -1790,7 +1790,7 @@ function buildInabaScan(){
   // 相しきい値（連結期）
   const hisResetMax=tachyCL-20;             // これ以下でHisリセット
   const termMax    =tachyCL-110;            // これ以下で頻拍停止
-  const start=tachyCL-10;                   // 頻拍周期−10msから開始
+  const start=p.s1cl;                       // 基本周期（UIのS1CL）から開始
   const floor=Math.max(160, termMax-30);
   let nSteps=Math.floor((start-floor)/DEC)+1;
   if(nSteps>40) nSteps=40; if(nSteps<1) nSteps=1;
@@ -3546,6 +3546,9 @@ document.querySelectorAll('#paceModeSeg button').forEach(b=>{
     if(state.pace.mode==='vscan'){
       state.pace.site='RVA';
       const sel=document.getElementById('site'); if(sel) sel.value='RVA';
+      // 頻拍誘発中：稲葉法/V Scanの基本周期の初期値を頻拍周期に合わせる（そこから−10msスキャン）
+      const tcl0 = state.tachyArmed ? (getBaselineTachyCL(state.scenario) || (tachyParams(state.scenario)||{}).tcl) : null;
+      if(tcl0){ state.pace.s1cl=tcl0; const el=$('s1cl'); if(el) el.value=tcl0; }
       if(!state.playing) draw();
     }
     // バースト：頻拍中なら臨床定番の「TCL−20ms」をS1の初期値に（本書p92：TCLより10〜20ms短い）
