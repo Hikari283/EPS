@@ -1790,8 +1790,7 @@ function buildInabaScan(){
   const GAP=state.win;
   const EXTRA_OFF=Math.round(GAP*0.5);
   state.pace.paceOnAt=LEAD;
-  const stopAt=p.stopAt;
-  if(stopAt!=null){ const kStop=Math.floor((stopAt-LEAD)/GAP)+1; nSteps=Math.max(1,Math.min(nSteps,kStop)); }
+  // 稲葉法スキャンは頻拍停止で自然終了するので、停止位置での切り詰めはしない（全連結期を残す）。
   state.duration=LEAD+nSteps*GAP;
   const couplings=[], segs=[];
   let firstHisReset=null, firstTerm=null;
@@ -2030,7 +2029,7 @@ function recT0(){
   return Math.max(0, state.duration - REC_WIN);
 }
 
-function saveRecording(label){
+function saveRecording(label, t0Override){
   if(!state.wave) return null;
   const id = recordings.length + 1;
   const rec = {
@@ -2041,13 +2040,24 @@ function saveRecording(label){
     hisEvs: state.hisEvs || [],
     duration: state.duration,
     result: state.result ? JSON.parse(JSON.stringify(state.result)) : null,
-    t0: recT0(),  // 最後の刺激直後を中心に表示
+    t0: (t0Override!=null) ? t0Override : recT0(),  // 最後の刺激直後を中心に表示
     paceMode: state.pace.mode,
   };
   recordings.push(rec);
   renderTabs();
   showToast(`📼 ${rec.label} を保存しました`);
   return rec;
+}
+// 稲葉法など segs を持つスキャンは連結期ごとに個別イベント保存。それ以外は1つ。
+function saveVScanSegments(baseLabel){
+  const r=state.result;
+  if(!r || !r.vscan || !r.vscan.segs || !r.vscan.segs.length){ return saveRecording(baseLabel); }
+  let last=null;
+  r.vscan.segs.forEach(s=>{
+    const tag = s.phase==='stop' ? '停止' : s.phase==='His-reset' ? 'Hisリセット' : '非リセット';
+    last = saveRecording(`${baseLabel} ${s.coupling}ms（${tag}）`, s.t);
+  });
+  return last;
 }
 
 function switchToLive(){
@@ -3493,7 +3503,8 @@ $('stopPace').onclick=()=>{
     state.pace.stopAt = savedClock;
     generateTimeline();          // 停止位置までのV Scanを再構築
     if(state.stimTrigger) captureStimReview(savedClock);
-    const rec = saveRecording(`${modeLabel} ${site}`);
+    // 稲葉法など segs を持つスキャンは連結期ごとに個別イベント保存
+    const rec = saveVScanSegments(`${modeLabel} ${site}`);
     state.pace.stopAt = null;
     state.pace.active=false; state.pace.maneuver=null; state.pace.running=false;
     generateTimeline(); updatePaceButtons();
