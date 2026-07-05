@@ -1740,31 +1740,39 @@ function buildVScan(){
 // 単発スキャン刺激は進行中頻拍をリセットするのみ（新レートに化けない）。
 function buildVScanTachy(){
   const p=state.pace, sc=state.scenario;
-  const STEP_GAP=VSCAN_STEP_GAP, DEC=10, FLOOR=200, LEAD=VSCAN_LEAD;
+  const DEC=10, LEAD=VSCAN_LEAD;
   const tachyCL=getBaselineTachyCL(sc);
-  const tLabel={at:'リエントリー性AT',atypavnrt:'非典型AVNRT',aflutter:'心房粗動'}[sc];
-  let start=tachyCL-20;                          // 頻拍周期−20msから開始
-  let nSteps=Math.floor((start-FLOOR)/DEC)+1;
-  if(nSteps>48) nSteps=48; if(nSteps<1) nSteps=1;
-  state.duration=LEAD+nSteps*STEP_GAP;
-  // 背景頻拍を全期間
-  buildBaseline(sc, 0, state.duration);
-  const couplings=[];
+  const tLabel={at:'リエントリー性AT',atypavnrt:'非典型AVNRT',aflutter:'心房粗動'}[sc]||'頻拍';
+  // 頻拍拍の A基準(t) から V までのオフセット（emitTachyBeat準拠）。V–V連結期の同期に使う。
+  const Voff = isAVRT(sc) ? -120 : (sc==='avnrt'||sc==='avnrt_noretro') ? -4 : (sc==='atypavnrt') ? -185 : 142;
+  const start=tachyCL-20;                        // 頻拍周期−20msから開始
+  const floor=Math.max(160, tachyCL-160);
+  let nSteps=Math.floor((start-floor)/DEC)+1;
+  if(nSteps>40) nSteps=40; if(nSteps<1) nSteps=1;
+  // 各セグメント＝表示窓1つ。掃引原点をセグメント先頭に、期外刺激を窓の中央に固定。
+  const GAP=state.win, EXTRA_OFF=Math.round(GAP*0.5);
+  state.pace.paceOnAt=LEAD;
+  state.duration=LEAD+nSteps*GAP;
+  const couplings=[], segs=[];
   for(let k=0;k<nSteps;k++){
-    const segStart=LEAD+k*STEP_GAP;
     const coupling=start-k*DEC; couplings.push(coupling);
-    const tS1=segStart+600;          // S1 単発スキャン刺激
-    emitStim(tS1, p.site);
-    const tS2=tS1+coupling;          // S2 早期刺激
-    emitStim(tS2, p.site);
+    const segStart=LEAD+k*GAP, segEnd=segStart+GAP;
+    const tExtraV=segStart+EXTRA_OFF;            // 期外刺激V（画面中央の固定位置）
+    const prevV=tExtraV-coupling;                // 直前の頻拍V（連結期V–V分だけ手前）
+    // lead頻拍：直前Vを起点に後ろ向きへ（tachyBeatはA基準なので V→A は −Voff）
+    for(let vt=prevV; vt>=segStart+40; vt-=tachyCL) emitTachyBeat(sc, vt-Voff);
+    emitStim(tExtraV, p.site); emitVent(tExtraV, false, null, true);   // 心室期外刺激（幅広QRS）
+    // 期外刺激で頻拍がリセット → 以降は期外刺激Vを起点にTCLで再開
+    for(let vt=tExtraV+tachyCL; vt<segEnd; vt+=tachyCL) emitTachyBeat(sc, vt-Voff);
+    segs.push({coupling, t:tExtraV, phase:'vscan'});
   }
   state.result={ site:p.site, induced:true, mechanism:tLabel,
     a2h2:null, jump:false, narrow:false,
     notes:[
-      `進行中の${tLabel}（TCL ${tachyCL}ms）に対して ${p.site} から単発スキャン刺激（${start}→${couplings[couplings.length-1]}ms）。`,
-      `単発早期刺激は頻拍をリセットするのみで頻拍レートは不変。連続停止/誘発はバースト・エントレインメントで評価してください。`
+      `進行中の${tLabel}（TCL ${tachyCL}ms）に対して ${p.site} から単発心室期外刺激（V–V連結期 ${start}→${couplings[couplings.length-1]}ms）。`,
+      `連結期TCL−10なら期外刺激は次のVの10ms前に落ちます。単発刺激は頻拍をリセットするのみ。`
     ],
-    vscan:{start, end:couplings[couplings.length-1], steps:couplings.length} };
+    vscan:{start, end:couplings[couplings.length-1], steps:couplings.length, gap:GAP, segs} };
   return true;
 }
 
@@ -2054,8 +2062,8 @@ function saveVScanSegments(baseLabel){
   if(!r || !r.vscan || !r.vscan.segs || !r.vscan.segs.length){ return saveRecording(baseLabel); }
   let last=null;
   r.vscan.segs.forEach(s=>{
-    const tag = s.phase==='stop' ? '停止' : s.phase==='His-reset' ? 'Hisリセット' : '非リセット';
-    last = saveRecording(`${baseLabel} ${s.coupling}ms（${tag}）`, s.t);
+    const tag = s.phase==='stop' ? '停止' : s.phase==='His-reset' ? 'Hisリセット' : s.phase==='vscan' ? '' : '非リセット';
+    last = saveRecording(`${baseLabel} ${s.coupling}ms${tag?`（${tag}）`:''}`, s.t);
   });
   return last;
 }
