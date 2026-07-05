@@ -585,7 +585,7 @@ function tachyParams(sc){
     case 'atypavnrt': return {tcl:360, inCircuit:true,  retro:'retro_rv', va:135, label:'非典型AVNRT'};
     case 'avrt':      return {tcl:330, inCircuit:true,  retro:'avrt_left',va:135, label:'正方向性AVRT'};
     case 'at':            return {tcl:360, inCircuit:false, retro:'retro_rv', va:150, label:'リエントリー性AT'};
-    case 'avnrt_noretro': return {tcl:350, inCircuit:true,  retro:null,       va:null, label:'AVNRT（室房伝導なし）', noRetro:true};
+    case 'avnrt_noretro': return {tcl:350, inCircuit:true,  retro:null,       va:null, label:'AVNRT（室房伝導なし）', noRetro:true, noOrtho:true};
     case 'at_noretro':    return {tcl:360, inCircuit:false, retro:null,       va:null, label:'AT（室房伝導なし）',    noRetro:true};
     case 'at_noretro_noortho': return {tcl:360, inCircuit:false, retro:null,  va:null, label:'AT（室房伝導なし・orthodromic captureなし）', noRetro:true, noOrtho:true};
     default: return null;
@@ -1520,7 +1520,8 @@ function buildStraightPace(){
       : `停止ボタンを押すとペーシング終了・結果が確認できます。`;
     const lesNote = les
       ? (les.evaluable===false
-          ? `<b>last entrainment sequence</b>：A1A2 ＝ <b>${les.a1a2}ms</b> ＞ 刺激周期 ${les.pcl}ms → A2は<b>orthodromic captureされず（逆方向性捕捉）</b>のため<b>評価不可</b>。刺激部位を変えて A1A2＝刺激周期 となる部位で再評価を。`
+          ? `<b>last entrainment sequence</b>：A1A2 ＝ <b>${les.a1a2}ms</b> ＞ 刺激周期 ${les.pcl}ms → A2は<b>orthodromic captureされず</b>のため<b>評価不可</b>。`
+            + (les.isAT ? '刺激部位を変えて A1A2＝刺激周期 となる部位で再評価を。' : '（室房伝導なしAVNRTは逆行路がなく A2 を順行性に捕捉できない）。<b>VAリンキング（ΔVA&lt;20）</b>で AVNRT を診断。')
           : `<b>last entrainment sequence</b>：A1A2 ＝ <b>${les.a1a2}ms</b>（＝刺激周期・全電極）、V1V2 も刺激周期 → <b>A2までペース依存に順行性捕捉</b>。並び <b>${les.seq}</b> → <b>${les.isAT?'AT':'AVNRT/ORT'}</b>。`)
       : null;
     const vaLinkNote = (les && les.isAT!=null && p.stopAt!=null && !terminates)
