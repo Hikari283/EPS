@@ -1792,9 +1792,15 @@ function buildInabaScan(){
   const isAT=!inCircuit;
   const tLabel=tp.label||'頻拍';
   const mode=(p.site==='HRA'?'hra':p.site);
-  // 位相しきい値（連結期）
-  const hisResetMax=tachyCL-20;            // これ以下でHisをリセット
-  const termMax    =tachyCL-110;           // これ以下で頻拍停止
+  // 頻拍中Hisの心房波(A)に対するオフセット（emitTachyBeat準拠）：
+  //   AVNRT系はHisがAの手前(負)、ATはHisがAの後(正)。これでHisリセット可能な連結期が変わる。
+  const HOFF={avnrt:-50, avnrt_noretro:-50, atypavnrt:-90, at:92, at_noretro:92, at_noretro_noortho:92};
+  const Hoff=Math.max(-100, Math.min(100, isAVRT(sc)?-90:(HOFF[sc]??92)));
+  const SH=40;                             // 心房期外刺激→His（CSp近位・短い順行伝導）
+  // 位相しきい値（連結期）：期外刺激His(tExtra+SH)が本来のHisより前に来る＝Hisリセット（HH短縮）。
+  //   AVNRT（HisがAの手前）は連結期を十分短くしないとリセットできない。
+  let hisResetMax=Math.min(tachyCL-10, Hoff+tachyCL-SH);   // これ以下でHisリセット
+  let termMax    =Math.min(hisResetMax-20, tachyCL-110);   // これ以下で頻拍停止
   const start=p.s1cl;                      // 基本周期（UIのS1CL）から開始し、−10msずつ短縮
   const floor=Math.max(160, termMax-30);
   let nSteps=Math.floor((start-floor)/DEC)+1;
@@ -1824,11 +1830,11 @@ function buildInabaScan(){
       emitAtrial(tExtra, mode, 0.9);
       for(let t=tAlast+tachyCL; t<segEnd; t+=tachyCL) emitTachyBeat(sc, t);
     } else if(coupling>termMax){
-      // Hisリセット window
+      // Hisリセット window：期外刺激が本来のHisより前にHisを捕捉 → H*前進＝HH短縮
       if(firstHisReset==null) firstHisReset=coupling;
       emitAtrial(tExtra, mode, 0.95);
-      emitHis(tExtra+90, 1.5);                // リセットされたHis（H*）：A波から離して強調
-      emitVent(tExtra+90+45, false);          // 期外刺激は A→H*→V* と順行伝導（V*）
+      emitHis(tExtra+SH, 1.5);                // 前進したHis（H*）：直前HisからのHHが短縮
+      emitVent(tExtra+SH+45, false);          // 期外刺激は A→H*→V* と順行伝導（V*）
       if(isAT){
         // AT：Hisはリセットするが頻拍non-reset（AA不変・元スケジュール継続）
         for(let t=tAlast+tachyCL; t<segEnd; t+=tachyCL) emitTachyBeat(sc, t);
@@ -1842,7 +1848,7 @@ function buildInabaScan(){
       emitAtrial(tExtra, mode, 0.95);
       if(isAT){
         // AT：A→H→V捕捉後に回路がブロック＝HAブロックで停止
-        emitHis(tExtra+90, 1.5); emitVent(tExtra+90+45,false);
+        emitHis(tExtra+SH, 1.5); emitVent(tExtra+SH+45,false);
       }
       // AVNRT/ORT：AHブロック（A→His伝導せず）＝Aのみで停止
       buildSinusFill(tExtra+Math.round(state.sinusCL*0.9), segEnd);
