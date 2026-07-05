@@ -1479,10 +1479,12 @@ function buildStraightPace(){
         if(noOrtho){
           // orthodromic captureなし：A2は順行性に捕捉されず、頻拍の自己Aが逆方向性に出現。
           // → A1A2 ≠ 刺激周期（延長）＝ last entrainment sequence 評価不可。
+          // 復帰1拍目＝A2そのもの（非捕捉）なので、VAリンキングは 最終ペースV→A2。
+          // ATは A2 を刺激部位依存（vaDelta）にずらす → ΔVA≥20。AVNRTは vaDelta=0。
           const a1a2His = cl + 45;                        // 刺激周期より延長（His計測）
-          const tA2 = a1His + a1a2His - atrialOffsets(modeFrom).His;  // A2（頻拍極性）
+          const tA2 = a1His + a1a2His - atrialOffsets(modeFrom).His + vaDelta;  // A2（頻拍極性・部位依存）
           emitTachyBeat(sc, tA2);                         // 頻拍極性のA2複合体
-          renderTachy(sc, tA2 + tachyCL + vaDelta, state.duration); // 以降 頻拍(TCL)・復帰VAは部位依存
+          renderTachy(sc, tA2 + tachyCL, state.duration); // 以降 頻拍(TCL)
           les = { evaluable:false, a1a2:a1a2His, pcl:cl, isAT, vaDelta };
         } else {
           // orthodromic captureあり：A2までペース依存に順行性捕捉 → 全電極 A1A2＝PCL、V1V2＝PCL。
