@@ -1787,9 +1787,14 @@ function buildInabaScan(){
   const isAT=!tp.inCircuit;                 // AVNRT/ORT=false, AT=true
   const tLabel=tp.label||'頻拍';
   const mode=(p.site==='HRA'?'hra':p.site);
-  // 相しきい値（連結期）
-  const hisResetMax=tachyCL-20;             // これ以下でHisリセット
-  const termMax    =tachyCL-110;            // これ以下で頻拍停止
+  // 頻拍中Hisの心房A基準オフセット（emitTachyBeat準拠）。AVNRT系はHisがAの手前(負)、ATは後(正)。
+  const HOFF={avnrt:-50, avnrt_noretro:-50, atypavnrt:-90, at:92, at_noretro:92, at_noretro_noortho:92};
+  const Hoff=Math.max(-100, Math.min(100, isAVRT(sc)?-90:(HOFF[sc]??92)));
+  const SH=40;                              // 心房期外刺激→His（CSp近位・短い順行伝導）
+  // 相しきい値（連結期）：期外刺激His(tExtra+SH)が本来のHisより前に来る＝Hisリセット（HH短縮）。
+  //   AVNRT（HisがAの手前）は連結期を十分短くしないとリセットできない。
+  const hisResetMax=Math.min(tachyCL-10, Hoff+tachyCL-SH);   // これ以下でHisリセット
+  const termMax    =Math.min(hisResetMax-40, tachyCL-110);   // これ以下で頻拍停止
   const start=p.s1cl;                       // 基本周期（UIのS1CL）から開始
   const floor=Math.max(160, termMax-30);
   let nSteps=Math.floor((start-floor)/DEC)+1;
@@ -1818,20 +1823,21 @@ function buildInabaScan(){
     } else if(phase==='His-reset'){
       if(firstHisReset==null) firstHisReset=coupling;
       emitAtrial(tExtra, mode, 0.95);
-      emitHis(tExtra+55, 1.4); emitVent(tExtra+55+45, false);   // A→H*→V*
-      if(isAT){ for(let t=tAlast+tachyCL; t<segEnd; t+=tachyCL) emitTachyBeat(sc, t); }  // 頻拍non-reset
-      else    { for(let t=tExtra+tachyCL; t<segEnd; t+=tachyCL) emitTachyBeat(sc, t); }  // 頻拍reset
+      // H* は短いSHで前進 → 直前HisからのHHが短縮（reset）。A→H*→V*。
+      emitHis(tExtra+SH, 1.4); emitVent(tExtra+SH+45, false);
+      if(isAT){ for(let t=tAlast+tachyCL; t<segEnd; t+=tachyCL) emitTachyBeat(sc, t); }  // 頻拍non-reset（AA不変）
+      else    { for(let t=tExtra+tachyCL; t<segEnd; t+=tachyCL) emitTachyBeat(sc, t); }  // 頻拍reset（期外刺激起点）
     } else {
       if(firstTerm==null) firstTerm=coupling;
       emitAtrial(tExtra, mode, 0.95);
-      if(isAT){ emitHis(tExtra+55, 1.4); emitVent(tExtra+55+45, false); }  // A→H→V後に回路ブロック=HA block
+      if(isAT){ emitHis(tExtra+SH, 1.4); emitVent(tExtra+SH+45, false); }  // A→H→V後に回路ブロック=HA block
       buildSinusFill(tExtra+Math.round((state.sinusCL||800)*0.9), segEnd);
       nSteps=k+1; state.duration=LEAD+nSteps*GAP; break;   // 停止でスキャン終了
     }
   }
   const dx = isAT
-    ? `${firstHisReset!=null?`Hisリセットでも<b>頻拍non-reset（AA不変）→ AT</b>。`:''}${firstTerm!=null?` 停止様式は<b>HAブロック</b>（ATは否定できず）。`:''}`
-    : `${firstHisReset!=null?`Hisリセットで<b>頻拍もreset</b>（回路に侵入）。`:''}${firstTerm!=null?` <b>AHブロック</b>で停止 → <b>AT否定</b>。`:''}`;
+    ? `${firstHisReset!=null?`連結期 ${firstHisReset}ms で <b>Hisリセット（HH短縮）</b>でも<b>頻拍non-reset（AA不変）→ AT</b>。`:''}${firstTerm!=null?` 停止様式は<b>HAブロック</b>（ATは否定できず）。`:''}`
+    : `${firstHisReset!=null?`連結期 ${firstHisReset}ms で <b>Hisリセット（HH短縮）＝頻拍もreset</b>（回路に侵入）。`:''}${firstTerm!=null?` <b>AHブロック</b>で停止 → <b>AT否定</b>。`:''}`;
   state.result={ site:p.site, induced:true, mechanism:tLabel, a2h2:null, jump:false, narrow:false,
     notes:[`<b>稲葉法</b>：${p.site}（心房）から頻拍中に単発期外刺激を ${start}→${couplings[couplings.length-1]}ms でスキャン。`, dx].filter(Boolean),
     vscan:{start, end:couplings[couplings.length-1], steps:couplings.length, gap:GAP, segs} };
