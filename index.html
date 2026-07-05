@@ -1790,7 +1790,7 @@ function buildInabaScan(){
   // 相しきい値（連結期）
   const hisResetMax=tachyCL-20;             // これ以下でHisリセット
   const termMax    =tachyCL-110;            // これ以下で頻拍停止
-  const start=tachyCL-20;                   // 頻拍周期−20msから開始
+  const start=tachyCL-10;                   // 頻拍周期−10msから開始
   const floor=Math.max(160, termMax-30);
   let nSteps=Math.floor((start-floor)/DEC)+1;
   if(nSteps>40) nSteps=40; if(nSteps<1) nSteps=1;
