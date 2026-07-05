@@ -1828,6 +1828,7 @@ function buildInabaScan(){
       if(firstHisReset==null) firstHisReset=coupling;
       emitAtrial(tExtra, mode, 0.95);
       emitHis(tExtra+90, 1.5);                // リセットされたHis（H*）：A波から離して強調
+      emitVent(tExtra+90+45, false);          // 期外刺激は A→H*→V* と順行伝導（V*）
       if(isAT){
         // AT：Hisはリセットするが頻拍non-reset（AA不変・元スケジュール継続）
         for(let t=tAlast+tachyCL; t<segEnd; t+=tachyCL) emitTachyBeat(sc, t);
