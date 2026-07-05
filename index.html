@@ -1492,8 +1492,14 @@ function buildStraightPace(){
             // AT：A2が先行し順行伝導 → A2-H*-V*（V* が V1+cl＝V1V2もPCL）
             emitHis(a2His + ahTo);
             emitVent(a2His + ahTo + 45, false);
+          } else {
+            // AVNRT系：A2に伴う V*・H* は A2 の「前」（房室結節経由）→ 並び H*-V*-A2。
+            //   slow-fast(avnrt)は A≈V で V* は A2 直前、fast-slow(atypavnrt)は長RPで V* は前方。
+            const vaBack = (sc==='atypavnrt') ? 185 : 4;   // A2→V*の逆算（RPの長さ）
+            emitVent(a2His - vaBack, false);
+            emitHis(a2His - vaBack - 48);
           }
-          // AVNRT系：H*・V*は最終ペース拍の順行伝導（A1直後・ループ描画済み）→ H*-V*-A2
+          // A2の後にVは出ない（＝H*-V*-A2、ATとの鑑別点）。
           // A3以降は頻拍(TCL)へ復帰。極性差を補正しHis電極で A2A3＝TCL になるようアンカー。
           // ATは vaDelta 分だけ復帰位相がずれる（＝復帰VAが刺激部位で変動）。
           const a3Start = a2His + tachyCL - atrialOffsets(modeFrom).His + vaDelta;
