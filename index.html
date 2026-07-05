@@ -1747,6 +1747,8 @@ function buildVScan(){
 // 単発スキャン刺激は進行中頻拍をリセットするのみ（新レートに化けない）。
 function buildVScanTachy(){
   const p=state.pace, sc=state.scenario;
+  // 心房（CS/HRA）から頻拍中に単発期外刺激スキャン ＝ 稲葉法（稲葉 2024）
+  if(p.site!=='RVA') return buildInabaScan();
   const STEP_GAP=VSCAN_STEP_GAP, DEC=10, FLOOR=200, LEAD=VSCAN_LEAD;
   const tachyCL=getBaselineTachyCL(sc);
   const tLabel={at:'リエントリー性AT',atypavnrt:'非典型AVNRT',aflutter:'心房粗動'}[sc];
@@ -1771,6 +1773,83 @@ function buildVScanTachy(){
       `進行中の${tLabel}（TCL ${tachyCL}ms）に対して ${p.site} から単発スキャン刺激（${start}→${couplings[couplings.length-1]}ms）。`,
       `単発早期刺激は頻拍をリセットするのみで頻拍レートは不変。連続停止/誘発はバースト・エントレインメントで評価してください。`
     ],
+    vscan:{start, end:couplings[couplings.length-1], steps:couplings.length} };
+  return true;
+}
+
+// ---- 稲葉法（稲葉 2024）：頻拍中に CSp から心房期外刺激を連結期短縮しながらスキャン ----
+// ①His束をリセットする最長連結期の期外刺激：Hisリセットでも頻拍non-reset → AT。
+//   AVNRT/ORTは回路に侵入するので頻拍もreset。
+// ②頻拍を停止させた早期期外刺激：AHブロックで停止 → AT否定。AT はHAブロックで停止。
+function buildInabaScan(){
+  const p=state.pace, sc=state.scenario;
+  const STEP_GAP=VSCAN_STEP_GAP, DEC=10, LEAD=VSCAN_LEAD;
+  const tachyCL=getBaselineTachyCL(sc);
+  const tp=tachyParams(sc)||{};
+  const inCircuit=!!tp.inCircuit;          // AVNRT/ORT=true, AT=false
+  const isAT=!inCircuit;
+  const tLabel=tp.label||'頻拍';
+  const mode=(p.site==='HRA'?'hra':p.site);
+  // 位相しきい値（連結期）
+  const hisResetMax=tachyCL-20;            // これ以下でHisをリセット
+  const termMax    =tachyCL-110;           // これ以下で頻拍停止
+  const start=tachyCL+10;                  // 頻拍周期より少し長めから開始
+  const floor=Math.max(160, termMax-30);
+  let nSteps=Math.floor((start-floor)/DEC)+1;
+  if(nSteps>22) nSteps=22; if(nSteps<1) nSteps=1;
+  const stopAt=p.stopAt;
+  if(stopAt!=null){ const kStop=Math.floor((stopAt-LEAD)/STEP_GAP)+1; nSteps=Math.max(1,Math.min(nSteps,kStop)); }
+  state.duration=LEAD+nSteps*STEP_GAP;
+  const couplings=[];
+  let firstHisReset=null, firstTerm=null;
+  for(let k=0;k<nSteps;k++){
+    const coupling=start-k*DEC; couplings.push(coupling);
+    const segStart=LEAD+k*STEP_GAP, segEnd=segStart+STEP_GAP-40;
+    // 期外刺激の直前に頻拍を2拍見せる
+    let tA=segStart+200;
+    emitTachyBeat(sc, tA); const tA0=tA; tA+=tachyCL;
+    emitTachyBeat(sc, tA); const tAlast=tA;   // 最後のlead頻拍A
+    const tExtra=tAlast+coupling;             // 心房期外刺激
+    emitStim(tExtra, mode);
+    if(coupling>hisResetMax){
+      // Hisリセットせず：心房捕捉のみ、頻拍は素通り（元スケジュール継続）
+      emitAtrial(tExtra, mode, 0.9);
+      for(let t=tAlast+tachyCL; t<segEnd; t+=tachyCL) emitTachyBeat(sc, t);
+    } else if(coupling>termMax){
+      // Hisリセット window
+      if(firstHisReset==null) firstHisReset=coupling;
+      emitAtrial(tExtra, mode, 0.95);
+      emitHis(tExtra+55);                     // リセットされたHis（H*）
+      if(isAT){
+        // AT：Hisはリセットするが頻拍non-reset（AA不変・元スケジュール継続）
+        for(let t=tAlast+tachyCL; t<segEnd; t+=tachyCL) emitTachyBeat(sc, t);
+      } else {
+        // AVNRT/ORT：頻拍reset（期外刺激起点で再開）
+        for(let t=tExtra+tachyCL; t<segEnd; t+=tachyCL) emitTachyBeat(sc, t);
+      }
+    } else {
+      // 頻拍停止 window
+      if(firstTerm==null) firstTerm=coupling;
+      emitAtrial(tExtra, mode, 0.95);
+      if(isAT){
+        // AT：A→H→V捕捉後に回路がブロック＝HAブロックで停止
+        emitHis(tExtra+55); emitVent(tExtra+55+45,false);
+      }
+      // AVNRT/ORT：AHブロック（A→His伝導せず）＝Aのみで停止
+      buildSinusFill(tExtra+Math.round(state.sinusCL*0.9), segEnd);
+    }
+  }
+  const dxNote = isAT
+    ? `${firstHisReset!=null?`<b>①</b> 連結期 ${firstHisReset}ms で <b>Hisリセット・頻拍non-reset（AA不変）→ AT</b>（感度96%/特異度100%）。`:''}`
+      + `${firstTerm!=null?` <b>②</b> 連結期 ${firstTerm}ms で <b>HAブロック停止</b>（A→H→V後に回路ブロック）＝ATは否定できない。`:''}`
+    : `${firstHisReset!=null?`<b>①</b> 連結期 ${firstHisReset}ms で <b>Hisリセット＝頻拍もreset</b>（回路に侵入）→ AT否定的。`:''}`
+      + `${firstTerm!=null?` <b>②</b> 連結期 ${firstTerm}ms で <b>AHブロック停止</b>（A→His伝導せず）→ <b>AT否定</b>（感度92%/特異度100%）。`:''}`;
+  state.result={ site:p.site, induced:true, mechanism:tLabel,
+    a2h2:null, jump:false, narrow:false,
+    notes:[
+      `<b>稲葉法</b>：${p.site}（心房）から頻拍中に単発期外刺激を ${start}→${couplings[couplings.length-1]}ms で短縮スキャン。`,
+      dxNote
+    ].filter(Boolean),
     vscan:{start, end:couplings[couplings.length-1], steps:couplings.length} };
   return true;
 }
@@ -3617,7 +3696,7 @@ function updateModeLabel(){
   if(state.scenario==='avblock_3inf') txt='3度AVブロック（His束下）';
   if(state.pace.active){
     if(state.pace.mode==='burst') txt='🔁 バースト（'+state.pace.site+' '+state.pace.s1cl+'ms）';
-    else if(state.pace.mode==='vscan') txt='📉 V Scan（'+state.pace.site+' '+(r&&r.vscan?r.vscan.start+'→'+r.vscan.end:'')+'ms）';
+    else if(state.pace.mode==='vscan') txt=(state.pace.site!=='RVA'&&state.tachyArmed?'🔬 稲葉法（':'📉 V Scan（')+state.pace.site+' '+(r&&r.vscan?r.vscan.start+'→'+r.vscan.end:'')+'ms）';
     else if(state.pace.maneuver==='entrain') txt='⏱ エントレインメント（'+(r&&r.entrain?r.entrain.label:'')+'）';
     else if(state.pace.maneuver==='parahis') txt='⚡ パラヒス刺激';
     else if(state.pace.maneuver==='valink') txt='🔗 VAリンキング（'+(r&&r.vaLink?r.vaLink.label:'')+'）';
