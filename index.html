@@ -2094,10 +2094,9 @@ function saveRecording(label, t0Override){
 function saveVScanSegments(baseLabel){
   const r=state.result;
   if(!r || !r.vscan || !r.vscan.segs || !r.vscan.segs.length){ return saveRecording(baseLabel); }
-  const stopClock = state.pace.stopAt!=null ? state.pace.stopAt : state.duration;
+  // ビルド時点で停止位置までのセグメントに絞られているので、全て個別保存する。
   let last=null;
   r.vscan.segs.forEach(s=>{
-    if(s.t > stopClock) return;                       // 停止位置を越えたセグメントは除外
     const tag = s.phase==='stop' ? '停止' : s.phase==='His-reset' ? 'Hisリセット' : '非リセット';
     last = saveRecording(`${baseLabel} ${s.coupling}ms（${tag}）`, s.t);
   });
