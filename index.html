@@ -1827,7 +1827,7 @@ function buildInabaScan(){
       // Hisリセット window
       if(firstHisReset==null) firstHisReset=coupling;
       emitAtrial(tExtra, mode, 0.95);
-      emitHis(tExtra+55);                     // リセットされたHis（H*）
+      emitHis(tExtra+90, 1.5);                // リセットされたHis（H*）：A波から離して強調
       if(isAT){
         // AT：Hisはリセットするが頻拍non-reset（AA不変・元スケジュール継続）
         for(let t=tAlast+tachyCL; t<segEnd; t+=tachyCL) emitTachyBeat(sc, t);
@@ -1841,7 +1841,7 @@ function buildInabaScan(){
       emitAtrial(tExtra, mode, 0.95);
       if(isAT){
         // AT：A→H→V捕捉後に回路がブロック＝HAブロックで停止
-        emitHis(tExtra+55); emitVent(tExtra+55+45,false);
+        emitHis(tExtra+90, 1.5); emitVent(tExtra+90+45,false);
       }
       // AVNRT/ORT：AHブロック（A→His伝導せず）＝Aのみで停止
       buildSinusFill(tExtra+Math.round(state.sinusCL*0.9), segEnd);
