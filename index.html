@@ -1850,16 +1850,25 @@ function buildInabaScan(){
         for(let t=firstA; t<segEnd; t+=tachyCL) emitTachyBeat(sc, t);
       }
     } else {
+      // prem≥termMargin：SAEがAV結節でブロック＝AHブロック（心房Aは捕捉されHisは脱落）。
       if(firstTerm==null) firstTerm=coupling;
-      emitAtrial(tExtra, mode, 0.95);
-      if(isAT){ const hStar=tExtra+Hoff; emitHis(hStar, 1.4); emitVent(hStar+HV, false); }  // A→H→V後に回路ブロック=HA block
-      buildSinusFill(tExtra+Math.round((state.sinusCL||800)*0.9), segEnd);
-      nSteps=k+1; state.duration=LEAD+nSteps*GAP; break;   // 停止でスキャン終了
+      emitAtrial(tExtra, mode, 0.95);              // 心房は捕捉されるがHisへ伝導せず（emitHisしない）
+      if(isAT){
+        // AT：AV結節は回路外。AHブロックでHisが脱落しても心房頻拍は持続（Inaba 2024 Fig.3）。
+        //   → Ae直後拍は埋没、以降の頻拍A→H→Vは継続（AAは2×TCLで不変）。停止しない＝スキャン継続。
+        segs[segs.length-1].phase='AH-persist';
+        const refr=Math.round(tachyCL*0.75);
+        for(let t=tAlast+tachyCL; t<segEnd; t+=tachyCL){ if(t < tExtra+refr) continue; emitTachyBeat(sc, t); }
+      } else {
+        // AVNRT/ORT：AV結節が回路内。AHブロック（His脱落）で頻拍停止→洞調律。→ AT否定。
+        buildSinusFill(tExtra+Math.round((state.sinusCL||800)*0.9), segEnd);
+        nSteps=k+1; state.duration=LEAD+nSteps*GAP; break;   // 停止でスキャン終了
+      }
     }
   }
   const dx = isAT
-    ? `${firstHisReset!=null?`連結期 ${firstHisReset}ms で <b>Hisリセット（HH短縮）</b>でも<b>頻拍non-reset（AA不変）→ AT</b>。`:''}${firstTerm!=null?` 停止様式は<b>HAブロック</b>（ATは否定できず）。`:''}`
-    : `${firstHisReset!=null?`連結期 ${firstHisReset}ms で <b>Hisリセット（HH短縮）＝頻拍もreset</b>（回路に侵入）。`:''}${firstTerm!=null?` <b>AHブロック</b>で停止 → <b>AT否定</b>。`:''}`;
+    ? `${firstHisReset!=null?`連結期 ${firstHisReset}ms で <b>Hisリセット（HH短縮）</b>でも心房2拍＝2×TCLで<b>頻拍non-reset（AA不変）</b>。`:''}${firstTerm!=null?` さらに ${firstTerm}ms で <b>AHブロック（His脱落）でも頻拍持続</b> → <b>AT確定</b>（AV結節は回路外）。`:''}`
+    : `${firstHisReset!=null?`連結期 ${firstHisReset}ms で <b>Hisリセット（HH短縮）＝頻拍もreset</b>（回路に侵入）。`:''}${firstTerm!=null?` ${firstTerm}ms で <b>AHブロックにより頻拍停止</b> → <b>AT否定</b>（AVNRT/ORT）。`:''}`;
   state.result={ site:p.site, induced:true, mechanism:tLabel, a2h2:null, jump:false, narrow:false,
     notes:[`<b>稲葉法</b>：${p.site}（心房）から頻拍中に単発期外刺激を ${start}→${couplings[couplings.length-1]}ms でスキャン。`, dx].filter(Boolean),
     vscan:{start, end:couplings[couplings.length-1], steps:couplings.length, gap:GAP, segs} };
@@ -2090,7 +2099,7 @@ function saveVScanSegments(baseLabel){
   if(!r || !r.vscan || !r.vscan.segs || !r.vscan.segs.length){ return saveRecording(baseLabel); }
   let last=null;
   r.vscan.segs.forEach(s=>{
-    const tag = s.phase==='stop' ? '停止' : s.phase==='His-reset' ? 'Hisリセット' : s.phase==='vscan' ? '' : '非リセット';
+    const tag = s.phase==='stop' ? '停止(AHブロック)' : s.phase==='AH-persist' ? 'AHブロック(頻拍持続)' : s.phase==='His-reset' ? 'Hisリセット' : s.phase==='vscan' ? '' : '非リセット';
     last = saveRecording(`${baseLabel} ${s.coupling}ms${tag?`（${tag}）`:''}`, s.t);
   });
   return last;
