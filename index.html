@@ -1832,11 +1832,17 @@ function buildInabaScan(){
       emitAtrial(tExtra, mode, 0.95);
       // 前進量ADV：premとともに増えるが減衰(slope<1)と上限(ADVMAX)で頭打ち→やがてブロック停止。
       const ADV=Math.min(ADVMAX, Math.round(slope*(prem-onsetMargin)));
-      // 回路頻拍：予定His(priorHis+TCL)からADVだけ手前にH*が出る＝HH短縮。
-      // AT：期外刺激の順行His（tExtra+AH, AH=Hoff>0）が本来より早く出る＝His前進。
-      const hStar = isAT ? (tExtra+Hoff) : (priorHis+tachyCL-ADV);
+      // 回路頻拍：予定His(priorHis+TCL)からADVだけ手前にH*が出る＝HH短縮＋心房も同時リセット。
+      // AT：期外刺激の順行His（tExtra+AH+decr）が本来より早く出る＝His前進。心房焦点は不変。
+      const decrAT=Math.min(60, Math.round(0.5*prem));       // AT: 期外刺激のAH漸延
+      const hStar = isAT ? (tExtra+Hoff+decrAT) : (priorHis+tachyCL-ADV);
       emitHis(hStar, 1.4); emitVent(hStar+HV, false);
-      if(isAT){ for(let t=tAlast+tachyCL; t<segEnd; t+=tachyCL) emitTachyBeat(sc, t); }  // 頻拍non-reset（AA不変）
+      if(isAT){
+        // 稲葉法(Inaba 2024 Fig.1)：SAEはHisをリセットするが心房焦点はリセットしない。
+        //   期外刺激Ae直後の頻拍拍は心房不応で埋没→可視の心房2拍は2×TCL（＝頻拍不変）。
+        const refr=Math.round(tachyCL*0.75);
+        for(let t=tAlast+tachyCL; t<segEnd; t+=tachyCL){ if(t < tExtra+refr) continue; emitTachyBeat(sc, t); }
+      }
       else{
         // 頻拍reset：H*を起点にTCLで再開。再開ビートのHisがH*+TCLに来るようAを逆算
         //   （emitTachyBeatはH=A+Hoff）→ 直後のH–H*がTCLに戻る。
