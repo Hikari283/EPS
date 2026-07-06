@@ -1831,7 +1831,12 @@ function buildInabaScan(){
       // H* が前進 → 直前HisからのHHが短縮（reset）。ただしdecrで短縮はプラトーに近づく。
       emitHis(hStar, 1.4); emitVent(hStar+45, false);
       if(isAT){ for(let t=tAlast+tachyCL; t<segEnd; t+=tachyCL) emitTachyBeat(sc, t); }  // 頻拍non-reset（AA不変）
-      else    { for(let t=tExtra+tachyCL; t<segEnd; t+=tachyCL) emitTachyBeat(sc, t); }  // 頻拍reset（期外刺激起点）
+      else{
+        // 頻拍reset：H*を起点にTCLで再開。再開ビートのHisがH*+TCLに来るようAを逆算
+        //   （emitTachyBeatはH=A+Hoff）→ 直後のH–H*がTCLに戻る。
+        const firstA=hStar+tachyCL-Hoff;
+        for(let t=firstA; t<segEnd; t+=tachyCL) emitTachyBeat(sc, t);
+      }
     } else {
       if(firstTerm==null) firstTerm=coupling;
       emitAtrial(tExtra, mode, 0.95);
