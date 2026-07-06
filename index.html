@@ -1859,6 +1859,16 @@ function buildInabaScan(){
         segs[segs.length-1].phase='AH-persist';
         const refr=Math.round(tachyCL*0.75);
         for(let t=tAlast+tachyCL; t<segEnd; t+=tachyCL){ if(t < tExtra+refr) continue; emitTachyBeat(sc, t); }
+      } else if(sc==='avrt'){
+        // ORT-A型：HAブロックで停止。SAEは順行してHisは出る（＝His存在）が、その先
+        //   （His→V→副路→心房の逆行肢）で停止。AV結節の順行は保たれHisがあるためAV結節が
+        //   回路内であることを証明できない → <b>ATを否定できない</b>停止様式。
+        segs[segs.length-1].phase='HA-block';
+        const ADV=Math.min(ADVMAX, Math.round(slope*(prem-onsetMargin)));
+        const hStar=priorHis+tachyCL-ADV;
+        emitHis(hStar, 1.4); emitVent(hStar+HV, false);   // His は伝導して出る
+        buildSinusFill(hStar+Math.round((state.sinusCL||800)*0.9), segEnd);
+        nSteps=k+1; state.duration=LEAD+nSteps*GAP; break;
       } else {
         // AVNRT/ORT：AV結節が回路内。AHブロック（His脱落）で頻拍停止→洞調律。→ AT否定。
         buildSinusFill(tExtra+Math.round((state.sinusCL||800)*0.9), segEnd);
@@ -1866,8 +1876,11 @@ function buildInabaScan(){
       }
     }
   }
+  const isHAblock = (sc==='avrt');
   const dx = isAT
     ? `${firstHisReset!=null?`連結期 ${firstHisReset}ms で <b>Hisリセット（HH短縮）</b>でも心房2拍＝2×TCLで<b>頻拍non-reset（AA不変）</b>。`:''}${firstTerm!=null?` さらに ${firstTerm}ms で <b>AHブロック（His脱落）でも頻拍持続</b> → <b>AT確定</b>（AV結節は回路外）。`:''}`
+    : isHAblock
+    ? `${firstHisReset!=null?`連結期 ${firstHisReset}ms で <b>Hisリセット（HH短縮）＝頻拍もreset</b>（回路に侵入）。`:''}${firstTerm!=null?` ${firstTerm}ms で <b>HAブロックで停止</b>（His は出るが逆行肢で停止）→ <b>AT否定できず</b>。`:''}`
     : `${firstHisReset!=null?`連結期 ${firstHisReset}ms で <b>Hisリセット（HH短縮）＝頻拍もreset</b>（回路に侵入）。`:''}${firstTerm!=null?` ${firstTerm}ms で <b>AHブロックにより頻拍停止</b> → <b>AT否定</b>（AVNRT/ORT）。`:''}`;
   state.result={ site:p.site, induced:true, mechanism:tLabel, a2h2:null, jump:false, narrow:false,
     notes:[`<b>稲葉法</b>：${p.site}（心房）から頻拍中に単発期外刺激を ${start}→${couplings[couplings.length-1]}ms でスキャン。`, dx].filter(Boolean),
@@ -2099,7 +2112,7 @@ function saveVScanSegments(baseLabel){
   if(!r || !r.vscan || !r.vscan.segs || !r.vscan.segs.length){ return saveRecording(baseLabel); }
   let last=null;
   r.vscan.segs.forEach(s=>{
-    const tag = s.phase==='stop' ? '停止(AHブロック)' : s.phase==='AH-persist' ? 'AHブロック(頻拍持続)' : s.phase==='His-reset' ? 'Hisリセット' : s.phase==='vscan' ? '' : '非リセット';
+    const tag = s.phase==='stop' ? '停止(AHブロック)' : s.phase==='HA-block' ? '停止(HAブロック)' : s.phase==='AH-persist' ? 'AHブロック(頻拍持続)' : s.phase==='His-reset' ? 'Hisリセット' : s.phase==='vscan' ? '' : '非リセット';
     last = saveRecording(`${baseLabel} ${s.coupling}ms${tag?`（${tag}）`:''}`, s.t);
   });
   return last;
