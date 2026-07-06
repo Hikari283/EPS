@@ -1823,8 +1823,13 @@ function buildInabaScan(){
     } else if(phase==='His-reset'){
       if(firstHisReset==null) firstHisReset=coupling;
       emitAtrial(tExtra, mode, 0.95);
-      // H* は短いSHで前進 → 直前HisからのHHが短縮（reset）。A→H*→V*。
-      emitHis(tExtra+SH, 1.4); emitVent(tExtra+SH+45, false);
+      // 減衰伝導：連結期を詰めるほど結節内(AH)が延び、Hisの前進量が鈍る（頭打ち）。
+      //   prem=リセット閾値からの前倒し量、decr=AH延長。SHeff=SH+decrでH*が後ろへずれる。
+      const prem=Math.max(0, hisResetMax-coupling);
+      const decr=Math.round(0.6*prem);
+      const hStar=tExtra+SH+decr;
+      // H* が前進 → 直前HisからのHHが短縮（reset）。ただしdecrで短縮はプラトーに近づく。
+      emitHis(hStar, 1.4); emitVent(hStar+45, false);
       if(isAT){ for(let t=tAlast+tachyCL; t<segEnd; t+=tachyCL) emitTachyBeat(sc, t); }  // 頻拍non-reset（AA不変）
       else    { for(let t=tExtra+tachyCL; t<segEnd; t+=tachyCL) emitTachyBeat(sc, t); }  // 頻拍reset（期外刺激起点）
     } else {
