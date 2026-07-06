@@ -1787,16 +1787,16 @@ function buildInabaScan(){
   const isAT=!tp.inCircuit;                 // AVNRT/ORT=false, AT=true
   const tLabel=tp.label||'頻拍';
   const mode=(p.site==='HRA'?'hra':p.site);
-  // 頻拍中Hisの心房A基準オフセット（emitTachyBeat準拠）。AVNRT系はHisがAの手前(負)、ATは後(正)。
-  const HOFF={avnrt:-50, avnrt_noretro:-50, atypavnrt:-90, at:92, at_noretro:92, at_noretro_noortho:92};
-  const Hoff=Math.max(-100, Math.min(100, isAVRT(sc)?-90:(HOFF[sc]??92)));
-  const SH=40;                              // 心房期外刺激→His（CSp近位・短い順行伝導）
-  // 相しきい値（連結期）：期外刺激His(tExtra+SH)が本来のHisより前に来る＝Hisリセット（HH短縮）。
-  //   AVNRT（HisがAの手前）は連結期を十分短くしないとリセットできない。
-  const hisResetMax=Math.min(tachyCL-10, Hoff+tachyCL-SH);   // これ以下でHisリセット
-  const termMax    =Math.min(hisResetMax-40, tachyCL-110);   // これ以下で頻拍停止
+  // 頻拍中Hisの心房A基準オフセット（emitTachyBeat準拠：His = A + Hoff）。
+  //   AVNRT −50 / 非典型(fast-slow) −233 / ORT −168 / AT +92。実描画位置に一致させる（クランプしない）。
+  const HOFF={avnrt:-50, avnrt_noretro:-50, atypavnrt:-233, at:92, at_noretro:92, at_noretro_noortho:92};
+  const Hoff = isAVRT(sc) ? -168 : (HOFF[sc] ?? 92);
+  const HV=45;                              // His→V
+  // 相は「心房期外刺激の早期度 prem = TCL − 連結期」で決める（Hoffには依存させない）。
+  //   prem<onset：リセットせず／onset≤prem<term：Hisリセット（HH短縮）／prem≥term：AVブロックで停止。
+  const onsetMargin=15, termMargin=130, slope=0.6, ADVMAX=90;
   const start=p.s1cl;                       // 基本周期（UIのS1CL）から開始
-  const floor=Math.max(160, termMax-30);
+  const floor=Math.max(120, tachyCL-termMargin-30);
   let nSteps=Math.floor((start-floor)/DEC)+1;
   if(nSteps>40) nSteps=40; if(nSteps<1) nSteps=1;
   // 各セグメント＝表示窓1つ分。掃引原点をセグメント先頭に合わせ、期外刺激を窓の中央に固定。
@@ -1814,8 +1814,15 @@ function buildInabaScan(){
     const tAlast=tExtra-coupling;           // 直前の頻拍A（連結期分だけ手前）
     for(let t=tAlast; t>=segStart+40; t-=tachyCL) emitTachyBeat(sc, t);   // lead頻拍（後ろ向き）
     emitStim(tExtra, mode);
-    const phase = coupling>hisResetMax ? 'no-reset' : coupling>termMax ? 'His-reset' : 'stop';
+    const prem=tachyCL-coupling;            // 期外刺激の早期度
+    const phase = prem<onsetMargin ? 'no-reset' : prem<termMargin ? 'His-reset' : 'stop';
     segs.push({coupling, t:tExtra, phase});
+    // ORT/非典型はHisがAの手前(大きな負Hoff)のため、期外刺激直前のHisが後ろ向きlead
+    // だけでは描かれない（そのAが前方＝preempt）。グリッド上の直前Hisを補完描画する。
+    let priorHis=tAlast+Hoff;
+    if(!isAT){
+      for(let h=priorHis+tachyCL; h<tExtra-15; h+=tachyCL){ emitHis(h); emitVent(h+HV, false); priorHis=h; }
+    }
     if(phase==='no-reset'){
       // Hisリセットせず：心房捕捉のみ、頻拍は素通り
       emitAtrial(tExtra, mode, 0.9);
@@ -1823,13 +1830,12 @@ function buildInabaScan(){
     } else if(phase==='His-reset'){
       if(firstHisReset==null) firstHisReset=coupling;
       emitAtrial(tExtra, mode, 0.95);
-      // 減衰伝導：連結期を詰めるほど結節内(AH)が延び、Hisの前進量が鈍る（頭打ち）。
-      //   prem=リセット閾値からの前倒し量、decr=AH延長。SHeff=SH+decrでH*が後ろへずれる。
-      const prem=Math.max(0, hisResetMax-coupling);
-      const decr=Math.round(0.6*prem);
-      const hStar=tExtra+SH+decr;
-      // H* が前進 → 直前HisからのHHが短縮（reset）。ただしdecrで短縮はプラトーに近づく。
-      emitHis(hStar, 1.4); emitVent(hStar+45, false);
+      // 前進量ADV：premとともに増えるが減衰(slope<1)と上限(ADVMAX)で頭打ち→やがてブロック停止。
+      const ADV=Math.min(ADVMAX, Math.round(slope*(prem-onsetMargin)));
+      // 回路頻拍：予定His(priorHis+TCL)からADVだけ手前にH*が出る＝HH短縮。
+      // AT：期外刺激の順行His（tExtra+AH, AH=Hoff>0）が本来より早く出る＝His前進。
+      const hStar = isAT ? (tExtra+Hoff) : (priorHis+tachyCL-ADV);
+      emitHis(hStar, 1.4); emitVent(hStar+HV, false);
       if(isAT){ for(let t=tAlast+tachyCL; t<segEnd; t+=tachyCL) emitTachyBeat(sc, t); }  // 頻拍non-reset（AA不変）
       else{
         // 頻拍reset：H*を起点にTCLで再開。再開ビートのHisがH*+TCLに来るようAを逆算
@@ -1840,7 +1846,7 @@ function buildInabaScan(){
     } else {
       if(firstTerm==null) firstTerm=coupling;
       emitAtrial(tExtra, mode, 0.95);
-      if(isAT){ emitHis(tExtra+SH, 1.4); emitVent(tExtra+SH+45, false); }  // A→H→V後に回路ブロック=HA block
+      if(isAT){ const hStar=tExtra+Hoff; emitHis(hStar, 1.4); emitVent(hStar+HV, false); }  // A→H→V後に回路ブロック=HA block
       buildSinusFill(tExtra+Math.round((state.sinusCL||800)*0.9), segEnd);
       nSteps=k+1; state.duration=LEAD+nSteps*GAP; break;   // 停止でスキャン終了
     }
