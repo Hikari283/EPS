@@ -1794,7 +1794,11 @@ function buildInabaScan(){
   const HV=45;                              // His→V
   // 相は「心房期外刺激の早期度 prem = TCL − 連結期」で決める（Hoffには依存させない）。
   //   prem<onset：リセットせず／onset≤prem<term：Hisリセット（HH短縮）／prem≥term：AVブロックで停止。
-  const onsetMargin=15, termMargin=130, slope=0.6, ADVMAX=90;
+  // リセット開始に要する早期度 onset（＝TCLより何ms短い連結期で初めてHisがリセットするか）。
+  //   Inaba 2024 Table2 の実測中央値に合わせる：AVNRT −100 / 非典型 −86 / ORT −110 / AT −74。
+  const ONSET={avnrt:100, avnrt_noretro:100, atypavnrt:86, at:74, at_noretro:74, at_noretro_noortho:74};
+  const onsetMargin = isAVRT(sc) ? 110 : (ONSET[sc] ?? 74);
+  const termMargin=Math.max(150, onsetMargin+30), slope=0.6, ADVMAX=90;
   const minSH=20;                          // stim→His の最小順行時間（H*は必ずStimの後に出る）
   const start=p.s1cl;                       // 基本周期（UIのS1CL）から開始
   const floor=Math.max(120, tachyCL-termMargin-30);
