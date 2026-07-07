@@ -1859,7 +1859,11 @@ function buildInabaScan(){
           if(firstHisReset==null) firstHisReset=coupling;
           const hStar=priorHis+tachyCL-ADV;
           emitHis(hStar, 1.4); emitVent(hStar+HV, false);
-          const firstA=hStar+tachyCL-Hoff;                   // H*起点にTCLで再開
+          // リセット拍の逆行性心房（A = His + |Hoff|）。これが無いと再開後2拍目のAが欠落する。
+          const retroMode = isAVRT(sc) ? apConfig(sc).retro : (sc==='atypavnrt'?'atyp':'avnrt');
+          const Aretro=hStar-Hoff;
+          emitAtrial(Aretro, retroMode, 0.9);
+          const firstA=Aretro+tachyCL;                       // 逆行A起点にTCLで再開
           for(let t=firstA; t<segEnd; t+=tachyCL) emitTachyBeat(sc, t);
         } else {
           // まだ十分早期でない：Hisは予定位置のまま前進せず＝非リセット扱い（頻拍素通り）。
