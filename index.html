@@ -1825,13 +1825,11 @@ function buildInabaScan(){
     // ORT/非典型はHisがAの手前(大きな負Hoff)のため、期外刺激直前のHisが後ろ向きlead
     // だけでは描かれない（そのAが前方＝preempt）。グリッド上の直前Hisを補完描画する。
     //   ただし補完拍の His も V も Stim より前に収める（H→Stim→V と Stim が His-V を割らないように）。
+    // グリッド上の「刺激直前のHis」までHis-Vを補完描画（そのAは前方＝preemptで非表示）。
+    //   SAEが順行AH(=|Hoff|)より長い連結期だと A→His→V の V手前にSAEが入る（生理的に正しい）。
     let priorHis=tAlast+Hoff;
     if(!isAT){
-      for(let h=priorHis+tachyCL; h < tExtra-10; h+=tachyCL){
-        emitHis(h);
-        if(h+HV < tExtra-5) emitVent(h+HV, false);   // Vが刺激より後になる補完拍はV省略（H→Stim→Vの割り込み防止）
-        priorHis=h;
-      }
+      for(let h=priorHis+tachyCL; h<tExtra; h+=tachyCL){ emitHis(h); emitVent(h+HV, false); priorHis=h; }
     }
     if(phase==='no-reset'){
       // Hisリセットせず：心房捕捉のみ、頻拍は素通り
