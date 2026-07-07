@@ -1795,6 +1795,7 @@ function buildInabaScan(){
   // 相は「心房期外刺激の早期度 prem = TCL − 連結期」で決める（Hoffには依存させない）。
   //   prem<onset：リセットせず／onset≤prem<term：Hisリセット（HH短縮）／prem≥term：AVブロックで停止。
   const onsetMargin=15, termMargin=130, slope=0.6, ADVMAX=90;
+  const minSH=20;                          // stim→His の最小順行時間（H*は必ずStimの後に出る）
   const start=p.s1cl;                       // 基本周期（UIのS1CL）から開始
   const floor=Math.max(120, tachyCL-termMargin-30);
   let nSteps=Math.floor((start-floor)/DEC)+1;
@@ -1828,26 +1829,36 @@ function buildInabaScan(){
       emitAtrial(tExtra, mode, 0.9);
       for(let t=tAlast+tachyCL; t<segEnd; t+=tachyCL) emitTachyBeat(sc, t);
     } else if(phase==='His-reset'){
-      if(firstHisReset==null) firstHisReset=coupling;
       emitAtrial(tExtra, mode, 0.95);
-      // 前進量ADV：premとともに増えるが減衰(slope<1)と上限(ADVMAX)で頭打ち→やがてブロック停止。
-      const ADV=Math.min(ADVMAX, Math.round(slope*(prem-onsetMargin)));
-      // 回路頻拍：予定His(priorHis+TCL)からADVだけ手前にH*が出る＝HH短縮＋心房も同時リセット。
-      // AT：期外刺激の順行His（tExtra+AH+decr）が本来より早く出る＝His前進。心房焦点は不変。
-      const decrAT=Math.min(60, Math.round(0.5*prem));       // AT: 期外刺激のAH漸延
-      const hStar = isAT ? (tExtra+Hoff+decrAT) : (priorHis+tachyCL-ADV);
-      emitHis(hStar, 1.4); emitVent(hStar+HV, false);
       if(isAT){
+        // AT：期外刺激の順行His（tExtra+AH+decr）が本来より早く出る＝His前進。心房焦点は不変。
+        if(firstHisReset==null) firstHisReset=coupling;
+        const decrAT=Math.min(60, Math.round(0.5*prem));     // AT: 期外刺激のAH漸延
+        const hStar=tExtra+Hoff+decrAT;                      // Hoff(+92)>0 → 必ずStimの後
+        emitHis(hStar, 1.4); emitVent(hStar+HV, false);
         // 稲葉法(Inaba 2024 Fig.1)：SAEはHisをリセットするが心房焦点はリセットしない。
         //   期外刺激Ae直後の頻拍拍は心房不応で埋没→可視の心房2拍は2×TCL（＝頻拍不変）。
         const refr=Math.round(tachyCL*0.75);
         for(let t=tAlast+tachyCL; t<segEnd; t+=tachyCL){ if(t < tExtra+refr) continue; emitTachyBeat(sc, t); }
-      }
-      else{
-        // 頻拍reset：H*を起点にTCLで再開。再開ビートのHisがH*+TCLに来るようAを逆算
-        //   （emitTachyBeatはH=A+Hoff）→ 直後のH–H*がTCLに戻る。
-        const firstA=hStar+tachyCL-Hoff;
-        for(let t=firstA; t<segEnd; t+=tachyCL) emitTachyBeat(sc, t);
+      } else {
+        // 回路頻拍：H*は予定His(priorHis+TCL)からADVだけ手前に出る＝HH短縮。
+        //   ただしH*は必ずStimの後（stim→Hisの順行時間minSH以上）に出す。
+        //   前進しすぎてStimより前に来る場合はADVを詰め、H*=Stim+minSHで頭打ち。
+        const naturalGap=(priorHis+tachyCL)-tExtra;          // Stim→予定His（前進なし）
+        let ADV=Math.min(ADVMAX, Math.round(slope*(prem-onsetMargin)));
+        ADV=Math.min(ADV, naturalGap-minSH);                 // H*をStimの後(≥minSH)に保つ
+        if(ADV>0){
+          // 真のリセット：H*=Stim+minSH以降 かつ 予定Hisより手前＝HH短縮。頻拍も同時reset。
+          if(firstHisReset==null) firstHisReset=coupling;
+          const hStar=priorHis+tachyCL-ADV;
+          emitHis(hStar, 1.4); emitVent(hStar+HV, false);
+          const firstA=hStar+tachyCL-Hoff;                   // H*起点にTCLで再開
+          for(let t=firstA; t<segEnd; t+=tachyCL) emitTachyBeat(sc, t);
+        } else {
+          // まだ十分早期でない：Hisは予定位置のまま前進せず＝非リセット扱い（頻拍素通り）。
+          segs[segs.length-1].phase='no-reset';
+          for(let t=tAlast+tachyCL; t<segEnd; t+=tachyCL) emitTachyBeat(sc, t);
+        }
       }
     } else {
       // prem≥termMargin：SAEがAV結節でブロック＝AHブロック（心房Aは捕捉されHisは脱落）。
