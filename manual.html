@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EP Trainer（β版）取扱説明書</title>
+<style>
+  :root{ --bg:#0d1320; --card:#111a2b; --line:#22314a; --tx:#e6eefb; --sub:#9aa8bf; --accent:#38bdf8; --ok:#34d399; --warn:#fbbf24; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--tx);font-family:-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.75;font-size:15px}
+  .wrap{max-width:820px;margin:0 auto;padding:32px 20px 80px}
+  h1{font-size:26px;margin:0 0 4px}
+  .lead{color:var(--sub);margin:0 0 24px}
+  h2{font-size:19px;margin:34px 0 10px;padding-bottom:6px;border-bottom:2px solid var(--accent);color:#bfe3fb}
+  h3{font-size:15.5px;margin:20px 0 6px;color:#dbe7fb}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:12px 0}
+  ol,ul{margin:8px 0 8px 4px;padding-left:22px}
+  li{margin:5px 0}
+  code{background:#0a1320;border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:13px}
+  .step{display:flex;gap:12px;margin:10px 0;align-items:flex-start}
+  .num{flex:0 0 26px;height:26px;border-radius:50%;background:var(--accent);color:#04222e;font-weight:700;display:flex;align-items:center;justify-content:center;font-size:14px}
+  .note{border-left:4px solid var(--warn);background:rgba(251,191,36,.08);padding:10px 14px;border-radius:0 8px 8px 0;margin:12px 0}
+  .ok{border-left-color:var(--ok);background:rgba(52,211,153,.08)}
+  .tag{display:inline-block;background:#1b2a3c;border:1px solid var(--line);border-radius:6px;padding:1px 8px;font-size:12.5px;color:var(--accent);margin-right:4px}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:13.5px}
+  th,td{border:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top}
+  th{background:#0a1320;color:#bfe3fb}
+  .toc a{color:var(--accent);text-decoration:none}
+  .toc li{margin:3px 0}
+  footer{margin-top:40px;color:var(--sub);font-size:12.5px;text-align:center;border-top:1px solid var(--line);padding-top:16px}
+  @media print{ body{background:#fff;color:#000} .card{border-color:#ccc} h2{color:#0a5} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>EP Trainer <span style="font-size:.6em;opacity:.7">β版</span></h1>
+  <p class="lead">心内心電図（EGM）を見て頻拍を鑑別する、電気生理検査（EPS）トレーニングアプリ ― 取扱説明書</p>
+
+  <div class="card toc">
+    <b>もくじ</b>
+    <ul>
+      <li><a href="#about">1. これは何？</a></li>
+      <li><a href="#start">2. はじめかた（登録・ログイン）</a></li>
+      <li><a href="#screen">3. 画面の見かた</a></li>
+      <li><a href="#flow">4. 基本の使いかた</a></li>
+      <li><a href="#maneuver">5. 鑑別手技メニュー</a></li>
+      <li><a href="#inaba">6. 稲葉法（心房期外刺激）</a></li>
+      <li><a href="#quiz">7. ランダム出題・自己診断</a></li>
+      <li><a href="#feedback">8. 要望・質問の送りかた</a></li>
+      <li><a href="#admin">9. 管理者向け（記録の見かた）</a></li>
+      <li><a href="#faq">10. よくある質問</a></li>
+    </ul>
+  </div>
+
+  <h2 id="about">1. これは何？</h2>
+  <div class="card">
+    上室頻拍（AVNRT・AVRT・AT・非典型AVNRT など）の心内心電図を再現し、
+    <b>誘発 → 各種の鑑別手技 → 自己診断</b> の流れを、実際のEPSと同じ順序で練習できるアプリです。
+    ブラウザで <code>index.html</code> を開くだけで動きます（インストール不要）。
+  </div>
+
+  <h2 id="start">2. はじめかた（登録・ログイン）</h2>
+  <div class="card">
+    起動すると最初に登録画面が出ます。
+    <div class="step"><div class="num">1</div><div><b>今日の目的</b>を選ぶ（予習／復習／勉強）。</div></div>
+    <div class="step"><div class="num">2</div><div>初めての人は <span class="tag">新規登録</span> タブへ。<b>ID（職員番号を推奨）・名前・アブレーション歴</b>を入れて「登録して開始」。</div></div>
+    <div class="step"><div class="num">3</div><div>2回目以降は <span class="tag">ログイン</span> タブでIDを入れるだけ。</div></div>
+    <div class="note">
+      ⚠️ 登録情報は<b>その端末の中だけ</b>に保存されます。スマホとPCなど<b>別の端末で使うときは、その端末でもう一度「新規登録」</b>してください（同じIDでOK）。
+    </div>
+  </div>
+
+  <h2 id="screen">3. 画面の見かた</h2>
+  <div class="card">
+    <ul>
+      <li><b>左側パネル</b>：症例選択・誘発ボタン・ペーシング設定・鑑別手技・自己診断・要望欄。</li>
+      <li><b>中央</b>：心内心電図の波形（体表 I/II/V1、HRA、His、CS、RVA、刺激チャネル）。</li>
+      <li><b>上部のピル表示</b>：表示時間窓・時刻・周期長（ms）・現在のモード。</li>
+    </ul>
+  </div>
+
+  <h2 id="flow">4. 基本の使いかた</h2>
+  <div class="card">
+    <div class="step"><div class="num">1</div><div><b>症例を選ぶ</b>（またはランダム出題）。</div></div>
+    <div class="step"><div class="num">2</div><div><b>「💥 頻拍を誘発する」</b>を押して頻拍を開始。</div></div>
+    <div class="step"><div class="num">3</div><div>波形を観察 ―― 最早期心房・VA関係・QRS幅・AHの変化 などを確認。</div></div>
+    <div class="step"><div class="num">4</div><div><b>鑑別手技</b>（下記5章）を実施して反応を見る。</div></div>
+    <div class="step"><div class="num">5</div><div><b>自己診断</b>で機序を選んで「答え合わせ」。</div></div>
+    <div class="note ok">洞調律に戻したいときは「洞調律へ戻す」を押します。</div>
+  </div>
+
+  <h2 id="maneuver">5. 鑑別手技メニュー</h2>
+  <div class="card">
+    <table>
+      <tr><th>手技</th><th>内容・見どころ</th></tr>
+      <tr><td>His不応期PVC</td><td>His不応期に心室期外刺激。心房が前進すれば副伝導路（AVRT）の証明。AVNRT/ATでは心房不変。</td></tr>
+      <tr><td>心室オーバードライブ</td><td>停止後 V-A-V＝AVNRT/AVRT、V-A-A-V＝AT。</td></tr>
+      <tr><td>エントレインメント</td><td>PPI−TCL・SA−VA で鑑別（SA−VA &lt;85＝AVRT、&gt;85＝AVNRT/AT）。</td></tr>
+      <tr><td>VAリンキング</td><td>頻拍のVA関係の固定性を評価。</td></tr>
+      <tr><td>パラヒス刺激</td><td>His束近傍刺激で出力によるQRS/HV変化を観察。</td></tr>
+    </table>
+  </div>
+
+  <h2 id="inaba">6. 稲葉法（心房期外刺激）</h2>
+  <div class="card">
+    頻拍中に単発の心房期外刺激（SAE）を入れ、<b>Hisのリセット</b>と<b>心房2拍（A1→A3）の間隔</b>から鑑別する方法です（Inaba 2024）。
+    <ul>
+      <li><b>使い方</b>：ペーシングを V Scan・心房サイトに設定して単発刺激を入れる。</li>
+      <li>A1→A3 が <b>2×TCL 未満</b>＝リセットあり（AVNRT/AVRT）、<b>2×TCL と一致</b>＝AT。</li>
+      <li>頻拍が停止したパターン（AHブロック等）でも鑑別のヒントになります。</li>
+    </ul>
+    <div class="note">稲葉法が使えない症例でも、他の手技（5章）で診断できるよう作られています。</div>
+  </div>
+
+  <h2 id="quiz">7. ランダム出題・自己診断</h2>
+  <div class="card">
+    <ul>
+      <li>症例選択で <b>「🎲 ランダム出題」</b>を選ぶと、機序が伏せられた状態で1症例が出ます。</li>
+      <li>誘発 → 各手技で鑑別 → <b>自己診断</b>で機序を選んで「答え合わせ」。</li>
+      <li>正解すると答え（機序名）が表示されます。もう一度ランダム出題で次の症例へ。</li>
+    </ul>
+  </div>
+
+  <h2 id="feedback">8. 要望・質問の送りかた</h2>
+  <div class="card">
+    左側パネルの <b>「💬 要望・質問」</b>欄に自由に記入して「送信」。
+    内容は開発・運用者に届きます（誰が・いつ書いたかも一緒に記録されます）。
+  </div>
+
+  <h2 id="admin">9. 管理者向け（記録の見かた）</h2>
+  <div class="card">
+    利用状況は Google スプレッドシートの <code>log</code> シートに自動で集まります。
+    <table>
+      <tr><th>列</th><th>内容</th></tr>
+      <tr><td>ts</td><td>日時（日本時間）</td></tr>
+      <tr><td>id</td><td>利用者ID（職員番号など）</td></tr>
+      <tr><td>name</td><td>名前</td></tr>
+      <tr><td>ablation</td><td>アブレーション歴</td></tr>
+      <tr><td>purpose</td><td>目的（予習／復習／勉強）</td></tr>
+      <tr><td>type</td><td>操作種別：<code>login</code>／<code>induce</code>（誘発）／<code>maneuver</code>（手技）／<code>diagnosis</code>（自己診断）／<code>feedback</code>（要望）</td></tr>
+      <tr><td>detail</td><td>詳細（診断の正誤・要望の本文など）</td></tr>
+    </table>
+    <ul>
+      <li><b>要望だけ見たいとき</b>：<code>type</code> 列を <code>feedback</code> でフィルタ。本文は <code>detail</code> 列。</li>
+      <li><b>正答率を見たいとき</b>：<code>type</code>=<code>diagnosis</code> の <code>detail</code> 内 <code>correct</code>。</li>
+    </ul>
+    <div class="note">
+      🔒 <b>学会発表のとき</b>：IDが職員番号だと個人特定に直結します。スライドでは <b>ID→連番（A・B・C…）</b>に置き換えてください（対応表は手元に別途保管）。
+    </div>
+  </div>
+
+  <h2 id="faq">10. よくある質問</h2>
+  <div class="card">
+    <h3>Q. インターネットがないと使えない？</h3>
+    <p>波形の練習はオフラインでも動きます。利用記録は端末内に貯まり、オンラインに戻ると自動送信されます。</p>
+    <h3>Q. 別の端末で同じIDにしたい</h3>
+    <p>各端末で同じIDを新規登録すればOKです（記録はIDでまとまります）。</p>
+    <h3>Q. 記録された内容は誰が見る？</h3>
+    <p>運用担当者が集計用スプレッドシートで確認します。院内利用・教育目的です。</p>
+    <h3>Q. データがシートに来ない</h3>
+    <p>Apps Scriptの再デプロイ時に「アクセスできるユーザー＝全員」になっているか確認してください。</p>
+  </div>
+
+  <footer>
+    EP Trainer（β版）取扱説明書 ／ 電気生理検査 教育用シミュレーション<br>
+    ※本アプリは学習用です。実臨床の判断は必ず正規の検査・指導医の監督下で行ってください。
+  </footer>
+
+</div>
+</body>
+</html>
