@@ -118,7 +118,6 @@
         </optgroup>
         <optgroup label="── Coumel's law（脚ブロック）──">
           <option value="coumel_pos">ORT＋同側脚ブロック → VA/TCL延長（Coumel陽性）</option>
-          <option value="coumel_neg">ORT（中隔）＋脚ブロック → VA/TCL不変（Coumel陰性）</option>
         </optgroup>
       </select>
       <label>洞周期 Sinus CL <span class="val" id="sclv">800 ms</span></label>
@@ -271,7 +270,6 @@
         <option value="atypavnrt">非典型AVNRT（fast-slow）</option>
         <option value="aflutter">心房粗動</option>
         <option value="coumel_pos">ORT＋脚ブロック（Coumel陽性）</option>
-        <option value="coumel_neg">ORT＋脚ブロック（Coumel陰性）</option>
       </select>
       <button id="checkDx">答え合わせ</button>
       <div id="dxResult" class="small"></div>
@@ -546,7 +544,6 @@ function renderTachy(sc, start, end){
   if(sc==='at')    return fillTachyAT(start,end);
   if(sc==='atypavnrt') return fillTachyAtypAVNRT(start,end);
   if(sc==='coumel_pos') return fillTachyCoumel(start,end,true);
-  if(sc==='coumel_neg') return fillTachyCoumel(start,end,false);
   if(sc==='avnrt_noretro') return fillTachyAVNRTNoRetro(start,end);
   if(isATnoRetro(sc))      return fillTachyATNoRetro(start,end);
 }
@@ -556,7 +553,7 @@ function isAVRT(sc){ return sc==='avrt' || sc==='avrtB' || sc==='avrtC'; }
 // AT（室房伝導なし）系：orthodromic captureあり/なしの2種を共通に扱う
 function isATnoRetro(sc){ return sc==='at_noretro' || sc==='at_noretro_noortho'; }
 // 誘発で開始する頻拍シナリオ（選択時は洞調律、誘発ボタンで頻拍に）
-function isInducible(sc){ return sc==='avnrt'||isAVRT(sc)||sc==='at'||sc==='atypavnrt'||sc==='avnrt_noretro'||isATnoRetro(sc)||sc==='coumel_pos'||sc==='coumel_neg'; }
+function isInducible(sc){ return sc==='avnrt'||isAVRT(sc)||sc==='at'||sc==='atypavnrt'||sc==='avnrt_noretro'||isATnoRetro(sc)||sc==='coumel_pos'; }
 function apConfig(sc){
   // retro=逆行心房マップ, v1/ii=予防興奮δ波の極性, side=副路部位, label=表示名
   switch(sc){
@@ -588,7 +585,6 @@ function buildBaseline(scenario, startT, endT){
   if(scenario==='avnrt_noretro'){ fillTachyAVNRTNoRetro(startT,endT); return; }
   if(isATnoRetro(scenario)){ fillTachyATNoRetro(startT,endT); return; }
   if(scenario==='coumel_pos'){ fillTachyCoumel(startT,endT,true); return; }
-  if(scenario==='coumel_neg'){ fillTachyCoumel(startT,endT,false); return; }
 
   // ---- 2度AVブロック Wenckebach型（4:3パターン）----
   if(scenario==='avblock_wenck'){
@@ -2234,6 +2230,10 @@ function generateTimeline(preserveView){
   state.pace.paceOnAt = null;            // バースト系のビルドが設定（ライブ掃引の開始位置）
   state.duration = state.baseDuration;   // V Scan で延長するため毎回リセット（buildVScanが上書き）
   if(state.pace.active){
+    // Coumel陽性は手技中は通常のORT（左自由壁AVRT）として扱う（脚ブロックに気づかなくても診断可能）。
+    //   基本の誘発表示だけ脚ブロックのデモを出す（buildBaseline側 fillTachyCoumel）。
+    const _realSc = state.scenario;
+    if(state.scenario==='coumel_pos') state.scenario='avrt';
     const mv=state.pace.maneuver;
     if(mv){
       const fn = mv==='entrain'?buildEntrainment : mv==='parahis'?buildParaHisian : mv==='valink'?buildVaLinking
@@ -2242,6 +2242,7 @@ function generateTimeline(preserveView){
     } else if(state.pace.mode==='burst'){ buildStraightPace(); }
     else if(state.pace.mode==='vscan'){ buildVScan(); }
     else buildPaced();
+    state.scenario=_realSc;                          // 内部シナリオは coumel_pos に戻す（自己診断用）
   }
   else{
     state.result=null;
@@ -3405,7 +3406,7 @@ function loop(now){
 // ===================================================================
 const $=id=>document.getElementById(id);
 
-const RANDOM_POOL=['avnrt','avrt','avrtB','avrtC','at','atypavnrt','avnrt_noretro','at_noretro','at_noretro_noortho','coumel_pos','coumel_neg'];
+const RANDOM_POOL=['avnrt','avrt','avrtB','avrtC','at','atypavnrt','avnrt_noretro','at_noretro','at_noretro_noortho','coumel_pos'];
 $('scenario').onchange=e=>{
   const v=e.target.value;
   if(v==='random'){                                  // 診断チャレンジ：隠れた症例をランダム選択
@@ -3552,7 +3553,7 @@ $('induceTachy').onclick=()=>{
     state.tachyArmed=true;
     generateTimeline();                 // 誘発済み頻拍として描画（else分岐がtachyArmedを参照）
     state.playing=true; setPlayBtn(); updatePaceButtons();
-    const nm={at:'リエントリー性AT',atypavnrt:'非典型AVNRT',avnrt_noretro:'AVNRT（室房伝導なし）',at_noretro:'AT（室房伝導なし）',coumel_pos:'ORT（Coumel陽性）',coumel_neg:'ORT（Coumel陰性）'}[sc] || (tachyParams(sc)?tachyParams(sc).label:'頻拍');
+    const nm={at:'リエントリー性AT',atypavnrt:'非典型AVNRT',avnrt_noretro:'AVNRT（室房伝導なし）',at_noretro:'AT（室房伝導なし）',coumel_pos:'ORT（Coumel陽性）'}[sc] || (tachyParams(sc)?tachyParams(sc).label:'頻拍');
     showToast(dxHidden() ? '頻拍を誘発しました' : `${nm} を誘発しました`);
   } else {
     showToast('この症例は頻拍を誘発できません（洞調律）');
@@ -3738,11 +3739,11 @@ document.querySelectorAll('#calModeSeg button').forEach(b=>{
   };
 });
 
-const SCEN_NAME={avnrt:'通常型AVNRT', atypavnrt:'非典型AVNRT', avrt:'正方向性AVRT（A型・左側Kent）', avrtB:'正方向性AVRT（B型・右側Kent）', avrtC:'正方向性AVRT（C型・後中隔Kent）', at:'リエントリー性AT', avnrt_noretro:'AVNRT（室房伝導なし）', at_noretro:'AT（室房伝導なし）', at_noretro_noortho:'AT（室房伝導なし・ortho captureなし）', coumel_pos:'ORT＋脚ブロック（Coumel陽性）', coumel_neg:'ORT＋脚ブロック（Coumel陰性）'};
+const SCEN_NAME={avnrt:'通常型AVNRT', atypavnrt:'非典型AVNRT', avrt:'正方向性AVRT（A型・左側Kent）', avrtB:'正方向性AVRT（B型・右側Kent）', avrtC:'正方向性AVRT（C型・後中隔Kent）', at:'リエントリー性AT', avnrt_noretro:'AVNRT（室房伝導なし）', at_noretro:'AT（室房伝導なし）', at_noretro_noortho:'AT（室房伝導なし・ortho captureなし）', coumel_pos:'ORT＋脚ブロック（Coumel陽性）'};
 $('checkDx').onclick=()=>{
   const pick=$('dx').value, el=$('dxResult');
   if(!pick){ el.innerHTML='<span class="hint">機序を選んでください。</span>'; return; }
-  const correct = pick===truthKey();
+  const correct = acceptedAnswers().includes(pick);
   let msg = correct ? '<span class="tag ok">正解</span>' : '<span class="tag bad">不正解</span>';
   if(state.challenge && !state.revealed){                 // チャレンジ：答え合わせでネタばらし
     state.revealed=true;
@@ -3761,7 +3762,12 @@ function truthKey(){
   if(isAVRT(sc)) return 'avrt';                     // avrt / avrtB / avrtC
   if(sc==='at'||isATnoRetro(sc)) return 'at';       // at / at_noretro / at_noretro_noortho
   if(sc==='atypavnrt') return 'atypavnrt';
-  return sc;                                        // coumel_pos / coumel_neg など
+  return sc;                                        // coumel_pos
+}
+// 正解として受け入れる選択（Coumel陽性は脚ブロックに気づかなくてもORT=avrtで正解）
+function acceptedAnswers(){
+  if(state.scenario==='coumel_pos') return ['coumel_pos','avrt'];
+  return [truthKey()];
 }
 
 // ---- 結果/解説/モード表示 ----
@@ -3782,7 +3788,6 @@ function setScenNote(){
     atypavnrt:'非典型AVNRT。「💥頻拍を誘発」で開始。長VAで求心性最早期（CS近位/中隔）。長RPのATとの鑑別がポイント。',
     aflutter:'心房粗動。「💥頻拍を誘発」で開始。CS/HRAの心房波の規則性と房室伝導比を読み取ります。',
     coumel_pos:'ORT（左自由壁）。「💥頻拍を誘発」で開始→途中で脚ブロックが出現し幅広QRSに。脚ブロック前後でVA・TCLを比較→延長（⊿≥35ms）＝同側自由壁副路（Coumel陽性）。',
-    coumel_neg:'ORT（中隔）。「💥頻拍を誘発」で開始→脚ブロックが出てもVA・TCLは不変（Coumel陰性）→自由壁副路を否定。',
     avblock_wenck:'Wenckebach型2度AVブロック。AH間隔が段階的に延長し脱落（4:3パターン）。His束上ブロックが典型。',
     avblock_21:'2:1 AVブロック。1拍おきにP波が伝導しない。His電位で上位/下位の鑑別を行います。',
     avblock_3sup:'3度（完全）AVブロック — His束上。P波とHisは解離。接合部補充（narrow QRS・60bpm）。',
@@ -3800,7 +3805,6 @@ function updateModeLabel(){
     if(state.scenario==='avnrt') txt='AVNRT';
     if(isAVRT(state.scenario)) txt='正方向性AVRT';
     if(state.scenario==='coumel_pos') txt='ORT＋脚ブロック（Coumel陽性）';
-    if(state.scenario==='coumel_neg') txt='ORT＋脚ブロック（Coumel陰性）';
     if(state.scenario==='avnrt_noretro') txt='AVNRT（室房伝導なし）';
     if(state.scenario==='at_noretro') txt='AT（室房伝導なし）';
     if(state.scenario==='at_noretro_noortho') txt='AT（室房伝導なし・ortho captureなし）';
