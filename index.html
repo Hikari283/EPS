@@ -4021,8 +4021,17 @@ function initAuth(){
   document.querySelectorAll('#authTabs button').forEach(b=>b.onclick=()=>authView(b.dataset.tab));
   const doLogin=()=>{
     const id=(document.getElementById('loginId').value||'').trim();
+    if(!id){ document.getElementById('loginErr').textContent='IDを入力してください。'; return; }
     const u=loadUsers().find(x=>x.id===id);
-    if(!u){ document.getElementById('loginErr').textContent='IDが見つかりません。新規登録してください。'; return; }
+    if(!u){
+      // この端末では未登録 → 同じIDで新規登録画面へ誘導（端末ごとに初回登録が必要なため）
+      document.getElementById('loginErr').textContent='';
+      document.getElementById('suId').value=id;
+      document.getElementById('suErr').textContent='この端末では初回です。名前などを入れて登録してください（IDは入力済み）。';
+      authView('signup');
+      document.getElementById('suName').focus();
+      return;
+    }
     setCurrentUser(u); enterSession(); showAuth(false);
   };
   document.getElementById('doLogin').onclick=doLogin;
