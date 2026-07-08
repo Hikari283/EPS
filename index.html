@@ -3962,7 +3962,7 @@ function saveQueue(q){ localStorage.setItem('eps_logq', JSON.stringify(q)); }
 function logEvent(type, detail){
   if(!state.user) return;
   const q=logQueue();
-  q.push({ ts:new Date().toISOString(), id:state.user.id, name:state.user.name,
+  q.push({ ts:new Date().toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'}), id:state.user.id, name:state.user.name,
            ablation:state.user.ablation, purpose:state.purpose||'', type, detail:detail||{} });
   saveQueue(q); flushLog();
 }
