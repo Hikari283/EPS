@@ -48,8 +48,7 @@
       <li><a href="#inaba">6. 稲葉法（心房期外刺激）</a></li>
       <li><a href="#quiz">7. ランダム出題・自己診断</a></li>
       <li><a href="#feedback">8. 要望・質問の送りかた</a></li>
-      <li><a href="#admin">9. 管理者向け（記録の見かた）</a></li>
-      <li><a href="#faq">10. よくある質問</a></li>
+      <li><a href="#faq">9. よくある質問</a></li>
     </ul>
   </div>
 
@@ -83,11 +82,14 @@
   <h2 id="flow">4. 基本の使いかた</h2>
   <div class="card">
     <div class="step"><div class="num">1</div><div><b>症例を選ぶ</b>（またはランダム出題）。</div></div>
-    <div class="step"><div class="num">2</div><div><b>「💥 頻拍を誘発する」</b>を押して頻拍を開始。</div></div>
+    <div class="step"><div class="num">2</div><div><b>ペーシングで頻拍を誘発する</b>。S1S2（連結期を詰める）やバースト刺激を行い、jump や頻拍誘発を再現します ―― 実際のEPSと同じ手順です。</div></div>
     <div class="step"><div class="num">3</div><div>波形を観察 ―― 最早期心房・VA関係・QRS幅・AHの変化 などを確認。</div></div>
     <div class="step"><div class="num">4</div><div><b>鑑別手技</b>（下記5章）を実施して反応を見る。</div></div>
     <div class="step"><div class="num">5</div><div><b>自己診断</b>で機序を選んで「答え合わせ」。</div></div>
-    <div class="note ok">洞調律に戻したいときは「洞調律へ戻す」を押します。</div>
+    <div class="note ok">
+      💡 <b>誘発を飛ばして診断だけ練習したいとき</b>は、<b>「💥 頻拍を誘発する」ボタン</b>を押すと、すぐに頻拍が始まった状態になります。<br>
+      洞調律に戻したいときは「洞調律へ戻す」を押します。
+    </div>
   </div>
 
   <h2 id="maneuver">5. 鑑別手技メニュー</h2>
@@ -128,38 +130,14 @@
     内容は開発・運用者に届きます（誰が・いつ書いたかも一緒に記録されます）。
   </div>
 
-  <h2 id="admin">9. 管理者向け（記録の見かた）</h2>
-  <div class="card">
-    利用状況は Google スプレッドシートの <code>log</code> シートに自動で集まります。
-    <table>
-      <tr><th>列</th><th>内容</th></tr>
-      <tr><td>ts</td><td>日時（日本時間）</td></tr>
-      <tr><td>id</td><td>利用者ID（職員番号など）</td></tr>
-      <tr><td>name</td><td>名前</td></tr>
-      <tr><td>ablation</td><td>アブレーション歴</td></tr>
-      <tr><td>purpose</td><td>目的（予習／復習／勉強）</td></tr>
-      <tr><td>type</td><td>操作種別：<code>login</code>／<code>induce</code>（誘発）／<code>maneuver</code>（手技）／<code>diagnosis</code>（自己診断）／<code>feedback</code>（要望）</td></tr>
-      <tr><td>detail</td><td>詳細（診断の正誤・要望の本文など）</td></tr>
-    </table>
-    <ul>
-      <li><b>要望だけ見たいとき</b>：<code>type</code> 列を <code>feedback</code> でフィルタ。本文は <code>detail</code> 列。</li>
-      <li><b>正答率を見たいとき</b>：<code>type</code>=<code>diagnosis</code> の <code>detail</code> 内 <code>correct</code>。</li>
-    </ul>
-    <div class="note">
-      🔒 <b>学会発表のとき</b>：IDが職員番号だと個人特定に直結します。スライドでは <b>ID→連番（A・B・C…）</b>に置き換えてください（対応表は手元に別途保管）。
-    </div>
-  </div>
-
-  <h2 id="faq">10. よくある質問</h2>
+  <h2 id="faq">9. よくある質問</h2>
   <div class="card">
     <h3>Q. インターネットがないと使えない？</h3>
     <p>波形の練習はオフラインでも動きます。利用記録は端末内に貯まり、オンラインに戻ると自動送信されます。</p>
     <h3>Q. 別の端末で同じIDにしたい</h3>
     <p>各端末で同じIDを新規登録すればOKです（記録はIDでまとまります）。</p>
-    <h3>Q. 記録された内容は誰が見る？</h3>
-    <p>運用担当者が集計用スプレッドシートで確認します。院内利用・教育目的です。</p>
-    <h3>Q. データがシートに来ない</h3>
-    <p>Apps Scriptの再デプロイ時に「アクセスできるユーザー＝全員」になっているか確認してください。</p>
+    <h3>Q. 誘発はどうやる？</h3>
+    <p>基本はペーシング（S1S2・バースト）で誘発します。診断だけ練習したいときは「💥 頻拍を誘発する」ボタンですぐ頻拍を開始できます。</p>
   </div>
 
   <footer>
