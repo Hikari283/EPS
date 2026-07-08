@@ -104,6 +104,7 @@
       <h2>① シナリオ / 基質</h2>
       <label>症例</label>
       <select id="scenario">
+        <option value="random">🎲 ランダム出題（診断チャレンジ）</option>
         <option value="avnrt">二重房室結節 / AVNRT 誘発</option>
         <option value="avrt">副伝導路（WPW A型・左側）/ 正方向性AVRT</option>
         <option value="avrtB">副伝導路（WPW B型・右側）/ 正方向性AVRT</option>
@@ -3404,7 +3405,34 @@ function loop(now){
 // ===================================================================
 const $=id=>document.getElementById(id);
 
-$('scenario').onchange=e=>{ state.scenario=e.target.value; state.pace.active=false; state.pace.running=false; state.tachyArmed=false; setScenNote(); generateTimeline(); updatePaceButtons(); };
+const RANDOM_POOL=['avnrt','avrt','avrtB','avrtC','at','atypavnrt','avnrt_noretro','at_noretro','at_noretro_noortho','coumel_pos','coumel_neg'];
+$('scenario').onchange=e=>{
+  const v=e.target.value;
+  if(v==='random'){                                  // 診断チャレンジ：隠れた症例をランダム選択
+    state.challenge=true; state.revealed=false;
+    state.scenario=RANDOM_POOL[Math.floor(Math.random()*RANDOM_POOL.length)];
+  } else {
+    state.challenge=false; state.revealed=false; state.scenario=v;
+  }
+  state.pace.active=false; state.pace.running=false; state.tachyArmed=false;
+  $('dx').value=''; $('dxResult').innerHTML='';       // 前回の答え合わせをクリア
+  setScenNote(); generateTimeline(); updatePaceButtons();
+};
+// チャレンジ中で未回答なら機序を伏せる
+function dxHidden(){ return state.challenge && !state.revealed; }
+// 伏せる：機序名・結論を「機序」に置換（回答前のみ）
+function dxMask(s){
+  if(!s || !dxHidden()) return s;
+  return String(s)
+    .replace(/AT（室房伝導なし・orthodromic captureなし）/g,'機序')
+    .replace(/(?:AVNRT|AT)（室房伝導なし）/g,'機序')
+    .replace(/正方向性AVRT[^、。<（]*(?:（[^）]*）)?/g,'機序')
+    .replace(/ORT（[^）]*）/g,'機序')
+    .replace(/非典型AVNRT|通常型AVNRT|リエントリー性AT/g,'機序')
+    .replace(/AVNRT|AVRT|ORT|Coumel(?:陽性|陰性)?/g,'機序')
+    .replace(/\bAT\b/g,'機序')
+    .replace(/機序(?:[／\/・]機序)+/g,'機序');
+}
 $('scl').oninput=e=>{ state.sinusCL=+e.target.value; $('sclv').textContent=e.target.value+' ms'; if(!state.pace.active) generateTimeline(); };
 $('site').onchange=e=>{ state.pace.site=e.target.value; };
 $('sense').onchange=e=>{ state.pace.sense=e.target.value; };
@@ -3525,7 +3553,7 @@ $('induceTachy').onclick=()=>{
     generateTimeline();                 // 誘発済み頻拍として描画（else分岐がtachyArmedを参照）
     state.playing=true; setPlayBtn(); updatePaceButtons();
     const nm={at:'リエントリー性AT',atypavnrt:'非典型AVNRT',avnrt_noretro:'AVNRT（室房伝導なし）',at_noretro:'AT（室房伝導なし）',coumel_pos:'ORT（Coumel陽性）',coumel_neg:'ORT（Coumel陰性）'}[sc] || (tachyParams(sc)?tachyParams(sc).label:'頻拍');
-    showToast(`${nm} を誘発しました`);
+    showToast(dxHidden() ? '頻拍を誘発しました' : `${nm} を誘発しました`);
   } else {
     showToast('この症例は頻拍を誘発できません（洞調律）');
   }
@@ -3710,11 +3738,20 @@ document.querySelectorAll('#calModeSeg button').forEach(b=>{
   };
 });
 
+const SCEN_NAME={avnrt:'通常型AVNRT', atypavnrt:'非典型AVNRT', avrt:'正方向性AVRT（A型・左側Kent）', avrtB:'正方向性AVRT（B型・右側Kent）', avrtC:'正方向性AVRT（C型・後中隔Kent）', at:'リエントリー性AT', avnrt_noretro:'AVNRT（室房伝導なし）', at_noretro:'AT（室房伝導なし）', at_noretro_noortho:'AT（室房伝導なし・ortho captureなし）', coumel_pos:'ORT＋脚ブロック（Coumel陽性）', coumel_neg:'ORT＋脚ブロック（Coumel陰性）'};
 $('checkDx').onclick=()=>{
   const pick=$('dx').value, el=$('dxResult');
   if(!pick){ el.innerHTML='<span class="hint">機序を選んでください。</span>'; return; }
-  if(pick===truthKey()){ el.innerHTML='<span class="tag ok">正解</span>'; }
-  else el.innerHTML='<span class="tag bad">不正解</span>もう一度、最早期心房・VA関係・QRS幅・AHの変化を見てみましょう。';
+  const correct = pick===truthKey();
+  let msg = correct ? '<span class="tag ok">正解</span>' : '<span class="tag bad">不正解</span>';
+  if(state.challenge && !state.revealed){                 // チャレンジ：答え合わせでネタばらし
+    state.revealed=true;
+    msg += ' 正解は <b>'+(SCEN_NAME[state.scenario]||state.scenario)+'</b> でした。もう一度「🎲 ランダム出題」で次の症例へ。';
+    setScenNote(); updateResultPanel(); updateModeLabel();
+  } else if(!correct){
+    msg += 'もう一度、最早期心房・VA関係・QRS幅・AHの変化を見てみましょう。';
+  }
+  el.innerHTML=msg;
 };
 
 // 現在のシナリオに対応する正解キー（dxドロップダウンの値と一致させる）
@@ -3729,6 +3766,11 @@ function truthKey(){
 
 // ---- 結果/解説/モード表示 ----
 function setScenNote(){
+  if(dxHidden()){                                    // チャレンジ中：症例を伏せる
+    $('scenario').value='random';
+    $('scenNote').textContent='🎲 ランダム出題。誘発して各手技で鑑別し、④「自己診断」で答え合わせしてください（正解でネタばらし）。';
+    return;
+  }
   $('scenario').value=state.scenario;
   const notes={
     sinus:'AH/HV間隔を計測し、S2を短縮して漸減伝導と房室ブロックを観察します。',
@@ -3778,21 +3820,21 @@ function updateModeLabel(){
     else if(r&&r.induced) txt='⚡ '+r.mechanism;
     else txt='ペーシング・プロトコル実行中';
   }
-  $('modeLbl').textContent=txt;
+  $('modeLbl').textContent=dxMask(txt);
 }
 function updateResultPanel(){
   const el=$('result'); const r=state.result;
   if(!state.pace.active){
-    el.innerHTML = scenarioBaselineHints();
+    el.innerHTML = dxMask(scenarioBaselineHints());
     return;
   }
   let h='';
   if(r.a2h2!=null) h+=`<span class="m" style="background:#0a0f18;border:1px solid #1f2937;padding:3px 8px;border-radius:6px">A1A2 <b>${r.a1a2}</b> → A2H2 <b>${Math.round(r.a2h2)} ms</b></span> `;
   if(r.jump) h+='<span class="tag info">AH jump 検出（二重結節生理）</span>';
   if(r.a2h2==null && r.site!=='RVA') h+='<span class="tag bad">房室ブロック（心室応答なし）</span>';
-  if(r.induced) h+='<span class="tag ok">頻拍誘発：'+r.mechanism+'</span>';
+  if(r.induced) h+='<span class="tag ok">'+(dxHidden()?'頻拍誘発（機序は④で判定）':'頻拍誘発：'+r.mechanism)+'</span>';
   if(r.narrow) h+='<span class="tag info">QRS narrow化</span>';
-  h+='<div class="hint" style="margin-top:6px">'+r.notes.map(n=>'・'+n).join('<br>')+'</div>';
+  h+='<div class="hint" style="margin-top:6px">'+r.notes.map(n=>'・'+dxMask(n)).join('<br>')+'</div>';
   h+='<div class="hint" style="margin-top:4px">計測してみよう：'+measureTargets()+'</div>';
   el.innerHTML=h;
 }
