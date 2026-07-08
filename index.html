@@ -126,6 +126,12 @@
   <div class="auth-card">
     <div class="auth-brand">EPS Trainer</div>
     <div class="auth-sub">院内トレーニング — ログインして開始</div>
+    <label for="authPurpose" style="display:block;font-size:12px;color:#8aa0c0;margin:2px 0 4px">今日の目的</label>
+    <select id="authPurpose" style="width:100%;padding:10px;border-radius:8px;border:1px solid #24344f;background:#0a1320;color:#e6eefb;font-size:14px;box-sizing:border-box;margin-bottom:14px">
+      <option value="予習">予習</option>
+      <option value="復習">復習</option>
+      <option value="勉強">勉強（自己学習）</option>
+    </select>
     <div class="auth-tabs" id="authTabs">
       <button data-tab="login" class="on" type="button">ログイン</button>
       <button data-tab="signup" type="button">新規登録</button>
@@ -3623,6 +3629,7 @@ $('induceTachy').onclick=()=>{
     state.playing=true; setPlayBtn(); updatePaceButtons();
     const nm={at:'リエントリー性AT',atypavnrt:'非典型AVNRT',avnrt_noretro:'AVNRT（室房伝導なし）',at_noretro:'AT（室房伝導なし）',coumel_pos:'ORT（Coumel陽性）'}[sc] || (tachyParams(sc)?tachyParams(sc).label:'頻拍');
     showToast(dxHidden() ? '頻拍を誘発しました' : `${nm} を誘発しました`);
+    logEvent('induce', {scenario:truthKey(), challenge:!!state.challenge});
   } else {
     showToast('この症例は頻拍を誘発できません（洞調律）');
   }
@@ -3648,6 +3655,7 @@ document.querySelectorAll('.mvbtn').forEach(b=>{
     if(!state.pace.maneuver){ updatePaceButtons(); return; }
     state.playing=true; setPlayBtn(); updatePaceButtons();
     document.querySelectorAll('.mvbtn').forEach(x=>x.classList.toggle('on', x===b));
+    logEvent('maneuver', {maneuver:mv});
   };
 });
 $('stopPace').onclick=()=>{
@@ -3821,6 +3829,7 @@ $('checkDx').onclick=()=>{
     msg += 'もう一度、最早期心房・VA関係・QRS幅・AHの変化を見てみましょう。';
   }
   el.innerHTML=msg;
+  logEvent('diagnosis', {scenario:truthKey(), picked:pick, correct, challenge:!!state.challenge});
 };
 
 // 現在のシナリオに対応する正解キー（dxドロップダウンの値と一致させる）
@@ -3946,6 +3955,33 @@ function setCurrentUser(u){
   const b=document.getElementById('userBadge'); if(b) b.textContent='👤 '+u.id+'（'+u.ablation+'）';
 }
 function showAuth(show){ document.getElementById('authOverlay').style.display = show?'flex':'none'; }
+
+// ---- 学習ログ（自動送信・オフライン対応） ----
+const LOG_ENDPOINT = '';   // ← Google Apps Sc​riptのWebアプリURLをここに貼る（空なら端末内に蓄積のみ）
+function logQueue(){ try{ return JSON.parse(localStorage.getItem('eps_logq')||'[]'); }catch(e){ return []; } }
+function saveQueue(q){ localStorage.setItem('eps_logq', JSON.stringify(q)); }
+function logEvent(type, detail){
+  if(!state.user) return;
+  const q=logQueue();
+  q.push({ ts:new Date().toISOString(), id:state.user.id, name:state.user.name,
+           ablation:state.user.ablation, purpose:state.purpose||'', type, detail:detail||{} });
+  saveQueue(q); flushLog();
+}
+let _flushing=false;
+function flushLog(){
+  if(_flushing || !LOG_ENDPOINT || !navigator.onLine) return;
+  const q=logQueue(); if(!q.length) return;
+  _flushing=true;
+  fetch(LOG_ENDPOINT, { method:'POST', mode:'no-cors',
+    headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify({rows:q}) })
+    .then(()=>saveQueue([])).catch(()=>{}).finally(()=>{ _flushing=false; });
+}
+window.addEventListener('online', flushLog);
+function enterSession(){
+  const sel=document.getElementById('authPurpose');
+  state.purpose = sel ? sel.value : '';
+  logEvent('login');
+}
 function authView(v){   // 'login' | 'signup' | 'done'
   document.getElementById('authTabs').hidden = (v==='done');
   document.getElementById('pane-login').hidden = (v!=='login');
@@ -3956,13 +3992,14 @@ function authView(v){   // 'login' | 'signup' | 'done'
 function initAuth(){
   const cur=localStorage.getItem('eps_current'); const users=loadUsers();
   const u = cur && users.find(x=>x.id===cur);
-  if(u){ setCurrentUser(u); showAuth(false); } else { showAuth(true); }
+  if(u){ setCurrentUser(u); document.getElementById('loginId').value=u.id; }
+  showAuth(true);   // 毎回オーバーレイ表示 → 今日の目的を毎回選ばせる
   document.querySelectorAll('#authTabs button').forEach(b=>b.onclick=()=>authView(b.dataset.tab));
   const doLogin=()=>{
     const id=(document.getElementById('loginId').value||'').trim();
     const u=loadUsers().find(x=>x.id===id);
     if(!u){ document.getElementById('loginErr').textContent='IDが見つかりません。新規登録してください。'; return; }
-    setCurrentUser(u); showAuth(false);
+    setCurrentUser(u); enterSession(); showAuth(false);
   };
   document.getElementById('doLogin').onclick=doLogin;
   document.getElementById('loginId').onkeydown=e=>{ if(e.key==='Enter') doLogin(); };
@@ -3981,7 +4018,7 @@ function initAuth(){
     document.getElementById('doneId').textContent=id;
     authView('done');
   };
-  document.getElementById('doneStart').onclick=()=>showAuth(false);
+  document.getElementById('doneStart').onclick=()=>{ enterSession(); showAuth(false); };
   document.getElementById('switchUser').onclick=()=>{
     document.getElementById('loginId').value='';
     document.getElementById('loginErr').textContent='';
