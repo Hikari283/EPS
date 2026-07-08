@@ -3500,6 +3500,8 @@ $('scenario').onchange=e=>{
   state.pace.active=false; state.pace.running=false; state.tachyArmed=false;
   $('dx').value=''; $('dxResult').innerHTML='';       // 前回の答え合わせをクリア
   setScenNote(); generateTimeline(); updatePaceButtons();
+  state.playing=true; setPlayBtn();                    // シナリオ選択で必ず波形を動かす
+  requestAnimationFrame(()=>{ resize(); draw(); });
 };
 // チャレンジ中で未回答なら機序を伏せる
 function dxHidden(){ return state.challenge && !state.revealed; }
@@ -3972,7 +3974,11 @@ function setCurrentUser(u){
   state.user=u; localStorage.setItem('eps_current', u.id);
   const b=document.getElementById('userBadge'); if(b) b.textContent='👤 '+u.id+'（'+u.ablation+'）';
 }
-function showAuth(show){ document.getElementById('authOverlay').style.display = show?'flex':'none'; }
+function showAuth(show){
+  document.getElementById('authOverlay').style.display = show?'flex':'none';
+  // オーバーレイを閉じた瞬間にキャンバスを再計測（被っている間はサイズが確定せず固まって見えるため）
+  if(!show){ state.playing=true; requestAnimationFrame(()=>{ resize(); draw(); }); }
+}
 
 // ---- 学習ログ（自動送信・オフライン対応） ----
 const LOG_ENDPOINT = 'https://script.google.com/macros/s/AKfycbw8EIy9RgzidoZtph5QvwPInSeUIabPTupJmC68tDZSJywX2ws2ko1uKYaVFrqTgMKAhg/exec';   // ← Google Apps ScriptのWebアプリURL（空なら端末内に蓄積のみ）
