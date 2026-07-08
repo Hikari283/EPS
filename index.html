@@ -141,6 +141,7 @@
       <input id="loginId" placeholder="登録したID" autocomplete="off" spellcheck="false">
       <div class="auth-err" id="loginErr"></div>
       <button class="auth-go" id="doLogin" type="button">ログイン</button>
+      <div class="auth-note">⚠️ 登録情報は<b>この端末内のみ</b>に保存されます。別の端末（スマホ・PCなど）で使うときは、その端末で<b>もう一度「新規登録」</b>が必要です（同じIDでOK）。</div>
     </div>
     <div class="auth-pane" id="pane-signup" hidden>
       <label for="suId">ID（<b>職員番号を推奨</b>）</label>
@@ -156,7 +157,7 @@
       </select>
       <div class="auth-err" id="suErr"></div>
       <button class="auth-go" id="doSignup" type="button">登録して開始</button>
-      <div class="auth-note">IDは次回ログインに使います（<b>職員番号を推奨</b>）。名前は端末内にのみ保存され、学習ログはIDで匿名化されます。記録に同意の上ご利用ください。</div>
+      <div class="auth-note">IDは次回ログインに使います（<b>職員番号を推奨</b>）。登録情報は<b>この端末内のみ</b>に保存されるため、端末を変えたら再登録が必要です。利用記録（ID・名前・目的など）は集計に用います。同意の上ご利用ください。</div>
     </div>
     <div class="auth-pane" id="pane-done" hidden>
       <div class="auth-ok">登録完了 🎉</div>
