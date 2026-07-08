@@ -859,6 +859,12 @@ function buildEntrainment(sc){
   // 1) 頻拍を数拍
   renderTachy(sc, 0, tPaceStart - 5);
 
+  // SA−VA：ペーシング刺激→心房(SA)と頻拍のV→A(VA)の差。
+  //   ORT(Vが回路内)はSA≒VA(<85ms)、AVNRT(V傍観)は延長(>85ms)、ATも>85ms。
+  const va = tp.va || 135;
+  const saDelta = tp.inCircuit ? (isAVRT(sc) ? 40 : 120) : 130;
+  const SA = va + saDelta;
+
   // 2) RVAオーバードライブ（心房はPCLに加速＝エントレイン）
   //    体表QRSは漸増融合(progressive fusion)→固定融合(constant fusion)を示す
   let lastV;
@@ -868,7 +874,7 @@ function buildEntrainment(sc){
     // 融合度：最初の3拍は順行性成分が残り漸増融合、以降は固定融合
     const fusionFrac = i<3 ? (i+1)/4 : 0.6;   // 0=完全自己, 1=完全ペース
     emitVentFusion(ts, fusionFrac);
-    emitHis(ts+50,1.6); emitAtrial(ts + tp.va, tp.retro, 0.9);
+    emitHis(ts+50,1.6); emitAtrial(ts + SA, tp.retro, 0.9);   // 心房はStim+SAで捕捉（＝SA間隔）
     lastV = ts;
   }
 
@@ -878,14 +884,16 @@ function buildEntrainment(sc){
   renderTachy(sc, tResume, state.duration);
 
   const diff = ppi - tcl;
+  const savaJudge = saDelta<85 ? '<b>SA−VA &lt;85ms → V が回路内＝ORT</b>' : '<b>SA−VA &gt;85ms → V は傍観＝AVNRT/AT</b>';
   state.result = {
     site:'RVA', induced:true, mechanism:tp.label, a2h2:null, jump:false,
     narrow:false, notes:[
       `RVAをTCL−30ms（${pcl}ms）で${nPace}拍オーバードライブ → ペーシング中は心房もPCLに加速（エントレイン）。`,
       `体表QRSは<b>漸増融合→固定融合</b>を呈し、entrainment（リエントリー回路）を証明。`,
-      `停止後の復帰周期 PPI ${ppi}ms、TCL ${tcl}ms、<b>PPI−TCL ${diff}ms</b>。`
+      `停止後の復帰周期 PPI ${ppi}ms、TCL ${tcl}ms、<b>PPI−TCL ${diff}ms</b>（<115＝V回路内 / >115＝AT）。`,
+      `<b>SA ${SA}ms</b>（最終ペーシング刺激→心房）− <b>VA ${va}ms</b>（頻拍中V→A）＝ <b>SA−VA ${saDelta}ms</b>。${savaJudge}。`
     ],
-    entrain:{tcl, ppi, diff, inCircuit:tp.inCircuit, label:tp.label, pcl, fusion:true}
+    entrain:{tcl, ppi, diff, inCircuit:tp.inCircuit, label:tp.label, pcl, fusion:true, sa:SA, va, sava:saDelta}
   };
   return true;
 }
