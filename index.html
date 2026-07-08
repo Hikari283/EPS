@@ -3956,7 +3956,7 @@ function setCurrentUser(u){
 function showAuth(show){ document.getElementById('authOverlay').style.display = show?'flex':'none'; }
 
 // ---- 学習ログ（自動送信・オフライン対応） ----
-const LOG_ENDPOINT = 'https://script.google.com/macros/s/AKfycbwCmKEGA90LmzSQDEUzncxVRkMsMjy3JCc6dqCzcLdHol5xcF5O6-6LEXJAfONXuFbOtw/exec';   // ← Google Apps ScriptのWebアプリURL（空なら端末内に蓄積のみ）
+const LOG_ENDPOINT = 'https://script.google.com/macros/s/AKfycbzUkXYq9dd-7V5CK7JLNL8ysArbmTFAr0CHYABVD6if_wIupGYmm_EZLfIkWDKlJIi2bw/exec';   // ← Google Apps ScriptのWebアプリURL（空なら端末内に蓄積のみ）
 function logQueue(){ try{ return JSON.parse(localStorage.getItem('eps_logq')||'[]'); }catch(e){ return []; } }
 function saveQueue(q){ localStorage.setItem('eps_logq', JSON.stringify(q)); }
 function logEvent(type, detail){
