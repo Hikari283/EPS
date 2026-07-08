@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>EPS Trainer — 電気生理検査トレーニング</title>
+<title>EP Trainer（β版）— 電気生理検査トレーニング</title>
 <style>
   :root{
     --bg:#0b0f16; --panel:#121826; --panel2:#0e1420; --line:#1f2937;
@@ -124,7 +124,7 @@
 </style>
 <div id="authOverlay" class="auth-ov" role="dialog" aria-modal="true" aria-label="ログイン">
   <div class="auth-card">
-    <div class="auth-brand">EPS Trainer</div>
+    <div class="auth-brand">EP Trainer<span style="font-size:.6em;opacity:.7"> β版</span></div>
     <div class="auth-sub">院内トレーニング — ログインして開始</div>
     <label for="authPurpose" style="display:block;font-size:12px;color:#8aa0c0;margin:2px 0 4px">今日の目的</label>
     <select id="authPurpose" style="width:100%;padding:10px;border-radius:8px;border:1px solid #24344f;background:#0a1320;color:#e6eefb;font-size:14px;box-sizing:border-box;margin-bottom:14px">
@@ -170,7 +170,7 @@
 <div class="app">
   <!-- ============ サイドバー操作パネル ============ -->
   <div class="side">
-    <h1>EPS Trainer</h1>
+    <h1>EP Trainer <span style="font-size:.5em;opacity:.65;font-weight:400">β版</span></h1>
     <div class="sub">心内電位を読み・ペーシングを組み・キャリパーで診断する電気生理トレーニング</div>
     <div class="user-badge"><span id="userBadge">👤 未ログイン</span><button id="switchUser" type="button">切替</button></div>
 
@@ -393,7 +393,7 @@
 
 <script>
 /* ===================================================================
-   EPS Trainer — 教育用シミュレーション
+   EP Trainer（β版）— 教育用シミュレーション
    ※ 実臨床の波形を簡略化したトレーニング用モデルです
    =================================================================== */
 
