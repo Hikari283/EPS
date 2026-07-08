@@ -1859,11 +1859,14 @@ function buildInabaScan(){
           if(firstHisReset==null) firstHisReset=coupling;
           const hStar=priorHis+tachyCL-ADV;
           emitHis(hStar, 1.4); emitVent(hStar+HV, false);
-          // リセット拍の逆行性心房（A = His + |Hoff|）。これが無いと再開後2拍目のAが欠落する。
+          // リセット拍の逆行性心房（A = His + |Hoff|）。ORT/非典型は逆行が遠いので別A波として描く。
+          //   AVNRT系は A≈His で逆行がSAE心房に近接（＝SAE捕捉Aが拍のA）→ 二重A波を描かない。
           const retroMode = isAVRT(sc) ? apConfig(sc).retro : (sc==='atypavnrt'?'atyp':'avnrt');
           const Aretro=hStar-Hoff;
-          emitAtrial(Aretro, retroMode, 0.9);
-          const firstA=Aretro+tachyCL;                       // 逆行A起点にTCLで再開
+          const farRetro = (Aretro-tExtra > 200);            // ORT/非典型：逆行が遠い
+          if(farRetro) emitAtrial(Aretro, retroMode, 0.9);   // 遠い逆行Aは別A波として描く
+          //   遠い系は逆行A起点、近い系(AVNRT)はSAE心房起点で約1周期後に再開（AAが自然に連続）。
+          const firstA = farRetro ? (Aretro+tachyCL) : (tExtra+tachyCL);
           for(let t=firstA; t<segEnd; t+=tachyCL) emitTachyBeat(sc, t);
         } else {
           // まだ十分早期でない：Hisは予定位置のまま前進せず＝非リセット扱い（頻拍素通り）。
