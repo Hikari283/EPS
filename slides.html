@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EP Trainer（β版）プレゼン</title>
+<style>
+  :root{ --bg:#0b1120; --card:#111a2b; --line:#22314a; --tx:#eaf1fb; --sub:#9fb0c8; --accent:#38bdf8; --accent2:#a78bfa; --ok:#34d399; --warn:#fbbf24; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:#05080f;color:var(--tx);font-family:-apple-system,"Hiragino Kaku Gothic ProN",sans-serif}
+  .deck{scroll-snap-type:y mandatory;overflow-y:scroll;height:100vh}
+  .slide{scroll-snap-align:start;min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:6vh 8vw;position:relative;
+    background:radial-gradient(ellipse at 70% 0%,rgba(56,189,248,.10),transparent 55%),radial-gradient(ellipse at 0% 100%,rgba(167,139,250,.10),transparent 55%),var(--bg);
+    border-bottom:1px solid #0f1830}
+  .kicker{color:var(--accent);font-weight:700;letter-spacing:.08em;font-size:clamp(12px,1.4vw,15px);margin-bottom:14px;text-transform:uppercase}
+  h1{font-size:clamp(30px,6vw,64px);line-height:1.12;letter-spacing:-.01em}
+  h2{font-size:clamp(24px,3.6vw,40px);line-height:1.2;margin-bottom:22px}
+  .sub{color:var(--sub);font-size:clamp(15px,2vw,22px);margin-top:16px;line-height:1.7}
+  ul{list-style:none;margin-top:10px}
+  li{font-size:clamp(15px,2.1vw,23px);padding:11px 0 11px 38px;position:relative;line-height:1.5}
+  li::before{content:"";position:absolute;left:6px;top:1.1em;width:11px;height:11px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}
+  li b{color:#bfe6ff}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px;margin-top:26px}
+  .tile{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px}
+  .tile .n{font-size:clamp(22px,3vw,34px);font-weight:800;color:var(--accent)}
+  .tile h3{font-size:clamp(15px,1.8vw,20px);margin:8px 0 6px}
+  .tile p{color:var(--sub);font-size:clamp(13px,1.5vw,16px);line-height:1.55}
+  .flow{display:flex;flex-wrap:wrap;gap:12px;margin-top:26px;align-items:stretch}
+  .flow .st{flex:1 1 150px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 14px;position:relative}
+  .flow .st .s{color:var(--accent2);font-weight:700;font-size:13px}
+  .flow .st .t{font-size:clamp(15px,1.8vw,20px);margin-top:6px;font-weight:700}
+  .flow .st .d{color:var(--sub);font-size:13px;margin-top:4px;line-height:1.5}
+  .pageno{position:absolute;bottom:22px;right:34px;color:#4a5c78;font-size:13px}
+  .tag{display:inline-block;background:rgba(56,189,248,.12);border:1px solid var(--line);color:var(--accent);border-radius:999px;padding:4px 14px;font-size:clamp(12px,1.4vw,15px);margin:4px 6px 0 0}
+  .big{font-size:clamp(26px,4vw,46px);font-weight:800;line-height:1.25}
+  .hl{color:var(--accent)} .hl2{color:var(--accent2)} .hlw{color:var(--warn)}
+  .center{align-items:center;text-align:center}
+  .center ul{display:inline-block;text-align:left}
+  .hint{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);color:#3d4d68;font-size:12px;z-index:10}
+  @media print{
+    .deck{height:auto;overflow:visible}
+    .slide{min-height:100vh;page-break-after:always;border:none}
+    .hint{display:none}
+  }
+</style>
+</head>
+<body>
+<div class="deck">
+
+  <!-- 1 タイトル -->
+  <section class="slide center">
+    <div class="kicker">電気生理検査 教育用シミュレーター</div>
+    <h1>EP Trainer <span class="hl">β版</span></h1>
+    <p class="sub">心内心電図を「見て・動かして・鑑別する」<br>上室頻拍トレーニングアプリ</p>
+    <div style="margin-top:30px">
+      <span class="tag">AVNRT</span><span class="tag">AVRT</span><span class="tag">AT</span><span class="tag">非典型AVNRT</span><span class="tag">稲葉法</span>
+    </div>
+    <div class="pageno">1</div>
+  </section>
+
+  <!-- 2 背景 -->
+  <section class="slide">
+    <div class="kicker">Background — なぜ作ったか</div>
+    <h2>頻拍の鑑別は「経験の場数」が要る</h2>
+    <ul>
+      <li>上室頻拍の鑑別は、<b>心内心電図の読み</b>と<b>手技への反応</b>の理解が必要。</li>
+      <li>しかし実症例は<b>いつ・どの機序が来るか選べない</b>。研修医が数をこなしにくい。</li>
+      <li>カテ室では<b>じっくり考える時間が取りにくい</b>。復習の教材も少ない。</li>
+      <li>→ <b>いつでも・何度でも・安全に</b>練習できる環境が欲しかった。</li>
+    </ul>
+    <div class="pageno">2</div>
+  </section>
+
+  <!-- 3 これは何 -->
+  <section class="slide">
+    <div class="kicker">What — これは何？</div>
+    <h2>実機と同じ流れを、ブラウザで再現</h2>
+    <div class="flow">
+      <div class="st"><div class="s">STEP 1</div><div class="t">誘発</div><div class="d">S1S2・バーストで頻拍を誘発</div></div>
+      <div class="st"><div class="s">STEP 2</div><div class="t">観察</div><div class="d">最早期心房・VA・QRS幅・AH</div></div>
+      <div class="st"><div class="s">STEP 3</div><div class="t">鑑別手技</div><div class="d">PVC・オーバードライブ・稲葉法…</div></div>
+      <div class="st"><div class="s">STEP 4</div><div class="t">自己診断</div><div class="d">機序を選んで答え合わせ</div></div>
+    </div>
+    <p class="sub">インストール不要。<b class="hl">index.html を開くだけ</b>で動作します。</p>
+    <div class="pageno">3</div>
+  </section>
+
+  <!-- 4 収録症例 -->
+  <section class="slide">
+    <div class="kicker">Contents — 収録している症例</div>
+    <h2>主要な上室頻拍を網羅</h2>
+    <div class="grid">
+      <div class="tile"><div class="n">AVNRT</div><h3>通常型 / 非典型</h3><p>slow-fast・fast-slow。室房伝導なしの型も。</p></div>
+      <div class="tile"><div class="n">AVRT</div><h3>正方向性（A/B/C型）</h3><p>左側・右側・後中隔 Kent。Coumel陽性も。</p></div>
+      <div class="tile"><div class="n">AT</div><h3>心房頻拍</h3><p>リエントリー性。室房伝導なし等の亜型。</p></div>
+      <div class="tile"><div class="n">🎲</div><h3>ランダム出題</h3><p>機序を伏せて出題＝実戦形式のクイズ。</p></div>
+    </div>
+    <div class="pageno">4</div>
+  </section>
+
+  <!-- 5 鑑別手技 -->
+  <section class="slide">
+    <div class="kicker">Maneuvers — 鑑別手技</div>
+    <h2>実臨床で使う手技をひと通り</h2>
+    <ul>
+      <li><b>His不応期PVC</b> — 心房前進で副伝導路（AVRT）を証明</li>
+      <li><b>心室オーバードライブ</b> — V-A-V／V-A-A-V で AVNRT/AVRT vs AT</li>
+      <li><b>エントレインメント</b> — PPI−TCL・SA−VA で鑑別</li>
+      <li><b>VAリンキング／パラヒス刺激</b></li>
+      <li><b class="hl2">稲葉法（心房期外刺激）</b> — Hisリセットと A1→A3 で AT を鑑別</li>
+    </ul>
+    <div class="pageno">5</div>
+  </section>
+
+  <!-- 6 稲葉法 -->
+  <section class="slide">
+    <div class="kicker">Highlight — 稲葉法を実装</div>
+    <h2>論文ベースの新しい鑑別法も体験できる</h2>
+    <ul>
+      <li>頻拍中に<b>単発の心房期外刺激（SAE）</b>を入れる（Inaba 2024）。</li>
+      <li>心房2拍 <b>A1→A3</b> が <b>2×TCL 未満</b>＝リセットあり／<b>一致</b>＝AT。</li>
+      <li><b>Hisのリセット</b>・停止パターン（AHブロック等）も忠実に再現。</li>
+      <li>実装は<b class="hl">論文の実測値に合わせて調整</b>。教科書では分かりにくい挙動を可視化。</li>
+    </ul>
+    <div class="pageno">6</div>
+  </section>
+
+  <!-- 7 学習の仕組み -->
+  <section class="slide">
+    <div class="kicker">Learning — 定着させる仕組み</div>
+    <h2>「解けたつもり」で終わらせない</h2>
+    <div class="grid">
+      <div class="tile"><div class="n">🎲</div><h3>ランダム出題</h3><p>機序を伏せて出題。実戦さながらに鑑別の思考を鍛える。</p></div>
+      <div class="tile"><div class="n">✓</div><h3>自己診断・答え合わせ</h3><p>その場で正誤が分かる。間違えたら着眼点を再確認。</p></div>
+      <div class="tile"><div class="n">💬</div><h3>要望・質問フォーム</h3><p>使う人の声を集めて改善に反映。</p></div>
+    </div>
+    <div class="pageno">7</div>
+  </section>
+
+  <!-- 8 使い方 -->
+  <section class="slide">
+    <div class="kicker">How to use — 使い方</div>
+    <h2>登録して、すぐ始められる</h2>
+    <ul>
+      <li><b>①</b> 今日の目的（予習／復習／勉強）を選ぶ</li>
+      <li><b>②</b> 初回のみ ID（職員番号推奨）・名前・アブレーション歴を登録</li>
+      <li><b>③</b> 症例を選び、<b>ペーシングで誘発</b>（診断だけなら誘発ボタンで即開始）</li>
+      <li><b>④</b> 手技で鑑別 → 自己診断で答え合わせ</li>
+    </ul>
+    <p class="sub">各自の<b>スマホ・PCどちらでも</b>利用可能。</p>
+    <div class="pageno">8</div>
+  </section>
+
+  <!-- 9 今後 -->
+  <section class="slide">
+    <div class="kicker">Next — 今後の展望</div>
+    <h2>β版から、みんなで育てる</h2>
+    <ul>
+      <li>収録症例の追加（心房粗動・その他の亜型）。</li>
+      <li>利用データをもとに<b>つまずきやすいポイント</b>を分析。</li>
+      <li>要望フォームの声を反映して改善を継続。</li>
+      <li>研修プログラムへの組み込み・効果検証。</li>
+    </ul>
+    <div class="pageno">9</div>
+  </section>
+
+  <!-- 10 まとめ -->
+  <section class="slide center">
+    <div class="kicker">Summary</div>
+    <p class="big">いつでも・何度でも・安全に<br><span class="hl">頻拍の鑑別</span>を練習できる</p>
+    <p class="sub" style="margin-top:26px">実機と同じ流れ ＋ 稲葉法などの新しい手技 ＋ 自己診断<br>まずは <span class="hlw">β版</span> を触ってみてください。</p>
+    <div style="margin-top:26px"><span class="tag">EP Trainer（β版）</span></div>
+    <div class="pageno">10</div>
+  </section>
+
+</div>
+<div class="hint">↓ スクロール／方向キーでめくる ・ 印刷でPDF化できます</div>
+</body>
+</html>
