@@ -126,17 +126,19 @@
   <div class="auth-card">
     <div class="auth-brand">EPS Trainer</div>
     <div class="auth-sub">院内トレーニング — ログインして開始</div>
-    <div class="auth-tabs">
+    <div class="auth-tabs" id="authTabs">
       <button data-tab="login" class="on" type="button">ログイン</button>
       <button data-tab="signup" type="button">新規登録</button>
     </div>
     <div class="auth-pane" id="pane-login">
-      <label for="loginId">あなたのID</label>
-      <input id="loginId" placeholder="EPS-XXXXX" autocomplete="off" spellcheck="false">
+      <label for="loginId">あなたのID（職員番号など）</label>
+      <input id="loginId" placeholder="登録したID" autocomplete="off" spellcheck="false">
       <div class="auth-err" id="loginErr"></div>
       <button class="auth-go" id="doLogin" type="button">ログイン</button>
     </div>
     <div class="auth-pane" id="pane-signup" hidden>
+      <label for="suId">ID（<b>職員番号を推奨</b>）</label>
+      <input id="suId" placeholder="例：職員番号" autocomplete="off" spellcheck="false">
       <label for="suName">名前</label>
       <input id="suName" placeholder="山田 太郎" autocomplete="off">
       <label for="suAbl">アブレーション歴</label>
@@ -149,7 +151,13 @@
       </select>
       <div class="auth-err" id="suErr"></div>
       <button class="auth-go" id="doSignup" type="button">登録して開始</button>
-      <div class="auth-note">登録すると<b>匿名ID</b>が発行されます。次回はそのIDでログイン。名前は端末内にのみ保存され、学習ログはIDで匿名化されます。記録に同意の上ご利用ください。</div>
+      <div class="auth-note">IDは次回ログインに使います（<b>職員番号を推奨</b>）。名前は端末内にのみ保存され、学習ログはIDで匿名化されます。記録に同意の上ご利用ください。</div>
+    </div>
+    <div class="auth-pane" id="pane-done" hidden>
+      <div class="auth-ok">登録完了 🎉</div>
+      <div class="auth-idbox">あなたのID<b id="doneId"></b></div>
+      <div class="auth-note">この端末で次回ログインに使います（職員番号を推奨）。</div>
+      <button class="auth-go" id="doneStart" type="button">開始する</button>
     </div>
   </div>
 </div>
@@ -3933,25 +3941,25 @@ function scenarioBaselineHints(){
 // ---- 匿名ログイン ----
 function loadUsers(){ try{ return JSON.parse(localStorage.getItem('eps_users')||'[]'); }catch(e){ return []; } }
 function saveUsers(u){ localStorage.setItem('eps_users', JSON.stringify(u)); }
-function genUserId(users){ const cs='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let id;
-  do{ id='EPS-'+Array.from({length:5},()=>cs[Math.floor(Math.random()*cs.length)]).join(''); }while(users.some(u=>u.id===id)); return id; }
 function setCurrentUser(u){
   state.user=u; localStorage.setItem('eps_current', u.id);
   const b=document.getElementById('userBadge'); if(b) b.textContent='👤 '+u.id+'（'+u.ablation+'）';
 }
 function showAuth(show){ document.getElementById('authOverlay').style.display = show?'flex':'none'; }
+function authView(v){   // 'login' | 'signup' | 'done'
+  document.getElementById('authTabs').hidden = (v==='done');
+  document.getElementById('pane-login').hidden = (v!=='login');
+  document.getElementById('pane-signup').hidden = (v!=='signup');
+  document.getElementById('pane-done').hidden = (v!=='done');
+  document.querySelectorAll('#authTabs button').forEach(x=>x.classList.toggle('on', x.dataset.tab===v));
+}
 function initAuth(){
   const cur=localStorage.getItem('eps_current'); const users=loadUsers();
   const u = cur && users.find(x=>x.id===cur);
   if(u){ setCurrentUser(u); showAuth(false); } else { showAuth(true); }
-  document.querySelectorAll('.auth-tabs button').forEach(b=>b.onclick=()=>{
-    document.querySelectorAll('.auth-tabs button').forEach(x=>x.classList.toggle('on',x===b));
-    const t=b.dataset.tab;
-    document.getElementById('pane-login').hidden = t!=='login';
-    document.getElementById('pane-signup').hidden = t!=='signup';
-  });
+  document.querySelectorAll('#authTabs button').forEach(b=>b.onclick=()=>authView(b.dataset.tab));
   const doLogin=()=>{
-    const id=(document.getElementById('loginId').value||'').trim().toUpperCase();
+    const id=(document.getElementById('loginId').value||'').trim();
     const u=loadUsers().find(x=>x.id===id);
     if(!u){ document.getElementById('loginErr').textContent='IDが見つかりません。新規登録してください。'; return; }
     setCurrentUser(u); showAuth(false);
@@ -3959,24 +3967,27 @@ function initAuth(){
   document.getElementById('doLogin').onclick=doLogin;
   document.getElementById('loginId').onkeydown=e=>{ if(e.key==='Enter') doLogin(); };
   document.getElementById('doSignup').onclick=()=>{
+    const id=(document.getElementById('suId').value||'').trim();
     const name=(document.getElementById('suName').value||'').trim();
     const abl=document.getElementById('suAbl').value;
-    if(!name){ document.getElementById('suErr').textContent='名前を入力してください。'; return; }
-    const users=loadUsers(); const id=genUserId(users);
+    const errEl=document.getElementById('suErr');
+    if(!id){ errEl.textContent='IDを入力してください（職員番号を推奨）。'; return; }
+    if(!name){ errEl.textContent='名前を入力してください。'; return; }
+    const users=loadUsers();
+    if(users.some(u=>u.id===id)){ errEl.textContent='このIDは既に登録済みです。ログインするか別のIDにしてください。'; return; }
     const u={id, name, ablation:abl, created:new Date().toISOString()};
     users.push(u); saveUsers(users); setCurrentUser(u);
-    const pane=document.getElementById('pane-signup');
-    pane.innerHTML='<div class="auth-ok">登録完了 🎉</div>'
-      +'<div class="auth-idbox">あなたのID<b>'+id+'</b></div>'
-      +'<div class="auth-note">次回ログインに使います。控えておいてください（端末が変わると同じIDで入れます）。</div>'
-      +'<button class="auth-go" id="startBtn" type="button">開始する</button>';
-    document.getElementById('startBtn').onclick=()=>showAuth(false);
+    errEl.textContent='';
+    document.getElementById('doneId').textContent=id;
+    authView('done');
   };
+  document.getElementById('doneStart').onclick=()=>showAuth(false);
   document.getElementById('switchUser').onclick=()=>{
-    const p=document.getElementById('loginId'); if(p) p.value='';
+    document.getElementById('loginId').value='';
     document.getElementById('loginErr').textContent='';
-    document.querySelector('.auth-tabs button[data-tab="login"]').click();
-    showAuth(true);
+    document.getElementById('suId').value=''; document.getElementById('suName').value='';
+    document.getElementById('suErr').textContent='';
+    authView('login'); showAuth(true);
   };
 }
 initAuth();
