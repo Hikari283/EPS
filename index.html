@@ -349,6 +349,14 @@
       <div id="dxResult" class="small"></div>
     </div>
 
+    <div class="card">
+      <h3>💬 要望・質問</h3>
+      <div class="small" style="margin-bottom:6px;color:#7c8aa0">気づいた点・追加してほしい症例・バグ・質問など、自由に書いて送信してください。開発者に届きます。</div>
+      <textarea id="fbText" rows="3" placeholder="例：〇〇の波形が分かりにくい／△△の症例も追加してほしい" style="width:100%;box-sizing:border-box;padding:8px;border-radius:8px;border:1px solid #24344f;background:#0a1320;color:#e6eefb;font-size:13px;resize:vertical"></textarea>
+      <button id="fbSend" style="margin-top:6px">送信</button>
+      <div id="fbResult" class="small"></div>
+    </div>
+
   </div>
 
   <!-- ============ メイン表示 ============ -->
@@ -3830,6 +3838,16 @@ $('checkDx').onclick=()=>{
   }
   el.innerHTML=msg;
   logEvent('diagnosis', {scenario:truthKey(), picked:pick, correct, challenge:!!state.challenge});
+};
+
+// 要望・質問の送信
+$('fbSend').onclick=()=>{
+  const ta=$('fbText'), out=$('fbResult');
+  const text=(ta.value||'').trim();
+  if(!text){ out.innerHTML='<span class="hint">内容を入力してください。</span>'; return; }
+  logEvent('feedback', {text});
+  ta.value='';
+  out.innerHTML='<span class="tag ok">送信しました</span> ご意見ありがとうございます！';
 };
 
 // 現在のシナリオに対応する正解キー（dxドロップダウンの値と一致させる）
