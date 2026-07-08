@@ -1816,7 +1816,12 @@ function buildInabaScan(){
   const GAP=state.win;
   const EXTRA_OFF=Math.round(GAP*0.5);
   state.pace.paceOnAt=LEAD;
-  // 稲葉法スキャンは頻拍停止で自然終了するので、停止位置での切り詰めはしない（全連結期を残す）。
+  // 途中でペーシングを止めたら、打ったところ（stopAt）までの連結期だけ残す。
+  const stopAt=p.stopAt;
+  if(stopAt!=null){
+    const kStop=Math.floor((stopAt-LEAD-EXTRA_OFF)/GAP)+1;
+    nSteps=Math.max(1, Math.min(nSteps, kStop));
+  }
   state.duration=LEAD+nSteps*GAP;
   const couplings=[], segs=[];
   let firstHisReset=null, firstTerm=null;
@@ -1824,6 +1829,7 @@ function buildInabaScan(){
     const coupling=start-k*DEC; couplings.push(coupling);
     const segStart=LEAD+k*GAP, segEnd=segStart+GAP;
     const tExtra=segStart+EXTRA_OFF;        // 期外刺激（画面中央の固定位置）
+    if(stopAt!=null && tExtra>stopAt){ nSteps=k; state.duration=LEAD+nSteps*GAP; break; }  // 停止位置を越える刺激は打たない
     const tAlast=tExtra-coupling;           // 直前の頻拍A（連結期分だけ手前）
     for(let t=tAlast; t>=segStart+40; t-=tachyCL) emitTachyBeat(sc, t);   // lead頻拍（後ろ向き）
     emitStim(tExtra, mode);
