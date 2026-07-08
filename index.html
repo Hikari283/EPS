@@ -280,14 +280,6 @@
       </details>
     </div>
 
-    <div class="card">
-      <h2>⑤ アナライザー（自動計測）</h2>
-      <label style="display:flex;align-items:center;gap:6px">
-        <input type="checkbox" id="autoAnalyze" checked style="width:auto"> 通電後に自動解析する</label>
-      <button id="analyzeBtn">📐 いま表示中を解析</button>
-      <div id="analyzeOut" class="small"></div>
-      <div class="small">AH/HV/TCL/VA を自動計測し、最早期心房から求心性／偏心性を判定します。あくまで教育用の近似値です。</div>
-    </div>
   </div>
 
   <!-- ============ メイン表示 ============ -->
@@ -2287,7 +2279,6 @@ function generateTimeline(preserveView){
   }
   updateResultPanel();
   updateModeLabel();
-  if(typeof runAnalyzer==='function' && document.getElementById('autoAnalyze')?.checked) runAnalyzer();
 }
 
 // ===================================================================
@@ -3855,153 +3846,6 @@ function revealText(){
   return base[state.scenario]||'';
 }
 
-// ===================================================================
-//  アナライザー（自動計測エンジン）
-// ===================================================================
-const ATR_CHANS = ['HRA','HISd','HISm','HISp',...CSIDS];
-function evk(ch,kinds){ return state.events.filter(e=>e.ch===ch && kinds.includes(e.kind)).sort((a,b)=>a.t-b.t); }
-
-// 基準時刻 tRef 近傍で最も早い心房電位を返す（求心性/偏心性判定用）
-function earliestAtrial(tRef, win=90){
-  let best=null, all=[];
-  for(const ch of ATR_CHANS){
-    const e = state.events.filter(x=>x.ch===ch && x.kind==='A' && Math.abs(x.t-tRef)<win).sort((a,b)=>a.t-b.t)[0];
-    if(e){ all.push({ch, t:e.t}); if(!best || e.t<best.t) best={ch, t:e.t}; }
-  }
-  return best ? {best, all} : null;
-}
-// 最早期心房の部位カテゴリ → 求心性(中隔)か偏心性(CS)か
-function activationPattern(ch){
-  if(ch==='HRA') return {label:'HRA（高位右房・洞調律型）', kind:'high'};
-  if(HISIDS.includes(ch)) return {label:'His束近傍（中隔）', kind:'concentric'};
-  // CS：近位(9-10)寄り=中隔寄り、遠位(2-1)=側壁
-  const k = CSIDS.indexOf(ch);
-  if(k<=1) return {label:'CS近位（中隔寄り）', kind:'concentric'};
-  if(k===2) return {label:'CS中部（左房寄り）', kind:'eccentric'};
-  return {label:'CS遠位（左側壁＝偏心性）', kind:'eccentric'};
-}
-
-// His複合での AH / HV を計測（H基準で前のHISm-A、後のRVA-V）
-function ahHvAt(hEv){
-  const A = state.events.filter(e=>e.ch==='HISm'&&e.kind==='A'&&e.t<hEv.t&&hEv.t-e.t<280).sort((a,b)=>b.t-a.t)[0];
-  const V = state.events.filter(e=>e.ch==='RVA'&&e.kind==='V'&&e.t>=hEv.t&&e.t-hEv.t<160).sort((a,b)=>a.t-b.t)[0];
-  return { AH: A?Math.round(hEv.t-A.t):null, HV: V?Math.round(V.t-hEv.t):null };
-}
-
-function runAnalyzer(){
-  const r = state.result;
-  const out = [];
-  const Hs = evk('HISm',['H']);
-  const Vs = evk('RVA',['V']);
-
-  // --- 1. 基線/駆動拍の AH・HV（最初の伝導His複合）---
-  // 進行中の頻拍シナリオでは順行A→H→Vが無いため基線AH/HVは表示しない
-  const ongoingBaselineTachy = ['atypavnrt','aflutter'].includes(state.scenario) && !state.pace.active;
-  if(Hs.length && !ongoingBaselineTachy){
-    const m = ahHvAt(Hs[0]);
-    if(m.AH!=null)
-      out.push(`<b>基線</b> AH <b>${m.AH}</b> ms ／ HV <b>${m.HV??'—'}</b> ms`);
-  }
-
-  // --- 2. 頻拍中：TCL・VA・最早期心房 ---
-  const ongoingTachy = ['at','atypavnrt','avnrt_noretro','at_noretro','at_noretro_noortho'].includes(state.scenario) && !state.pace.active;
-  const isTachy = (r && r.induced) || ongoingTachy;
-  if(isTachy && Vs.length>=3){
-    const tail = Vs.slice(-4);
-    const ints=[]; for(let i=1;i<tail.length;i++) ints.push(tail[i].t-tail[i-1].t);
-    const tcl = Math.round(ints.reduce((a,b)=>a+b,0)/ints.length);
-    // 末尾Vは直後の心房が描かれていない場合があるため1つ手前を基準にする
-    const vRef = tail[tail.length-2] || tail[tail.length-1];
-    // vRef 直後（〜TCL内）の最早期心房を探す
-    let bestA=null;
-    for(const ch of ATR_CHANS){
-      const e=state.events.filter(x=>x.ch===ch&&x.kind==='A'&&x.t>vRef.t-40&&x.t<vRef.t+tcl*0.95)
-                          .sort((a,b)=>a.t-b.t)[0];
-      if(e&&(!bestA||e.t<bestA.t)) bestA={ch,t:e.t};
-    }
-    out.push(`<b>頻拍周期 TCL</b> <b>${tcl}</b> ms（${Math.round(60000/tcl)} bpm）`);
-    if(bestA){
-      const va = Math.round(bestA.t - vRef.t);   // 心室→心房
-      const patt = activationPattern(bestA.ch);
-      const ecc = patt.kind==='eccentric';
-      out.push(`<b>VA</b> ${va<=2?'ほぼ同時':va+'ms'} ／ <b>最早期心房</b> ${CH.find(c=>c.id===bestA.ch).label}`);
-      out.push(`<span class="tag ${ecc?'bad':'info'}">${ecc?'偏心性':patt.kind==='concentric'?'求心性':'高位右房'}：${patt.label}</span>`);
-      // 鑑別ヒント（VA・最早期心房から）
-      let hint;
-      if(ecc) hint = va<160 ? '→ 偏心性・心室直後の心房 → <b>正方向性AVRT（副伝導路）</b>を支持'
-                            : '→ 偏心性・長RP → <b>リエントリー性AT</b>を支持';
-      else    hint = va<70  ? '→ 短VA・求心性中隔 → <b>通常型AVNRT</b>を支持'
-                            : '→ 長VA・求心性中隔 → <b>非典型AVNRT／中隔起源AT</b>を支持';
-      out.push(hint);
-    }
-  }
-
-  // --- 2c. パラヒス刺激 ΔSA ---
-  if(r && r.paraHis){
-    const e=r.paraHis;
-    out.push(`<b>パラヒス刺激</b> SA 捕捉 ${e.saCap}ms → 非捕捉 ${e.saNon}ms（ΔSA ${e.dSA}ms）`);
-    out.push(`<span class="tag ${e.dSA<=20?'bad':'ok'}">${e.dSA<=20?'ΔSA小：His非捕捉でもSA不変':'ΔSA大：His非捕捉でSA延長'}</span>`);
-    out.push(e.dSA<=20 ? '→ <b>extranodal（副路）パターン</b>：隔壁副路の存在を示唆'
-                       : '→ <b>nodal（結節性）パターン</b>：副路なし（房室結節伝導）');
-  }
-
-  // --- 2d. VAリンキング ---
-  if(r && r.vaLink){
-    const e=r.vaLink;
-    out.push(`<b>VAリンキング</b> 復帰VA ${e.vaSeq.join(' / ')} ms（ばらつき ${e.spread}ms）`);
-    out.push(`<span class="tag ${e.spread<=15?'ok':'bad'}">${e.spread<=15?'VA一定（リンク）':'VA変動（アンリンク）'}</span>`);
-    out.push(e.spread<=15 ? '→ <b>AVNRT / AVRT</b>（VAが心室に連結）を支持'
-                          : '→ <b>AT</b>（心房が独立＝VA非連結）を支持');
-  }
-
-  // --- 2e. His不応期PVC ---
-  if(r && r.hisPvc){
-    const e=r.hisPvc;
-    out.push(`<b>His不応期PVC</b> 心房は ${e.advanced?`<b>${e.delta}ms 前進</b>`:'<b>不変</b>'}`);
-    out.push(`<span class="tag ${e.advanced?'bad':'ok'}">${e.advanced?'前進あり：副伝導路を介して心房捕捉':'前進なし：His不応で結節を逆行できず'}</span>`);
-    out.push(e.advanced ? '→ <b>AVRT（副伝導路）を証明</b>' : '→ <b>AVNRT</b>（副路なし）を支持');
-  }
-  // --- 2f. 心室オーバードライブ応答 V-A-V / V-A-A-V ---
-  if(r && r.vaav){
-    const e=r.vaav;
-    out.push(`<b>心室オーバードライブ応答</b> <b>${e.pattern}</b>`);
-    out.push(`<span class="tag ${e.isAT?'bad':'ok'}">${e.isAT?'V-A-A-V：心房が独立':'V-A-V：房室が連結'}</span>`);
-    out.push(e.isAT ? '→ <b>AT</b>（心室は回路外）' : '→ <b>AVNRT / AVRT</b>（心室が回路に参加）');
-  }
-
-  // --- 2b. エントレインメント PPI−TCL ---
-  if(r && r.entrain){
-    const e=r.entrain;
-    out.push(`<b>エントレインメント</b> PPI ${e.ppi}ms − TCL ${e.tcl}ms ＝ <b>PPI−TCL ${e.diff}ms</b>`);
-    out.push(`<span class="tag ${e.diff<115?'ok':'bad'}">${e.diff<115?'PPI−TCL < 115ms：心室が回路内／近接':'PPI−TCL > 115ms：心室は回路外'}</span>`);
-    out.push(e.diff<115 ? '→ <b>AVNRT / AVRT</b>（心室が回路に参加）を支持'
-                        : '→ <b>AT</b>（心室は回路外）を支持');
-  }
-
-  if(r && !state.pace.maneuver){
-    if(r.a2h2!=null){
-      out.push(`<b>S2応答</b> A1A2 ${r.a1a2} → A2H2 <b>${Math.round(r.a2h2)}</b> ms` + (r.jump?' <span class="tag info">AH jump</span>':''));
-    } else if(r.a2h2==null && state.pace.active && r.site!=='RVA'){
-      out.push('<span class="tag bad">S2 房室ブロック（心室応答なし）</span>');
-    }
-  }
-
-  // --- 3. 心房粗動：F-F周期と伝導比 ---
-  if(state.scenario==='aflutter' && !state.pace.active){
-    const Fs = evk('HRA',['A']);
-    if(Fs.length>=3){
-      const ff = Math.round((Fs[Fs.length-1].t-Fs[0].t)/(Fs.length-1));
-      const ratio = Vs.length? (Fs.length/Math.max(1,Vs.length)).toFixed(1):'—';
-      out.push(`<b>心房周期 F-F</b> <b>${ff}</b> ms ／ 房室伝導比 約 <b>${ratio}:1</b>`);
-    }
-  }
-
-  document.getElementById('analyzeOut').innerHTML =
-    out.length ? out.map(s=>`<div style="margin:4px 0">${s}</div>`).join('')
-               : '<span class="hint">解析対象がありません。通電するか粗動シナリオを表示してください。</span>';
-}
-
-$('analyzeBtn').onclick = runAnalyzer;
 
 // ---- 初期化 ----
 resize();
