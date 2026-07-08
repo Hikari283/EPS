@@ -274,10 +274,6 @@
       </select>
       <button id="checkDx">答え合わせ</button>
       <div id="dxResult" class="small"></div>
-      <details>
-        <summary>解答・解説を見る</summary>
-        <div id="reveal" class="small"></div>
-      </details>
     </div>
 
   </div>
@@ -3717,20 +3713,18 @@ document.querySelectorAll('#calModeSeg button').forEach(b=>{
 $('checkDx').onclick=()=>{
   const pick=$('dx').value, el=$('dxResult');
   if(!pick){ el.innerHTML='<span class="hint">機序を選んでください。</span>'; return; }
-  const truth = currentTruth();
-  if(pick===truth.key){ el.innerHTML='<span class="tag ok">正解</span>'+truth.short; }
+  if(pick===truthKey()){ el.innerHTML='<span class="tag ok">正解</span>'; }
   else el.innerHTML='<span class="tag bad">不正解</span>もう一度、最早期心房・VA関係・QRS幅・AHの変化を見てみましょう。';
 };
 
-function currentTruth(){
-  const r=state.result;
-  if(r && r.induced && r.mechanism.includes('AVNRT')) return {key:'avnrt', short:'AVNRT。心房と心室がほぼ同時で室房間隔が極短、His最早期の求心性心房興奮。'};
-  if(r && r.induced && r.mechanism.includes('AVRT')) return {key:'avrt', short:'正方向性AVRT。心室の後に偏心性心房（CS遠位最早期）、VA間隔が比較的長い。'};
-  if(state.scenario==='at') return {key:'at', short:'マクロリエントリー性心房頻拍。心房が先行する長RP頻拍、CS近位最早期（ペリミトラル）、房室結節は受動的に伝導。'};
-  if(state.scenario==='atypavnrt') return {key:'atypavnrt', short:'非典型AVNRT(fast-slow)。長VAで求心性（中隔/CS近位最早期）、緩伝導路を逆行。'};
-  if(state.scenario==='aflutter') return {key:'aflutter', short:'心房粗動。規則的な心房波と鋸歯状F波、しばしば2:1伝導。'};
-  if(r && r.a2h2==null && state.pace.active) return {key:'block', short:'房室ブロック：S2が結節不応期に入り心室応答が脱落。'};
-  return {key:'sinus', short:'正常房室伝導。AHは連結期短縮で漸減、最後はブロック。'};
+// 現在のシナリオに対応する正解キー（dxドロップダウンの値と一致させる）
+function truthKey(){
+  const sc=state.scenario;
+  if(sc==='avnrt'||sc==='avnrt_noretro') return 'avnrt';
+  if(isAVRT(sc)) return 'avrt';                     // avrt / avrtB / avrtC
+  if(sc==='at'||isATnoRetro(sc)) return 'at';       // at / at_noretro / at_noretro_noortho
+  if(sc==='atypavnrt') return 'atypavnrt';
+  return sc;                                        // coumel_pos / coumel_neg など
 }
 
 // ---- 結果/解説/モード表示 ----
@@ -3790,7 +3784,6 @@ function updateResultPanel(){
   const el=$('result'); const r=state.result;
   if(!state.pace.active){
     el.innerHTML = scenarioBaselineHints();
-    $('reveal').innerHTML = revealText();
     return;
   }
   let h='';
@@ -3802,7 +3795,6 @@ function updateResultPanel(){
   h+='<div class="hint" style="margin-top:6px">'+r.notes.map(n=>'・'+n).join('<br>')+'</div>';
   h+='<div class="hint" style="margin-top:4px">計測してみよう：'+measureTargets()+'</div>';
   el.innerHTML=h;
-  $('reveal').innerHTML=revealText();
 }
 function measureTargets(){
   switch(state.scenario){
@@ -3829,21 +3821,6 @@ function scenarioBaselineHints(){
     case 'avblock_3inf': return '3度（完全）AVブロック — His束下。洞P→His電位はあるが心室V脱落（HV遮断）。心室性補充（wide QRS）が独立して打ちます。HV遮断を確認しましょう。';
     default: return '';
   }
-}
-function revealText(){
-  const base={
-    sinus:'<b>正常房室伝導</b><br>AH(房室結節伝導,正常〜130ms)、HV(His-Purkinje,35-55ms)。S2短縮でAHは滑らかに延長し、結節有効不応期でブロック（心室脱落）。jumpは無い。',
-    avnrt:'<b>AVNRT（通常型 slow-fast）</b><br>速伝導路と緩伝導路の二重生理。連結期短縮で速伝導路がERPに達しブロック→緩伝導路へ切替わりAHが≥50ms <b>jump</b>。緩伝導路順行+速伝導路逆行のリエントリーで頻拍。心房と心室がほぼ同時、VA<70ms、最早期心房はHis(中隔)＝<b>求心性</b>。',
-    avrt:'<b>正方向性AVRT</b><br>洞調律で予防興奮（デルタ・短HV）。S2で副路が前向きブロック→AVNを順行(narrow QRS)→副路を逆行してリエントリー。心室の後に心房、最早期心房は副路付着部（左側壁ならCS遠位）＝<b>偏心性</b>。VAは比較的長い。',
-    at:'<b>マクロリエントリー性心房頻拍（AT）</b><br>心房内の大回路リエントリー（ペリミトラル型）。心房が先行する<b>長RP</b>頻拍で、CS近位最早期の偏心性活性化（求心性のAVNRTと対比）。房室結節は受動的伝導のためAVブロックを作っても頻拍は持続（AVNRT/AVRTとの決定的な違い）。心室刺激でV-A-A-V応答。return cycle ≈ TCL（overdrive抑制なし）。',
-    atypavnrt:'<b>非典型AVNRT（fast-slow）</b><br>緩伝導路を逆行するため<b>長VA</b>。最早期心房は中隔（CS近位/His付近）＝<b>求心性</b>。心電図上は長RP頻拍に見え、巣性ATとの鑑別が問題になる（ATはAV非依存、AVNRTはHis後の心房が必須）。',
-    aflutter:'<b>心房粗動</b><br>三尖弁峡部などのマクロリエントリー。心房周期≈240ms前後の規則的興奮、II誘導で鋸歯状F波、房室結節で2:1などに減衰伝導。',
-    avblock_wenck:'<b>Wenckebach型2度AVブロック（Mobitz I）</b><br>His束上（AVN内）のブロック。AH間隔が徐々に延長（房室結節疲弊）→最終P波がブロック→休止後リセット。4:3パターンが典型的。通常は可逆的で良性。',
-    avblock_21:'<b>2:1 AVブロック</b><br>連続しているためWenckebachかMobitz IIか判別困難。<b>His電位の有無が鍵</b>：伝導しない拍にHisがあれば下位（危険）、なければ上位（AVN内、良性）。',
-    avblock_3sup:'<b>3度AVブロック — His束上</b><br>P波と接合部補充が完全解離（AV dissociation）。Hisチャネル：洞P後にH電位なし。補充はHis束より上位の接合部起源（narrow QRS, 50–60 bpm）。通常ペースメーカー適応。',
-    avblock_3inf:'<b>3度AVブロック — His束下（完全ブロック）</b><br>洞P→His電位は正常通過だが<b>HV遮断</b>でV脱落。心室性補充（wide QRS, 30–40 bpm）が独立。高度な傷害で突然死リスク高く、永続的ペースメーカー絶対適応。',
-  };
-  return base[state.scenario]||'';
 }
 
 
