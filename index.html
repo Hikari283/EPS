@@ -125,45 +125,23 @@
 <div id="authOverlay" class="auth-ov" role="dialog" aria-modal="true" aria-label="ログイン">
   <div class="auth-card">
     <div class="auth-brand">EP Trainer<span style="font-size:.6em;opacity:.7"> β版</span></div>
-    <div class="auth-sub">院内トレーニング — ログインして開始</div>
-    <label for="authPurpose" style="display:block;font-size:12px;color:#8aa0c0;margin:2px 0 4px">今日の目的</label>
-    <select id="authPurpose" style="width:100%;padding:10px;border-radius:8px;border:1px solid #24344f;background:#0a1320;color:#e6eefb;font-size:14px;box-sizing:border-box;margin-bottom:14px">
-      <option value="予習">予習</option>
-      <option value="復習">復習</option>
-      <option value="勉強">勉強（自己学習）</option>
-    </select>
-    <div class="auth-tabs" id="authTabs">
-      <button data-tab="login" class="on" type="button">ログイン</button>
-      <button data-tab="signup" type="button">新規登録</button>
-    </div>
-    <div class="auth-pane" id="pane-login">
-      <label for="loginId">あなたのID（職員番号など）</label>
-      <input id="loginId" placeholder="登録したID" autocomplete="off" spellcheck="false">
-      <div class="auth-err" id="loginErr"></div>
-      <button class="auth-go" id="doLogin" type="button">ログイン</button>
-      <div class="auth-note">⚠️ 登録情報は<b>この端末内のみ</b>に保存されます。別の端末（スマホ・PCなど）で使うときは、その端末で<b>もう一度「新規登録」</b>が必要です（同じIDでOK）。</div>
-    </div>
-    <div class="auth-pane" id="pane-signup" hidden>
-      <label for="suId">ID（<b>職員番号を推奨</b>）</label>
-      <input id="suId" placeholder="例：職員番号" autocomplete="off" spellcheck="false">
-      <label for="suName">名前</label>
-      <input id="suName" placeholder="山田 太郎" autocomplete="off">
-      <label for="suAbl">アブレーション歴</label>
-      <select id="suAbl">
+    <div class="auth-sub">はじめる前に、下の2つを選んでください</div>
+    <div class="auth-pane">
+      <label for="startAbl">経験年数</label>
+      <select id="startAbl">
         <option value="1〜3年目">1〜3年目</option>
         <option value="3〜5年目">3〜5年目</option>
         <option value="5〜10年目">5〜10年目</option>
         <option value="10年目以上">10年目以上</option>
       </select>
-      <div class="auth-err" id="suErr"></div>
-      <button class="auth-go" id="doSignup" type="button">登録して開始</button>
-      <div class="auth-note">IDは次回ログインに使います（<b>職員番号を推奨</b>）。登録情報は<b>この端末内のみ</b>に保存されるため、端末を変えたら再登録が必要です。利用記録（ID・名前・目的など）は集計に用います。同意の上ご利用ください。</div>
-    </div>
-    <div class="auth-pane" id="pane-done" hidden>
-      <div class="auth-ok">登録完了 🎉</div>
-      <div class="auth-idbox">あなたのID<b id="doneId"></b></div>
-      <div class="auth-note">この端末で次回ログインに使います（職員番号を推奨）。</div>
-      <button class="auth-go" id="doneStart" type="button">開始する</button>
+      <label for="startPurpose" style="margin-top:10px">今日の目的</label>
+      <select id="startPurpose">
+        <option value="予習">予習</option>
+        <option value="復習">復習</option>
+        <option value="勉強">勉強（自己学習）</option>
+      </select>
+      <button class="auth-go" id="startBtn" type="button" style="margin-top:14px">はじめる</button>
+      <div class="auth-note">利用記録（経験年数・目的・操作）は匿名で集計に用います。個人を特定する情報は保存しません。</div>
     </div>
   </div>
 </div>
@@ -172,7 +150,7 @@
   <div class="side">
     <h1>EP Trainer <span style="font-size:.5em;opacity:.65;font-weight:400">β版</span></h1>
     <div class="sub">心内電位を読み・ペーシングを組み・キャリパーで診断する電気生理トレーニング</div>
-    <div class="user-badge"><span id="userBadge">👤 未ログイン</span><button id="switchUser" type="button">切替</button></div>
+    <div class="user-badge"><span id="userBadge">—</span><button id="switchUser" type="button">変更</button></div>
 
     <div class="card">
       <h2>① シナリオ / 基質</h2>
@@ -3967,12 +3945,10 @@ function scenarioBaselineHints(){
 }
 
 
-// ---- 匿名ログイン ----
-function loadUsers(){ try{ return JSON.parse(localStorage.getItem('eps_users')||'[]'); }catch(e){ return []; } }
-function saveUsers(u){ localStorage.setItem('eps_users', JSON.stringify(u)); }
-function setCurrentUser(u){
-  state.user=u; localStorage.setItem('eps_current', u.id);
-  const b=document.getElementById('userBadge'); if(b) b.textContent='👤 '+u.id+'（'+u.ablation+'）';
+// ---- 開始画面（匿名・経験年数と目的のみ） ----
+function setBadge(){
+  const b=document.getElementById('userBadge');
+  if(b) b.textContent = state.user ? ('👤 '+state.user.ablation+'／'+(state.purpose||'')) : '—';
 }
 function showAuth(show){
   document.getElementById('authOverlay').style.display = show?'flex':'none';
@@ -3987,7 +3963,7 @@ function saveQueue(q){ localStorage.setItem('eps_logq', JSON.stringify(q)); }
 function logEvent(type, detail){
   if(!state.user) return;
   const q=logQueue();
-  q.push({ ts:new Date().toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'}), id:state.user.id, name:state.user.name,
+  q.push({ ts:new Date().toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'}),
            ablation:state.user.ablation, purpose:state.purpose||'', type, detail:detail||{} });
   saveQueue(q); flushLog();
 }
@@ -4001,64 +3977,27 @@ function flushLog(){
     .then(()=>saveQueue([])).catch(()=>{}).finally(()=>{ _flushing=false; });
 }
 window.addEventListener('online', flushLog);
-function enterSession(){
-  const sel=document.getElementById('authPurpose');
-  state.purpose = sel ? sel.value : '';
-  logEvent('login');
-}
-function authView(v){   // 'login' | 'signup' | 'done'
-  document.getElementById('authTabs').hidden = (v==='done');
-  document.getElementById('pane-login').hidden = (v!=='login');
-  document.getElementById('pane-signup').hidden = (v!=='signup');
-  document.getElementById('pane-done').hidden = (v!=='done');
-  document.querySelectorAll('#authTabs button').forEach(x=>x.classList.toggle('on', x.dataset.tab===v));
+function startSession(){
+  const abl=document.getElementById('startAbl').value;
+  state.purpose=document.getElementById('startPurpose').value;
+  state.user={ablation:abl};
+  localStorage.setItem('eps_last', JSON.stringify({ablation:abl, purpose:state.purpose}));
+  setBadge();
+  logEvent('start');
+  showAuth(false);
 }
 function initAuth(){
-  const cur=localStorage.getItem('eps_current'); const users=loadUsers();
-  const u = cur && users.find(x=>x.id===cur);
-  if(u){ setCurrentUser(u); document.getElementById('loginId').value=u.id; }
-  showAuth(true);   // 毎回オーバーレイ表示 → 今日の目的を毎回選ばせる
-  document.querySelectorAll('#authTabs button').forEach(b=>b.onclick=()=>authView(b.dataset.tab));
-  const doLogin=()=>{
-    const id=(document.getElementById('loginId').value||'').trim();
-    if(!id){ document.getElementById('loginErr').textContent='IDを入力してください。'; return; }
-    const u=loadUsers().find(x=>x.id===id);
-    if(!u){
-      // この端末では未登録 → 同じIDで新規登録画面へ誘導（端末ごとに初回登録が必要なため）
-      document.getElementById('loginErr').textContent='';
-      document.getElementById('suId').value=id;
-      document.getElementById('suErr').textContent='この端末では初回です。名前などを入れて登録してください（IDは入力済み）。';
-      authView('signup');
-      document.getElementById('suName').focus();
-      return;
+  // 前回の選択をプリフィル（同じ端末なら確認して押すだけ）
+  try{
+    const last=JSON.parse(localStorage.getItem('eps_last')||'null');
+    if(last){
+      if(last.ablation) document.getElementById('startAbl').value=last.ablation;
+      if(last.purpose)  document.getElementById('startPurpose').value=last.purpose;
     }
-    setCurrentUser(u); enterSession(); showAuth(false);
-  };
-  document.getElementById('doLogin').onclick=doLogin;
-  document.getElementById('loginId').onkeydown=e=>{ if(e.key==='Enter') doLogin(); };
-  document.getElementById('doSignup').onclick=()=>{
-    const id=(document.getElementById('suId').value||'').trim();
-    const name=(document.getElementById('suName').value||'').trim();
-    const abl=document.getElementById('suAbl').value;
-    const errEl=document.getElementById('suErr');
-    if(!id){ errEl.textContent='IDを入力してください（職員番号を推奨）。'; return; }
-    if(!name){ errEl.textContent='名前を入力してください。'; return; }
-    const users=loadUsers();
-    if(users.some(u=>u.id===id)){ errEl.textContent='このIDは既に登録済みです。ログインするか別のIDにしてください。'; return; }
-    const u={id, name, ablation:abl, created:new Date().toISOString()};
-    users.push(u); saveUsers(users); setCurrentUser(u);
-    errEl.textContent='';
-    document.getElementById('doneId').textContent=id;
-    authView('done');
-  };
-  document.getElementById('doneStart').onclick=()=>{ enterSession(); showAuth(false); };
-  document.getElementById('switchUser').onclick=()=>{
-    document.getElementById('loginId').value='';
-    document.getElementById('loginErr').textContent='';
-    document.getElementById('suId').value=''; document.getElementById('suName').value='';
-    document.getElementById('suErr').textContent='';
-    authView('login'); showAuth(true);
-  };
+  }catch(e){}
+  showAuth(true);
+  document.getElementById('startBtn').onclick=startSession;
+  document.getElementById('switchUser').onclick=()=>showAuth(true);
 }
 initAuth();
 
