@@ -2762,7 +2762,9 @@ function drawSplitView(){
 }
 
 function draw(){
-  if(state.stimTrigger){ drawSplitView(); return; }
+  // Stimトリガーの分割レビューはS1S2専用（V Scan/バーストでは単発スパイクが分割の谷間に落ちて
+  // 見えなくなるため、通常の掃引/静止描画にフォールバックする）。
+  if(state.stimTrigger && state.pace.mode==='s1s2'){ drawSplitView(); return; }
   if(state.playing && state.sweep){
     if(!state.wave) buildWaveBuffers();
     drawSweep();
