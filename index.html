@@ -2440,17 +2440,11 @@ function drawPacePulse(x, top, lH){
 }
 // mode: 'near'（刺激部位＝背の高い縦スパイク＋三角）, 'far'（他チャンネルの遠隔アーチファクト＝細く薄い縦線）, 'stimlane'
 function drawStimSpike(x, top, mode){
+  // 遠隔アーチファクト（全チャンネルを貫く赤い縦線）は描かない。刺激は Stim 行と刺激部位のみ。
+  if(mode==='far') return;
   ctx.save();
   ctx.strokeStyle = COLOR.stim;
-  if(mode==='far'){
-    // 遠隔アーチファクト：実症例同様、背の高い明るい縦線で全チャンネルを貫く
-    ctx.globalAlpha = 0.85;
-    ctx.lineWidth = 1.4;
-    ctx.beginPath();
-    ctx.moveTo(x, top+laneH*0.12);
-    ctx.lineTo(x, top+laneH*0.92);
-    ctx.stroke();
-  } else {
+  {
     ctx.lineWidth = (mode==='stimlane') ? 2.2 : 1.8;
     ctx.beginPath();
     ctx.moveTo(x, top+laneH*(mode==='stimlane'?0.10:0.13));
