@@ -2012,13 +2012,13 @@ function buildVScanResetArmed(){
   if(!isORT){
     // AVNRT：His不応期PVCは頻拍をリセットしない＝規則的グリッドを一切乱さず、PVCを重畳するだけ。
     for(let t=0; t<state.duration; t+=tachyCL) emitTB(t);
-    // PVCは基準拍 B に対し「delay」だけ遅れて打つ。開始位置はユーザー設定SLで決まる：
-    //   次のHis = B + (CL-50)。PVCの His基準位置 = delay - (CL-50) = SL - CL。
-    //   SL 350-400 → His〜V の間 / SL≧400 → V・A より後ろ / SL<350 → His より前。
-    //   delay を毎回 DEC ずつ縮める＝PVCが少しずつ早期化（Hisより前へ向かって短縮）。
-    const SL = Math.max(200, Math.round(p.s1cl || (tachyCL+20)));  // ユーザー設定SL
+    // delay ＝ 基準拍 B からのPVC連結期（＝画面表示の連結期そのもの。S1の数字＝実連結期）。
+    //   His は B+(CL-50) に出る（≒次のVよりHVぶん前）。したがって PVC がHisに重なるのは
+    //   連結期 ≈ CL-50（＝VV−HV）付近。連結期がそれより長い＝拡張期（V寄り）、短い＝Hisより前。
+    //   delay を毎回 DEC ずつ縮める＝PVCが拡張期からHis不応期へ寄っていく。
+    const SL = Math.max(200, Math.round(p.s1cl || (tachyCL+20)));  // ユーザー設定S1＝開始連結期
     const period = 7*tachyCL;                          // PVC間隔（CLの整数倍＝位相を保つ）
-    let delay = SL - 50;                               // 開始位置（His基準 = SL - CL）
+    let delay = Math.min(SL, tachyCL-6);               // 開始連結期（次のVに被らないようクランプ）
     // 最初のPVCがページ中央付近(≈win*1.5)に来るよう基準拍を選ぶ
     let B = Math.round((state.win*1.5 - delay)/tachyCL)*tachyCL;
     if(B < tachyCL*2) B = tachyCL*2;
