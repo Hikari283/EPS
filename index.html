@@ -496,17 +496,16 @@ function emitHis(tH,sc=1){ ev('HISd',tH,'H',0.6*sc); ev('HISm',tH+1,'H',1.0*sc);
 //       次の拍と繋がって見えるのを防ぐ。
 function emitVent(tV, preex=false, rate=null, rvPaced=false, surfaceKind=null){
   // RVペース時はローカルV波をスパイク(tV)の右側から立ち上げる（スパイク→波形）
-  ev('RVA', rvPaced?tV+18:tV+4, 'V', 1.0);
+  // RVペース拍：His far-field V（+16）を基準に、RVA・CS・HRA も同時刻に揃えて縦一直線のスパイクにする。
+  ev('RVA', rvPaced?tV+16:tV+4, 'V', 1.0);
   if(rvPaced){
-    // RVペーシング（実機 slow-fast 実測 H-V-A）：His far-field V は +66（Hは別途emitHis +47）。
-    ev('HISd',tV+66,'Vsp',0.9); ev('HISm',tV+66,'Vsp',0.95); ev('HISp',tV+67,'Vsp',0.8);
+    ev('HISd',tV+16,'Vsp',0.9); ev('HISm',tV+16,'Vsp',0.95); ev('HISp',tV+16,'Vsp',0.8);
   } else {
     ev('HISd',tV+2,'V',0.8); ev('HISm',tV+3,'V',0.78); ev('HISp',tV+4,'V',0.7);
   }
-  // RVペース時：His(66)→CS で連続。HRAにも小さくV波。
   if(rvPaced){
-    for(let i=0;i<CSIDS.length;i++) ev(CSIDS[i], tV+70+i*3,'Vff');
-    ev('HRA', tV+74,'Vff',0.22);
+    for(const id of CSIDS) ev(id, tV+16,'Vff');
+    ev('HRA', tV+16,'Vff',0.22);
   } else {
     for(const id of CSIDS) ev(id, tV+16,'Vff');
     ev('HRA', tV+18,'Vff',0.6);
