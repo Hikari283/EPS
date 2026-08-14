@@ -3418,7 +3418,13 @@ function loop(now){
       captureStimReview();
       reviewPendingT = null;
     }
-    if(state.clock >= state.duration) state.clock=state.sweepOrigin||0;
+    if(state.clock >= state.duration){
+      // V Scan を最後まで流し切った（自然終了）→ 停止ボタンを押さなくても録画イベントを保存
+      if(state.pace.active && state.pace.running && state.pace.mode==='vscan' && !state.pace.maneuver && state.pace.stopAt==null){
+        autoFinishVScan();
+      }
+      state.clock=state.sweepOrigin||0;
+    }
   }
   document.getElementById('tLbl').textContent=((state.playing?state.clock:state.t0)/1000).toFixed(2)+' s';
   // V Scan 現在連結期表示
@@ -3644,6 +3650,14 @@ document.querySelectorAll('.mvbtn').forEach(b=>{
     logEvent('maneuver', {maneuver:mv});
   };
 });
+// V Scan が自然終了（全ステップ通電完了）したときの自動保存＆停止。
+function autoFinishVScan(){
+  const site=state.pace.site;
+  if(state.stimTrigger) captureStimReview(state.clock);
+  saveVScanSegments(`V Scan ${site}`);
+  state.pace.active=false; state.pace.maneuver=null; state.pace.running=false;
+  generateTimeline(); updatePaceButtons();
+}
 $('stopPace').onclick=()=>{
   const mode=state.pace.mode, site=state.pace.site;
   const modeLabel={s1s2:'S1S2',burst:'バースト',vscan:'V Scan'}[mode]||mode;
