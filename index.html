@@ -498,7 +498,7 @@ function emitVent(tV, preex=false, rate=null, rvPaced=false, surfaceKind=null){
   // RVペース時はローカルV波をスパイク(tV)の右側から立ち上げる（スパイク→波形）
   // RVペース拍：His far-field V（+16）を基準に、RVA・CS・HRA も同時刻に揃えて縦一直線のスパイクにする。
   // 直接刺激拍のRVA局所Vは、多相性ではなく鋭い単一スパイク（Vsp）で描く。
-  if(rvPaced) ev('RVA', tV+16, 'Vsp', 1.2);
+  if(rvPaced) ev('RVA', tV+RV_VPEAK_OFF, 'Vsp', 1.2);
   else        ev('RVA', tV+4,  'V',   1.0);
   if(rvPaced){
     ev('HISd',tV+16,'Vsp',0.9); ev('HISm',tV+16,'Vsp',0.95); ev('HISp',tV+16,'Vsp',0.8);
@@ -531,8 +531,11 @@ function emitVent(tV, preex=false, rate=null, rvPaced=false, surfaceKind=null){
 
 // 刺激スパイクは捕捉波形より PACE_LATENCY だけ手前に描画（スパイク→少し遅れて脱分極波形）。
 const PACE_LATENCY = 14; // 刺激→捕捉（局所脱分極）の潜時(ms)
+const RV_VPEAK_OFF = 16; // RVペース時のRVA局所Vピーク位置（emitVentと共有）
 function emitStim(tS, site){
-  ev('STIM', tS-PACE_LATENCY, 'S', 1.0);
+  // RVペースでは Stim 行の縦線を RVA局所Vのピーク（tS+RV_VPEAK_OFF）に合わせる。
+  const stimT = (site==='RVA') ? tS+RV_VPEAK_OFF : tS-PACE_LATENCY;
+  ev('STIM', stimT, 'S', 1.0);
   ev(site, tS-PACE_LATENCY, 'S', 0.55); // 刺激アーチファクトを刺激部位にも
 }
 // 捕捉判定：出力が閾値以上なら捕捉（脱分極を起こす）。未満なら刺激スパイクのみ（loss of capture）
