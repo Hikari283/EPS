@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d1117">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>おもいだす — 学習メモ検索</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#151c26; --panel2:#111823; --line:#232e3d;
+    --txt:#e8edf5; --muted:#8b9bb4; --accent:#6ba8f5; --accent2:#41d19a;
+    --warm:#f0b45e; --danger:#f87171; --hit:#3b2f14; --hitTxt:#ffd98a;
+    --shadow:0 8px 28px rgba(0,0,0,.45);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP",system-ui,sans-serif;
+    font-size:15px;line-height:1.65;overscroll-behavior-y:none}
+  body{display:flex;flex-direction:column;min-height:100dvh}
+  button,input,textarea,select{font-family:inherit;font-size:inherit;color:inherit}
+  button{cursor:pointer}
+  a{color:var(--accent)}
+
+  /* ---------- header ---------- */
+  header{position:sticky;top:0;z-index:30;background:linear-gradient(180deg,#131b26,#0d1117);
+    border-bottom:1px solid var(--line);padding:10px 14px 12px;padding-top:max(10px,env(safe-area-inset-top))}
+  .brand{display:flex;align-items:center;gap:9px;margin-bottom:9px}
+  .brand h1{font-size:16px;margin:0;font-weight:800;letter-spacing:.02em}
+  .brand h1 span{color:var(--accent)}
+  .brand .sp{flex:1}
+  .pill{font-size:11px;color:var(--muted);background:var(--panel2);border:1px solid var(--line);
+    border-radius:999px;padding:3px 10px;white-space:nowrap}
+  .pill.on{color:#062b1c;background:var(--accent2);border-color:var(--accent2);font-weight:700}
+
+  .searchbar{display:flex;gap:8px;align-items:stretch}
+  .sbox{flex:1;position:relative;display:flex;align-items:center}
+  .sbox svg{position:absolute;left:11px;width:17px;height:17px;opacity:.5;pointer-events:none}
+  #q{width:100%;background:#0a0f17;border:1px solid var(--line);border-radius:12px;
+    padding:11px 34px 11px 34px;font-size:16px;outline:none}
+  #q:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(107,168,245,.14)}
+  .clearq{position:absolute;right:6px;background:none;border:0;color:var(--muted);
+    font-size:19px;line-height:1;padding:4px 8px;display:none}
+  .clearq.show{display:block}
+  .askbtn{background:var(--accent);color:#04223a;border:0;border-radius:12px;padding:0 14px;
+    font-weight:800;font-size:13px;white-space:nowrap}
+  .askbtn:disabled{opacity:.35}
+
+  /* ---------- layout ---------- */
+  main{flex:1;width:100%;max-width:820px;margin:0 auto;padding:14px 14px 96px}
+  .view{display:none}
+  .view.on{display:block}
+  h2.sec{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;
+    margin:22px 0 10px;font-weight:700}
+  h2.sec:first-child{margin-top:4px}
+
+  /* ---------- cards ---------- */
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:13px 14px;margin-bottom:10px}
+  .card.click{cursor:pointer;transition:border-color .12s,transform .08s}
+  .card.click:active{transform:scale(.995)}
+  .card.click:hover{border-color:#31435a}
+  .card.rel{border-style:dashed;opacity:.92}
+  .ctitle{font-weight:700;font-size:15px;margin:0 0 5px;line-height:1.45}
+  .snip{color:#c3cfe0;font-size:13.5px;white-space:pre-wrap;word-break:break-word}
+  .snip mark{background:var(--hit);color:var(--hitTxt);border-radius:3px;padding:0 2px;font-weight:700}
+  .meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:9px}
+  .tag{font-size:11px;background:#17263a;color:#9fc4f2;border:1px solid #23384f;
+    border-radius:999px;padding:2px 9px}
+  .tag.d{background:#1d2430;color:var(--muted);border-color:var(--line)}
+  .score{margin-left:auto;font-size:11px;color:#5f7189;font-variant-numeric:tabular-nums}
+
+  .empty{text-align:center;color:var(--muted);padding:44px 18px;font-size:14px;line-height:1.9}
+  .empty b{display:block;color:var(--txt);font-size:16px;margin-bottom:8px}
+
+  .sugg{display:flex;flex-wrap:wrap;gap:7px;align-items:center;font-size:12px;color:var(--muted);
+    background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;
+    margin-bottom:12px}
+  .sugg button{background:#1c2a3d;border:1px solid #2e455f;border-radius:999px;padding:4px 12px;
+    font-size:13px;font-weight:700;color:#9fc4f2}
+  .sugg button:hover{background:#25384f}
+
+  /* ---------- ai answer ---------- */
+  .ai{background:linear-gradient(180deg,#14243a,#111d2e);border:1px solid #26456d;
+    border-radius:14px;padding:14px;margin-bottom:14px}
+  .ai .hd{display:flex;align-items:center;gap:7px;font-size:11px;color:#8fbdf5;
+    text-transform:uppercase;letter-spacing:.08em;font-weight:800;margin-bottom:9px}
+  .ai .bd{white-space:pre-wrap;font-size:14.5px;word-break:break-word}
+  .ai .bd .cite{color:var(--accent);font-weight:800;cursor:pointer;text-decoration:underline;
+    text-underline-offset:2px}
+  .ai.err{background:#2a1620;border-color:#5c2230}
+  .ai.err .hd{color:#fca5a5}
+  .dots::after{content:'';animation:dots 1.2s steps(4,end) infinite}
+  @keyframes dots{0%{content:''}25%{content:'・'}50%{content:'・・'}75%{content:'・・・'}}
+
+  /* ---------- forms ---------- */
+  label{display:block;font-size:12px;color:var(--muted);margin:14px 0 5px;font-weight:600}
+  label:first-child{margin-top:0}
+  input[type=text],textarea,select{width:100%;background:#0a0f17;border:1px solid var(--line);
+    border-radius:11px;padding:10px 12px;font-size:16px;outline:none;resize:vertical}
+  input[type=text]:focus,textarea:focus,select:focus{border-color:var(--accent)}
+  textarea{min-height:170px;line-height:1.7}
+  .hint{font-size:11.5px;color:#69788d;margin-top:5px;line-height:1.6}
+  .btns{display:flex;gap:9px;margin-top:16px;flex-wrap:wrap}
+  .btn{flex:1;min-width:120px;background:#1e2836;border:1px solid #2c3a4d;border-radius:11px;
+    padding:11px;font-size:14px;font-weight:600;text-align:center}
+  .btn:hover{background:#25334a}
+  .btn.primary{background:var(--accent);color:#04223a;border-color:var(--accent);font-weight:800}
+  .btn.go{background:var(--accent2);color:#04291b;border-color:var(--accent2);font-weight:800}
+  .btn.dim{background:#1a212c;color:var(--muted)}
+  .btn.danger{background:#2b1520;border-color:#4d2030;color:#fca5a5}
+  .btn.sm{flex:0 0 auto;min-width:0;padding:8px 14px;font-size:13px}
+
+  /* ---------- review ---------- */
+  .rev{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;
+    box-shadow:var(--shadow)}
+  .rev .q{font-size:19px;font-weight:800;line-height:1.5;margin:0 0 4px}
+  .rev .when{font-size:11.5px;color:var(--muted)}
+  .rev .ans{margin-top:16px;padding-top:16px;border-top:1px dashed var(--line);
+    white-space:pre-wrap;font-size:14.5px;word-break:break-word}
+  .revbar{display:flex;gap:8px;margin-top:18px}
+  .revbar .btn{padding:13px 6px;font-size:13.5px}
+  .b-ok{background:#123328;border-color:#1d5340;color:#7ee5b8}
+  .b-mid{background:#33290f;border-color:#57451a;color:#f4cd82}
+  .b-ng{background:#331519;border-color:#5c2230;color:#fca5a5}
+  .progress{height:4px;background:var(--line);border-radius:99px;overflow:hidden;margin-bottom:16px}
+  .progress i{display:block;height:100%;background:var(--accent2);transition:width .25s}
+
+  /* ---------- nav ---------- */
+  nav{position:fixed;left:0;right:0;bottom:0;z-index:40;display:flex;
+    background:rgba(17,24,35,.94);backdrop-filter:blur(12px);border-top:1px solid var(--line);
+    padding-bottom:env(safe-area-inset-bottom)}
+  nav button{flex:1;background:none;border:0;color:var(--muted);padding:9px 4px 8px;
+    font-size:10.5px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:3px;
+    position:relative}
+  nav button .ic{font-size:19px;line-height:1}
+  nav button.on{color:var(--accent)}
+  nav .badge{position:absolute;top:4px;right:50%;margin-right:-22px;background:var(--warm);
+    color:#3d2600;font-size:10px;font-weight:800;border-radius:99px;padding:1px 6px;min-width:17px}
+
+  /* ---------- modal ---------- */
+  .mask{position:fixed;inset:0;background:rgba(4,7,12,.72);z-index:50;display:none;
+    align-items:flex-end;justify-content:center;backdrop-filter:blur(3px)}
+  .mask.on{display:flex}
+  .sheet{background:var(--panel);border:1px solid var(--line);border-bottom:0;
+    border-radius:18px 18px 0 0;width:100%;max-width:820px;max-height:88dvh;overflow-y:auto;
+    padding:16px 16px calc(20px + env(safe-area-inset-bottom));box-shadow:var(--shadow)}
+  @media(min-width:700px){
+    .mask{align-items:center}
+    .sheet{border-radius:18px;border-bottom:1px solid var(--line);max-height:82dvh}
+  }
+  .grab{width:38px;height:4px;background:#33415a;border-radius:99px;margin:0 auto 14px}
+  .sheet h3{margin:0 0 4px;font-size:18px;line-height:1.45}
+  .sheet .sub{font-size:11.5px;color:var(--muted);margin-bottom:14px}
+  .body{white-space:pre-wrap;font-size:14.5px;word-break:break-word;
+    background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:13px}
+  .body mark{background:var(--hit);color:var(--hitTxt);border-radius:3px;padding:0 2px;font-weight:700}
+
+  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:78px;z-index:60;
+    background:#22303f;border:1px solid #38495e;border-radius:11px;padding:10px 18px;
+    font-size:13.5px;font-weight:600;box-shadow:var(--shadow);opacity:0;pointer-events:none;
+    transition:opacity .2s,transform .2s}
+  .toast.on{opacity:1;transform:translateX(-50%) translateY(-6px)}
+
+  .stat{display:flex;gap:9px;margin-bottom:14px}
+  .stat div{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:12px;
+    padding:11px 8px;text-align:center}
+  .stat b{display:block;font-size:21px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.3}
+  .stat span{font-size:10.5px;color:var(--muted)}
+  .warn{background:#2b1f10;border:1px solid #55401c;border-radius:11px;padding:11px 13px;
+    font-size:12px;color:#f3d3a0;line-height:1.7;margin-top:10px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <h1>おもい<span>だす</span></h1>
+    <div class="sp"></div>
+    <div class="pill" id="aiPill">AI検索 オフ</div>
+    <div class="pill" id="cntPill">0件</div>
+  </div>
+  <div class="searchbar">
+    <div class="sbox">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+        <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>
+      </svg>
+      <input id="q" type="search" placeholder="うろ覚えでOK。漢字や綴りが違っても探します" autocomplete="off" enterkeyhint="search">
+      <button class="clearq" id="clearq" aria-label="clear">×</button>
+    </div>
+    <button class="askbtn" id="askBtn" disabled>AIに聞く</button>
+  </div>
+</header>
+
+<main>
+  <!-- ============ 検索 ============ -->
+  <section class="view on" id="v-search">
+    <div id="aiSlot"></div>
+    <div id="results"></div>
+  </section>
+
+  <!-- ============ 追加 ============ -->
+  <section class="view" id="v-add">
+    <h2 class="sec" id="addMode">新しく記録する</h2>
+    <input type="hidden" id="editId">
+    <label>タイトル（あとで検索する時の手がかり）</label>
+    <input type="text" id="f-title" placeholder="例：房室結節の減衰伝導とは">
+    <label>内容</label>
+    <textarea id="f-body" placeholder="勉強した内容、要点、自分の言葉でのまとめなど。長くてOK。"></textarea>
+    <label>タグ（カンマ / 空白区切り）</label>
+    <input type="text" id="f-tags" placeholder="例：電気生理 EPS 国試">
+    <label>出典・どこで学んだか</label>
+    <input type="text" id="f-src" placeholder="例：永嶋先生のPDF p.42 / YouTube◯◯">
+    <div class="btns">
+      <button class="btn go" id="saveBtn">保存する</button>
+      <button class="btn dim" id="cancelBtn">クリア</button>
+    </div>
+    <div class="btns">
+      <button class="btn danger sm" id="delBtn" style="display:none">このノートを削除</button>
+    </div>
+
+    <h2 class="sec">まとめて取り込む</h2>
+    <div class="card">
+      <div class="hint" style="margin:0 0 10px">
+        テキストを貼り付けて一括登録できます。<b style="color:#e8edf5">---</b> の行、または <b style="color:#e8edf5">#</b> で始まる見出し行で自動的にノートを分割します。
+      </div>
+      <textarea id="bulk" placeholder="# 見出し1&#10;内容…&#10;&#10;# 見出し2&#10;内容…" style="min-height:120px"></textarea>
+      <div class="btns">
+        <button class="btn primary" id="bulkBtn">取り込む</button>
+        <button class="btn" id="fileBtn">ファイルから読む</button>
+        <input type="file" id="fileIn" accept=".txt,.md,.json,.csv" style="display:none">
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 復習 ============ -->
+  <section class="view" id="v-review">
+    <div id="revWrap"></div>
+  </section>
+
+  <!-- ============ 設定 ============ -->
+  <section class="view" id="v-set">
+    <h2 class="sec">AI要約（任意）</h2>
+    <div class="card">
+      <div class="hint" style="margin:0">
+        検索そのものはAIなしで動きます。ここは「見つかった何件かをAIに読ませて、
+        質問に一言で答えてもらう」ためのおまけ機能です。<b style="color:#e8edf5">未設定のままで問題ありません。</b>
+      </div>
+      <label>Anthropic APIキー</label>
+      <input type="text" id="s-key" placeholder="sk-ant-..." autocomplete="off" spellcheck="false">
+      <label>モデル</label>
+      <select id="s-model">
+        <option value="claude-opus-5">Claude Opus 5（推奨・最も賢い）</option>
+        <option value="claude-sonnet-5">Claude Sonnet 5（速い）</option>
+        <option value="claude-haiku-4-5">Claude Haiku 4.5（最安）</option>
+      </select>
+      <div class="warn">
+        ⚠️ キーはこの端末のブラウザ内（localStorage）にのみ保存され、外部には送りません。
+        送信先はAnthropicのAPIだけです。共用の端末では使わないでください。
+      </div>
+      <div class="btns">
+        <button class="btn primary" id="saveKey">保存</button>
+        <button class="btn dim" id="clearKey">キーを消す</button>
+      </div>
+    </div>
+
+    <h2 class="sec">言い換え辞書</h2>
+    <div class="card">
+      <div class="hint" style="margin:0 0 10px">
+        1行に1つ。<b style="color:#e8edf5">検索語 = 別名, 別名</b> の形式。
+        自分だけの略語、英日の対応、<b style="color:#e8edf5">漢字の読み</b>を登録すると、どちらで検索してもヒットします。漢字の読みだけは推測できないので、よく使う語はここに書いておくと便利です。
+      </div>
+      <textarea id="s-syn" style="min-height:110px" spellcheck="false"></textarea>
+      <div class="btns"><button class="btn primary" id="saveSyn">保存</button></div>
+    </div>
+
+    <h2 class="sec">データ</h2>
+    <div class="card">
+      <div class="stat">
+        <div><b id="st-n">0</b><span>ノート</span></div>
+        <div><b id="st-d">0</b><span>今日の復習</span></div>
+        <div><b id="st-c">0</b><span>総文字数</span></div>
+      </div>
+      <div class="btns">
+        <button class="btn" id="expBtn">バックアップ書き出し</button>
+        <button class="btn" id="impBtn">読み込み</button>
+        <input type="file" id="impIn" accept=".json" style="display:none">
+      </div>
+      <div class="btns">
+        <button class="btn danger sm" id="wipeBtn">全データを削除</button>
+      </div>
+      <div class="hint">
+        データはこの端末のブラウザにだけ保存されます。機種変更やブラウザのデータ削除で消えるので、
+        定期的にバックアップを書き出してください。
+      </div>
+    </div>
+  </section>
+</main>
+
+<nav>
+  <button data-v="search" class="on"><span class="ic">🔍</span>検索</button>
+  <button data-v="add"><span class="ic">✏️</span>記録</button>
+  <button data-v="review"><span class="ic">🔁</span>復習<span class="badge" id="revBadge" style="display:none">0</span></button>
+  <button data-v="set"><span class="ic">⚙️</span>設定</button>
+</nav>
+
+<div class="mask" id="mask">
+  <div class="sheet" id="sheet"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* =======================================================================
+   おもいだす — 学習メモ検索
+   単一HTMLで完結。外部ライブラリ・サーバー不要。
+   保存先は localStorage のみ。
+   ======================================================================= */
+
+const LS_NOTES = 'omoidasu.notes.v1';
+const LS_CFG   = 'omoidasu.cfg.v1';
+const DAY = 86400000;
+
+let notes = [];
+let cfg = { key:'', model:'claude-opus-5', syn:'' };
+let IDX = null;                 // 転置インデックス
+let lastHits = [];              // 直近の検索結果（AI回答の引用元）
+let revQueue = [], revIdx = 0, revShown = false;
+
+/* ================= 保存 ================= */
+function load(){
+  try{ notes = JSON.parse(localStorage.getItem(LS_NOTES) || '[]'); }catch(e){ notes = []; }
+  if(!Array.isArray(notes)) notes = [];
+  try{ Object.assign(cfg, JSON.parse(localStorage.getItem(LS_CFG) || '{}')); }catch(e){}
+  if(!cfg.syn) cfg.syn = '房室結節 = ぼうしつけっせつ, AVN, AV node\n心室 = しんしつ, ventricle';
+}
+function saveNotes(){
+  localStorage.setItem(LS_NOTES, JSON.stringify(notes));
+  buildIndex(); refreshChrome();
+}
+function saveCfg(){ localStorage.setItem(LS_CFG, JSON.stringify(cfg)); refreshChrome(); }
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+const byId = id => notes.find(n => n.id === id);
+
+/* ================= 正規化 =================
+   長さを1:1に保つ正規化。こうしておくと正規化後の文字位置が
+   元テキストの位置とズレないので、ハイライトが正確に出せる。
+   ・全角英数記号 → 半角  ・大文字 → 小文字  ・カタカナ → ひらがな
+   ========================================= */
+function nchar(ch){
+  const c = ch.codePointAt(0);
+  if(c >= 0xFF01 && c <= 0xFF5E) return String.fromCharCode(c - 0xFEE0).toLowerCase();
+  if(c === 0x3000) return ' ';
+  if(c >= 0x30A1 && c <= 0x30F6) return String.fromCharCode(c - 0x60);   // ｶﾀｶﾅ→ひらがな
+  if(c >= 0x0041 && c <= 0x005A) return String.fromCharCode(c + 32);
+  if(c === 0x30FD) return 0x309D;  // ヽ
+  return ch;
+}
+function nrm(s){
+  if(!s) return '';
+  let o = '';
+  for(const ch of s) o += nchar(ch);
+  return o;
+}
+
+/* ================= 分かち書き =================
+   日本語は単語境界がないので、CJK部分は文字2-gram（＋漢字1文字）で索引する。
+   英数字は単語そのまま。これで「けっせつ」でも「結節」でも引っかかる。
+   ============================================== */
+const RE_CJK  = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/;
+const RE_SEG  = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]+|[0-9a-z]+/g;
+const RE_KANJI= /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/;
+
+function tokens(text){
+  const out = [];
+  const s = nrm(text || '');
+  const segs = s.match(RE_SEG);
+  if(!segs) return out;
+  for(const seg of segs){
+    if(RE_CJK.test(seg)){
+      if(seg.length === 1){ out.push(seg); continue; }
+      for(let i = 0; i < seg.length - 1; i++) out.push(seg.slice(i, i+2));
+      for(const ch of seg) if(RE_KANJI.test(ch)) out.push(ch);
+    }else{
+      out.push(seg);
+    }
+  }
+  return out;
+}
+
+/* ================= インデックス ================= */
+function buildIndex(){
+  const docs = [], dmap = new Map();
+  for(const n of notes){
+    const tf = new Map();
+    const add = (txt, w) => { for(const t of tokens(txt)) tf.set(t, (tf.get(t)||0) + w); };
+    add(n.title, 3);
+    add((n.tags||[]).join(' '), 2);
+    add(n.body, 1);
+    add(n.src || '', 1);
+    let len = 0; for(const v of tf.values()) len += v;
+    const d = { id:n.id, tf, len, hay: nrm((n.title||'') + '\n' + (n.tags||[]).join(' ') + '\n' + (n.body||'')) };
+    docs.push(d); dmap.set(n.id, d);
+  }
+  const df = new Map();
+  for(const d of docs) for(const t of d.tf.keys()) df.set(t, (df.get(t)||0) + 1);
+  const avgdl = docs.length ? docs.reduce((a,d)=>a+d.len, 0) / docs.length : 1;
+  IDX = { docs, dmap, df, avgdl, N: docs.length };
+}
+
+function idf(t){
+  const n = IDX.df.get(t) || 0;
+  return Math.log(1 + (IDX.N - n + 0.5) / (n + 0.5));
+}
+
+/* ---- あいまい一致の道具 ---- */
+
+/* 1文字の打ち間違い・抜け・多い、および隣り合う2文字の入れ替えを許す。
+   入れ替え（pyhton ↔ python）はタイプミスで最も多いので必ず拾う。 */
+function ed1(a, b){
+  if(a === b) return true;
+  const la = a.length, lb = b.length;
+  if(Math.abs(la - lb) > 1) return false;
+
+  if(la === lb){                       // 置き換え1文字 or 隣接入れ替え
+    const d = [];
+    for(let i = 0; i < la; i++) if(a[i] !== b[i]){ d.push(i); if(d.length > 2) return false; }
+    if(d.length <= 1) return true;
+    return d[1] === d[0] + 1 && a[d[0]] === b[d[1]] && a[d[1]] === b[d[0]];
+  }
+                                       // 1文字の挿入 or 削除
+  const s = la < lb ? a : b, l = la < lb ? b : a;
+  let i = 0, j = 0, skipped = false;
+  while(i < s.length && j < l.length){
+    if(s[i] === l[j]){ i++; j++; continue; }
+    if(skipped) return false;
+    skipped = true; j++;
+  }
+  return true;
+}
+
+/* 語彙の中から、打ち間違いっぽく近い語を拾う */
+function nearTerms(term){
+  const out = [];
+  const isAscii = /^[0-9a-z]+$/.test(term);
+  if(term.length < (isAscii ? 4 : 3)) return out;
+  for(const t of IDX.df.keys()){
+    if(t === term) continue;
+    if(isAscii !== /^[0-9a-z]+$/.test(t)) continue;
+    if(Math.abs(t.length - term.length) <= 1 && ed1(term, t)) out.push(t);
+    if(out.length >= 4) break;
+  }
+  if(out.length) return out;
+
+  // 2文字以上ずれていても、形が十分似ていれば1つだけ代役を立てる
+  let best = null, bs = 0.55;
+  for(const t of IDX.df.keys()){
+    if(t.length < 3 || isAscii !== /^[0-9a-z]+$/.test(t)) continue;
+    const s = dice(term, t);
+    if(s > bs){ bs = s; best = t; }
+  }
+  return best ? [best] : [];
+}
+
+/* 2つの文字列の 2-gram 一致率（Dice係数）。0〜1 */
+function dice(a, b){
+  const ga = new Set(), gb = new Set();
+  for(let i = 0; i < a.length - 1; i++) ga.add(a.slice(i, i+2));
+  for(let i = 0; i < b.length - 1; i++) gb.add(b.slice(i, i+2));
+  if(!ga.size || !gb.size) return 0;
+  let inter = 0; for(const g of ga) if(gb.has(g)) inter++;
+  return 2 * inter / (ga.size + gb.size);
+}
+
+/* 文字レベルの含有率。2-gram が1つも当たらない時の最後の砦 */
+function charSim(qn, hay){
+  const cs = new Set();
+  for(const c of qn) if(!/[\s、。,.?？!！]/.test(c)) cs.add(c);
+  if(!cs.size) return 0;
+  let hit = 0; for(const c of cs) if(hay.includes(c)) hit++;
+  return hit / cs.size;
+}
+
+/* 「もしかして」候補: 語彙の中でクエリに一番形が近い語 */
+function didYouMean(qn){
+  const seen = new Set(), cand = [];
+  for(const t of IDX.df.keys()){
+    if(t.length < 2) continue;
+    const s = dice(qn, t);
+    if(s >= 0.34) cand.push([t, s]);
+  }
+  cand.sort((a,b) => b[1] - a[1]);
+  const out = [];
+  for(const [t] of cand){
+    if(seen.has(t)) continue;
+    seen.add(t); out.push(t);
+    if(out.length >= 4) break;
+  }
+  return out;
+}
+
+/* BM25。qt は Map<term, weight> */
+function bm25(qt){
+  const k1 = 1.2, b = 0.72, out = [];
+  let total = 0; for(const w of qt.values()) total += w;
+  if(!total) return out;
+  for(const d of IDX.docs){
+    let s = 0, hit = 0;
+    for(const [t, w] of qt){
+      const f = d.tf.get(t); if(!f) continue;
+      hit += w;
+      s += w * idf(t) * (f * (k1 + 1)) / (f + k1 * (1 - b + b * d.len / IDX.avgdl));
+    }
+    if(s > 0) out.push({ id:d.id, score: s * (0.55 + 0.45 * (hit / total)) });
+  }
+  return out;
+}
+
+/* 言い換え辞書を展開 */
+function synonyms(){
+  const map = new Map();
+  for(const line of (cfg.syn||'').split('\n')){
+    const i = line.indexOf('=');
+    if(i < 0) continue;
+    const head = nrm(line.slice(0, i).trim());
+    const alts = line.slice(i+1).split(/[,、]/).map(s => nrm(s.trim())).filter(Boolean);
+    if(!head || !alts.length) continue;
+    const all = [head, ...alts];
+    for(const w of all) map.set(w, all.filter(x => x !== w));
+  }
+  return map;
+}
+
+/* ================= 中核：あいまい検索 =================
+   完全一致を前提にしない。5段構えで「だいたい言いたいこと」に寄せる。
+     1. 2-gram 索引     … 単語の切れ目が分からなくても部分一致する
+     2. 言い換え辞書     … 利用者が登録した別名で置き換える
+     3. 打ち間違い補正   … 編集距離1以内の語を弱い重みで足す
+     4. フレーズ一致     … 続けて書いた並びが本文にあれば加点
+     5. 疑似関連フィードバック
+                        … 上位ノートの特徴語で引き直し、言葉が違うだけの
+                          同じ話題を拾う
+   それでも0件なら、文字レベルの近さで「近いかも」を必ず返す。
+   ===================================================== */
+function search(query){
+  if(!IDX) buildIndex();
+  const qn = nrm(query).trim();
+  if(!qn || !IDX.N) return { hits:[], rel:[], loose:[], sugg:[], terms:[] };
+
+  // 1) クエリ語
+  const qt = new Map();
+  for(const t of tokens(query)) qt.set(t, Math.max(qt.get(t)||0, 1));
+  const core = [...qt.keys()];
+
+  // 2) 言い換え辞書
+  for(const [w, alts] of synonyms()){
+    if(qn.includes(w)) for(const a of alts)
+      for(const t of tokens(a)) if(!qt.has(t)) qt.set(t, 0.85);
+  }
+
+  // 3) 打ち間違い補正。索引に無い語だけ、近い語で代用する
+  for(const t of core){
+    if(IDX.df.has(t)) continue;
+    for(const nt of nearTerms(t)) if(!qt.has(nt)) qt.set(nt, 0.6);
+  }
+
+  // 4) 一次検索 ＋ フレーズ一致ボーナス
+  const bmap = new Map(bm25(qt).map(r => [r.id, r.score]));
+  const phrases = qn.split(/[\s、。,.?？!！]+/).filter(p => p.length >= 2);
+  for(const d of IDX.docs){
+    let bonus = 0;
+    for(const p of phrases) if(d.hay.includes(p)) bonus += p.length * 0.9;
+    if(bonus > 0) bmap.set(d.id, (bmap.get(d.id) || 0) + bonus);
+  }
+
+  // 5) 疑似関連フィードバック
+  let ranked = [...bmap].map(([id, score]) => ({ id, score })).sort((a,b) => b.score - a.score);
+  const rel = [];
+  if(ranked.length){
+    const cand = new Map();
+    for(const r of ranked.slice(0, 3)){
+      const d = IDX.dmap.get(r.id); if(!d) continue;
+      for(const [t, f] of d.tf){
+        if(qt.has(t)) continue;
+        const n = IDX.df.get(t) || 1;
+        if(n > Math.max(2, IDX.N * 0.5)) continue;     // ありふれた語は除外
+        if(t.length < 2 && !RE_KANJI.test(t)) continue;
+        cand.set(t, (cand.get(t)||0) + f * idf(t));
+      }
+    }
+    const exp = [...cand].sort((a,b) => b[1] - a[1]).slice(0, 6);
+    if(exp.length){
+      const et = new Map(exp.map(([t]) => [t, 1]));
+      for(const r of bm25(et)){
+        if(bmap.has(r.id)) bmap.set(r.id, bmap.get(r.id) + r.score * 0.25);
+        else rel.push({ id:r.id, score: r.score });
+      }
+      ranked = [...bmap].map(([id, score]) => ({ id, score })).sort((a,b) => b.score - a.score);
+    }
+  }
+
+  // 6) 最後の砦。2-gram が1つも当たらなくても、文字の重なりで拾う。
+  //    英数字だけのクエリで charSim を使うと、アルファベットは重なりやすく
+  //    無関係なノートを拾ってしまうので、そこは 2-gram の一致率だけで見る。
+  const loose = [];
+  if(ranked.length < 3){
+    const asciiQ = /^[0-9a-z\s]+$/.test(qn);
+    const known = new Set(ranked.map(r => r.id));
+    for(const d of IDX.docs){
+      if(known.has(d.id)) continue;
+      const g = dice(qn, d.hay.slice(0, 400)) * 1.6;
+      const s = asciiQ ? g : Math.max(charSim(qn, d.hay), g);
+      if(s >= 0.62) loose.push({ id: d.id, score: s });
+    }
+    loose.sort((a,b) => b.score - a.score);
+  }
+
+  // 7) 綴りが近い語の提案。ヒットが乏しい時だけ出す
+  const sugg = ranked.length < 3 ? didYouMean(qn).filter(t => !qn.includes(t)) : [];
+
+  const top = ranked.length ? ranked[0].score : 1;
+  rel.sort((a,b) => b.score - a.score);
+  return {
+    hits:  ranked.slice(0, 40).map(r => ({ ...r, pct: Math.round(r.score / top * 100) })),
+    rel:   rel.slice(0, 5),
+    loose: loose.slice(0, 6),
+    sugg:  sugg.slice(0, 4),
+    terms: [...qt.keys()].concat(phrases)
+  };
+}
+
+/* ================= ハイライト & 抜粋 ================= */
+const esc = s => (s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function ranges(text, terms){
+  const hay = nrm(text), rs = [];
+  for(const t of terms){
+    if(!t || t.length < 1) continue;
+    let i = 0;
+    while(i < hay.length){
+      const p = hay.indexOf(t, i);
+      if(p < 0) break;
+      rs.push([p, p + t.length]);
+      i = p + 1;
+      if(rs.length > 400) break;
+    }
+  }
+  if(!rs.length) return [];
+  rs.sort((a,b) => a[0] - b[0]);
+  const m = [rs[0]];
+  for(const r of rs.slice(1)){
+    const last = m[m.length-1];
+    if(r[0] <= last[1]) last[1] = Math.max(last[1], r[1]);
+    else m.push(r);
+  }
+  return m;
+}
+function mark(text, terms){
+  const rs = ranges(text, terms);
+  if(!rs.length) return esc(text);
+  let out = '', p = 0;
+  for(const [a, b] of rs){
+    out += esc(text.slice(p, a)) + '<mark>' + esc(text.slice(a, b)) + '</mark>';
+    p = b;
+  }
+  return out + esc(text.slice(p));
+}
+function snippet(text, terms, span){
+  span = span || 150;
+  if(!text) return '';
+  const rs = ranges(text, terms);
+  if(!rs.length) return text.slice(0, span) + (text.length > span ? '…' : '');
+  const c = rs[0][0];
+  const a = Math.max(0, c - Math.floor(span * 0.35));
+  const b = Math.min(text.length, a + span);
+  return (a > 0 ? '…' : '') + text.slice(a, b) + (b < text.length ? '…' : '');
+}
+
+/* ================= 復習スケジュール ================= */
+const STEPS = [1, 3, 7, 16, 35, 90, 180];
+function grade(n, g){                     // g: 2=覚えてた 1=あやふや 0=忘れた
+  const s = n.step || 0;
+  if(g === 2)      n.step = Math.min(s + 1, STEPS.length - 1);
+  else if(g === 1) n.step = Math.max(0, s);
+  else             n.step = 0;
+  n.last = Date.now();
+  n.next = Date.now() + STEPS[n.step] * DAY * (g === 1 ? 0.5 : 1);
+  n.revs = (n.revs || 0) + 1;
+}
+const dueList = () => notes.filter(n => (n.next || 0) <= Date.now())
+                           .sort((a,b) => (a.next||0) - (b.next||0));
+
+/* ================= 画面共通 ================= */
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('on');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.remove('on'), 1900);
+}
+function refreshChrome(){
+  const due = dueList().length;
+  document.getElementById('cntPill').textContent = notes.length + '件';
+  const badge = document.getElementById('revBadge');
+  badge.textContent = due;
+  badge.style.display = due ? 'block' : 'none';
+  // AI検索は任意の追加機能。キーが無いときは表に出さない
+  const on = !!cfg.key;
+  const p = document.getElementById('aiPill');
+  p.textContent = 'AI要約 オン';
+  p.classList.toggle('on', on);
+  p.style.display = on ? '' : 'none';
+  const ab = document.getElementById('askBtn');
+  ab.style.display = on ? '' : 'none';
+  ab.disabled = !(on && document.getElementById('q').value.trim());
+  document.getElementById('st-n').textContent = notes.length;
+  document.getElementById('st-d').textContent = due;
+  document.getElementById('st-c').textContent =
+    notes.reduce((a,n) => a + (n.body||'').length, 0).toLocaleString();
+}
+function go(v){
+  document.querySelectorAll('.view').forEach(e => e.classList.remove('on'));
+  document.getElementById('v-' + v).classList.add('on');
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  window.scrollTo(0, 0);
+  if(v === 'review') renderReview();
+}
+document.querySelectorAll('nav button').forEach(b =>
+  b.addEventListener('click', () => go(b.dataset.v)));
+
+/* ================= 検索画面 ================= */
+function card(n, terms, pct, isRel){
+  const tags = (n.tags||[]).map(t => '<span class="tag">' + esc(t) + '</span>').join('');
+  const src  = n.src ? '<span class="tag d">' + esc(n.src) + '</span>' : '';
+  return '<div class="card click ' + (isRel ? 'rel' : '') + '" data-id="' + n.id + '">'
+    + '<p class="ctitle">' + mark(n.title || '(無題)', terms) + '</p>'
+    + '<div class="snip">' + mark(snippet(n.body, terms), terms) + '</div>'
+    + '<div class="meta">' + tags + src
+    + '<span class="score">' + (isRel ? '関連' : pct + '%') + '</span></div></div>';
+}
+function renderSearch(){
+  const q = document.getElementById('q').value.trim();
+  const box = document.getElementById('results');
+  document.getElementById('clearq').classList.toggle('show', !!q);
+  refreshChrome();
+
+  if(!q){
+    document.getElementById('aiSlot').innerHTML = '';
+    lastHits = [];
+    if(!notes.length){
+      box.innerHTML = '<div class="empty"><b>まだノートがありません</b>'
+        + '下の「記録」から、勉強した内容を書き留めてみてください。<br>'
+        + '既にテキストがあるなら、まとめて取り込むこともできます。</div>';
+    }else{
+      const recent = [...notes].sort((a,b) => (b.updated||0) - (a.updated||0)).slice(0, 12);
+      box.innerHTML = '<h2 class="sec">最近さわったノート</h2>'
+        + recent.map(n => card(n, [], 100, false)).join('');
+    }
+    return;
+  }
+
+  const r = search(q);
+  lastHits = r.hits;
+
+  let html = '';
+  if(r.sugg.length){
+    html += '<div class="sugg">もしかして：'
+      + r.sugg.map(t => '<button data-s="' + esc(t) + '">' + esc(t) + '</button>').join('')
+      + '</div>';
+  }
+  if(r.hits.length){
+    html += '<h2 class="sec">' + r.hits.length + '件ヒット</h2>'
+         + r.hits.map(h => card(byId(h.id), r.terms, h.pct, false)).join('');
+  }
+  if(r.rel.length){
+    html += '<h2 class="sec">言い方は違うけれど関連しそう</h2>'
+         + r.rel.map(h => card(byId(h.id), r.terms, 0, true)).join('');
+  }
+  if(r.loose.length){
+    html += '<h2 class="sec">当たっていないかもしれないが近いもの</h2>'
+         + r.loose.map(h => card(byId(h.id), r.terms, 0, true)).join('');
+  }
+  if(!html){
+    // ひらがな・カタカナだけで引かれた時は「漢字の読み」を探している可能性が高い。
+    // 読みは辞書なしには推測できないので、登録してもらう導線を出す。
+    const kanaOnly = /^[぀-ヿー\s]+$/.test(nrm(q));
+    box.innerHTML = '<div class="empty"><b>見つかりませんでした</b>'
+      + (kanaOnly
+        ? '漢字で書かれたノートを「読み」で探すことはできません。<br>'
+          + 'よく引く言葉は言い換え辞書に<br>'
+          + '<b style="display:inline;font-size:14px;color:#9fc4f2">房室結節 = ぼうしつけっせつ</b><br>'
+          + 'のように登録しておくと、読みでも当たるようになります。'
+        : 'うろ覚えの単語ひとつだけでも試してみてください。<br>'
+          + '自分だけの略語や英日の対応を言い換え辞書に<br>登録しておくと、どちらで書いても当たります。')
+      + '<div class="btns" style="max-width:280px;margin:20px auto 0">'
+      + '<button class="btn" data-goset="1">言い換え辞書をひらく</button></div></div>';
+    return;
+  }
+  box.innerHTML = html;
+}
+
+/* 詳細シート */
+function openNote(id, terms){
+  const n = byId(id); if(!n) return;
+  const d = n.next ? new Date(n.next) : null;
+  const when = d ? (d.getTime() <= Date.now() ? '復習の時期です'
+                  : '次の復習：' + d.toLocaleDateString('ja-JP')) : '復習：未設定';
+  document.getElementById('sheet').innerHTML =
+      '<div class="grab"></div>'
+    + '<h3>' + mark(n.title || '(無題)', terms || []) + '</h3>'
+    + '<div class="sub">' + esc(when)
+      + (n.src ? ' ・ ' + esc(n.src) : '')
+      + ' ・ ' + new Date(n.created || Date.now()).toLocaleDateString('ja-JP') + 'に記録</div>'
+    + '<div class="body">' + mark(n.body || '', terms || []) + '</div>'
+    + '<div class="meta">' + (n.tags||[]).map(t => '<span class="tag">' + esc(t) + '</span>').join('') + '</div>'
+    + '<div class="btns">'
+      + '<button class="btn primary" data-act="edit">編集する</button>'
+      + '<button class="btn" data-act="close">閉じる</button>'
+    + '</div>';
+  document.getElementById('sheet').dataset.id = id;
+  document.getElementById('mask').classList.add('on');
+}
+document.getElementById('mask').addEventListener('click', e => {
+  const sheet = document.getElementById('sheet');
+  if(e.target.id === 'mask'){ closeSheet(); return; }
+  const act = e.target.dataset.act;
+  if(act === 'close') closeSheet();
+  if(act === 'edit'){ closeSheet(); editNote(sheet.dataset.id); }
+});
+function closeSheet(){ document.getElementById('mask').classList.remove('on'); }
+
+document.getElementById('results').addEventListener('click', e => {
+  if(e.target.closest('button[data-goset]')){
+    go('set');
+    const el = document.getElementById('s-syn');
+    el.scrollIntoView({ block:'center' }); el.focus();
+    return;
+  }
+  const s = e.target.closest('button[data-s]');
+  if(s){
+    const q = document.getElementById('q');
+    q.value = s.dataset.s; renderSearch(); q.focus();
+    return;
+  }
+  const c = e.target.closest('.card[data-id]');
+  if(c) openNote(c.dataset.id, search(document.getElementById('q').value.trim()).terms);
+});
+
+/* 入力 */
+let tmr = null;
+document.getElementById('q').addEventListener('input', () => {
+  clearTimeout(tmr); tmr = setTimeout(renderSearch, 110);
+});
+document.getElementById('clearq').addEventListener('click', () => {
+  const q = document.getElementById('q'); q.value = ''; q.focus(); renderSearch();
+});
+
+/* ================= 記録 ================= */
+function editNote(id){
+  const n = byId(id); if(!n) return;
+  document.getElementById('editId').value = n.id;
+  document.getElementById('f-title').value = n.title || '';
+  document.getElementById('f-body').value  = n.body || '';
+  document.getElementById('f-tags').value  = (n.tags||[]).join(' ');
+  document.getElementById('f-src').value   = n.src || '';
+  document.getElementById('addMode').textContent = 'ノートを編集';
+  document.getElementById('delBtn').style.display = '';
+  go('add');
+}
+function clearForm(){
+  ['editId','f-title','f-body','f-tags','f-src'].forEach(i => document.getElementById(i).value = '');
+  document.getElementById('addMode').textContent = '新しく記録する';
+  document.getElementById('delBtn').style.display = 'none';
+}
+document.getElementById('saveBtn').addEventListener('click', () => {
+  const title = document.getElementById('f-title').value.trim();
+  const body  = document.getElementById('f-body').value.trim();
+  if(!title && !body){ toast('タイトルか内容を入力してください'); return; }
+  const tags = document.getElementById('f-tags').value.split(/[,、\s]+/).map(s=>s.trim()).filter(Boolean);
+  const src  = document.getElementById('f-src').value.trim();
+  const id   = document.getElementById('editId').value;
+  if(id){
+    const n = byId(id);
+    Object.assign(n, { title, body, tags, src, updated: Date.now() });
+    toast('更新しました');
+  }else{
+    notes.unshift({ id: uid(), title: title || body.slice(0, 24), body, tags, src,
+                    created: Date.now(), updated: Date.now(),
+                    step: 0, revs: 0, next: Date.now() + DAY });
+    toast('保存しました');
+  }
+  saveNotes(); clearForm(); renderSearch();
+});
+document.getElementById('cancelBtn').addEventListener('click', clearForm);
+document.getElementById('delBtn').addEventListener('click', () => {
+  const id = document.getElementById('editId').value; if(!id) return;
+  if(!confirm('このノートを削除します。よろしいですか？')) return;
+  notes = notes.filter(n => n.id !== id);
+  saveNotes(); clearForm(); renderSearch(); toast('削除しました');
+});
+
+/* 一括取り込み */
+function bulkParse(text){
+  const lines = text.replace(/\r/g, '').split('\n');
+  const blocks = []; let cur = null;
+  for(const line of lines){
+    if(/^\s*---+\s*$/.test(line)){ if(cur) blocks.push(cur); cur = null; continue; }
+    const h = line.match(/^\s*#{1,6}\s+(.*)$/);
+    if(h){ if(cur) blocks.push(cur); cur = { title: h[1].trim(), body: [] }; continue; }
+    if(!cur) cur = { title: '', body: [] };
+    cur.body.push(line);
+  }
+  if(cur) blocks.push(cur);
+  return blocks
+    .map(b => ({ title: b.title, body: b.body.join('\n').trim() }))
+    .filter(b => b.title || b.body);
+}
+document.getElementById('bulkBtn').addEventListener('click', () => {
+  const txt = document.getElementById('bulk').value;
+  if(!txt.trim()){ toast('テキストを貼り付けてください'); return; }
+  const parsed = bulkParse(txt);
+  if(!parsed.length){ toast('取り込める内容がありません'); return; }
+  const now = Date.now();
+  for(const p of parsed){
+    notes.unshift({ id: uid(), title: p.title || p.body.slice(0, 24), body: p.body, tags: [], src: '',
+                    created: now, updated: now, step: 0, revs: 0, next: now + DAY });
+  }
+  saveNotes(); document.getElementById('bulk').value = '';
+  toast(parsed.length + '件を取り込みました'); go('search'); renderSearch();
+});
+document.getElementById('fileBtn').addEventListener('click', () => document.getElementById('fileIn').click());
+document.getElementById('fileIn').addEventListener('change', e => {
+  const f = e.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = () => { document.getElementById('bulk').value = String(r.result); toast('読み込みました。内容を確認して取り込んでください'); };
+  r.readAsText(f, 'utf-8');
+  e.target.value = '';
+});
+
+/* ================= 復習 ================= */
+function renderReview(){
+  const w = document.getElementById('revWrap');
+  if(!revQueue.length || revIdx >= revQueue.length){
+    revQueue = dueList(); revIdx = 0; revShown = false;
+  }
+  if(!revQueue.length){
+    const next = notes.map(n => n.next || 0).filter(Boolean).sort((a,b)=>a-b)[0];
+    w.innerHTML = '<div class="empty"><b>今日の復習は完了です 🎉</b>'
+      + (next ? '次の復習は ' + new Date(next).toLocaleDateString('ja-JP') + ' ごろです。'
+              : 'ノートを記録すると、忘れそうな頃に出題されます。') + '</div>';
+    refreshChrome(); return;
+  }
+  const n = revQueue[revIdx];
+  if(!n){ revQueue = []; renderReview(); return; }
+  const pct = Math.round(revIdx / revQueue.length * 100);
+  w.innerHTML =
+      '<div class="progress"><i style="width:' + pct + '%"></i></div>'
+    + '<h2 class="sec">残り ' + (revQueue.length - revIdx) + '件</h2>'
+    + '<div class="rev">'
+      + '<p class="q">' + esc(n.title || '(無題)') + '</p>'
+      + '<div class="when">' + (n.revs ? n.revs + '回目の復習' : 'はじめての復習')
+        + (n.src ? ' ・ ' + esc(n.src) : '') + '</div>'
+      + (revShown
+          ? '<div class="ans">' + esc(n.body || '(本文なし)') + '</div>'
+            + '<div class="revbar">'
+              + '<button class="btn b-ng"  data-g="0">忘れてた</button>'
+              + '<button class="btn b-mid" data-g="1">あやふや</button>'
+              + '<button class="btn b-ok"  data-g="2">覚えてた</button>'
+            + '</div>'
+          : '<div class="btns"><button class="btn primary" data-g="show">答えを見る</button></div>')
+    + '</div>'
+    + '<div class="btns"><button class="btn dim sm" data-g="skip">スキップ</button>'
+    + '<button class="btn dim sm" data-g="open">ノートを開く</button></div>';
+}
+document.getElementById('revWrap').addEventListener('click', e => {
+  const g = e.target.dataset.g; if(g === undefined) return;
+  const n = revQueue[revIdx];
+  if(g === 'show'){ revShown = true; renderReview(); return; }
+  if(g === 'open'){ openNote(n.id, []); return; }
+  if(g === 'skip'){ revIdx++; revShown = false; renderReview(); return; }
+  grade(n, Number(g));
+  saveNotes();
+  revIdx++; revShown = false;
+  renderReview();
+});
+
+/* ================= AI検索 =================
+   ローカル検索で上位のノートだけをAIに渡して答えさせる（RAG）。
+   ノート全部を送らないので、量が増えてもコストは一定。
+   ========================================= */
+const SYS = [
+  'あなたは利用者本人の学習メモを検索するアシスタントです。',
+  '与えられた「手元のノート」だけを根拠に、質問に日本語で簡潔に答えてください。',
+  '',
+  '守ること:',
+  '- 根拠にしたノートの番号を [1] [2] の形式で必ず文中に示す。',
+  '- ノートに書かれていないことは推測で補わない。書かれていなければ',
+  '  「手元のノートには見当たりません」と述べ、近い内容のノートがあれば案内する。',
+  '- 利用者が言葉を間違えて覚えている可能性があるので、表現が違っても',
+  '  意味が同じものは同じ話題として扱う。',
+  '- 前置きや挨拶は書かず、答えから始める。長くても6〜8行程度。'
+].join('\n');
+
+function aiSlot(html, cls){
+  document.getElementById('aiSlot').innerHTML =
+    '<div class="ai ' + (cls||'') + '">' + html + '</div>';
+}
+async function askAI(){
+  const q = document.getElementById('q').value.trim();
+  if(!q || !cfg.key) return;
+  if(!lastHits.length) renderSearch();
+  const hits = lastHits.slice(0, 12);
+  if(!hits.length){
+    aiSlot('<div class="hd">AIの回答</div><div class="bd">検索でノートが1件も見つからなかったため、AIに渡す材料がありません。</div>', 'err');
+    return;
+  }
+  aiSlot('<div class="hd">AIの回答</div><div class="bd">ノートを読んでいます<span class="dots"></span></div>');
+
+  const ctx = hits.map((h, i) => {
+    const n = byId(h.id);
+    return '[' + (i+1) + '] タイトル: ' + (n.title || '(無題)')
+         + '\nタグ: ' + ((n.tags||[]).join(', ') || 'なし')
+         + '\n出典: ' + (n.src || 'なし')
+         + '\n本文:\n' + (n.body || '').slice(0, 2500);
+  }).join('\n\n---\n\n');
+
+  const body = {
+    model: cfg.model,
+    max_tokens: 8000,
+    system: SYS,
+    messages: [{ role: 'user', content: '# 質問\n' + q + '\n\n# 手元のノート\n' + ctx }]
+  };
+  const headers = {
+    'content-type': 'application/json',
+    'x-api-key': cfg.key,
+    'anthropic-version': '2023-06-01',
+    'anthropic-dangerous-direct-browser-access': 'true'
+  };
+  // effort と server-side fallback は対応モデルのみ
+  if(cfg.model === 'claude-opus-5' || cfg.model === 'claude-sonnet-5'){
+    body.output_config = { effort: 'low' };
+  }
+  if(cfg.model === 'claude-opus-5'){
+    body.fallbacks = 'default';
+    headers['anthropic-beta'] = 'server-side-fallback-2026-07-01';
+  }
+
+  try{
+    const res = await fetch('https://api.anthropic.com/v1/messages',
+                            { method:'POST', headers, body: JSON.stringify(body) });
+    const data = await res.json().catch(() => null);
+    if(!res.ok){
+      const msg = (data && data.error && data.error.message) || ('HTTP ' + res.status);
+      aiSlot('<div class="hd">AIに聞けませんでした</div><div class="bd">' + esc(msg)
+        + '\n\nAPIキーが正しいか、設定画面で確認してください。</div>', 'err');
+      return;
+    }
+    // Claude Opus 5 は安全性の判断で応答を断ることがある。content を読む前に確認する。
+    if(data.stop_reason === 'refusal'){
+      aiSlot('<div class="hd">AIの回答</div><div class="bd">この質問への回答は見送られました。'
+        + '聞き方を変えるか、下の検索結果を直接ご覧ください。</div>', 'err');
+      return;
+    }
+    const text = (data.content || [])
+      .filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
+    if(!text){
+      aiSlot('<div class="hd">AIの回答</div><div class="bd">空の応答が返りました。もう一度お試しください。</div>', 'err');
+      return;
+    }
+    const linked = esc(text).replace(/\[(\d{1,2})\]/g, (m, d) => {
+      const h = hits[Number(d) - 1];
+      return h ? '<span class="cite" data-cid="' + h.id + '">[' + d + ']</span>' : m;
+    });
+    aiSlot('<div class="hd">AIの回答（' + hits.length + '件のノートを参照）</div>'
+         + '<div class="bd">' + linked + '</div>');
+  }catch(err){
+    aiSlot('<div class="hd">通信できませんでした</div><div class="bd">' + esc(String(err && err.message || err))
+      + '\n\nネットワーク接続を確認してください。</div>', 'err');
+  }
+}
+document.getElementById('askBtn').addEventListener('click', askAI);
+document.getElementById('q').addEventListener('keydown', e => {
+  if(e.key === 'Enter' && cfg.key){ e.preventDefault(); askAI(); }
+});
+document.getElementById('aiSlot').addEventListener('click', e => {
+  const c = e.target.closest('.cite');
+  if(c) openNote(c.dataset.cid, search(document.getElementById('q').value.trim()).terms);
+});
+
+/* ================= 設定 ================= */
+document.getElementById('saveKey').addEventListener('click', () => {
+  cfg.key   = document.getElementById('s-key').value.trim();
+  cfg.model = document.getElementById('s-model').value;
+  saveCfg(); toast(cfg.key ? 'AI検索を有効にしました' : '保存しました');
+});
+document.getElementById('clearKey').addEventListener('click', () => {
+  cfg.key = ''; document.getElementById('s-key').value = '';
+  saveCfg(); toast('キーを削除しました');
+});
+document.getElementById('saveSyn').addEventListener('click', () => {
+  cfg.syn = document.getElementById('s-syn').value;
+  saveCfg(); toast('言い換え辞書を保存しました'); renderSearch();
+});
+
+/* データ入出力 */
+document.getElementById('expBtn').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify({ v:1, exported: Date.now(), notes }, null, 1)],
+                        { type:'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'omoidasu-' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  toast('バックアップを書き出しました');
+});
+document.getElementById('impBtn').addEventListener('click', () => document.getElementById('impIn').click());
+document.getElementById('impIn').addEventListener('change', e => {
+  const f = e.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try{
+      const d = JSON.parse(String(r.result));
+      const arr = Array.isArray(d) ? d : d.notes;
+      if(!Array.isArray(arr)) throw new Error('形式が違います');
+      const have = new Set(notes.map(n => n.id));
+      let add = 0;
+      for(const n of arr){
+        if(!n || !n.id || have.has(n.id)) continue;
+        notes.push(n); have.add(n.id); add++;
+      }
+      saveNotes(); renderSearch();
+      toast(add + '件を読み込みました');
+    }catch(err){ toast('読み込めませんでした: ' + (err.message||err)); }
+  };
+  r.readAsText(f, 'utf-8');
+  e.target.value = '';
+});
+document.getElementById('wipeBtn').addEventListener('click', () => {
+  if(!confirm('すべてのノートを削除します。元に戻せません。よろしいですか？')) return;
+  if(!confirm('本当に削除しますか？先にバックアップの書き出しをおすすめします。')) return;
+  notes = []; saveNotes(); renderSearch(); toast('すべて削除しました');
+});
+
+/* ================= 起動 ================= */
+load();
+buildIndex();
+document.getElementById('s-key').value   = cfg.key || '';
+document.getElementById('s-model').value = cfg.model || 'claude-opus-5';
+document.getElementById('s-syn').value   = cfg.syn || '';
+refreshChrome();
+renderSearch();
+</script>
+</body>
+</html>
