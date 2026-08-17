@@ -124,6 +124,7 @@
   <span><i style="background:var(--his)"></i>His束（H）</span>
   <span><i style="background:var(--ven)"></i>心室の興奮（V）</span>
   <span><i style="background:var(--stim)"></i>ペーシング刺激</span>
+  <span style="margin-left:auto;font-size:11.5px">輪の中 — <b style="color:var(--atr)">黄</b>：頻拍自身の興奮 ／ <b style="color:var(--stim)">赤</b>：ペーシング由来の興奮</span>
 </div>
 
 <h2>この頻拍で何が起きているか</h2>
@@ -325,7 +326,7 @@ function build(kind){
   for(let x = 760; x <= 2560; x += PCLat) stims.push(x);
   const lastS = stims[stims.length - 1];
 
-  const axis = [], coll = [], collided = new Set();
+  const axis = [], coll = [], collided = new Set(), pacedA = new Set();
   const A = [];
   for(let T = -TCL; T <= 720; T += TCL) A.push(T);
   let nat = A[A.length-1] + TCL, capAt = null;
@@ -336,7 +337,7 @@ function build(kind){
     v.push(st + 5);                                   // 心室は毎拍とらえられる
     if(capAt !== null){                               // 捕捉後は毎拍、心房まで届く
       axis.push({t0:r0, t1:r1, u0:1, u1:0, c:C.S});
-      A.push(r1); coll.push({t:r1, u:0, cap:true});
+      A.push(r1); pacedA.add(r1); coll.push({t:r1, u:0, cap:true});
       continue;
     }
     while(nat + LEAD < r1){ A.push(nat); nat += TCL; } // 未捕捉なら頻拍は自前の周期で進む
@@ -350,7 +351,7 @@ function build(kind){
       coll.push({t:tc, u, cap:false}); collided.add(hit);
     }else{                                            // 順行波がいない → 心房に到達し捕捉
       axis.push({t0:r0, t1:r1, u0:1, u1:0, c:C.S});
-      A.push(r1); coll.push({t:r1, u:0, cap:true}); capAt = r1;
+      A.push(r1); pacedA.add(r1); coll.push({t:r1, u:0, cap:true}); capAt = r1;
     }
   }
   // ペーシング前に心室まで下りきった拍
@@ -379,19 +380,22 @@ function build(kind){
      順行側は次の刺激に消されるので1周を完走できない。
      最後の1発だけが完走し、そのぶん停止後の間隔が頻拍周期に戻る。 */
   const loopW = [], loopColl = [];
+  const owner = x => pacedA.has(x) ? C.S : C.A;   // 赤＝ペーシング由来、黄＝頻拍自身
   for(let i = 0; i < A.length - 1; i++){
     const dt = A[i+1] - A[i];
     if(dt >= TCL - 1){
-      loopW.push({t0:A[i], t1:A[i]+TCL, th0:0, th1:1, c:C.A});     // 完走
+      loopW.push({t0:A[i], t1:A[i]+TCL, th0:0, th1:1, c:owner(A[i])});   // 完走
     }else{
       const tx = A[i] + (dt + TCL)/2, thx = (dt + TCL)/(2*TCL);
-      loopW.push({t0:A[i],   t1:tx, th0:0, th1:thx, c:C.A});       // 回っていた興奮（順行）
-      loopW.push({t0:A[i+1], t1:tx, th0:1, th1:thx, c:C.S});       // 入ってきた興奮の逆行側
+      // 回っていた興奮（順行）。捕捉後はこれ自体がペーシング由来になる
+      loopW.push({t0:A[i], t1:tx, th0:0, th1:thx, c:owner(A[i])});
+      // 入ってきた興奮の逆行側。すぐ消えるので淡い赤で描く
+      loopW.push({t0:A[i+1], t1:tx, th0:1, th1:thx, c:'#ff9a9a'});
       loopColl.push({t:tx, th:thx});
     }
   }
   const tailA = A[A.length-1];
-  loopW.push({t0:tailA, t1:tailA+TCL, th0:0, th1:1, c:C.A});
+  loopW.push({t0:tailA, t1:tailA+TCL, th0:0, th1:1, c:owner(tailA)});
   // His電位は軸を横切った時刻から導く。衝突点がHisを越えると順行→逆行に変わる。
   for(const sg of axis){
     const lo = Math.min(sg.u0, sg.u1), hi = Math.max(sg.u0, sg.u1);
@@ -412,8 +416,10 @@ const META = {
       'ペーシング周期のほうが短いので、逆行波は1拍ごとに早いタイミングで到達し、<b>衝突点は少しずつ心房側へせり上がって</b>いきます。図の赤い横線が、その足跡です。',
       'ついに衝突点が心房に達すると、興奮は輪の中まで入り込みます。そして入口で<b>2つに分裂</b>します。頻拍と同じ向きに進む<b>順行側</b>と、逆向きに進む<b>逆行側</b>です。',
       '逆行側は、回っていた元の興奮と<b>正面衝突して互いに消えます</b>。生き残った順行側がそのまま回路を引き継ぎ、次の頻拍波になります。これが<b>リセット</b>で、毎拍これが起き続けている状態が「エントレインメント」です。',
+      'この瞬間から、<b>輪を回っているのはペーシング由来の興奮（赤）</b>に入れ替わります。頻拍はもう自分の興奮では回っておらず、外から送り込まれた興奮に乗っ取られた状態です。図の輪の中の色が黄から赤に変わるのが、その入れ替わりです。',
       'このとき順行側は<b>1周を完走できません</b>。91.7% まで進んだところで、次の刺激が送り込んだ逆行側に消されるからです。輪はペーシング周期に引き込まれたまま回り続けます。',
-      'ペーシングを止めると、最後に生き残った順行側だけは<b>消される相手がいないので1周を完走</b>します。だから停止後の心房間隔は頻拍周期に戻り、そのあと心室へ下ります。心房波が2つ並ぶ <span class="chip">V-A-A-V</span> になるのはこのためです。'
+      'ペーシングを止めると、最後に生き残った赤い興奮だけは<b>消される相手がいないので1周を完走</b>します。1周ぶんの時間がちょうど頻拍周期なので、これで心房間隔が元に戻ります。完走したあとは輪の色が赤から黄へ戻り、頻拍が自分の力で回っている状態に復帰します。',
+      'その完走した興奮がようやく心室へ下るので、心房波が2つ並ぶ <span class="chip">V-A-A-V</span> になります。'
     ]},
   avnrt: { name:'房室結節リエントリー頻拍（AVNRT）', resp:'V-A-V',
     why:[
