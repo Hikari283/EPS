@@ -219,8 +219,16 @@ const P = {
   RVA_AVN   : [[78,215],[86,180],[120,150],[145,140]],
   AVN_A     : [[151,96],[151,70]],
   RVA_AP    : [[78,215],[180,215],[258,203]],
-  RVA_V     : [[78,215],[151,215]]
+  RVA_V     : [[78,215],[151,215]],
+  RVA_AXIS  : [[78,215],[151,215]]
 };
+/* 房室伝導軸。心房(u=0)から心室(u=1)までを1本の軸として扱い、
+   順行波と逆行波の位置を同じ物差しで比べられるようにする。
+   衝突点をこの u で表すのが、この図の要。 */
+const AX = { x:151, y0:70, y1:215 };
+const axisPt = u => [AX.x, AX.y0 + u * (AX.y1 - AX.y0)];
+const U_HIS  = (140 - 70) / (215 - 70);
+const LOOP   = { x:98, y:52, r:13 };
 function ptAt(path, f){
   f = Math.max(0, Math.min(1, f));
   let tot = 0; const seg = [];
@@ -269,7 +277,7 @@ function build(kind){
       S(T-285, T-35, 'AVN_SLOW', C.A); S(T-35, T+85, 'AVN_FAST', C.A);
       S(T-35, T, 'AVN_V', C.V); S(T, T+45, 'V_SPREAD', C.V);
     }
-    return { a, h, v, seg, ppi, rv, end: rv + TCL*3 + 260,
+    return { a, h, v, seg, stims:STIMS, last:LAST, ppi, rv, end: rv + TCL*3 + 260,
              seq:[[LAST+5,'V'],[LAST+145,'A'],[rv,'V']] };
   }
 
@@ -300,58 +308,105 @@ function build(kind){
       S(T, T+60, 'V_TO_AP', C.V); S(T+60, T+105, 'AP_UP', C.V);
       S(T+105, T+150, 'AP_A', C.A);
     }
-    return { a, h, v, seg, ppi, rv, end: rv + TCL*3 + 260,
+    return { a, h, v, seg, stims:STIMS, last:LAST, ppi, rv, end: rv + TCL*3 + 260,
              seq:[[LAST+5,'V'],[LAST+100,'A'],[rv,'V']] };
   }
 
-  // AT: 心房内の自動能。房室結節も心室も下流の通り道にすぎない。
-  for(let T = -TCL; T <= 720; T += TCL){
-    a.push(T); h.push(T+130); v.push(T+165);
-    S(T, T+110, 'FOCUS_AVN', C.A); S(T+110, T+165, 'AVN_V', C.V);
-    S(T+165, T+210, 'V_SPREAD', C.V);
+  /* ---- AT: 心房内のマイクロリエントリー ----
+     心室からオーバードライブをかけても、最初の数拍は心房を捕捉できない。
+     逆行してきた興奮は、頻拍が下ろしてくる順行波と房室伝導軸の途中で
+     ぶつかって互いに消える。ペーシング周期のほうが短いので、
+     衝突点は1拍ごとに心房側へせり上がり、最後に心房へ届いて回路を捕捉する。
+     捕捉されるまで心房は自分の周期で打ち続け、捕捉された瞬間に
+     ペーシング周期へ引き込まれる — これがエントレインメントの成立。 */
+  const PCLat = 300;                       // 頻拍周期360msに対するオーバードライブ
+  const LEAD = 30, ANTE = 135, RETRO = 160;// 軸に入るまで / 順行の軸通過 / 逆行の軸通過
+  const stims = [];
+  for(let x = 760; x <= 2560; x += PCLat) stims.push(x);
+  const lastS = stims[stims.length - 1];
+
+  const axis = [], coll = [], collided = new Set();
+  const A = [];
+  for(let T = -TCL; T <= 720; T += TCL) A.push(T);
+  let nat = A[A.length-1] + TCL, capAt = null;
+
+  for(const st of stims){
+    const r0 = st + LEAD, r1 = r0 + RETRO;
+    S(st, r0, 'RVA_AXIS', C.S);                       // 刺激部位から軸の足まで
+    v.push(st + 5);                                   // 心室は毎拍とらえられる
+    if(capAt !== null){                               // 捕捉後は毎拍、心房まで届く
+      axis.push({t0:r0, t1:r1, u0:1, u1:0, c:C.S});
+      A.push(r1); coll.push({t:r1, u:0, cap:true});
+      continue;
+    }
+    while(nat + LEAD < r1){ A.push(nat); nat += TCL; } // 未捕捉なら頻拍は自前の周期で進む
+    const hit = A.find(x => !collided.has(x) && x+LEAD+ANTE > r0 && x+LEAD < r1);
+    if(hit !== undefined){
+      const ta0 = hit + LEAD;
+      const tc = (1 + r0/RETRO + ta0/ANTE) / (1/ANTE + 1/RETRO);
+      const u  = (tc - ta0) / ANTE;
+      axis.push({t0:ta0, t1:tc, u0:0, u1:u, c:C.A});  // 順行波（途中で消える）
+      axis.push({t0:r0,  t1:tc, u0:1, u1:u, c:C.S});  // 逆行波（途中で消える）
+      coll.push({t:tc, u, cap:false}); collided.add(hit);
+    }else{                                            // 順行波がいない → 心房に到達し捕捉
+      axis.push({t0:r0, t1:r1, u0:1, u1:0, c:C.S});
+      A.push(r1); coll.push({t:r1, u:0, cap:true}); capAt = r1;
+    }
   }
-  for(const s of STIMS){
-    v.push(s+5); a.push(s+160);
-    S(s, s+40, 'RVA_V', C.S);
-    S(s+5, s+125, 'RVA_AVN', C.S);
-    S(s+125, s+160, 'AVN_A', C.A);
+  // ペーシング前に心室まで下りきった拍
+  for(const x of A) if(!collided.has(x) && x + LEAD + ANTE <= stims[0]){
+    axis.push({t0:x+LEAD, t1:x+LEAD+ANTE, u0:0, u1:1, c:C.A});
+    v.push(x + LEAD + ANTE);
+    S(x+LEAD+ANTE, x+LEAD+ANTE+45, 'V_SPREAD', C.V);
   }
-  const a2 = LAST + 160 + TCL;            // 自動能が次に発火する心房波
-  const rv = a2 + 165, ppi = rv - LAST;
-  a.push(a2); h.push(a2+130); v.push(rv);
-  S(a2, a2+110, 'FOCUS_AVN', C.A); S(a2+110, rv, 'AVN_V', C.V);
-  S(rv, rv+45, 'V_SPREAD', C.V);
-  for(let k = 1; k <= 3; k++){
-    const T = a2 + TCL*k;
-    a.push(T); h.push(T+130); v.push(T+165);
-    S(T, T+110, 'FOCUS_AVN', C.A); S(T+110, T+165, 'AVN_V', C.V);
-    S(T+165, T+210, 'V_SPREAD', C.V);
+  // 停止後：回路が自前の周期で打ち、それが心室へ下りる
+  const lastA = A[A.length-1], rvA = lastA + TCL, rv = rvA + LEAD + ANTE;
+  A.push(rvA);
+  axis.push({t0:rvA+LEAD, t1:rv, u0:0, u1:1, c:C.A});
+  v.push(rv); S(rv, rv+45, 'V_SPREAD', C.V);
+  for(let k = 1; k <= 2; k++){
+    const T = rvA + TCL*k;
+    A.push(T); axis.push({t0:T+LEAD, t1:T+LEAD+ANTE, u0:0, u1:1, c:C.A});
+    v.push(T+LEAD+ANTE); S(T+LEAD+ANTE, T+LEAD+ANTE+45, 'V_SPREAD', C.V);
   }
-  return { a, h, v, seg, ppi, rv, end: a2 + TCL*3 + 300,
-           seq:[[LAST+5,'V'],[LAST+160,'A'],[a2,'A'],[rv,'V']] };
+  A.sort((x, y) => x - y);
+  for(const x of A) a.push(x);
+  // His電位は軸を横切った時刻から導く。衝突点がHisを越えると順行→逆行に変わる。
+  for(const sg of axis){
+    const lo = Math.min(sg.u0, sg.u1), hi = Math.max(sg.u0, sg.u1);
+    if(U_HIS >= lo && U_HIS <= hi && sg.u1 !== sg.u0){
+      h.push(sg.t0 + (U_HIS - sg.u0) / (sg.u1 - sg.u0) * (sg.t1 - sg.t0));
+    }
+  }
+  return { a, h, v, seg, axis, coll, loop:A, cap:capAt, stims, last:lastS, pcl:PCLat,
+           ppi: rv - lastS, rv, end: rvA + TCL*2 + 320,
+           seq:[[lastS+5,'V'],[lastA,'A'],[rvA,'A'],[rv,'V']] };
 }
 
 const META = {
-  at: { name:'心房頻拍（AT）', resp:'V-A-A-V',
+  at: { name:'心房頻拍（AT・マイクロリエントリー）', resp:'V-A-A-V',
     why:[
-      '起源は<b>心房の中</b>にあり、房室結節も心室もその下流の通り道にすぎません。回路は心室を含みません。',
-      'RVA からの刺激は房室結節を<b>逆行</b>して心房に届き、自動能をリセットします。ここで初めてエントレインメントが成立します。',
-      'ペーシングを止めると、最後の刺激で生じた心室波、その逆行性の心房波、そして<b>自動能が自分のタイミングで発火する次の心房波</b>が続き、それがようやく心室へ下ります。心房波が2つ並ぶ <span class="chip">V-A-A-V</span> がこの頻拍の指紋です。',
-      'PPI は往路も復路も房室結節を通るうえ、回路が心房内にあるため<b>極端に長く</b>なります。'
+      '回路は<b>心房の中で完結した小さなリエントリー</b>です。房室結節も心室も、その下流の通り道にすぎません。',
+      '心室からオーバードライブをかけても、<b>最初の数拍は心房を捕捉できません</b>。逆行してきた興奮は、頻拍が下ろしてくる順行波と房室伝導路の途中でぶつかり、互いに消えてしまうからです。',
+      'ペーシング周期のほうが短いので、逆行波は1拍ごとに早いタイミングで到達し、<b>衝突点は少しずつ心房側へせり上がって</b>いきます。図の赤い横線が、その足跡です。',
+      'ついに衝突点が心房に達すると回路が捕捉され、心房はそれまでの自前の周期を捨てて<b>ペーシング周期に引き込まれます</b>。ここで初めてエントレインメントが成立します。',
+      '止めると、最後の刺激による心室波、その逆行性の心房波、そして<b>回路が自分の周期で打つ次の心房波</b>が続き、それがようやく心室へ下ります。心房波が2つ並ぶ <span class="chip">V-A-A-V</span> がこの頻拍の指紋です。'
     ]},
   avnrt: { name:'房室結節リエントリー頻拍（AVNRT）', resp:'V-A-V',
     why:[
       '回路は房室結節近傍の<b>遅伝導路と速伝導路</b>の間で完結しています。心室は回路に含まれない傍観者です。',
       'RVA からの刺激は His-Purkinje を逆行して房室結節まで登り、そこで回路に入ります。心室が回路外なので<b>入口までが遠い</b>のが要点です。',
       '止めると、心室波 → 逆行性の心房波 → 遅伝導路を下りてきた心室波、の順で <span class="chip">V-A-V</span> になります。',
-      'PPI − TCL は逆行に要した時間の分だけ延び、<b>115 ms を超える</b>のが通常です。'
+      'PPI − TCL は逆行に要した時間の分だけ延び、<b>115 ms を超える</b>のが通常です。',
+      '<b style="color:#f0b45e">この2つはまだ簡略版です。</b>AT で作った「衝突点が1拍ごとにせり上がり、数拍かけて捕捉に至る」過程は、まだ反映できていません。1拍目からいきなり捕捉している点は実際と異なります。'
     ]},
   avrt: { name:'房室回帰性頻拍（AVRT・順行性）', resp:'V-A-V',
     why:[
       '心房 → 房室結節 → His → 心室 → 副伝導路 → 心房 と大きく回ります。<b>心室が回路の一部</b>である点が他の2つと決定的に違います。',
       'RVA は回路そのものの上に乗っているので、刺激は<b>ひと足で回路に入り</b>、副伝導路を伝って心房へ抜けます。',
       '止めると <span class="chip">V-A-V</span>。応答の形は AVNRT と同じで、ここでは見分けられません。',
-      '見分けるのは<b>距離</b>です。ペーシング部位が回路上にあるため PPI − TCL は<b>115 ms 未満</b>と短くなります。この3つの中で心室融合が出うるのも AVRT だけです。'
+      '見分けるのは<b>距離</b>です。ペーシング部位が回路上にあるため PPI − TCL は<b>115 ms 未満</b>と短くなります。この3つの中で心室融合が出うるのも AVRT だけです。',
+      '<b style="color:#f0b45e">この2つはまだ簡略版です。</b>AT で作った「衝突点が1拍ごとにせり上がり、数拍かけて捕捉に至る」過程は、まだ反映できていません。1拍目からいきなり捕捉している点は実際と異なります。'
     ]}
 };
 
@@ -390,7 +445,7 @@ function drawCircuit(){
   txt('AVN', GEO.avn.x+GEO.avn.w/2, GEO.avn.y+27, C.mut, 11, 'center', '700');
   poly([[151,70],[151,96]], C.line, 1.6);
   poly([[151,140],[151,196]], C.line, 1.6);
-  txt('His', 158, 168, C.mut, 10, 'left', '600');
+  txt('His', 158, 156, C.mut, 10, 'left', '600');
 
   // 回路ごとの固有パーツ
   if(kind === 'avrt'){
@@ -406,10 +461,16 @@ function drawCircuit(){
     txt('心室は傍観者', 190, 186, C.mut, 9.5, 'left', '600');
   }
   if(kind === 'at'){
-    G.strokeStyle = C.A; G.lineWidth = 2;
-    G.beginPath(); G.arc(GEO.focus.x, GEO.focus.y, 9, 0, 7); G.stroke();
-    G.fillStyle = C.A; G.beginPath(); G.arc(GEO.focus.x, GEO.focus.y, 3.5, 0, 7); G.fill();
-    txt('自動能', GEO.focus.x, GEO.focus.y-15, C.A, 10, 'center', '700');
+    // 心房内のマイクロリエントリー。回り続けている輪として描く
+    G.strokeStyle = '#3c5b7a'; G.lineWidth = 2.6;
+    G.beginPath(); G.arc(LOOP.x, LOOP.y, LOOP.r, 0, 7); G.stroke();
+    txt('マイクロリエントリー', LOOP.x + 6, LOOP.y - 20, C.A, 9, 'center', '700');
+    const ang = loopAngle(t);
+    const lx = LOOP.x + Math.cos(ang)*LOOP.r, ly = LOOP.y + Math.sin(ang)*LOOP.r;
+    G.save(); G.shadowColor = C.A; G.shadowBlur = 12; G.fillStyle = C.A;
+    G.beginPath(); G.arc(lx, ly, 4.6, 0, 7); G.fill(); G.restore();
+    poly([[LOOP.x+LOOP.r, LOOP.y],[132, 60],[AX.x, AX.y0]], '#2b3a4f', 1.4);
+    poly([[AX.x, 196],[AX.x, AX.y1]], '#233247', 1.6);   // 軸を心室の高さまで延ばす
   }
   // ペーシング部位
   G.fillStyle = C.S; G.beginPath(); G.arc(GEO.rva.x, GEO.rva.y, 6.5, 0, 7); G.fill();
@@ -425,7 +486,43 @@ function drawCircuit(){
     G.fillStyle = s.c; G.beginPath(); G.arc(x, y, 5.4, 0, 7); G.fill();
     G.restore();
   }
+
+  // 房室伝導軸を上下する興奮（順行＝黄、逆行＝赤）
+  if(D.axis) for(const sg of D.axis){
+    if(t < sg.t0 || t > sg.t1) continue;
+    const f = (t - sg.t0) / Math.max(1, sg.t1 - sg.t0);
+    const [x, y] = axisPt(sg.u0 + (sg.u1 - sg.u0) * f);
+    G.save(); G.shadowColor = sg.c; G.shadowBlur = 14; G.fillStyle = sg.c;
+    G.beginPath(); G.arc(x, y, 5.4, 0, 7); G.fill(); G.restore();
+  }
+
+  // 衝突点。起きた場所を残すので、1拍ごとにせり上がるのが見える
+  if(D.coll) for(let i = 0; i < D.coll.length; i++){
+    const c = D.coll[i];
+    if(t < c.t) continue;
+    const [x, y] = axisPt(c.u), age = t - c.t;
+    if(!c.cap) poly([[x-10, y],[x+10, y]], 'rgba(248,113,113,.5)', 1.8);
+    if(age < 200){                                   // ぶつかった瞬間の閃光
+      const k = 1 - age/200;
+      G.save(); G.globalAlpha = k;
+      G.strokeStyle = c.cap ? C.acc : '#ff9a9a'; G.lineWidth = 2.2;
+      G.beginPath(); G.arc(x, y, 6 + (1-k)*15, 0, 7); G.stroke(); G.restore();
+    }
+    if(!c.cap && i === 0 && age < 1400) txt('ここでぶつかって消える', x-15, y+4, '#ff9a9a', 10, 'right', '700');
+    if(c.cap && c.t === D.cap && age < 1600) txt('心房まで届いて捕捉', x+15, y+4, C.acc, 10.5, 'left', '800');
+  }
   G.restore();
+}
+
+/* マイクロリエントリーの回転角。心房興奮の間隔から求めるので、
+   捕捉されて周期が縮むと回転もそのまま速くなる。 */
+function loopAngle(tt){
+  const L = D.loop; if(!L) return -Math.PI/2;
+  for(let i = 0; i < L.length - 1; i++){
+    if(tt >= L[i] && tt < L[i+1])
+      return -Math.PI/2 + 2*Math.PI * (tt - L[i]) / (L[i+1] - L[i]);
+  }
+  return -Math.PI/2;
 }
 
 /* ---------- 心内心電図 ---------- */
@@ -461,7 +558,7 @@ function drawTracing(){
   for(const ms of D.a) if(vis(ms)){ spike(ms, 36, 12, C.A); spike(ms, 96, 8, C.A); }
   for(const ms of D.h) if(vis(ms))  spike(ms, 96, 6, C.Hb);
   for(const ms of D.v) if(vis(ms)){ spike(ms, 158, 16, C.V); spike(ms, 96, 9, C.V); }
-  for(const ms of STIMS) if(vis(ms)){
+  for(const ms of D.stims) if(vis(ms)){
     const x = t2x(ms);
     G.strokeStyle = C.S; G.lineWidth = 1.8;
     G.beginPath(); G.moveTo(x, 212-13); G.lineTo(x, 212+5); G.stroke();
@@ -476,7 +573,7 @@ function drawTracing(){
   }
   // PPI キャリパー（次の心室波まで描き終えたら出す）
   if(t >= D.rv){
-    const x1 = t2x(LAST), x2 = t2x(D.rv), yc = TR.h - 32;
+    const x1 = t2x(D.last), x2 = t2x(D.rv), yc = TR.h - 32;
     poly([[x1, 224],[x1, yc]], C.acc, 1, [3,3]);
     poly([[x2, 176],[x2, yc]], C.acc, 1, [3,3]);
     poly([[x1, yc],[x2, yc]], C.acc, 1.6);
@@ -500,13 +597,16 @@ function drawHUD(){
   txt(m.name, 14, 24, C.txt, 15, 'left', '800');
 
   let phase = '頻拍中', pc = C.mut;
-  if(t >= STIMS[0] - 60 && t <= LAST + 40){ phase = 'RVAペーシング（エントレインメント）'; pc = C.S; }
-  else if(t > LAST + 40 && t < D.rv){ phase = '停止直後 — 復帰を待つ'; pc = C.acc; }
+  if(t >= D.stims[0] - 60 && t <= D.last + 40){
+    phase = (D.cap && t >= D.cap) ? 'エントレインメント成立 — 心房を捕捉中'
+          : (kind === 'at' ? 'RVAペーシング — まだ心房を捕捉できていない' : 'RVAペーシング');
+    pc = (D.cap && t >= D.cap) ? C.acc : C.S; }
+  else if(t > D.last + 40 && t < D.rv){ phase = '停止直後 — 復帰を待つ'; pc = C.acc; }
   else if(t >= D.rv){ phase = '頻拍が再開'; pc = C.mut; }
   txt(phase, TR.x + 66, 24, pc, 12, 'left', '700');
 
   // 停止後の応答を右上に出す
-  if(t > LAST + 40){
+  if(t > D.last + 40){
     const done = D.seq.filter(s => s[0] <= t).map(s => s[1]).join('-');
     if(done){
       const full = D.seq.length === done.split('-').length;
@@ -515,7 +615,7 @@ function drawHUD(){
   }
   // 経過時間
   txt((t < 0 ? 0 : Math.round(t)) + ' ms', 944, H - 10, '#4d5f75', 10.5, 'right', '600', true);
-  txt('TCL ' + TCL + ' ms  /  ペーシング周期 ' + PCL + ' ms', 14, H - 10, '#4d5f75', 10.5, 'left', '600', true);
+  txt('TCL ' + TCL + ' ms  /  ペーシング周期 ' + (D.pcl || PCL) + ' ms', 14, H - 10, '#4d5f75', 10.5, 'left', '600', true);
 }
 
 function frame(){
