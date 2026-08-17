@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0f16">
+<title>RVAエントレインメント</title>
+<style>
+  :root{
+    --bg:#0b0f16; --panel:#121826; --panel2:#0e1420; --line:#1f2937;
+    --txt:#e5e7eb; --muted:#93a3b8; --accent:#38bdf8;
+    --atr:#f6d860; --his:#fb923c; --ven:#c084fc; --stim:#f87171;
+    --mono:ui-monospace,SFMono-Regular,Menlo,"SF Mono",monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP",system-ui,sans-serif;
+    font-size:15px;line-height:1.7}
+  .wrap{max-width:1000px;margin:0 auto;padding:22px 16px 60px}
+
+  header h1{font-size:20px;margin:0 0 4px;font-weight:800;letter-spacing:.01em}
+  header p{margin:0 0 18px;color:var(--muted);font-size:13.5px;max-width:62ch}
+
+  /* ---- 頻拍の選択 ---- */
+  .tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+  .tabs button{flex:1;min-width:150px;background:var(--panel);border:1px solid var(--line);
+    border-radius:11px;padding:10px 12px;color:var(--muted);cursor:pointer;text-align:left;
+    font-family:inherit;font-size:13px;transition:border-color .15s,color .15s}
+  .tabs button b{display:block;font-size:14.5px;color:var(--txt);font-weight:700;margin-bottom:1px}
+  .tabs button:hover{border-color:#31435a}
+  .tabs button.on{border-color:var(--accent);color:var(--accent);
+    box-shadow:0 0 0 3px rgba(56,189,248,.12)}
+  .tabs button.on b{color:var(--accent)}
+
+  /* ---- 画面 ---- */
+  .stage{background:var(--panel2);border:1px solid var(--line);border-radius:14px;
+    padding:10px;overflow-x:auto}
+  canvas{display:block;width:100%;height:auto;border-radius:8px}
+
+  /* ---- 操作 ---- */
+  .ctl{display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap}
+  .ctl button{background:#1e2836;border:1px solid #2c3a4d;border-radius:10px;color:var(--txt);
+    padding:9px 16px;cursor:pointer;font-family:inherit;font-size:13.5px;font-weight:600}
+  .ctl button:hover{background:#25334a}
+  .ctl button.play{background:var(--accent);border-color:var(--accent);color:#04223a;font-weight:800;min-width:92px}
+  .ctl .sp{flex:1}
+  .ctl label{color:var(--muted);font-size:12px;display:flex;align-items:center;gap:7px}
+  .ctl select{background:#0a0f17;border:1px solid var(--line);border-radius:8px;color:var(--txt);
+    padding:7px 9px;font-family:var(--mono);font-size:12.5px}
+  input[type=range]{width:100%;accent-color:var(--accent);margin:12px 0 0}
+
+  /* ---- 凡例 ---- */
+  .legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--muted)}
+  .legend span{display:flex;align-items:center;gap:6px}
+  .legend i{width:11px;height:11px;border-radius:3px;display:block}
+
+  /* ---- 解説 ---- */
+  h2{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.09em;
+    margin:34px 0 12px;font-weight:700}
+  .why{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .why p{margin:0 0 10px}
+  .why p:last-child{margin-bottom:0}
+  .why b{color:var(--accent)}
+  .chip{display:inline-block;font-family:var(--mono);font-weight:800;font-size:12.5px;
+    background:#1b2a3d;border:1px solid #2b4256;color:#9ad4f8;border-radius:6px;padding:1px 8px}
+
+  table{width:100%;border-collapse:collapse;font-size:13.5px;
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  th,td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--line)}
+  th{background:var(--panel2);color:var(--muted);font-size:11.5px;font-weight:700;
+    text-transform:uppercase;letter-spacing:.05em}
+  td:not(:first-child){font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:12.5px}
+  tr:last-child td{border-bottom:0}
+  td.k{color:var(--muted);font-family:inherit}
+  .hit{color:var(--accent);font-weight:700}
+
+  ol.pit{padding-left:20px;margin:0}
+  ol.pit li{margin-bottom:9px;color:#cbd5e1;font-size:13.5px}
+  ol.pit li:last-child{margin-bottom:0}
+  ol.pit b{color:var(--txt)}
+
+  .note{background:#2b1f10;border:1px solid #55401c;border-radius:11px;padding:12px 14px;
+    font-size:12.5px;color:#f3d3a0;margin-top:16px;line-height:1.75}
+  footer{margin-top:34px;color:#5f7189;font-size:11.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>RVAエントレインメント</h1>
+  <p>右室心尖部からオーバードライブペーシングをかけ、止めた直後の応答で AT・AVNRT・AVRT を見分ける。
+     興奮波が回路のどこを通り、なぜ復帰の形と PPI が変わるのかを、回路と心内心電図を同期させて再生します。</p>
+</header>
+
+<div class="tabs" id="tabs">
+  <button data-k="at"><b>心房頻拍</b>AT — 心房内に起源</button>
+  <button data-k="avnrt"><b>房室結節リエントリー</b>AVNRT — 通常型 slow-fast</button>
+  <button data-k="avrt"><b>房室回帰性頻拍</b>AVRT — 順行性・副伝導路</button>
+</div>
+
+<div class="stage">
+  <canvas id="cv" width="1920" height="668"></canvas>
+</div>
+
+<input type="range" id="seek" min="0" max="1000" value="0" step="1" aria-label="再生位置">
+
+<div class="ctl">
+  <button class="play" id="play">一時停止</button>
+  <button id="back">最初から</button>
+  <div class="sp"></div>
+  <label>再生速度
+    <select id="rate">
+      <option value="0.12">ゆっくり</option>
+      <option value="0.25" selected>標準</option>
+      <option value="0.5">速い</option>
+      <option value="1">実時間</option>
+    </select>
+  </label>
+</div>
+
+<div class="legend">
+  <span><i style="background:var(--atr)"></i>心房の興奮（A）</span>
+  <span><i style="background:var(--his)"></i>His束（H）</span>
+  <span><i style="background:var(--ven)"></i>心室の興奮（V）</span>
+  <span><i style="background:var(--stim)"></i>ペーシング刺激</span>
+</div>
+
+<h2>この頻拍で何が起きているか</h2>
+<div class="why" id="why"></div>
+
+<h2>止めた直後の応答で見分ける</h2>
+<div style="overflow-x:auto">
+<table>
+  <thead><tr><th>指標</th><th>AT</th><th>AVNRT</th><th>AVRT（順行性）</th></tr></thead>
+  <tbody>
+    <tr><td class="k">停止後の応答</td>
+        <td class="hit">V-A-A-V</td><td>V-A-V</td><td>V-A-V</td></tr>
+    <tr><td class="k">PPI − TCL</td>
+        <td>≫ 115 ms</td><td>&gt; 115 ms</td><td class="hit">&lt; 115 ms</td></tr>
+    <tr><td class="k">補正 PPI − TCL</td>
+        <td>—</td><td>&gt; 110 ms</td><td class="hit">&lt; 110 ms</td></tr>
+    <tr><td class="k">SA − VA</td>
+        <td>—</td><td>&gt; 85 ms</td><td class="hit">&lt; 85 ms</td></tr>
+    <tr><td class="k">ΔHA</td>
+        <td>—</td><td>&gt; 0 ms</td><td class="hit">&lt; −10 ms</td></tr>
+    <tr><td class="k">心室融合</td>
+        <td>出ない</td><td>出ない</td><td class="hit">出うる</td></tr>
+    <tr><td class="k">心室は回路の一部か</td>
+        <td>いいえ</td><td>いいえ</td><td class="hit">はい</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>読み違えないために</h2>
+<ol class="pit">
+  <li><b>まずエントレインメントの成立を確認する。</b>心房が刺激周期まで加速し、かつ心房内の興奮順序が頻拍時と同一であること。
+      心房が捕捉できていなければ PPI は測っても意味がありません。</li>
+  <li><b>PPI は最終刺激からペーシング部位（RVA）の次の心室波まで。</b>他の電極で測ると値が変わります。</li>
+  <li><b>AVNRT でも偽性 V-A-A-V が出ることがあります。</b>復帰する興奮が房室結節でブロックされた場合で、
+      A-A-V に見えても AT とは限りません。</li>
+  <li><b>補正 PPI はペーシング中の房室結節の減衰伝導を差し引いたもの。</b>
+      補正PPI − TCL ＝（PPI − TCL）−（ペーシング中のAH − 頻拍中のAH）。</li>
+  <li><b>AT は VA 伝導が無いとそもそも心房を捕捉できません。</b>エントレインメント自体が成立しない場合があります。</li>
+</ol>
+
+<div class="note">
+  数値（115 ms・110 ms・85 ms・−10 ms）は EP の文献で広く使われている代表値をもとにしています。
+  このコンテナには <code>EPSとSVT 永嶋孝一.pdf</code> が無いため一次参照との突き合わせができていません。
+  NOTES.md の方針どおり、確定させる前に PDF で確認してください。カットオフ近傍の症例は
+  単独の指標で決めず、他の所見と併せて判断する前提の図です。
+</div>
+
+<footer>ループ再生します。上のタブで頻拍を切り替えると、同じ手技を別の回路で見比べられます。</footer>
+</div>
+
+<script>
+"use strict";
+/* =====================================================================
+   RVA エントレインメント アニメーション
+   心臓側の時間（ms）をそのまま持ち、再生速度をかけて描画する。
+   波形のタイミングと回路上の伝導区間は同じ時刻表から作るので、
+   2つの図は常に同期する。
+   ===================================================================== */
+
+const CV = document.getElementById('cv'), G = CV.getContext('2d');
+const W = 960, H = 334;                       // 論理サイズ（実キャンバスは2倍で描画）
+G.scale(2, 2);
+
+const C = { bg:'#0e1420', panel:'#121826', grid:'#16202e', grid2:'#22303f', line:'#2b3a4f',
+            txt:'#e5e7eb', mut:'#93a3b8', acc:'#38bdf8',
+            A:'#f6d860', Hb:'#fb923c', V:'#c084fc', S:'#f87171' };
+
+const TCL = 360, PCL = 330;
+const STIMS = [720, 1050, 1380, 1710], LAST = STIMS[STIMS.length - 1];
+
+/* ---------- 回路シェーマの座標 ---------- */
+const GEO = {
+  atrium:{x:26, y:34, w:250, h:36},
+  vent:  {x:26, y:196, w:250, h:38},
+  avn:   {x:120, y:96, w:62, h:44},
+  his:   {x1:151, y1:140, x2:151, y2:196},
+  aToAvn:{x1:151, y1:70, x2:151, y2:96},
+  ap:    {x:264, y1:70, y2:196},
+  rva:   {x:78, y:215},
+  focus: {x:66, y:52}
+};
+/* 伝導路。区間ごとに折れ線で持ち、時間で内挿して光点を走らせる */
+const P = {
+  FOCUS_AVN : [[66,52],[110,66],[145,96]],
+  A_AVN     : [[151,70],[151,96]],
+  AVN_SLOW  : [[139,98],[132,118],[139,138]],
+  AVN_FAST  : [[163,138],[170,118],[163,98]],
+  AVN_V     : [[151,140],[151,196]],
+  V_SPREAD  : [[151,215],[110,215],[78,215]],
+  V_TO_AP   : [[151,215],[220,215],[264,196]],
+  AP_UP     : [[264,196],[264,70]],
+  AP_A      : [[264,60],[210,44],[160,40]],
+  RVA_AVN   : [[78,215],[86,180],[120,150],[145,140]],
+  AVN_A     : [[151,96],[151,70]],
+  RVA_AP    : [[78,215],[180,215],[258,203]],
+  RVA_V     : [[78,215],[151,215]]
+};
+function ptAt(path, f){
+  f = Math.max(0, Math.min(1, f));
+  let tot = 0; const seg = [];
+  for(let i = 0; i < path.length - 1; i++){
+    const d = Math.hypot(path[i+1][0]-path[i][0], path[i+1][1]-path[i][1]);
+    seg.push(d); tot += d;
+  }
+  let want = f * tot;
+  for(let i = 0; i < seg.length; i++){
+    if(want <= seg[i] || i === seg.length - 1){
+      const k = seg[i] ? want / seg[i] : 0;
+      return [path[i][0] + (path[i+1][0]-path[i][0])*k,
+              path[i][1] + (path[i+1][1]-path[i][1])*k];
+    }
+    want -= seg[i];
+  }
+  return path[path.length-1];
+}
+
+/* ---------- 時刻表を作る ---------- */
+function build(kind){
+  const a = [], h = [], v = [], seg = [];
+  const S = (t0, t1, p, c) => seg.push({t0, t1, p, c});
+
+  if(kind === 'avnrt'){
+    // 通常型: 遅伝導路を下行し、速伝導路を逆行する。心室は傍観者。
+    for(let T = -TCL; T <= 720; T += TCL){
+      h.push(T); v.push(T+35); a.push(T+5);
+      S(T-250, T, 'AVN_SLOW', C.A); S(T, T+120, 'AVN_FAST', C.A);
+      S(T, T+35, 'AVN_V', C.V); S(T+35, T+80, 'V_SPREAD', C.V);
+      S(T+5, T+70, 'AVN_A', C.A);
+    }
+    for(const s of STIMS){
+      v.push(s+5); a.push(s+145);
+      S(s, s+40, 'RVA_V', C.S);
+      S(s+5, s+120, 'RVA_AVN', C.S);
+      S(s+120, s+150, 'AVN_A', C.A);
+    }
+    const ppi = TCL + 160, rv = LAST + ppi;
+    v.push(rv); h.push(rv-35); a.push(rv+5);
+    S(LAST+150, rv-35, 'AVN_SLOW', C.A);
+    S(rv-35, rv, 'AVN_V', C.V); S(rv, rv+45, 'V_SPREAD', C.V);
+    for(let k = 1; k <= 3; k++){
+      const T = rv + TCL*k;
+      h.push(T-35); v.push(T); a.push(T+5);
+      S(T-285, T-35, 'AVN_SLOW', C.A); S(T-35, T+85, 'AVN_FAST', C.A);
+      S(T-35, T, 'AVN_V', C.V); S(T, T+45, 'V_SPREAD', C.V);
+    }
+    return { a, h, v, seg, ppi, rv, end: rv + TCL*3 + 260,
+             seq:[[LAST+5,'V'],[LAST+145,'A'],[rv,'V']] };
+  }
+
+  if(kind === 'avrt'){
+    // 心房 → 房室結節 → His → 心室 → 副伝導路 → 心房。心室が回路の一部。
+    for(let T = -TCL; T <= 720; T += TCL){
+      h.push(T); v.push(T+35); a.push(T+145);
+      S(T-110, T, 'A_AVN', C.A); S(T, T+35, 'AVN_V', C.V);
+      S(T+35, T+95, 'V_TO_AP', C.V); S(T+95, T+140, 'AP_UP', C.V);
+      S(T+140, T+185, 'AP_A', C.A);
+    }
+    for(const s of STIMS){
+      v.push(s+5); a.push(s+100);
+      S(s, s+40, 'RVA_V', C.S);
+      S(s+5, s+60, 'RVA_AP', C.S);
+      S(s+60, s+95, 'AP_UP', C.S);
+      S(s+95, s+125, 'AP_A', C.A);
+    }
+    const ppi = TCL + 75, rv = LAST + ppi;
+    v.push(rv); h.push(rv-35); a.push(rv+110);
+    S(LAST+125, rv-35, 'A_AVN', C.A);
+    S(rv-35, rv, 'AVN_V', C.V); S(rv, rv+60, 'V_TO_AP', C.V);
+    S(rv+60, rv+105, 'AP_UP', C.V); S(rv+105, rv+150, 'AP_A', C.A);
+    for(let k = 1; k <= 3; k++){
+      const T = rv + TCL*k;
+      h.push(T-35); v.push(T); a.push(T+110);
+      S(T-145, T-35, 'A_AVN', C.A); S(T-35, T, 'AVN_V', C.V);
+      S(T, T+60, 'V_TO_AP', C.V); S(T+60, T+105, 'AP_UP', C.V);
+      S(T+105, T+150, 'AP_A', C.A);
+    }
+    return { a, h, v, seg, ppi, rv, end: rv + TCL*3 + 260,
+             seq:[[LAST+5,'V'],[LAST+100,'A'],[rv,'V']] };
+  }
+
+  // AT: 心房内の自動能。房室結節も心室も下流の通り道にすぎない。
+  for(let T = -TCL; T <= 720; T += TCL){
+    a.push(T); h.push(T+130); v.push(T+165);
+    S(T, T+110, 'FOCUS_AVN', C.A); S(T+110, T+165, 'AVN_V', C.V);
+    S(T+165, T+210, 'V_SPREAD', C.V);
+  }
+  for(const s of STIMS){
+    v.push(s+5); a.push(s+160);
+    S(s, s+40, 'RVA_V', C.S);
+    S(s+5, s+125, 'RVA_AVN', C.S);
+    S(s+125, s+160, 'AVN_A', C.A);
+  }
+  const a2 = LAST + 160 + TCL;            // 自動能が次に発火する心房波
+  const rv = a2 + 165, ppi = rv - LAST;
+  a.push(a2); h.push(a2+130); v.push(rv);
+  S(a2, a2+110, 'FOCUS_AVN', C.A); S(a2+110, rv, 'AVN_V', C.V);
+  S(rv, rv+45, 'V_SPREAD', C.V);
+  for(let k = 1; k <= 3; k++){
+    const T = a2 + TCL*k;
+    a.push(T); h.push(T+130); v.push(T+165);
+    S(T, T+110, 'FOCUS_AVN', C.A); S(T+110, T+165, 'AVN_V', C.V);
+    S(T+165, T+210, 'V_SPREAD', C.V);
+  }
+  return { a, h, v, seg, ppi, rv, end: a2 + TCL*3 + 300,
+           seq:[[LAST+5,'V'],[LAST+160,'A'],[a2,'A'],[rv,'V']] };
+}
+
+const META = {
+  at: { name:'心房頻拍（AT）', resp:'V-A-A-V',
+    why:[
+      '起源は<b>心房の中</b>にあり、房室結節も心室もその下流の通り道にすぎません。回路は心室を含みません。',
+      'RVA からの刺激は房室結節を<b>逆行</b>して心房に届き、自動能をリセットします。ここで初めてエントレインメントが成立します。',
+      'ペーシングを止めると、最後の刺激で生じた心室波、その逆行性の心房波、そして<b>自動能が自分のタイミングで発火する次の心房波</b>が続き、それがようやく心室へ下ります。心房波が2つ並ぶ <span class="chip">V-A-A-V</span> がこの頻拍の指紋です。',
+      'PPI は往路も復路も房室結節を通るうえ、回路が心房内にあるため<b>極端に長く</b>なります。'
+    ]},
+  avnrt: { name:'房室結節リエントリー頻拍（AVNRT）', resp:'V-A-V',
+    why:[
+      '回路は房室結節近傍の<b>遅伝導路と速伝導路</b>の間で完結しています。心室は回路に含まれない傍観者です。',
+      'RVA からの刺激は His-Purkinje を逆行して房室結節まで登り、そこで回路に入ります。心室が回路外なので<b>入口までが遠い</b>のが要点です。',
+      '止めると、心室波 → 逆行性の心房波 → 遅伝導路を下りてきた心室波、の順で <span class="chip">V-A-V</span> になります。',
+      'PPI − TCL は逆行に要した時間の分だけ延び、<b>115 ms を超える</b>のが通常です。'
+    ]},
+  avrt: { name:'房室回帰性頻拍（AVRT・順行性）', resp:'V-A-V',
+    why:[
+      '心房 → 房室結節 → His → 心室 → 副伝導路 → 心房 と大きく回ります。<b>心室が回路の一部</b>である点が他の2つと決定的に違います。',
+      'RVA は回路そのものの上に乗っているので、刺激は<b>ひと足で回路に入り</b>、副伝導路を伝って心房へ抜けます。',
+      '止めると <span class="chip">V-A-V</span>。応答の形は AVNRT と同じで、ここでは見分けられません。',
+      '見分けるのは<b>距離</b>です。ペーシング部位が回路上にあるため PPI − TCL は<b>115 ms 未満</b>と短くなります。この3つの中で心室融合が出うるのも AVRT だけです。'
+    ]}
+};
+
+let kind = 'at', D = build(kind), t = -TCL, playing = true, rate = 0.25, last = 0;
+
+/* ---------- 描画部品 ---------- */
+function rrect(x, y, w, h, r){
+  G.beginPath();
+  G.moveTo(x+r, y); G.arcTo(x+w, y, x+w, y+h, r); G.arcTo(x+w, y+h, x, y+h, r);
+  G.arcTo(x, y+h, x, y, r); G.arcTo(x, y, x+w, y, r); G.closePath();
+}
+function poly(path, col, wid, dash){
+  G.save(); G.strokeStyle = col; G.lineWidth = wid; G.lineCap = 'round'; G.lineJoin = 'round';
+  if(dash) G.setLineDash(dash);
+  G.beginPath(); G.moveTo(path[0][0], path[0][1]);
+  for(let i = 1; i < path.length; i++) G.lineTo(path[i][0], path[i][1]);
+  G.stroke(); G.restore();
+}
+function txt(s, x, y, col, size, align, weight, mono){
+  G.fillStyle = col; G.textAlign = align || 'left'; G.textBaseline = 'alphabetic';
+  G.font = (weight||'500') + ' ' + (size||11) + 'px ' +
+    (mono ? 'ui-monospace,Menlo,monospace' : '-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif');
+  G.fillText(s, x, y);
+}
+
+/* ---------- 回路シェーマ ---------- */
+function drawCircuit(){
+  G.save(); G.translate(14, 44);
+  // 心房・心室・房室結節
+  G.strokeStyle = C.line; G.lineWidth = 1.6;
+  rrect(GEO.atrium.x, GEO.atrium.y, GEO.atrium.w, GEO.atrium.h, 9); G.stroke();
+  rrect(GEO.vent.x, GEO.vent.y, GEO.vent.w, GEO.vent.h, 9); G.stroke();
+  rrect(GEO.avn.x, GEO.avn.y, GEO.avn.w, GEO.avn.h, 8); G.stroke();
+  txt('心房', GEO.atrium.x+16, GEO.atrium.y+23, C.mut, 12, 'left', '700');
+  txt('心室', GEO.vent.x+16, GEO.vent.y+24, C.mut, 12, 'left', '700');
+  txt('AVN', GEO.avn.x+GEO.avn.w/2, GEO.avn.y+27, C.mut, 11, 'center', '700');
+  poly([[151,70],[151,96]], C.line, 1.6);
+  poly([[151,140],[151,196]], C.line, 1.6);
+  txt('His', 158, 168, C.mut, 10, 'left', '600');
+
+  // 回路ごとの固有パーツ
+  if(kind === 'avrt'){
+    poly([[GEO.ap.x, GEO.ap.y1],[GEO.ap.x, GEO.ap.y2]], C.acc, 3.2);
+    txt('副伝導路', GEO.ap.x+7, 130, C.acc, 10, 'left', '700');
+    txt('心室が回路の一部', GEO.ap.x+7, 144, C.mut, 9, 'left', '600');
+  }
+  if(kind === 'avnrt'){
+    poly(P.AVN_SLOW, '#3c5b7a', 2.8); poly(P.AVN_FAST, '#3c5b7a', 2.8);
+    txt('遅', 128, 122, C.mut, 9.5, 'center', '700');
+    txt('速', 174, 122, C.mut, 9.5, 'center', '700');
+    poly([[151,140],[151,196]], '#233247', 1.4, [4,4]);
+    txt('心室は傍観者', 190, 186, C.mut, 9.5, 'left', '600');
+  }
+  if(kind === 'at'){
+    G.strokeStyle = C.A; G.lineWidth = 2;
+    G.beginPath(); G.arc(GEO.focus.x, GEO.focus.y, 9, 0, 7); G.stroke();
+    G.fillStyle = C.A; G.beginPath(); G.arc(GEO.focus.x, GEO.focus.y, 3.5, 0, 7); G.fill();
+    txt('自動能', GEO.focus.x, GEO.focus.y-15, C.A, 10, 'center', '700');
+  }
+  // ペーシング部位
+  G.fillStyle = C.S; G.beginPath(); G.arc(GEO.rva.x, GEO.rva.y, 6.5, 0, 7); G.fill();
+  txt('RVA', GEO.rva.x, GEO.rva.y+22, C.S, 10.5, 'center', '800', true);
+
+  // 走っている興奮波
+  for(const s of D.seg){
+    if(t < s.t0 || t > s.t1) continue;
+    const f = (t - s.t0) / Math.max(1, s.t1 - s.t0);
+    const [x, y] = ptAt(P[s.p], f);
+    G.save();
+    G.shadowColor = s.c; G.shadowBlur = 14;
+    G.fillStyle = s.c; G.beginPath(); G.arc(x, y, 5.4, 0, 7); G.fill();
+    G.restore();
+  }
+  G.restore();
+}
+
+/* ---------- 心内心電図 ---------- */
+const TR = { x:330, y:44, w:614, h:250, scale:0.176 };   // scale: px/ms
+const CHAN = [ {n:'HRA', y:36,  c:C.A}, {n:'His', y:96, c:C.Hb},
+               {n:'RVA', y:158, c:C.V}, {n:'Stim', y:212, c:C.S} ];
+const t2x = ms => TR.x + 66 + (ms + TCL) * TR.scale;
+
+function spike(ms, y, amp, col){
+  const x = t2x(ms), d = 3.4;
+  G.save(); G.strokeStyle = col; G.lineWidth = 1.8; G.lineJoin = 'round';
+  G.beginPath();
+  G.moveTo(x-d, y); G.lineTo(x-d*0.35, y-amp); G.lineTo(x+d*0.25, y+amp*0.55); G.lineTo(x+d, y);
+  G.stroke(); G.restore();
+}
+function drawTracing(){
+  G.save(); G.translate(0, TR.y);
+  // 方眼
+  G.strokeStyle = C.grid; G.lineWidth = 1;
+  for(let ms = -TCL; ms <= D.end; ms += 200){
+    const x = t2x(ms); if(x > TR.x + TR.w) break;
+    G.strokeStyle = (ms % 1000 === 0) ? C.grid2 : C.grid;
+    G.beginPath(); G.moveTo(x, 12); G.lineTo(x, TR.h - 20); G.stroke();
+  }
+  // チャンネル
+  for(const ch of CHAN){
+    G.strokeStyle = C.line; G.lineWidth = 1;
+    G.beginPath(); G.moveTo(TR.x + 66, ch.y); G.lineTo(TR.x + TR.w, ch.y); G.stroke();
+    txt(ch.n, TR.x + 58, ch.y + 4, ch.c, 11, 'right', '700', true);
+  }
+  // 現在時刻までの波形だけを描く（記録紙が流れていく見え方）
+  const vis = ms => ms <= t && t2x(ms) <= TR.x + TR.w;
+  for(const ms of D.a) if(vis(ms)){ spike(ms, 36, 12, C.A); spike(ms, 96, 8, C.A); }
+  for(const ms of D.h) if(vis(ms))  spike(ms, 96, 6, C.Hb);
+  for(const ms of D.v) if(vis(ms)){ spike(ms, 158, 16, C.V); spike(ms, 96, 9, C.V); }
+  for(const ms of STIMS) if(vis(ms)){
+    const x = t2x(ms);
+    G.strokeStyle = C.S; G.lineWidth = 1.8;
+    G.beginPath(); G.moveTo(x, 212-13); G.lineTo(x, 212+5); G.stroke();
+    G.fillStyle = C.S; G.beginPath(); G.arc(x, 212-16, 2.4, 0, 7); G.fill();
+  }
+  // 復帰パターンの目印
+  for(const [ms, nm] of D.seq){
+    if(!vis(ms)) continue;
+    const x = t2x(ms), col = nm === 'V' ? C.V : C.A, yy = nm === 'V' ? 128 : 12;
+    G.fillStyle = col; G.beginPath(); G.arc(x, yy, 8.5, 0, 7); G.fill();
+    txt(nm, x, yy + 4, '#0b0f16', 11, 'center', '800', true);
+  }
+  // PPI キャリパー（次の心室波まで描き終えたら出す）
+  if(t >= D.rv){
+    const x1 = t2x(LAST), x2 = t2x(D.rv), yc = TR.h - 32;
+    poly([[x1, 224],[x1, yc]], C.acc, 1, [3,3]);
+    poly([[x2, 176],[x2, yc]], C.acc, 1, [3,3]);
+    poly([[x1, yc],[x2, yc]], C.acc, 1.6);
+    poly([[x1, yc-5],[x1, yc+5]], C.acc, 1.8);
+    poly([[x2, yc-5],[x2, yc+5]], C.acc, 1.8);
+    const mid = (x1 + x2) / 2;
+    G.fillStyle = C.bg; G.fillRect(mid - 62, yc - 9, 124, 17);
+    txt('PPI − TCL = ' + (D.ppi - TCL) + ' ms', mid, yc + 4, C.acc, 11, 'center', '800', true);
+  }
+  // 再生位置
+  const px = t2x(t);
+  if(px >= TR.x + 66 && px <= TR.x + TR.w){
+    poly([[px, 8],[px, TR.h - 20]], 'rgba(56,189,248,.5)', 1.2);
+  }
+  G.restore();
+}
+
+/* ---------- 見出しと現在の状況 ---------- */
+function drawHUD(){
+  const m = META[kind];
+  txt(m.name, 14, 24, C.txt, 15, 'left', '800');
+
+  let phase = '頻拍中', pc = C.mut;
+  if(t >= STIMS[0] - 60 && t <= LAST + 40){ phase = 'RVAペーシング（エントレインメント）'; pc = C.S; }
+  else if(t > LAST + 40 && t < D.rv){ phase = '停止直後 — 復帰を待つ'; pc = C.acc; }
+  else if(t >= D.rv){ phase = '頻拍が再開'; pc = C.mut; }
+  txt(phase, TR.x + 66, 24, pc, 12, 'left', '700');
+
+  // 停止後の応答を右上に出す
+  if(t > LAST + 40){
+    const done = D.seq.filter(s => s[0] <= t).map(s => s[1]).join('-');
+    if(done){
+      const full = D.seq.length === done.split('-').length;
+      txt('応答  ' + done, 944, 24, full ? C.acc : C.mut, 13, 'right', '800', true);
+    }
+  }
+  // 経過時間
+  txt((t < 0 ? 0 : Math.round(t)) + ' ms', 944, H - 10, '#4d5f75', 10.5, 'right', '600', true);
+  txt('TCL ' + TCL + ' ms  /  ペーシング周期 ' + PCL + ' ms', 14, H - 10, '#4d5f75', 10.5, 'left', '600', true);
+}
+
+function frame(){
+  G.fillStyle = C.bg; G.fillRect(0, 0, W, H);
+  drawCircuit(); drawTracing(); drawHUD();
+}
+
+/* ---------- 再生ループ ---------- */
+function tick(now){
+  if(!last) last = now;
+  const dt = Math.min(64, now - last); last = now;
+  if(playing){
+    t += dt * rate;
+    if(t > D.end){ t = -TCL; }
+    document.getElementById('seek').value =
+      Math.round((t + TCL) / (D.end + TCL) * 1000);
+  }
+  frame();
+  requestAnimationFrame(tick);
+}
+
+/* ---------- 操作 ---------- */
+function setKind(k){
+  kind = k; D = build(k); t = -TCL;
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.k === k));
+  const m = META[k];
+  document.getElementById('why').innerHTML = m.why.map(p => '<p>' + p + '</p>').join('');
+}
+document.getElementById('tabs').addEventListener('click', e => {
+  const b = e.target.closest('button[data-k]'); if(b) setKind(b.dataset.k);
+});
+document.getElementById('play').addEventListener('click', e => {
+  playing = !playing; e.target.textContent = playing ? '一時停止' : '再生';
+});
+document.getElementById('back').addEventListener('click', () => { t = -TCL; });
+document.getElementById('rate').addEventListener('change', e => { rate = Number(e.target.value); });
+document.getElementById('seek').addEventListener('input', e => {
+  t = Number(e.target.value) / 1000 * (D.end + TCL) - TCL;
+  if(playing){ playing = false; document.getElementById('play').textContent = '再生'; }
+});
+
+setKind('at');
+
+/* URL で頻拍と時刻を指定できる。動画への書き出しや、
+   特定の瞬間を見せたい時のリンクに使う。
+     ?k=avrt&t=1900        その時刻で停止して表示
+     ?k=avrt&t=1900&still=1 アニメーションを回さず1コマだけ描く  */
+const QS = new URLSearchParams(location.search);
+if(QS.has('k') && META[QS.get('k')]) setKind(QS.get('k'));
+if(QS.has('t')){ t = Number(QS.get('t')); playing = false;
+                 document.getElementById('play').textContent = '再生'; }
+if(QS.has('still')){ playing = false; frame(); }
+else requestAnimationFrame(tick);
+</script>
+</body>
+</html>
