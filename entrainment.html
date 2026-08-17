@@ -100,7 +100,7 @@
 </div>
 
 <div class="stage">
-  <canvas id="cv" width="1920" height="668"></canvas>
+  <canvas id="cv" width="1920" height="960"></canvas>
 </div>
 
 <input type="range" id="seek" min="0" max="1000" value="0" step="1" aria-label="再生位置">
@@ -109,6 +109,14 @@
   <button class="play" id="play">一時停止</button>
   <button id="back">最初から</button>
   <div class="sp"></div>
+  <label id="pclWrap">ペーシング周期
+    <select id="pcl">
+      <option value="320">320 ms（ゆるい）</option>
+      <option value="300" selected>300 ms</option>
+      <option value="240">240 ms</option>
+      <option value="210">210 ms（強い）</option>
+    </select>
+  </label>
   <label>再生速度
     <select id="rate">
       <option value="0.12">ゆっくり</option>
@@ -185,7 +193,7 @@
    ===================================================================== */
 
 const CV = document.getElementById('cv'), G = CV.getContext('2d');
-const W = 960, H = 334;                       // 論理サイズ（実キャンバスは2倍で描画）
+const W = 960, H = 480;                       // 論理サイズ（実キャンバスは2倍で描画）
 G.scale(2, 2);
 
 const C = { bg:'#0e1420', panel:'#121826', grid:'#16202e', grid2:'#22303f', line:'#2b3a4f',
@@ -320,10 +328,11 @@ function build(kind){
      衝突点は1拍ごとに心房側へせり上がり、最後に心房へ届いて回路を捕捉する。
      捕捉されるまで心房は自分の周期で打ち続け、捕捉された瞬間に
      ペーシング周期へ引き込まれる — これがエントレインメントの成立。 */
-  const PCLat = 300;                       // 頻拍周期360msに対するオーバードライブ
+  const PCLat = atPCL;                     // 頻拍周期360msに対するオーバードライブ
   const LEAD = 30, ANTE = 135, RETRO = 160;// 軸に入るまで / 順行の軸通過 / 逆行の軸通過
+  const ARP = 190;                         // 心房の不応期。これより早く届いても捕捉できない
   const stims = [];
-  for(let x = 760; x <= 2560; x += PCLat) stims.push(x);
+  for(let x = 760; x <= 760 + PCLat*6; x += PCLat) stims.push(x);
   const lastS = stims[stims.length - 1];
 
   const axis = [], coll = [], collided = new Set(), pacedA = new Set();
@@ -340,15 +349,22 @@ function build(kind){
       A.push(r1); pacedA.add(r1); coll.push({t:r1, u:0, cap:true});
       continue;
     }
-    while(nat + LEAD < r1){ A.push(nat); nat += TCL; } // 未捕捉なら頻拍は自前の周期で進む
+    while(nat < r1){ A.push(nat); nat += TCL; }        // 未捕捉なら頻拍は自前の周期で進む
     const hit = A.find(x => !collided.has(x) && x+LEAD+ANTE > r0 && x+LEAD < r1);
-    if(hit !== undefined){
-      const ta0 = hit + LEAD;
-      const tc = (1 + r0/RETRO + ta0/ANTE) / (1/ANTE + 1/RETRO);
-      const u  = (tc - ta0) / ANTE;
-      axis.push({t0:ta0, t1:tc, u0:0, u1:u, c:C.A});  // 順行波（途中で消える）
-      axis.push({t0:r0,  t1:tc, u0:1, u1:u, c:C.S});  // 逆行波（途中で消える）
-      coll.push({t:tc, u, cap:false}); collided.add(hit);
+    // 心房が不応期のうちは、逆行波が届いても捕捉できない
+    const excitable = (r1 - A[A.length-1]) >= ARP;
+    if(hit !== undefined || !excitable){
+      if(hit === undefined){                         // 不応期に阻まれて心房に入れない
+        axis.push({t0:r0, t1:r1, u0:1, u1:0, c:C.S});
+        coll.push({t:r1, u:0, cap:false});
+      }else{
+        const ta0 = hit + LEAD;
+        const tc = (1 + r0/RETRO + ta0/ANTE) / (1/ANTE + 1/RETRO);
+        const u  = (tc - ta0) / ANTE;
+        axis.push({t0:ta0, t1:tc, u0:0, u1:u, c:C.A});  // 順行波（途中で消える）
+        axis.push({t0:r0,  t1:tc, u0:1, u1:u, c:C.S});  // 逆行波（途中で消える）
+        coll.push({t:tc, u, cap:false}); collided.add(hit);
+      }
     }else{                                            // 順行波がいない → 心房に到達し捕捉
       axis.push({t0:r0, t1:r1, u0:1, u1:0, c:C.S});
       A.push(r1); pacedA.add(r1); coll.push({t:r1, u:0, cap:true}); capAt = r1;
@@ -439,6 +455,7 @@ const META = {
     ]}
 };
 
+let atPCL = 300;
 let kind = 'at', D = build(kind), t = -TCL, playing = true, rate = 0.25, last = 0;
 
 /* ---------- 描画部品 ---------- */
@@ -655,13 +672,89 @@ function drawHUD(){
     }
   }
   // 経過時間
-  txt((t < 0 ? 0 : Math.round(t)) + ' ms', 944, H - 10, '#4d5f75', 10.5, 'right', '600', true);
-  txt('TCL ' + TCL + ' ms  /  ペーシング周期 ' + (D.pcl || PCL) + ' ms', 14, H - 10, '#4d5f75', 10.5, 'left', '600', true);
+  txt((t < 0 ? 0 : Math.round(t)) + ' ms', 944, H - 8, '#4d5f75', 10.5, 'right', '600', true);
+  txt('TCL ' + TCL + ' ms  /  ペーシング周期 ' + (D.pcl || PCL) + ' ms', 14, H - 8, '#4d5f75', 10.5, 'left', '600', true);
+}
+
+/* ---------- 輪の拡大図 ----------
+   解剖図の輪は小さくて、順行・逆行の分裂と衝突が見えないので、
+   同じ輪をここで拡大して描く。時刻は本体と共通なので動きは完全に一致する。 */
+const INS = { x:172, y:392, r:64 };
+const insPt = th => [INS.x + Math.cos(th*2*Math.PI)*INS.r,
+                     INS.y + Math.sin(th*2*Math.PI)*INS.r];
+
+function drawInset(){
+  if(kind !== 'at' || !D.loopW) return;
+  txt('マイクロリエントリーの拡大図', 14, 322, C.mut, 11, 'left', '700');
+
+  // 輪
+  G.strokeStyle = '#2b3a4f'; G.lineWidth = 9;
+  G.beginPath(); G.arc(INS.x, INS.y, INS.r, 0, 7); G.stroke();
+
+  // 頻拍の向き（輪の外側、左上に逃がす）
+  G.strokeStyle = '#3c5b7a'; G.lineWidth = 1.6;
+  G.beginPath(); G.arc(INS.x, INS.y, INS.r + 16, Math.PI*1.12, Math.PI*1.42); G.stroke();
+  const tip = [INS.x + Math.cos(Math.PI*1.42)*(INS.r+16), INS.y + Math.sin(Math.PI*1.42)*(INS.r+16)];
+  G.fillStyle = '#3c5b7a';
+  G.beginPath(); G.moveTo(tip[0]-1, tip[1]-6); G.lineTo(tip[0]+6, tip[1]-1);
+  G.lineTo(tip[0]-4, tip[1]+2); G.closePath(); G.fill();
+  txt('頻拍の向き', INS.x - INS.r - 20, INS.y - 34, C.mut, 9.5, 'right', '600');
+
+  // 入口（＝心房へ出る点）
+  const ep = insPt(0);
+  G.fillStyle = '#0e1420'; G.beginPath(); G.arc(ep[0], ep[1], 9, 0, 7); G.fill();
+  G.strokeStyle = C.S; G.lineWidth = 2; G.beginPath(); G.arc(ep[0], ep[1], 7, 0, 7); G.stroke();
+  txt('ペーシングが入る点', ep[0] + 16, ep[1] - 5, C.S, 10, 'left', '700');
+  txt('心房へ出る点でもある', ep[0] + 16, ep[1] + 9, C.mut, 9, 'left', '600');
+
+  // 逆行側が進んだ範囲を弧で残す
+  if(D.loopColl) for(const lc of D.loopColl){
+    if(t < lc.t) continue;
+    G.save(); G.strokeStyle = 'rgba(255,154,154,.32)'; G.lineWidth = 9;
+    G.beginPath(); G.arc(INS.x, INS.y, INS.r, lc.th*2*Math.PI, 2*Math.PI); G.stroke(); G.restore();
+  }
+
+  // 興奮
+  for(const w of D.loopW){
+    if(t < w.t0 || t > w.t1) continue;
+    const f = (t - w.t0) / Math.max(1, w.t1 - w.t0);
+    const [px, py] = insPt(w.th0 + (w.th1 - w.th0) * f);
+    G.save(); G.shadowColor = w.c; G.shadowBlur = 16; G.fillStyle = w.c;
+    G.beginPath(); G.arc(px, py, 7.5, 0, 7); G.fill(); G.restore();
+  }
+  // 正面衝突
+  if(D.loopColl) for(const lc of D.loopColl){
+    const age = t - lc.t;
+    if(age < 0 || age > 320) continue;
+    const [px, py] = insPt(lc.th), k = 1 - age/320;
+    G.save(); G.globalAlpha = k; G.strokeStyle = '#ff9a9a'; G.lineWidth = 2.4;
+    G.beginPath(); G.arc(px, py, 6 + (1-k)*20, 0, 7); G.stroke(); G.restore();
+    if(age < 900) txt('正面衝突', px, py - 16, '#ff9a9a', 10.5, 'center', '800');
+  }
+
+  // 数値の読み
+  const depth = (1 - (D.pcl || 300) / TCL) / 2;
+  const X0 = 360;
+  txt('いま輪の中で起きていること', X0, 322, C.mut, 11, 'left', '700');
+  const rows = [
+    ['頻拍周期 TCL', TCL + ' ms'],
+    ['ペーシング周期 PCL', (D.pcl || 300) + ' ms'],
+    ['逆行側が進める割合', '(1 − PCL/TCL) ÷ 2 = ' + (depth*100).toFixed(1) + ' %'],
+    ['衝突点', 'θ = ' + (1 - depth).toFixed(3)],
+    ['順行側が到達する割合', ((1 - depth)*100).toFixed(1) + ' %（1周できない）']
+  ];
+  rows.forEach((r, i) => {
+    const y = 352 + i*24;
+    txt(r[0], X0, y, C.mut, 11, 'left', '600');
+    txt(r[1], X0 + 200, y, i >= 2 ? C.acc : C.txt, 11.5, 'left', '700', true);
+  });
+  txt('PCL を短くするほど、逆行側は輪の奥まで入り込んでから衝突する。',
+      X0, 352 + 5*24 + 6, '#69788d', 10.5, 'left', '600');
 }
 
 function frame(){
   G.fillStyle = C.bg; G.fillRect(0, 0, W, H);
-  drawCircuit(); drawTracing(); drawHUD();
+  drawCircuit(); drawTracing(); drawInset(); drawHUD();
 }
 
 /* ---------- 再生ループ ---------- */
@@ -684,6 +777,7 @@ function setKind(k){
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.k === k));
   const m = META[k];
   document.getElementById('why').innerHTML = m.why.map(p => '<p>' + p + '</p>').join('');
+  document.getElementById('pclWrap').style.display = (k === 'at') ? '' : 'none';
 }
 document.getElementById('tabs').addEventListener('click', e => {
   const b = e.target.closest('button[data-k]'); if(b) setKind(b.dataset.k);
@@ -693,6 +787,9 @@ document.getElementById('play').addEventListener('click', e => {
 });
 document.getElementById('back').addEventListener('click', () => { t = -TCL; });
 document.getElementById('rate').addEventListener('change', e => { rate = Number(e.target.value); });
+document.getElementById('pcl').addEventListener('change', e => {
+  atPCL = Number(e.target.value); setKind('at'); t = -TCL;
+});
 document.getElementById('seek').addEventListener('input', e => {
   t = Number(e.target.value) / 1000 * (D.end + TCL) - TCL;
   if(playing){ playing = false; document.getElementById('play').textContent = '再生'; }
@@ -705,6 +802,9 @@ setKind('at');
      ?k=avrt&t=1900        その時刻で停止して表示
      ?k=avrt&t=1900&still=1 アニメーションを回さず1コマだけ描く  */
 const QS = new URLSearchParams(location.search);
+if(QS.has('pcl')){ atPCL = Number(QS.get('pcl'));
+  const sel = document.getElementById('pcl');
+  if([...sel.options].some(o => Number(o.value) === atPCL)) sel.value = String(atPCL); }
 if(QS.has('k') && META[QS.get('k')]) setKind(QS.get('k'));
 if(QS.has('t')){ t = Number(QS.get('t')); playing = false;
                  document.getElementById('play').textContent = '再生'; }
