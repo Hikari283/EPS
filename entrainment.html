@@ -228,7 +228,7 @@ const P = {
 const AX = { x:151, y0:70, y1:215 };
 const axisPt = u => [AX.x, AX.y0 + u * (AX.y1 - AX.y0)];
 const U_HIS  = (140 - 70) / (215 - 70);
-const LOOP   = { x:98, y:52, r:13 };
+const LOOP   = { x:96, y:52, r:17 };
 function ptAt(path, f){
   f = Math.max(0, Math.min(1, f));
   let tot = 0; const seg = [];
@@ -371,6 +371,27 @@ function build(kind){
   }
   A.sort((x, y) => x - y);
   for(const x of A) a.push(x);
+
+  /* 輪の中で何が起きているか。
+     捕捉のたびに、入ってきた興奮は入口で順行・逆行の2つに分かれる。
+     逆行側は回っていた興奮と正面衝突して互いに消え、
+     順行側が回路を引き継ぐ ＝ 連続的リセット。これがエントレインメントの正体。
+     順行側は次の刺激に消されるので1周を完走できない。
+     最後の1発だけが完走し、そのぶん停止後の間隔が頻拍周期に戻る。 */
+  const loopW = [], loopColl = [];
+  for(let i = 0; i < A.length - 1; i++){
+    const dt = A[i+1] - A[i];
+    if(dt >= TCL - 1){
+      loopW.push({t0:A[i], t1:A[i]+TCL, th0:0, th1:1, c:C.A});     // 完走
+    }else{
+      const tx = A[i] + (dt + TCL)/2, thx = (dt + TCL)/(2*TCL);
+      loopW.push({t0:A[i],   t1:tx, th0:0, th1:thx, c:C.A});       // 回っていた興奮（順行）
+      loopW.push({t0:A[i+1], t1:tx, th0:1, th1:thx, c:C.S});       // 入ってきた興奮の逆行側
+      loopColl.push({t:tx, th:thx});
+    }
+  }
+  const tailA = A[A.length-1];
+  loopW.push({t0:tailA, t1:tailA+TCL, th0:0, th1:1, c:C.A});
   // His電位は軸を横切った時刻から導く。衝突点がHisを越えると順行→逆行に変わる。
   for(const sg of axis){
     const lo = Math.min(sg.u0, sg.u1), hi = Math.max(sg.u0, sg.u1);
@@ -378,7 +399,7 @@ function build(kind){
       h.push(sg.t0 + (U_HIS - sg.u0) / (sg.u1 - sg.u0) * (sg.t1 - sg.t0));
     }
   }
-  return { a, h, v, seg, axis, coll, loop:A, cap:capAt, stims, last:lastS, pcl:PCLat,
+  return { a, h, v, seg, axis, coll, loopW, loopColl, loop:A, cap:capAt, stims, last:lastS, pcl:PCLat,
            ppi: rv - lastS, rv, end: rvA + TCL*2 + 320,
            seq:[[lastS+5,'V'],[lastA,'A'],[rvA,'A'],[rv,'V']] };
 }
@@ -389,8 +410,10 @@ const META = {
       '回路は<b>心房の中で完結した小さなリエントリー</b>です。房室結節も心室も、その下流の通り道にすぎません。',
       '心室からオーバードライブをかけても、<b>最初の数拍は心房を捕捉できません</b>。逆行してきた興奮は、頻拍が下ろしてくる順行波と房室伝導路の途中でぶつかり、互いに消えてしまうからです。',
       'ペーシング周期のほうが短いので、逆行波は1拍ごとに早いタイミングで到達し、<b>衝突点は少しずつ心房側へせり上がって</b>いきます。図の赤い横線が、その足跡です。',
-      'ついに衝突点が心房に達すると回路が捕捉され、心房はそれまでの自前の周期を捨てて<b>ペーシング周期に引き込まれます</b>。ここで初めてエントレインメントが成立します。',
-      '止めると、最後の刺激による心室波、その逆行性の心房波、そして<b>回路が自分の周期で打つ次の心房波</b>が続き、それがようやく心室へ下ります。心房波が2つ並ぶ <span class="chip">V-A-A-V</span> がこの頻拍の指紋です。'
+      'ついに衝突点が心房に達すると、興奮は輪の中まで入り込みます。そして入口で<b>2つに分裂</b>します。頻拍と同じ向きに進む<b>順行側</b>と、逆向きに進む<b>逆行側</b>です。',
+      '逆行側は、回っていた元の興奮と<b>正面衝突して互いに消えます</b>。生き残った順行側がそのまま回路を引き継ぎ、次の頻拍波になります。これが<b>リセット</b>で、毎拍これが起き続けている状態が「エントレインメント」です。',
+      'このとき順行側は<b>1周を完走できません</b>。91.7% まで進んだところで、次の刺激が送り込んだ逆行側に消されるからです。輪はペーシング周期に引き込まれたまま回り続けます。',
+      'ペーシングを止めると、最後に生き残った順行側だけは<b>消される相手がいないので1周を完走</b>します。だから停止後の心房間隔は頻拍周期に戻り、そのあと心室へ下ります。心房波が2つ並ぶ <span class="chip">V-A-A-V</span> になるのはこのためです。'
     ]},
   avnrt: { name:'房室結節リエントリー頻拍（AVNRT）', resp:'V-A-V',
     why:[
@@ -465,10 +488,26 @@ function drawCircuit(){
     G.strokeStyle = '#3c5b7a'; G.lineWidth = 2.6;
     G.beginPath(); G.arc(LOOP.x, LOOP.y, LOOP.r, 0, 7); G.stroke();
     txt('マイクロリエントリー', LOOP.x + 6, LOOP.y - 20, C.A, 9, 'center', '700');
-    const ang = loopAngle(t);
-    const lx = LOOP.x + Math.cos(ang)*LOOP.r, ly = LOOP.y + Math.sin(ang)*LOOP.r;
-    G.save(); G.shadowColor = C.A; G.shadowBlur = 12; G.fillStyle = C.A;
-    G.beginPath(); G.arc(lx, ly, 4.6, 0, 7); G.fill(); G.restore();
+    // 入口（ここで順行と逆行に分かれる）
+    const ep = loopPt(0);
+    G.strokeStyle = '#4a6785'; G.lineWidth = 1.4;
+    G.beginPath(); G.arc(ep[0], ep[1], 3.2, 0, 7); G.stroke();
+    // 輪を回る興奮（順行＝黄、入ってきた側の逆行＝赤）
+    if(D.loopW) for(const w of D.loopW){
+      if(t < w.t0 || t > w.t1) continue;
+      const f = (t - w.t0) / Math.max(1, w.t1 - w.t0);
+      const [px, py] = loopPt(w.th0 + (w.th1 - w.th0) * f);
+      G.save(); G.shadowColor = w.c; G.shadowBlur = 12; G.fillStyle = w.c;
+      G.beginPath(); G.arc(px, py, 4.8, 0, 7); G.fill(); G.restore();
+    }
+    // 輪の中での正面衝突
+    if(D.loopColl) for(const lc of D.loopColl){
+      const age = t - lc.t;
+      if(age < 0 || age > 260) continue;
+      const [px, py] = loopPt(lc.th), k = 1 - age/260;
+      G.save(); G.globalAlpha = k; G.strokeStyle = '#ff9a9a'; G.lineWidth = 2;
+      G.beginPath(); G.arc(px, py, 4 + (1-k)*11, 0, 7); G.stroke(); G.restore();
+    }
     poly([[LOOP.x+LOOP.r, LOOP.y],[132, 60],[AX.x, AX.y0]], '#2b3a4f', 1.4);
     poly([[AX.x, 196],[AX.x, AX.y1]], '#233247', 1.6);   // 軸を心室の高さまで延ばす
   }
@@ -514,15 +553,11 @@ function drawCircuit(){
   G.restore();
 }
 
-/* マイクロリエントリーの回転角。心房興奮の間隔から求めるので、
-   捕捉されて周期が縮むと回転もそのまま速くなる。 */
-function loopAngle(tt){
-  const L = D.loop; if(!L) return -Math.PI/2;
-  for(let i = 0; i < L.length - 1; i++){
-    if(tt >= L[i] && tt < L[i+1])
-      return -Math.PI/2 + 2*Math.PI * (tt - L[i]) / (L[i+1] - L[i]);
-  }
-  return -Math.PI/2;
+/* 輪の上の座標。th は周回数（0 が入口、1 で1周）。
+   入口を右端に置き、時計回りが頻拍の向き。逆行側は反時計回りに戻る。 */
+function loopPt(th){
+  const ang = th * 2 * Math.PI;
+  return [LOOP.x + Math.cos(ang)*LOOP.r, LOOP.y + Math.sin(ang)*LOOP.r];
 }
 
 /* ---------- 心内心電図 ---------- */
