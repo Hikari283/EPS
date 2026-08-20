@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CIED遠隔モニタリング管理システム — 画面モックアップ</title>
+<style>
+:root{
+  --bg:#f5f6f8; --panel:#fff; --ink:#1c2430; --muted:#6b7684; --line:#dfe3e8;
+  --accent:#1f6feb; --accent-soft:#e8f0fe;
+  --ok:#1a7f4b; --ok-bg:#e7f6ee;
+  --warn:#9a6400; --warn-bg:#fff5dd;
+  --bad:#b3261e; --bad-bg:#fdeceb;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#161a1f; --panel:#1e242b; --ink:#e6eaef; --muted:#98a2ad; --line:#313a44;
+    --accent:#5b9bff; --accent-soft:#1d2b45;
+    --ok:#5fd39a; --ok-bg:#14301f;
+    --warn:#ecb64b; --warn-bg:#3a2e12;
+    --bad:#ff8078; --bad-bg:#3d1d1a;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic UI",sans-serif;
+  background:var(--bg);color:var(--ink);font-size:14px;line-height:1.6}
+.note{background:var(--warn-bg);color:var(--warn);padding:10px 18px;font-size:12.5px;
+  border-bottom:1px solid var(--line);font-weight:600}
+
+/* ---- app chrome ---- */
+header{background:var(--panel);border-bottom:1px solid var(--line);padding:12px 18px;
+  display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.logo{font-weight:700;font-size:15px;letter-spacing:.02em}
+.offline{margin-left:auto;font-size:12px;color:var(--ok);background:var(--ok-bg);
+  padding:3px 10px;border-radius:99px;font-weight:600;white-space:nowrap}
+nav{display:flex;gap:2px;padding:0 18px;background:var(--panel);border-bottom:1px solid var(--line);
+  overflow-x:auto}
+nav button{appearance:none;background:none;border:0;border-bottom:2px solid transparent;
+  padding:11px 16px;font:inherit;font-size:13.5px;color:var(--muted);cursor:pointer;white-space:nowrap}
+nav button[aria-selected=true]{color:var(--accent);border-bottom-color:var(--accent);font-weight:700}
+main{padding:20px;max-width:1280px;margin:0 auto}
+section[hidden]{display:none}
+h2{font-size:16px;margin:0 0 4px}
+.sub{color:var(--muted);font-size:12.5px;margin:0 0 18px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;margin-bottom:16px}
+
+/* ---- import ---- */
+.drop{border:2px dashed var(--line);border-radius:12px;padding:38px 20px;text-align:center;
+  background:var(--panel)}
+.drop strong{display:block;font-size:15px;margin-bottom:6px}
+.drop span{color:var(--muted);font-size:12.5px}
+.btn{appearance:none;border:1px solid var(--accent);background:var(--accent);color:#fff;
+  padding:8px 18px;border-radius:7px;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--accent)}
+.btn.small{padding:4px 12px;font-size:12px}
+.stats{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0}
+.stat{flex:1;min-width:130px;background:var(--panel);border:1px solid var(--line);
+  border-radius:10px;padding:14px 16px}
+.stat b{display:block;font-size:24px;line-height:1.2}
+.stat span{color:var(--muted);font-size:12px}
+.stat.ok b{color:var(--ok)} .stat.warn b{color:var(--warn)} .stat.bad b{color:var(--bad)}
+
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{color:var(--muted);font-weight:600;font-size:12px;white-space:nowrap}
+.tbl-wrap{overflow-x:auto}
+.pill{display:inline-block;padding:2px 9px;border-radius:99px;font-size:11.5px;font-weight:700;white-space:nowrap}
+.pill.ok{background:var(--ok-bg);color:var(--ok)}
+.pill.warn{background:var(--warn-bg);color:var(--warn)}
+.pill.bad{background:var(--bad-bg);color:var(--bad)}
+.pill.dim{background:var(--line);color:var(--muted)}
+
+/* ---- verify screen ---- */
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:16px}
+@media (max-width:940px){.split{grid-template-columns:1fr}}
+.pdf{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:0;overflow:hidden}
+.pdf-bar{padding:9px 14px;border-bottom:1px solid var(--line);font-size:12px;color:var(--muted);
+  display:flex;align-items:center;gap:10px}
+.paper{background:#fff;color:#222;margin:14px;padding:18px 20px;border:1px solid #e2e2e2;
+  border-radius:4px;font-size:11.5px;line-height:1.75;max-height:560px;overflow:auto}
+.paper h4{margin:0 0 2px;font-size:13px}
+.paper .brand{color:#888;font-size:10px;margin-bottom:12px}
+.paper .row{display:flex;gap:8px;border-bottom:1px dotted #e5e5e5;padding:2.5px 0}
+.paper .lb{width:44%;color:#555;flex-shrink:0}
+.paper .vl{font-weight:600}
+.paper .sec{margin:12px 0 4px;font-weight:700;font-size:11.5px;background:#f0f0f0;padding:2px 6px}
+.hl{background:#ffe680;outline:2px solid #f0b400;border-radius:3px;
+  animation:flash .5s ease}
+@keyframes flash{from{background:#ffb300}to{background:#ffe680}}
+
+.fields{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.fields-bar{padding:9px 14px;border-bottom:1px solid var(--line);font-size:12px;color:var(--muted);
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.flist{max-height:600px;overflow:auto}
+.f{display:grid;grid-template-columns:1fr auto;gap:4px 10px;padding:9px 14px;
+  border-bottom:1px solid var(--line);cursor:pointer}
+.f:hover{background:var(--accent-soft)}
+.f .lab{font-size:12px;color:var(--muted)}
+.f .val{font-size:14px;font-weight:600;grid-column:1;display:flex;align-items:center;gap:8px}
+.f .side{grid-row:1/3;grid-column:2;display:flex;flex-direction:column;align-items:flex-end;gap:4px;
+  justify-content:center}
+.f .prev{font-size:11px;color:var(--muted)}
+.f.y{background:var(--warn-bg)}
+.f.r{background:var(--bad-bg)}
+.f .alert{grid-column:1/-1;font-size:11.5px;color:var(--bad);font-weight:600}
+.f .alert.w{color:var(--warn)}
+.inp{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:6px;
+  padding:3px 8px;font:inherit;font-size:13px;width:120px}
+
+/* ---- 前回値との比較 ---- */
+.f{grid-template-columns:1fr auto auto}
+.f .side{grid-column:3}
+.trend{grid-row:1/3;grid-column:2;display:flex;flex-direction:column;align-items:center;
+  gap:2px;justify-content:center;padding-right:6px}
+.spark{display:block}
+.spark .ln{fill:none;stroke:var(--muted);stroke-width:1.4;stroke-linejoin:round}
+.spark .dot{fill:var(--muted)}
+.spark.up .ln,.spark.up .dot{stroke:var(--bad);fill:none} .spark.up .dot{fill:var(--bad)}
+.spark.dn .ln{stroke:var(--accent)} .spark.dn .dot{fill:var(--accent)}
+.spark.alert .ln{stroke:var(--bad);stroke-width:1.8} .spark.alert .dot{fill:var(--bad)}
+.delta{font-size:11px;font-weight:700;white-space:nowrap;padding:0 5px;border-radius:4px;
+  background:var(--line);color:var(--muted)}
+.delta.up{background:var(--bad-bg);color:var(--bad)}
+.delta.dn{background:var(--accent-soft);color:var(--accent)}
+.delta.flat{background:transparent;color:var(--muted);font-weight:600}
+.delta.alert{background:var(--bad);color:#fff}
+
+.chg{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;
+  margin-bottom:16px}
+.chg h3{margin:0 0 10px;font-size:13.5px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.chgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(228px,1fr));gap:9px}
+.chi{border:1px solid var(--line);border-radius:8px;padding:9px 11px;display:flex;
+  align-items:center;gap:10px}
+.chi.bad{border-color:var(--bad);background:var(--bad-bg)}
+.chi.warn{border-color:var(--warn);background:var(--warn-bg)}
+.chi .t{flex:1;min-width:0}
+.chi .t b{display:block;font-size:12px;font-weight:600;color:var(--muted)}
+.chi .t span{font-size:13px;font-weight:700}
+.chi .t .arrow{color:var(--muted);font-weight:400;font-size:12px}
+label.tgl{font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:5px;cursor:pointer}
+td .spark{vertical-align:middle;margin-right:6px}
+.cellwrap{display:flex;align-items:center;gap:2px;white-space:nowrap}
+
+/* ---- 外来準備シート ---- */
+textarea.paste{width:100%;min-height:130px;border:1px solid var(--line);border-radius:8px;
+  background:var(--panel);color:var(--ink);padding:11px 13px;font:inherit;font-size:12.5px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;line-height:1.7;resize:vertical}
+th.s{cursor:pointer;user-select:none;white-space:nowrap}
+th.s:hover{color:var(--accent)}
+th.s .ar{opacity:.3;margin-left:3px}
+th.s.on{color:var(--accent)} th.s.on .ar{opacity:1}
+.miss{background:var(--warn-bg);border:1px solid var(--warn);border-radius:8px;
+  padding:11px 14px;margin-bottom:14px;font-size:12.5px;color:var(--warn)}
+.miss b{color:var(--warn)}
+tr.alertrow td{background:var(--bad-bg)}
+tr.warnrow td{background:var(--warn-bg)}
+.prog{display:flex;gap:8px;flex-wrap:wrap}
+.progc{border:1px solid var(--line);border-radius:8px;padding:9px 13px;background:var(--panel);
+  min-width:120px}
+.progc b{display:block;font-size:19px;line-height:1.3}
+.progc span{font-size:11.5px;color:var(--muted)}
+@media print{
+  .note,header,nav,.bar,textarea.paste,.card.noprint{display:none!important}
+  section[hidden]{display:none} body{background:#fff}
+  .card{border:0;padding:0} main{padding:0} .stats,.prog{page-break-inside:avoid}
+}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-top:10px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+
+/* ---- karte text ---- */
+pre.karte{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;white-space:pre-wrap;
+  line-height:1.8;margin:0}
+.bar{display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+
+/* ---- segmented control ---- */
+.seg{display:inline-flex;background:var(--panel);border:1px solid var(--line);border-radius:9px;
+  padding:3px;gap:3px;margin-bottom:16px;flex-wrap:wrap}
+.seg button{appearance:none;border:0;background:none;color:var(--muted);font:inherit;font-size:13px;
+  padding:7px 15px;border-radius:7px;cursor:pointer;white-space:nowrap}
+.seg button b{font-size:13px;margin-left:5px;opacity:.75}
+.seg button.on{background:var(--accent);color:#fff;font-weight:700}
+.seg button.on b{opacity:1}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.muted{color:var(--muted)}
+.right{margin-left:auto}
+</style>
+</head>
+<body>
+
+<div class="note">⚠️ これは画面イメージのモックアップです。実際には動作しません。表示されている患者情報・数値はすべて架空のダミーデータです。</div>
+
+<header>
+  <div class="logo">CIED遠隔モニタリング管理システム</div>
+  <span class="muted" style="font-size:12px">Phase 1 / 単独運用</span>
+  <span class="offline">● オフライン動作中（外部通信なし）</span>
+</header>
+
+<nav role="tablist">
+  <button role="tab" aria-selected="true" data-t="imp">① 取り込み</button>
+  <button role="tab" aria-selected="false" data-t="ver">② 確認・修正</button>
+  <button role="tab" aria-selected="false" data-t="kar">③ カルテ転記</button>
+  <button role="tab" aria-selected="false" data-t="lst">④ デバイス台帳</button>
+  <button role="tab" aria-selected="false" data-t="opd">⑤ 外来準備シート</button>
+</nav>
+
+<main>
+
+<!-- ============ ① 取り込み ============ -->
+<section id="imp">
+  <h2>レポートの一括取り込み</h2>
+  <p class="sub">USBメディアから、ダウンロードしたレポートPDFのフォルダをまとめて取り込みます。</p>
+
+  <div class="drop">
+    <strong>📁 フォルダをここにドラッグ＆ドロップ</strong>
+    <span>または</span><br><br>
+    <button class="btn">フォルダを選択</button>
+    <div class="muted" style="margin-top:14px;font-size:12px">
+      PDFファイルのみを取り込みます。USBメディアへの書き込みは行いません。
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat ok"><b>108</b><span>取り込み件数</span></div>
+    <div class="stat ok"><b>94</b><span>そのまま確定可</span></div>
+    <div class="stat warn"><b>12</b><span>要確認</span></div>
+    <div class="stat bad"><b>2</b><span>抽出失敗</span></div>
+  </div>
+
+  <div class="card">
+    <div class="bar">
+      <strong style="font-size:13.5px">処理結果</strong>
+      <span class="muted" style="font-size:12px">2026/08/20 10:42 実行 ／ 所要 1分12秒</span>
+      <button class="btn small right">要確認のみ表示</button>
+    </div>
+    <div class="tbl-wrap">
+    <table>
+      <thead><tr>
+        <th>状態</th><th>患者ID</th><th>氏名</th><th>メーカー</th><th>機種</th>
+        <th>送信日</th><th>取得元</th><th>要確認</th>
+      </tr></thead>
+      <tbody>
+        <tr><td><span class="pill warn">要確認</span></td><td class="mono">1234567</td><td>ダミー 太郎</td>
+            <td>Medtronic</td><td>Azure XT DR</td><td class="mono">2026/08/18</td>
+            <td><span class="pill dim">テキスト</span></td><td>3項目</td></tr>
+        <tr><td><span class="pill ok">確定可</span></td><td class="mono">1234596</td><td>ダミー 花子</td>
+            <td>Abbott</td><td>Assurity MRI</td><td class="mono">2026/08/18</td>
+            <td><span class="pill dim">テキスト</span></td><td>—</td></tr>
+        <tr><td><span class="pill ok">確定可</span></td><td class="mono">1230980</td><td>ダミー 次郎</td>
+            <td>Boston Sci.</td><td>ACCOLADE MRI</td><td class="mono">2026/08/17</td>
+            <td><span class="pill dim">テキスト</span></td><td>—</td></tr>
+        <tr><td><span class="pill warn">要確認</span></td><td class="mono">1930499</td><td>ダミー 三郎</td>
+            <td>MicroPort</td><td>Rega</td><td class="mono">2026/08/17</td>
+            <td><span class="pill warn">OCR</span></td><td>5項目</td></tr>
+        <tr><td><span class="pill ok">確定可</span></td><td class="mono">2983400</td><td>ダミー 桜</td>
+            <td>ZOLL (WCD)</td><td>LifeVest 4000</td><td class="mono">2026/08/16</td>
+            <td><span class="pill dim">テキスト</span></td><td>—</td></tr>
+        <tr><td><span class="pill bad">失敗</span></td><td class="mono">—</td><td>—</td>
+            <td>判別不可</td><td>—</td><td>—</td><td>—</td>
+            <td><span class="muted">メーカーを手動選択</span></td></tr>
+        <tr><td><span class="pill dim">重複</span></td><td class="mono">1234596</td><td>ダミー 花子</td>
+            <td>Abbott</td><td>Assurity MRI</td><td class="mono">2026/07/18</td>
+            <td colspan="2"><span class="muted">取り込み済みのためスキップ</span></td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ② 確認・修正 ============ -->
+<section id="ver" hidden>
+  <h2>抽出結果の確認・修正</h2>
+  <p class="sub">
+    ダミー 太郎（1234567）／ Medtronic Azure XT DR ／ 送信日 2026/08/18
+    <span class="muted">右の項目をクリックすると、左のレポートの該当箇所が光ります。</span>
+  </p>
+
+  <div class="chg">
+    <h3>
+      📈 前回（2026/05/19）からの変化
+      <span class="muted" style="font-weight:400;font-size:12px">直近6回分の推移を各項目に表示しています</span>
+      <label class="tgl right" style="margin-left:auto">
+        <input type="checkbox" id="onlyChanged"> 変化のあった項目だけ表示
+      </label>
+    </h3>
+    <div class="chgrid" id="chgrid"></div>
+    <p class="sub" style="margin:10px 0 0">
+      ※ 数値の変化を提示するものであり、臨床的な判断を示すものではありません。
+      変化を「注意」とみなす幅は項目ごとに設定できます（現在の設定値は仮の値です）。
+    </p>
+  </div>
+
+  <div class="split">
+    <!-- PDF pane -->
+    <div class="pdf">
+      <div class="pdf-bar">📄 元レポート（1/3ページ）<span class="right muted">拡大 100%</span></div>
+      <div class="paper">
+        <h4>CareLink ネットワーク　レポート</h4>
+        <div class="brand">Medtronic — ダミー帳票イメージ</div>
+
+        <div class="sec">患者情報</div>
+        <div class="row"><span class="lb">患者ID</span><span class="vl" id="p_pid">1234567</span></div>
+        <div class="row"><span class="lb">氏名</span><span class="vl" id="p_name">ダミー　太郎</span></div>
+        <div class="row"><span class="lb">生年月日</span><span class="vl">1955/03/12</span></div>
+        <div class="row"><span class="lb">送信日</span><span class="vl" id="p_date">2026/08/18</span></div>
+
+        <div class="sec">デバイス情報</div>
+        <div class="row"><span class="lb">機種名</span><span class="vl" id="p_model">Azure XT DR MRI</span></div>
+        <div class="row"><span class="lb">シリアル番号</span><span class="vl" id="p_sn">BLK123456 H</span></div>
+        <div class="row"><span class="lb">植込み日</span><span class="vl">2021/06/04</span></div>
+        <div class="row"><span class="lb">モード</span><span class="vl" id="p_mode">DDD 60–130 bpm</span></div>
+
+        <div class="sec">バッテリー</div>
+        <div class="row"><span class="lb">バッテリ状態</span><span class="vl" id="p_bst">OK</span></div>
+        <div class="row"><span class="lb">推定残存期間</span><span class="vl" id="p_bmo">7.4 年</span></div>
+
+        <div class="sec">リード</div>
+        <div class="row"><span class="lb">心房 P波高</span><span class="vl" id="p_ap">3.2 mV</span></div>
+        <div class="row"><span class="lb">心房 閾値</span><span class="vl" id="p_ath">0.75 V @ 0.40 ms</span></div>
+        <div class="row"><span class="lb">心房 インピーダンス</span><span class="vl" id="p_aimp">480 Ω</span></div>
+        <div class="row"><span class="lb">心室 R波高</span><span class="vl" id="p_vr">12.4 mV</span></div>
+        <div class="row"><span class="lb">心室 閾値</span><span class="vl" id="p_vth">0.50 V @ 0.40 ms</span></div>
+        <div class="row"><span class="lb">心室 インピーダンス</span><span class="vl" id="p_vimp">520 Ω</span></div>
+
+        <div class="sec">ペーシング／不整脈</div>
+        <div class="row"><span class="lb">心房ペーシング率</span><span class="vl" id="p_ap2">12 %</span></div>
+        <div class="row"><span class="lb">心室ペーシング率</span><span class="vl" id="p_vp">0.4 %</span></div>
+        <div class="row"><span class="lb">AT/AF burden</span><span class="vl" id="p_af">— （網掛けにより判読不能）</span></div>
+        <div class="row"><span class="lb">Mode Switch 回数</span><span class="vl" id="p_ms">14 回</span></div>
+        <div class="row"><span class="lb">VT/VF エピソード</span><span class="vl" id="p_vt">0 回</span></div>
+      </div>
+    </div>
+
+    <!-- fields pane -->
+    <div class="fields">
+      <div class="fields-bar">
+        抽出項目 18件
+        <span class="pill ok">確定可 15</span>
+        <span class="pill warn">要確認 2</span>
+        <span class="pill bad">要入力 1</span>
+        <button class="btn small right">確定してカルテ転記へ</button>
+      </div>
+      <div class="flist" id="flist"></div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span><i style="background:var(--ok)"></i>信頼度 0.90以上：そのまま採用</span>
+    <span><i style="background:var(--warn)"></i>0.70–0.90：要確認。チェックしないと確定できない</span>
+    <span><i style="background:var(--bad)"></i>0.70未満：未入力扱い。人が入力する</span>
+  </div>
+  <p class="sub" style="margin-top:10px">
+    ※ すべて緑でも、確定操作は必ず人が行います。自動確定は実装しません。
+  </p>
+</section>
+
+<!-- ============ ③ カルテ転記 ============ -->
+<section id="kar" hidden>
+  <h2>カルテ転記用テキスト</h2>
+  <p class="sub">確定した内容から定型文を生成します。文面のテンプレートは院内で編集できます。</p>
+
+  <div class="card">
+    <div class="bar">
+      <span class="muted" style="font-size:12.5px">テンプレート：</span>
+      <select class="inp" style="width:auto"><option>標準（遠隔モニタリング定期）</option><option>簡易版</option><option>ICD用</option></select>
+      <button class="btn right">📋 クリップボードにコピー</button>
+      <button class="btn ghost small">テンプレートを編集</button>
+    </div>
+<pre class="karte">【CIED遠隔モニタリング】2026/08/18 送信分
+
+デバイス : Medtronic Azure XT DR MRI (SN: BLK123456H)
+植込み日 : 2021/06/04　モード: DDD 60-130
+
+バッテリー : OK / 残存 約74ヶ月
+ペーシング率 : A 12% / V 0.4%
+
+リード
+  心房 : P 3.2mV, 閾値 0.75V@0.4ms, Imp 480Ω
+  心室 : R 12.4mV, 閾値 0.50V@0.4ms, Imp 520Ω
+
+不整脈
+  AT/AF burden : 2.1%
+  Mode Switch : 14回
+  VT/VF : 0回
+
+特記事項 : 前回からの有意な変化なし。次回定期送信 2026/11。
+（本文はシステムにて自動生成、担当者確認済）</pre>
+    <p class="sub" style="margin-top:12px;margin-bottom:0">
+      コピーしたテキストを電子カルテに貼り付けます。※ 同一PCで電子カルテが開ける場合に限ります。
+    </p>
+  </div>
+</section>
+
+<!-- ============ ④ デバイス台帳 ============ -->
+<section id="lst" hidden>
+  <h2>デバイス台帳</h2>
+  <p class="sub">
+    院内の全CIED患者を一元管理します。<strong>遠隔モニタリングをしていない患者（外来チェックのみ）も登録対象</strong>です。
+  </p>
+
+  <div class="seg" id="seg">
+    <button data-f="all" class="on">全デバイス <b>112</b></button>
+    <button data-f="yes">遠隔モニタリング中 <b>86</b></button>
+    <button data-f="no">遠隔なし（外来のみ） <b>26</b></button>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><b>112</b><span>登録デバイス</span></div>
+    <div class="stat warn"><b>12</b><span>未確認レポート</span></div>
+    <div class="stat bad"><b>3</b><span>要対応（電池・閾値）</span></div>
+    <div class="stat warn"><b>5</b><span>90日以上 未送信／未受診</span></div>
+    <div class="stat"><b>9</b><span>遠隔 導入候補</span></div>
+  </div>
+
+  <div class="card">
+    <div class="bar">
+      <input class="inp" style="width:200px" placeholder="患者ID・氏名・シリアルで検索">
+      <select class="inp" style="width:auto"><option>全メーカー</option><option>Medtronic</option><option>Abbott</option><option>Boston Scientific</option><option>MicroPort</option><option>ZOLL (WCD)</option></select>
+      <select class="inp" style="width:auto"><option>全デバイス種別</option><option>ペースメーカー</option><option>ICD</option><option>CRT-P</option><option>CRT-D</option><option>ILR</option><option>WCD</option></select>
+      <select class="inp" style="width:auto"><option>すべての状態</option><option>要対応のみ</option><option>未確認のみ</option><option>90日以上フォローなし</option></select>
+      <button class="btn small right">＋ デバイスを登録</button>
+      <button class="btn ghost small">CSV取込</button>
+      <button class="btn ghost small">CSV出力</button>
+    </div>
+    <div class="tbl-wrap">
+    <table>
+      <thead><tr>
+        <th>状態</th><th>遠隔</th><th>患者ID</th><th>氏名</th><th>種別</th><th>メーカー / 機種</th>
+        <th>シリアル</th><th>植込み日</th><th>MRI</th><th>最終フォロー</th><th>電池残存</th><th>次回予定</th>
+      </tr></thead>
+      <tbody id="ledger">
+        <tr data-r="yes"><td><span class="pill bad">要対応</span></td>
+            <td><span class="pill ok">遠隔中</span></td>
+            <td class="mono">0012339</td><td>ダミー 一郎</td><td>CRT-P</td>
+            <td>Medtronic / Percepta CRT-P</td><td class="mono">RZK4471</td><td class="mono">2018/02/19</td>
+            <td><span class="pill ok">可</span></td><td class="mono">2026/08/15 <span class="muted">遠隔</span></td>
+            <td><span style="color:var(--bad);font-weight:700">RRT (3ヶ月)</span></td><td class="mono">2026/09/03 外来</td></tr>
+
+        <tr data-r="yes"><td><span class="pill bad">要対応</span></td>
+            <td><span class="pill ok">遠隔中</span></td>
+            <td class="mono">2045118</td><td>ダミー 京子</td><td>ICD</td>
+            <td>Abbott / Ellipse VR</td><td class="mono">D1220355</td><td class="mono">2020/11/06</td>
+            <td><span class="pill ok">可</span></td><td class="mono">2026/08/12 <span class="muted">遠隔</span></td>
+            <td>26ヶ月</td><td class="mono">2026/09/10 外来</td></tr>
+
+        <tr data-r="yes"><td><span class="pill warn">未確認</span></td>
+            <td><span class="pill ok">遠隔中</span></td>
+            <td class="mono">1234567</td><td>ダミー 太郎</td><td>PM</td>
+            <td>Medtronic / Azure XT DR</td><td class="mono">BLK123456H</td><td class="mono">2021/06/04</td>
+            <td><span class="pill ok">可</span></td><td class="mono">2026/08/18 <span class="muted">遠隔</span></td>
+            <td>74ヶ月</td><td class="mono">2026/11 遠隔</td></tr>
+
+        <tr data-r="yes"><td><span class="pill warn">未送信</span></td>
+            <td><span class="pill ok">遠隔中</span></td>
+            <td class="mono">0288714</td><td>ダミー 冬彦</td><td>ICD</td>
+            <td>Boston Sci. / EMBLEM S-ICD</td><td class="mono">903714</td><td class="mono">2019/09/25</td>
+            <td><span class="pill ok">可</span></td>
+            <td class="mono"><span style="color:var(--warn);font-weight:700">2026/05/02</span> <span class="muted">遠隔</span></td>
+            <td>51ヶ月</td><td class="mono">—</td></tr>
+
+        <tr data-r="yes"><td><span class="pill ok">確認済</span></td>
+            <td><span class="pill ok">遠隔中</span></td>
+            <td class="mono">2983400</td><td>ダミー 桜</td><td>WCD</td>
+            <td>ZOLL / LifeVest 4000</td><td class="mono">LV88214</td><td class="mono">2026/06/30 <span class="muted">装着開始</span></td>
+            <td><span class="muted">—</span></td><td class="mono">2026/08/16 <span class="muted">遠隔</span></td>
+            <td><span class="muted">装着 22.4h/日</span></td><td class="mono">2026/08/23</td></tr>
+
+        <tr data-r="no"><td><span class="pill ok">確認済</span></td>
+            <td><span class="pill dim">未導入</span></td>
+            <td class="mono">3110274</td><td>ダミー 五郎</td><td>PM</td>
+            <td>MicroPort / Rega</td><td class="mono">RG55120</td><td class="mono">2017/04/11</td>
+            <td><span class="pill bad">不可</span></td><td class="mono">2026/07/22 <span class="muted">外来</span></td>
+            <td>38ヶ月</td><td class="mono">2027/01 外来</td></tr>
+
+        <tr data-r="no"><td><span class="pill warn">要フォロー</span></td>
+            <td><span class="pill dim">未導入</span></td>
+            <td class="mono">0087452</td><td>ダミー 松子</td><td>PM</td>
+            <td>Medtronic / Adapta ADDR01</td><td class="mono">PJN20418</td><td class="mono">2013/08/07</td>
+            <td><span class="pill bad">不可</span></td>
+            <td class="mono"><span style="color:var(--warn);font-weight:700">2026/02/14</span> <span class="muted">外来</span></td>
+            <td><span style="color:var(--warn);font-weight:700">11ヶ月</span></td><td class="mono">未設定</td></tr>
+
+        <tr data-r="no"><td><span class="pill ok">確認済</span></td>
+            <td><span class="pill warn">中止</span></td>
+            <td class="mono">2740881</td><td>ダミー 竹雄</td><td>CRT-D</td>
+            <td>Abbott / Quadra Assura</td><td class="mono">C2011897</td><td class="mono">2019/03/28</td>
+            <td><span class="pill ok">可</span></td><td class="mono">2026/08/05 <span class="muted">外来</span></td>
+            <td>42ヶ月</td><td class="mono">2026/11/05 外来</td></tr>
+
+        <tr data-r="no"><td><span class="pill ok">確認済</span></td>
+            <td><span class="pill dim">未導入</span></td>
+            <td class="mono">3610027</td><td>ダミー 梅子</td><td>ILR</td>
+            <td>Medtronic / Reveal LINQ</td><td class="mono">RLQ77302</td><td class="mono">2025/10/16</td>
+            <td><span class="pill ok">可</span></td><td class="mono">2026/08/01 <span class="muted">外来</span></td>
+            <td>21ヶ月</td><td class="mono">2026/11/01 外来</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p class="sub" style="margin:12px 0 0" id="segnote">
+      全112台のうち9件を表示しています（ダミー）。
+    </p>
+  </div>
+
+  <div class="card">
+    <div class="bar">
+      <strong style="font-size:13.5px">🔎 リコール・安全性情報の該当患者検索</strong>
+      <span class="muted" style="font-size:12px">メーカーからアドバイザリが出たときに、該当機種・該当ロットの患者を即座に抽出します。</span>
+    </div>
+    <div class="bar">
+      <select class="inp" style="width:auto"><option>Medtronic</option><option>Abbott</option><option>Boston Scientific</option><option>MicroPort</option></select>
+      <input class="inp" style="width:200px" placeholder="機種名（例: Adapta ADDR01）">
+      <input class="inp" style="width:180px" placeholder="シリアル範囲（任意）">
+      <input class="inp" style="width:180px" placeholder="植込み日 範囲（任意）">
+      <button class="btn small">該当患者を抽出</button>
+    </div>
+    <p class="sub" style="margin:0">
+      台帳に全デバイスが載っていれば、遠隔の有無にかかわらず数秒で該当者リストが出せます。
+      紙台帳やExcelを追う作業がなくなります。
+    </p>
+  </div>
+
+  <p class="sub">
+    ※ 遠隔なしの患者は、外来チェックの結果を手入力するか、プログラマから出力したレポートを取り込んで更新します。<br>
+    ※ 推移グラフ（電池・閾値・インピーダンス）は Phase 2 で追加予定。
+  </p>
+</section>
+
+<!-- ============ ⑤ 外来準備シート ============ -->
+<section id="opd" hidden>
+  <h2>外来準備シート</h2>
+  <p class="sub">
+    電子カルテから患者IDをまとめてコピーして貼り付けると、台帳と照合して外来準備用の一覧を作ります。
+  </p>
+
+  <div class="card noprint">
+    <div class="bar" style="margin-bottom:8px">
+      <strong style="font-size:13.5px">患者IDを貼り付け</strong>
+      <span class="muted" style="font-size:12px">
+        患者ID＝7桁の数字。改行・タブ・カンマ区切りに対応し、氏名や時刻が混ざっていてもIDだけを拾います。
+      </span>
+    </div>
+    <textarea class="paste" id="pasteBox" spellcheck="false">2026/08/21(金) 循環器内科 外来予定
+09:00	1234567	ダミー 太郎
+09:15	0012339	ダミー 一郎
+09:30	1234596	ダミー 花子
+09:45	0087452	ダミー 松子
+10:00	3110274	ダミー 五郎
+10:15	2045118	ダミー 京子
+10:30	3610027	ダミー 梅子
+10:45	0288714	ダミー 冬彦
+11:00	6120345	ダミー 夏美
+11:15	9999001	ダミー 新一
+11:30	2740881	ダミー 竹雄
+11:45	1930499	ダミー 三郎</textarea>
+    <div class="bar" style="margin:12px 0 0">
+      <button class="btn" id="runPaste">読み込む</button>
+      <button class="btn ghost small" id="clearPaste">クリア</button>
+      <span class="muted right" style="font-size:12px" id="parseInfo"></span>
+    </div>
+  </div>
+
+  <div id="opdResult" hidden>
+    <div id="missBox"></div>
+
+    <div class="card noprint">
+      <div class="bar" style="margin-bottom:10px">
+        <strong style="font-size:13.5px">🔧 メーカー別（プログラマの準備用）</strong>
+        <span class="muted" style="font-size:12px">当日に必要なプログラマの台数を把握できます。</span>
+      </div>
+      <div class="prog" id="progBox"></div>
+    </div>
+
+    <div class="card">
+      <div class="bar">
+        <strong style="font-size:13.5px" id="sheetTitle">外来準備シート</strong>
+        <span class="muted" style="font-size:12px" id="sortInfo">貼り付け順（＝受診順）で表示中</span>
+        <button class="btn ghost small right" id="resetSort">貼り付け順に戻す</button>
+        <button class="btn ghost small" onclick="window.print()">🖨 印刷</button>
+        <button class="btn ghost small">CSV出力</button>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr id="opdHead"></tr></thead>
+          <tbody id="opdBody"></tbody>
+        </table>
+      </div>
+      <p class="sub" style="margin:12px 0 0">
+        列の見出しをクリックすると並べ替えできます。もう一度クリックで昇順／降順が切り替わります。
+      </p>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<script>
+// タブ切り替え
+document.querySelectorAll('nav button').forEach(b=>{
+  b.onclick=()=>{
+    document.querySelectorAll('nav button').forEach(x=>x.setAttribute('aria-selected', x===b));
+    ['imp','ver','kar','lst','opd'].forEach(id=>document.getElementById(id).hidden = (id!==b.dataset.t));
+    window.scrollTo(0,0);
+  };
+});
+
+// 抽出項目
+//   hist : 直近6回分の推移（末尾が今回。null は未取得）
+//   dir  : 臨床的に注意すべき変化の向き  up=増加が注意 / down=低下が注意 / any=どちらも注意
+//   tol  : 変化率が何%を超えたら「注意」とみなすか（★すべて仮の値。要設定）
+const F=[
+ {l:'患者ID',v:'1234567',c:.99,a:'p_pid'},
+ {l:'氏名',v:'ダミー 太郎',c:.97,a:'p_name'},
+ {l:'送信日',v:'2026/08/18',c:.99,a:'p_date'},
+ {l:'機種名',v:'Azure XT DR MRI',c:.95,a:'p_model'},
+ {l:'シリアル番号',v:'BLK123456 H',c:.86,a:'p_sn',
+  warn:'末尾の空白が不確実です。「BLK123456H」で正しいか確認してください。'},
+ {l:'モード',v:'DDD 60–130 bpm',c:.94,a:'p_mode'},
+ {l:'バッテリー状態',v:'OK',c:.99,a:'p_bst',prev:'OK'},
+ {l:'バッテリー残存期間',v:'740 ヶ月',c:.55,a:'p_bmo',prev:'76 ヶ月',u:'ヶ月',
+  hist:[96,91,86,81,76,740],dir:'up',tol:10,alertTrend:true,
+  bad:'前回値から異常に増加しています。桁の誤りの可能性が高いため確認してください。（帳票では「7.4 年」と記載）'},
+ {l:'心房 P波高',v:'3.2 mV',c:.94,a:'p_ap',prev:'3.4 mV',u:'mV',
+  hist:[3.6,3.5,3.4,3.5,3.4,3.2],dir:'down',tol:30},
+ {l:'心房 閾値',v:'0.75 V @ 0.40 ms',c:.92,a:'p_ath',prev:'0.75 V',u:'V',
+  hist:[0.75,0.75,0.75,0.75,0.75,0.75],dir:'up',tol:50},
+ {l:'心房 インピーダンス',v:'480 Ω',c:.95,a:'p_aimp',prev:'475 Ω',u:'Ω',
+  hist:[470,472,475,478,475,480],dir:'any',tol:30},
+ {l:'心室 R波高',v:'12.4 mV',c:.93,a:'p_vr',prev:'12.1 mV',u:'mV',
+  hist:[12.8,12.6,12.3,12.5,12.1,12.4],dir:'down',tol:30},
+ {l:'心室 閾値',v:'0.50 V @ 0.40 ms',c:.91,a:'p_vth',prev:'0.50 V',u:'V',
+  hist:[0.5,0.5,0.5,0.5,0.5,0.5],dir:'up',tol:50},
+ {l:'心室 インピーダンス',v:'520 Ω',c:.94,a:'p_vimp',prev:'516 Ω',u:'Ω',
+  hist:[510,512,508,515,516,520],dir:'any',tol:30},
+ {l:'心房ペーシング率',v:'12 %',c:.96,a:'p_ap2',prev:'11 %',u:'%',
+  hist:[8,9,10,10,11,12],dir:'none',tol:50},
+ {l:'心室ペーシング率',v:'0.4 %',c:.93,a:'p_vp',prev:'0.5 %',u:'%',
+  hist:[0.6,0.5,0.5,0.4,0.5,0.4],dir:'none',tol:50},
+ {l:'AT/AF burden',v:'',c:0,a:'p_af',prev:'2.1 %',u:'%',
+  hist:[0.4,0.8,1.2,1.6,2.1,null],dir:'up',tol:50,
+  bad:'この項目を読み取れませんでした。帳票を見て入力してください。'},
+ {l:'Mode Switch 回数',v:'14 回',c:.88,a:'p_ms',prev:'11 回',u:'回',
+  hist:[3,5,7,9,11,14],dir:'up',tol:25},
+ {l:'VT/VF エピソード',v:'0 回',c:.97,a:'p_vt',prev:'0 回',u:'回',
+  hist:[0,0,0,0,0,0],dir:'up',tol:50},
+];
+
+// スパークライン（推移のミニグラフ）
+function spark(vals,cls='',w=66,h=22){
+  const ok=vals.filter(x=>x!=null);
+  if(ok.length<2) return `<svg class="spark" width="${w}" height="${h}"></svg>`;
+  const mn=Math.min(...ok),mx=Math.max(...ok),r=(mx-mn)||1;
+  const X=i=>2+i/(vals.length-1)*(w-4), Y=v=>h-3-((v-mn)/r)*(h-6);
+  let d='',pen=false,last=null;
+  vals.forEach((v,i)=>{
+    if(v==null){pen=false;return;}
+    d+=(pen?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1)+' ';pen=true;last=[X(i),Y(v)];
+  });
+  return `<svg class="spark ${cls}" width="${w}" height="${h}" aria-hidden="true">
+    <path class="ln" d="${d}"/>${last?`<circle class="dot" cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="2.2"/>`:''}</svg>`;
+}
+
+// 前回との差分を評価
+function diff(f){
+  if(!f.hist||f.hist.length<2) return null;
+  const cur=f.hist[f.hist.length-1], prv=f.hist[f.hist.length-2];
+  if(cur==null) return {missing:true,prv};
+  if(prv==null) return null;
+  const abs=cur-prv;
+  const pct= prv===0 ? (abs===0?0:null) : abs/Math.abs(prv)*100;
+  const flat = Math.abs(abs)<1e-9;
+  const notable = f.alertTrend || (pct!=null && Math.abs(pct)>=(f.tol??30));
+  const badDir = f.dir==='any' ? true
+               : f.dir==='up'   ? abs>0
+               : f.dir==='down' ? abs<0 : false;
+  return {cur,prv,abs,pct,flat,notable,badDir,alert:!!f.alertTrend};
+}
+const fmt=n=>(Math.abs(n)<10?n.toFixed(1):Math.round(n).toString()).replace(/\.0$/,'');
+
+const box=document.getElementById('flist');
+F.forEach(f=>{
+  const d=diff(f);
+  const cls = f.c>=.90 ? '' : (f.c>=.70 ? 'y' : 'r');
+  const el=document.createElement('div');
+  el.className='f '+cls;
+
+  let trend='';
+  if(d && !d.missing){
+    const dc = d.alert ? 'alert' : d.flat ? 'flat' : d.notable ? (d.badDir?'up':'dn') : 'flat';
+    const ar = d.flat ? '→' : d.abs>0 ? '▲' : '▼';
+    const txt= d.flat ? '変化なし'
+             : `${ar} ${d.abs>0?'+':'−'}${fmt(Math.abs(d.abs))}${f.u||''}`
+               + (d.pct!=null?` (${d.abs>0?'+':'−'}${fmt(Math.abs(d.pct))}%)`:'');
+    trend=`<div class="trend">${spark(f.hist, d.alert?'alert':d.notable?(d.badDir?'up':'dn'):'')}
+             <span class="delta ${dc}">${txt}</span></div>`;
+    el.dataset.changed = (d.alert||d.notable) ? '1':'0';
+  } else if(d && d.missing){
+    trend=`<div class="trend">${spark(f.hist)}<span class="delta">今回 未取得</span></div>`;
+    el.dataset.changed='1';
+  } else {
+    trend=`<div class="trend"></div>`;
+    el.dataset.changed='0';
+  }
+
+  const valHtml = f.v
+    ? `<span>${f.v}</span>`
+    : `<input class="inp" placeholder="未入力 — 入力してください">`;
+  el.innerHTML=`
+    <div class="lab">${f.l}</div>
+    <div class="val">${valHtml}</div>
+    ${trend}
+    <div class="side">
+      <span class="pill ${f.c>=.90?'ok':f.c>=.70?'warn':'bad'}">${f.c? f.c.toFixed(2):'—'}</span>
+      ${f.prev?`<span class="prev">前回 ${f.prev}</span>`:''}
+      ${f.c>=.70&&f.c<.90?'<label class="prev"><input type="checkbox"> 確認済</label>':''}
+    </div>
+    ${f.bad?`<div class="alert">⚠️ ${f.bad}</div>`:''}
+    ${f.warn?`<div class="alert w">△ ${f.warn}</div>`:''}`;
+  el.onclick=()=>{
+    document.querySelectorAll('.paper .hl').forEach(x=>x.classList.remove('hl'));
+    const t=document.getElementById(f.a);
+    if(t){t.classList.add('hl');t.scrollIntoView({block:'center',behavior:'smooth'});}
+  };
+  box.appendChild(el);
+});
+
+// 「前回からの変化」サマリ
+const grid=document.getElementById('chgrid');
+let shown=0;
+F.forEach(f=>{
+  const d=diff(f); if(!d) return;
+  if(!d.missing && !d.notable && !d.alert) return;
+  shown++;
+  const kind = d.alert||d.missing ? 'bad' : d.badDir ? 'warn' : '';
+  const body = d.missing
+    ? `<span class="arrow">前回 ${fmt(d.prv)}${f.u||''} →</span> <span>未取得</span>`
+    : `<span class="arrow">${fmt(d.prv)}${f.u||''} →</span> <span>${fmt(d.cur)}${f.u||''}</span>`;
+  grid.insertAdjacentHTML('beforeend',
+    `<div class="chi ${kind}">${spark(f.hist, d.alert?'alert':d.badDir?'up':'dn')}
+       <div class="t"><b>${f.l}</b>${body}</div></div>`);
+});
+if(!shown) grid.innerHTML='<p class="sub" style="margin:0">前回から注意すべき変化はありません。</p>';
+
+// 「変化のあった項目だけ表示」
+document.getElementById('onlyChanged').onchange=e=>{
+  document.querySelectorAll('#flist .f').forEach(el=>{
+    el.hidden = e.target.checked && el.dataset.changed!=='1';
+  });
+};
+
+// 台帳の電池残存にも推移を表示（直近6回分・単位ヶ月）
+const LEDGER_BAT=[
+  [28,22,16,11,6,3],[50,44,38,33,29,26],[96,91,86,81,76,74],[75,70,66,60,55,51],
+  null,[62,57,52,47,42,38],[40,34,28,22,16,11],[66,61,56,51,46,42],[30,28,26,24,22,21]
+];
+document.querySelectorAll('#ledger tr').forEach((tr,i)=>{
+  const h=LEDGER_BAT[i]; if(!h) return;
+  const td=tr.children[10]; if(!td) return;
+  // 残り12ヶ月を切ったら赤で表示
+  const cls = h[h.length-1]<=12 ? 'alert' : 'dn';
+  td.innerHTML=`<span class="cellwrap">${spark(h,cls,52,18)}${td.innerHTML}</span>`;
+});
+
+/* ============ ⑤ 外来準備シート ============ */
+
+// 台帳（ダミー）。実際はDBを引く
+const MASTER={
+ '1234567':{n:'ダミー 太郎',t:'PM'  ,m:'Medtronic'  ,md:'Azure XT DR MRI' ,im:'2021/06/04',r:'遠隔中',mri:'可',lf:'2026/08/18',lt:'遠隔',b:74 ,note:''},
+ '1234596':{n:'ダミー 花子',t:'PM'  ,m:'Abbott'     ,md:'Assurity MRI'    ,im:'2022/02/10',r:'遠隔中',mri:'可',lf:'2026/08/18',lt:'遠隔',b:96 ,note:''},
+ '0012339':{n:'ダミー 一郎',t:'CRT-P',m:'Medtronic' ,md:'Percepta CRT-P'  ,im:'2018/02/19',r:'遠隔中',mri:'可',lf:'2026/08/15',lt:'遠隔',b:3  ,note:'電池 RRT。交換の相談',lv:2},
+ '2045118':{n:'ダミー 京子',t:'ICD' ,m:'Abbott'     ,md:'Ellipse VR'      ,im:'2020/11/06',r:'遠隔中',mri:'可',lf:'2026/08/12',lt:'遠隔',b:26 ,note:'心室閾値の上昇傾向',lv:2},
+ '1230980':{n:'ダミー 次郎',t:'PM'  ,m:'Boston Sci.',md:'ACCOLADE MRI'    ,im:'2023/05/22',r:'遠隔中',mri:'可',lf:'2026/08/17',lt:'遠隔',b:88 ,note:''},
+ '3110274':{n:'ダミー 五郎',t:'PM'  ,m:'MicroPort'  ,md:'Rega'            ,im:'2017/04/11',r:'未導入',mri:'不可',lf:'2026/07/22',lt:'外来',b:38,note:''},
+ '0087452':{n:'ダミー 松子',t:'PM'  ,m:'Medtronic'  ,md:'Adapta ADDR01'   ,im:'2013/08/07',r:'未導入',mri:'不可',lf:'2026/02/14',lt:'外来',b:11,note:'電池残り わずか。6ヶ月フォローなし',lv:2},
+ '2740881':{n:'ダミー 竹雄',t:'CRT-D',m:'Abbott'    ,md:'Quadra Assura'   ,im:'2019/03/28',r:'中止'  ,mri:'可',lf:'2026/08/05',lt:'外来',b:42 ,note:'遠隔は患者希望で中止'},
+ '3610027':{n:'ダミー 梅子',t:'ILR' ,m:'Medtronic'  ,md:'Reveal LINQ'     ,im:'2025/10/16',r:'未導入',mri:'可',lf:'2026/08/01',lt:'外来',b:21 ,note:''},
+ '0288714':{n:'ダミー 冬彦',t:'ICD' ,m:'Boston Sci.',md:'EMBLEM S-ICD'    ,im:'2019/09/25',r:'遠隔中',mri:'可',lf:'2026/05/02',lt:'遠隔',b:51 ,note:'3ヶ月以上 未送信。送信状況の確認',lv:1},
+ '2983400':{n:'ダミー 桜'  ,t:'WCD' ,m:'ZOLL'       ,md:'LifeVest 4000'   ,im:'2026/06/30',r:'遠隔中',mri:'—' ,lf:'2026/08/16',lt:'遠隔',b:null,note:'装着 22.4h/日'},
+ '1930499':{n:'ダミー 三郎',t:'PM'  ,m:'MicroPort'  ,md:'Rega'            ,im:'2020/09/03',r:'遠隔中',mri:'不可',lf:'2026/08/17',lt:'遠隔',b:45,note:''},
+ '5008163':{n:'ダミー 秋人',t:'PM'  ,m:'Medtronic'  ,md:'Azure S SR'      ,im:'2024/01/18',r:'未導入',mri:'可',lf:'2026/06/10',lt:'外来',b:105,note:''},
+ '6120345':{n:'ダミー 夏美',t:'ICD' ,m:'Boston Sci.',md:'RESONATE X4'     ,im:'2022/07/29',r:'遠隔中',mri:'可',lf:'2026/08/14',lt:'遠隔',b:62 ,note:''},
+};
+
+// 貼り付けテキストから患者IDを拾う
+//  ・患者IDは「7桁の数字」。先頭ゼロが意味を持つ（例 0012339）ため、
+//    ★必ず文字列として扱い、数値に変換しない★
+//  ・全角数字は半角へ正規化
+//  ・「ちょうど7桁の数字列」をすべて拾う。6桁以下・8桁以上（日付・電話番号など）は自動的に除外
+//  ・1行に複数のIDが並んでいても取りこぼさない
+//    （取りこぼし＝患者の見落としは静かに起きるが、余分に拾えば「台帳に無い」として画面に出る。
+//      安全側に倒して、拾いすぎて人に見せる設計にする）
+//  ・重複は除き、貼り付け順を保持する
+function parseIds(text){
+  const norm=text.replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0));
+  const out=[],seen=new Set();
+  let raw=0;
+  norm.split(/\r?\n/).forEach(line=>{
+    (line.match(/\d+/g)||[]).filter(t=>t.length===7).forEach(id=>{
+      raw++;                                         // ★文字列のまま保持（先頭ゼロを守る）
+      if(!seen.has(id)){seen.add(id);out.push(id);}
+    });
+  });
+  return {ids:out,dup:raw-out.length};
+}
+
+const COLS=[
+  {k:'no' ,t:'順'      ,num:true},
+  {k:'id' ,t:'患者ID'  },
+  {k:'n'  ,t:'氏名'    },
+  {k:'t'  ,t:'種別'    },
+  {k:'m'  ,t:'メーカー' },
+  {k:'md' ,t:'機種'    },
+  {k:'im' ,t:'植込み日' },
+  {k:'r'  ,t:'遠隔'    },
+  {k:'mri',t:'MRI'    },
+  {k:'lf' ,t:'最終フォロー'},
+  {k:'b'  ,t:'電池(ヶ月)',num:true},
+  {k:'note',t:'確認事項'},
+];
+let ROWS=[],sortKey=null,sortAsc=true;
+
+function render(){
+  document.getElementById('opdHead').innerHTML=COLS.map(c=>
+    `<th class="s ${sortKey===c.k?'on':''}" data-k="${c.k}">${c.t}<span class="ar">${
+      sortKey===c.k?(sortAsc?'▲':'▼'):'⇅'}</span></th>`).join('');
+
+  document.getElementById('opdBody').innerHTML=ROWS.map(r=>{
+    const cls=r.lv===2?'alertrow':r.lv===1?'warnrow':'';
+    const rp=r.r==='遠隔中'?'ok':r.r==='中止'?'warn':'dim';
+    const bat=r.b==null?'<span class="muted">—</span>'
+      :`<span class="cellwrap">${spark(r.bhist,r.b<=12?'alert':'dn',44,16)}<b style="${
+          r.b<=12?'color:var(--bad)':''}">${r.b}</b></span>`;
+    return `<tr class="${cls}">
+      <td class="mono">${r.no}</td><td class="mono">${r.id}</td><td>${r.n}</td><td>${r.t}</td>
+      <td>${r.m}</td><td>${r.md}</td><td class="mono">${r.im}</td>
+      <td><span class="pill ${rp}">${r.r}</span></td>
+      <td><span class="pill ${r.mri==='可'?'ok':r.mri==='—'?'dim':'bad'}">${r.mri}</span></td>
+      <td class="mono">${r.lf} <span class="muted">${r.lt}</span></td>
+      <td>${bat}</td>
+      <td>${r.note?`<span style="${r.lv?'font-weight:600':''}">${r.note}</span>`:'<span class="muted">—</span>'}</td>
+    </tr>`;}).join('');
+
+  document.querySelectorAll('#opdHead th').forEach(th=>{
+    th.onclick=()=>{
+      const k=th.dataset.k;
+      sortAsc = (sortKey===k) ? !sortAsc : true;
+      sortKey=k;
+      const c=COLS.find(x=>x.k===k);
+      ROWS.sort((a,b)=>{
+        let x=a[k],y=b[k];
+        if(x==null)return 1; if(y==null)return -1;           // 空欄は常に末尾
+        const v=c.num? x-y : String(x).localeCompare(String(y),'ja');
+        return sortAsc? v : -v;
+      });
+      document.getElementById('sortInfo').textContent=
+        `「${c.t}」の${sortAsc?'昇順':'降順'}で表示中`;
+      render();
+    };
+  });
+}
+
+function runPaste(){
+  const {ids,dup}=parseIds(document.getElementById('pasteBox').value);
+  const hit=[],miss=[];
+  ids.forEach((id,i)=>{
+    const p=MASTER[id];
+    if(!p){miss.push(id);return;}
+    // 電池の推移（ダミー：直近6回分をさかのぼって生成）
+    // 末尾が現在値になるよう、古い順（大きい順）に並べる
+    const step = p.b==null?0:Math.round(p.b*0.09+2);
+    const bh = p.b==null?null:[5,4,3,2,1,0].map(k=>Math.max(0,p.b+k*step));
+    hit.push({no:hit.length+1,id,...p,bhist:bh});
+  });
+  ROWS=hit; sortKey=null; sortAsc=true;
+
+  document.getElementById('parseInfo').textContent=
+    `${ids.length}件の患者IDを認識`+(dup?`（重複 ${dup}件は除外）`:'');
+  document.getElementById('sortInfo').textContent='貼り付け順（＝受診順）で表示中';
+  document.getElementById('sheetTitle').textContent=
+    `外来準備シート — ${hit.length}名`;
+
+  document.getElementById('missBox').innerHTML = miss.length
+    ? `<div class="miss">⚠️ <b>台帳に登録がない患者が ${miss.length}件</b>あります：
+         <span class="mono">${miss.join(' / ')}</span><br>
+         新規植込み・他院植込み・ID入力の誤りが考えられます。台帳へ登録してください。</div>`
+    : '';
+
+  const cnt={};
+  hit.forEach(r=>cnt[r.m]=(cnt[r.m]||0)+1);
+  document.getElementById('progBox').innerHTML=
+    Object.entries(cnt).sort((a,b)=>b[1]-a[1])
+      .map(([m,c])=>`<div class="progc"><b>${c}<span style="font-size:12px">名</span></b><span>${m}</span></div>`)
+      .join('') || '<span class="muted">—</span>';
+
+  document.getElementById('opdResult').hidden=false;
+  render();
+}
+document.getElementById('runPaste').onclick=runPaste;
+document.getElementById('clearPaste').onclick=()=>{
+  document.getElementById('pasteBox').value='';
+  document.getElementById('opdResult').hidden=true;
+  document.getElementById('parseInfo').textContent='';
+};
+document.getElementById('resetSort').onclick=runPaste;
+runPaste();
+
+// 台帳の絞り込み（遠隔あり / なし）
+const NOTE={
+  all:'全112台のうち9件を表示しています（ダミー）。',
+  yes:'遠隔モニタリング中 86台のうち5件を表示しています（ダミー）。定期送信で自動更新されます。',
+  no :'遠隔なし 26台のうち4件を表示しています（ダミー）。外来チェックの結果で更新します。'
+     +'このうち「遠隔 導入候補」は9件です。'
+};
+document.querySelectorAll('#seg button').forEach(b=>{
+  b.onclick=()=>{
+    document.querySelectorAll('#seg button').forEach(x=>x.classList.toggle('on', x===b));
+    const f=b.dataset.f;
+    document.querySelectorAll('#ledger tr').forEach(tr=>{
+      tr.hidden = (f!=='all' && tr.dataset.r!==f);
+    });
+    document.getElementById('segnote').textContent=NOTE[f];
+  };
+});
+</script>
+</body>
+</html>

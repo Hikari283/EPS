@@ -1,0 +1,21 @@
+# 患者データ・実帳票は絶対にコミットしない
+samples/
+*.pdf
+*.db
+*.sqlite3
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# ビルド成果物
+packaging/output/
+
+# OS
+.DS_Store
+Thumbs.db
