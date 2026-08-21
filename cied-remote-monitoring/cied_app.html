@@ -392,7 +392,9 @@ const FIELDS = [
 // 患者ID・氏名は台帳への紐付けに使うため別枠で抽出（見つかれば自動入力、無ければ空欄で人が入れる）
 const PATIENT_ID_PATTERN = /ID[：:]\s*(\d{8})/;
 // 日本人氏名は姓と名の間に空白が入ることが多いため、行末までを氏名として拾う（\S+だと姓だけで止まる）
-const PATIENT_NAME_PATTERN = /患者名[：:]\s*(.+?)\s*$/m;
+// 「患者名：A ID： 00000000 医師：A」のように、氏名・ID・医師名が同じ行に並ぶ帳票がある。
+// 行末まで拾うと医師名まで氏名に混ざるため、ID/医師の手前で区切る（先読みで手前まで、を表現）。
+const PATIENT_NAME_PATTERN = /患者名[：:]\s*(.+?)(?=\s*(?:ID[：:]|医師[：:])|\s*$)/m;
 
 function coerce(raw, type){
   if(type === "int"){ const n = parseInt(raw.replace(/[^\d-]/g,""),10); return isNaN(n)?null:n; }
@@ -478,25 +480,29 @@ function getExtractedVal(path){
   return (r && r.value !== null && r.value !== undefined) ? r.value : "";
 }
 
-function buildKarteText(){
-  const eriMin = getExtractedVal("battery.remaining_months");
-  const eriMax = getExtractedVal("battery.remaining_months_max");
+// getVal: フィールドパス→値 の取得関数。省略時は「今貼り付けた1枚分」だけを見る。
+// 患者の全レポートを合成した値を渡せば、バラバラの順番で読み込んだページを1つのカルテ文にまとめられる
+// （mergedReportFieldsFor(patientId).get を渡す。btnConfirmとカルテ文の再表示の両方で使う）。
+function buildKarteText(getVal, deviceType){
+  getVal = getVal || getExtractedVal;
+  deviceType = deviceType || document.getElementById("in_device_type").value;
+  const eriMin = getVal("battery.remaining_months");
+  const eriMax = getVal("battery.remaining_months_max");
   const eri = (eriMin !== "" && eriMax !== "") ? (eriMin + "-" + eriMax + "（y）") : "";
-  const deviceType = document.getElementById("in_device_type").value;
-  const modelName = getExtractedVal("device.model_name");
+  const modelName = getVal("device.model_name");
 
   return [
     "【遠隔モニタリング】",
     "○デバイス種類　" + deviceType + "（" + modelName + "）",
     "○測定値",
-    "・電池電圧　" + getExtractedVal("battery.voltage") + "V",
+    "・電池電圧　" + getVal("battery.voltage") + "V",
     "・ERI：" + eri,
-    "・閾値　RA：" + getExtractedVal("leads.RA.threshold_voltage") + "V（" + getExtractedVal("leads.RA.threshold_pulse_width") + "ms）、" +
-      "RV：" + getExtractedVal("leads.RV.threshold_voltage") + "V（" + getExtractedVal("leads.RV.threshold_pulse_width") + "ms）",
-    "・波高値　P波：" + getExtractedVal("leads.RA.sensing_amplitude") + "mV、R波：" + getExtractedVal("leads.RV.sensing_amplitude") + "mV",
-    "・AS-VS：" + getExtractedVal("pacing.as_vs_percent") + "%、AS-VP：" + getExtractedVal("pacing.as_vp_percent") + "%",
-    "・AP-VS：" + getExtractedVal("pacing.ap_vs_percent") + "%、AP-VP：" + getExtractedVal("pacing.ap_vp_percent") + "%",
-    "・リード抵抗　RA：" + getExtractedVal("leads.RA.impedance") + "Ω、RV：" + getExtractedVal("leads.RV.impedance") + "Ω",
+    "・閾値　RA：" + getVal("leads.RA.threshold_voltage") + "V（" + getVal("leads.RA.threshold_pulse_width") + "ms）、" +
+      "RV：" + getVal("leads.RV.threshold_voltage") + "V（" + getVal("leads.RV.threshold_pulse_width") + "ms）",
+    "・波高値　P波：" + getVal("leads.RA.sensing_amplitude") + "mV、R波：" + getVal("leads.RV.sensing_amplitude") + "mV",
+    "・AS-VS：" + getVal("pacing.as_vs_percent") + "%、AS-VP：" + getVal("pacing.as_vp_percent") + "%",
+    "・AP-VS：" + getVal("pacing.ap_vs_percent") + "%、AP-VP：" + getVal("pacing.ap_vp_percent") + "%",
+    "・リード抵抗　RA：" + getVal("leads.RA.impedance") + "Ω、RV：" + getVal("leads.RV.impedance") + "Ω",
     "",
     "（前回との比較・イベント有無はここに手入力）",
   ].join("\n");
@@ -588,11 +594,15 @@ document.getElementById("btnConfirm").addEventListener("click", function(){
     id: uid(), device_id: device.id, patient_id: patientId,
     created_at: new Date().toISOString(),
     fields: currentResults.map(function(r){ return { path:r.field.path, label:r.field.label, value:r.value }; }),
-    karte_text: buildKarteText(),
+    karte_text: buildKarteText(), // このページ単独のスナップショット（参考用に保存）
   });
   saveReports(reports);
 
-  document.getElementById("karteText").textContent = buildKarteText();
+  // 表示するカルテ文は、この患者のこれまでの全レポートを項目ごとに合成したもの。
+  // 「Aさんのページ1→Bさんのページ1→Aさんのページ3」のようにバラバラの順番で確定しても、
+  // 確定するたびにその患者の最新・最も完全な合成結果が見られる。
+  const merged = mergedReportFieldsFor(patientId);
+  document.getElementById("karteText").textContent = buildKarteText(merged.get, device.device_type);
   document.getElementById("karteCard").hidden = false;
   document.getElementById("confirmInfo").textContent =
     (isNew ? "台帳に新規登録しました" : "台帳を更新しました") + "（患者ID " + patientId + "）";
@@ -668,12 +678,34 @@ function renderLedger(){
       '<td>' + escapeHtml(d.note||"") + '</td>' +
       '<td>' +
         '<button class="btn ghost small" data-edit="' + d.id + '">編集</button> ' +
+        '<button class="btn ghost small" data-karte="' + d.id + '">カルテ文</button> ' +
         '<button class="btn ghost small" data-del="' + d.id + '" style="color:var(--bad)">削除</button>' +
       '</td>';
     tbody.appendChild(tr);
   });
   tbody.querySelectorAll("[data-edit]").forEach(function(btn){
     btn.addEventListener("click", function(){ openDeviceForm(btn.dataset.edit); });
+  });
+  // これまで確定した全レポートを合成したカルテ文を、新しく貼り付けなくてもいつでも確認できる。
+  // バラバラの順番でページを確定した後、「今この患者の情報はどこまで揃っているか」を見るためのもの。
+  tbody.querySelectorAll("[data-karte]").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      const id = btn.dataset.karte;
+      const d = loadLedger().find(function(x){ return x.id === id; });
+      if(!d) return;
+      const merged = mergedReportFieldsFor(d.patient_id);
+      if(!merged.latestOverall){
+        alert("患者ID " + d.patient_id + "「" + d.patient_name + "」はまだレポートが取り込まれていません。");
+        return;
+      }
+      const text = buildKarteText(merged.get, d.device_type);
+      document.querySelectorAll("nav button").forEach(function(b){ b.setAttribute("aria-selected", String(b.dataset.t==="imp")); });
+      ["imp","lst","opd"].forEach(function(sec){ document.getElementById(sec).hidden = (sec !== "imp"); });
+      document.getElementById("resultCard").hidden = true;
+      document.getElementById("karteText").textContent = text;
+      document.getElementById("karteCard").hidden = false;
+      window.scrollTo(0,0);
+    });
   });
   tbody.querySelectorAll("[data-del]").forEach(function(btn){
     btn.addEventListener("click", function(){
