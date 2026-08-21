@@ -169,8 +169,16 @@ value_pattern で両方を1回で捕まえる設計にする。
 | `atrial_pacing_percent` | float (%) |
 | `ventricular_pacing_percent` | float (%) |
 | `biv_pacing_percent` | float (%) — CRTのみ |
+| `as_vs_percent` | float (%) — 心房・心室とも自己（センシング） |
+| `as_vp_percent` | float (%) — 心房は自己、心室はペーシング |
+| `ap_vs_percent` | float (%) — 心房はペーシング、心室は自己 |
+| `ap_vp_percent` | float (%) — 心房・心室ともペーシング |
 
 CRTの両室ペーシング率は臨床上きわめて重要（低下＝要介入）。閾値アラートの対象にする。
+
+**AS/AP-VS/VP の4区分はMedtronicの実カルテ転記例で確認済み**（実際に転記している）。
+A=心房、V=心室、S=センシング（自己）、P=ペーシングの略。一般的なEP用語なので
+他メーカーでも共通概念のはずだが、表記・区分の粒度は要実測（[06.1-次にやること]も参照）。
 
 ### ArrhythmiaInfo
 
@@ -224,27 +232,53 @@ CRTの両室ペーシング率は臨床上きわめて重要（低下＝要介�
 
 ### Medtronic CareLink（Quick Look II）実測分
 
-ユーザーが実レポート（イベントなしの基本パターン、氏名・ID・シリアル番号等は置換済み）を
-確認して得られた項目名。`src/profiles/medtronic_carelink.yaml` に反映済み。
+ユーザーが実レポート（イベントなしの基本パターン、氏名・ID・シリアル番号等は置換済み）と、
+実際のカルテ転記例（同じく患者情報なし）を確認して得られた項目名。
+`src/profiles/medtronic_carelink.yaml` に反映済み。
 
 | 共通フィールド | Medtronic表記（実測） |
 |---|---|
-| `battery.remaining_months` | 予測寿命／推定値 |
+| `device.model_name` / `device.model_number` | 「デバイス」欄に機種名と型番が続けて書かれる（例: `Azure XT DR MRI` `W2DR01`） |
+| `battery.remaining_months` / `_max` | 予測寿命／推定値・最大値。**カルテの「ERI：13.1-13.7（y）」はこの2値から組み立てる派生表示**（ユーザー確認済み。「ERI」という単語自体は帳票に印字されていない） |
 | `battery.voltage` | 電池電圧 |
-| `leads.RA/RV.impedance` | リードインピーダンス（Aペーシング／RVペーシング、バイポーラ） |
+| `leads.RA/RV.impedance` | リードインピーダンス（Aペーシング／RVペーシング、バイポーラ）。**カルテでは「リード抵抗」と表記** |
 | `leads.RA/RV.threshold` | ペーシング閾値（`1.500 V (0.40 ms)` の形で電圧とパルス幅がセット） |
-| `leads.RA/RV.sensing_amplitude` | P波高値／R波高値（1ページ目では「P/R波高値」表記） |
-| `arrhythmia.af_burden_percent` | AT/AF時間（要約ページは `%`、レートヒストグラムページは `= n sec` と書式が異なる） |
-| `pacing.ventricular/atrial_pacing_percent` | 総VP／総AP |
+| `leads.RA/RV.sensing_amplitude` | P波高値／R波高値（1ページ目では「P/R波高値」表記）。**未測定は数値の代わりに「-」** |
+| `pacing.as_vs/as_vp/ap_vs/ap_vp_percent` | AS-VS／AS-VP／AP-VS／AP-VP。**カルテ転記例で確認済み（優先度：高）** |
+| `pacing.ventricular/atrial_pacing_percent` | 総VP／総AP。カルテ例には出てこなかった（優先度：中） |
+| `arrhythmia.af_burden_percent` | AT/AF時間（要約ページは `%`、レートヒストグラムページは `= n sec` と書式が異なる）。**イベントなしのカルテ例には出てこなかった。イベントありの例で優先度を確定させる** |
 
 Medtronic固有（`extras` 扱い、今回はプロファイル未反映）:
 センシング・インテグリティ・カウンタ（短いV-Vインターバル）、心房リードポジションチェック、
-AS-VS/AS-VP/AP-VS/AP-VP（レートヒストグラム詳細）、Cardiac Compassトレンド、オブザベーション。
+モードスイッチ回数（帳票の「モードスイッチ」欄はレート閾値らしく回数ではなさそう。要確認）、
+Cardiac Compassトレンド、オブザベーション。
 
 **注意:** 今回の情報源はPDFではなく、ユーザーがPDFビューアでコピーしたテキストの貼り付け。
 実PDFのbbox（座標）情報が無いため、YAML中の `direction`/`window`（ラベルから見た値の相対位置）は
 未検証の仮置き。実PDFで `core/pdf.py` 経由のトークンを使って動作確認するまでは
 「項目名の対応表」としてのみ信頼してよい。
+
+### カルテ転記テンプレート（Medtronic・実例）
+
+B-4（カルテ転記文の書き方）の実例。氏名・ID等の患者情報は一切含まない。
+
+```
+【遠隔モニタリング】
+○デバイス種類　{device_type}（{model_name}）　{model_number}
+○測定値（{測定日}）
+・電池電圧　{battery.voltage}V
+・ERI：{battery.remaining_months}-{battery.remaining_months_max}（y）
+・閾値　RA：{leads.RA.threshold_voltage}V（{leads.RA.threshold_pulse_width}ms）、RV：{leads.RV.threshold_voltage}V（{leads.RV.threshold_pulse_width}ms）
+・波高値　P波：{leads.RA.sensing_amplitude}mV、R波：{leads.RV.sensing_amplitude}mV
+・AS-VS：{pacing.as_vs_percent}%、AS-VP：{pacing.as_vp_percent}%
+・AP-VS：{pacing.ap_vs_percent}%、AP-VP：{pacing.ap_vp_percent}%
+・リード抵抗　RA：{leads.RA.impedance}Ω、RV：{leads.RV.impedance}Ω
+
+（前回との比較コメント・イベント有無は、システムが決めつけず人が書く欄として残す）
+```
+
+`device_type`（PM/ICD等の種別）は帳票のどこに書いてあるか未確認。次のサンプルで確認する。
+このテンプレートはM2の「カルテ転記用テキスト生成（テンプレート編集可能）」のたたき台。
 
 ## 4.5 DBスキーマ（概略）
 
