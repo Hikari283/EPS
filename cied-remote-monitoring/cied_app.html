@@ -116,6 +116,11 @@ th.s.on{color:var(--accent)} th.s.on .ar{opacity:1}
 .toast.show{opacity:1}
 .opd-edit{border:1px solid var(--line);background:var(--panel2,var(--bg));color:var(--ink);
   border-radius:5px;padding:4px 6px;font:inherit;font-size:12.5px;width:80px}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;
+  align-items:center;justify-content:center;z-index:100;padding:20px}
+.modal-overlay[hidden]{display:none}
+.modal{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;
+  max-width:640px;width:100%;max-height:80vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,.3)}
 @media print{
   .note,header,nav,.bar,textarea.paste,.card.noprint{display:none!important}
   section[hidden]{display:none} body{background:#fff}
@@ -351,6 +356,17 @@ th.s.on{color:var(--accent)} th.s.on .ar{opacity:1}
 </main>
 <div class="toast" id="toast"></div>
 
+<div class="modal-overlay" id="karteModalOverlay" hidden>
+  <div class="modal">
+    <div class="bar">
+      <strong id="karteModalTitle" style="font-size:13.5px"></strong>
+      <button class="btn right" id="btnCopyKarteModal">📋 クリップボードにコピー</button>
+      <button class="btn ghost small" id="btnCloseKarteModal">閉じる</button>
+    </div>
+    <pre class="karte" id="karteModalText"></pre>
+  </div>
+</div>
+
 <script>
 "use strict";
 
@@ -548,6 +564,37 @@ function buildKarteText(getVal, deviceType){
   ].join("\n");
 }
 
+// ②デバイス台帳・③遠隔モニタリング記録の「カルテ文」ボタンから呼ぶ。
+// タブを移動せず、その場でポップアップ表示してコピーできるようにする。
+function showKarteModal(patientId){
+  const d = loadLedger().find(function(x){ return x.patient_id === patientId; });
+  const merged = mergedReportFieldsFor(patientId);
+  if(!merged.latestOverall){
+    alert("患者ID " + patientId + (d ? "「" + d.patient_name + "」" : "") + "はまだレポートが取り込まれていません。");
+    return;
+  }
+  const text = buildKarteText(merged.get, d ? d.device_type : "");
+  document.getElementById("karteModalTitle").textContent =
+    "カルテ文" + (d ? "（患者ID " + patientId + "「" + d.patient_name + "」）" : "（患者ID " + patientId + "）");
+  document.getElementById("karteModalText").textContent = text;
+  document.getElementById("karteModalOverlay").hidden = false;
+}
+function closeKarteModal(){
+  document.getElementById("karteModalOverlay").hidden = true;
+}
+document.getElementById("btnCloseKarteModal").addEventListener("click", closeKarteModal);
+document.getElementById("btnCopyKarteModal").addEventListener("click", function(){
+  const text = document.getElementById("karteModalText").textContent;
+  navigator.clipboard.writeText(text).then(function(){ showToast("コピーしました"); })
+    .catch(function(){ showToast("コピーに失敗しました"); });
+});
+document.getElementById("karteModalOverlay").addEventListener("click", function(e){
+  if(e.target === this) closeKarteModal();
+});
+document.addEventListener("keydown", function(e){
+  if(e.key === "Escape" && !document.getElementById("karteModalOverlay").hidden) closeKarteModal();
+});
+
 document.getElementById("btnExtract").addEventListener("click", runExtraction);
 document.getElementById("btnClearReport").addEventListener("click", function(){
   document.getElementById("reportInput").value = "";
@@ -721,7 +768,7 @@ function renderLedger(){
       '<td>' + escapeHtml(d.note||"") + '</td>' +
       '<td>' +
         '<button class="btn ghost small" data-edit="' + d.id + '">編集</button> ' +
-        '<button class="btn ghost small" data-karte="' + d.id + '">カルテ文</button> ' +
+        '<button class="btn ghost small" data-karte="' + d.patient_id + '">カルテ文</button> ' +
         '<button class="btn ghost small" data-del="' + d.id + '" style="color:var(--bad)">削除</button>' +
       '</td>';
     tbody.appendChild(tr);
@@ -732,26 +779,7 @@ function renderLedger(){
   // これまで確定した全レポートを合成したカルテ文を、新しく貼り付けなくてもいつでも確認できる。
   // バラバラの順番でページを確定した後、「今この患者の情報はどこまで揃っているか」を見るためのもの。
   tbody.querySelectorAll("[data-karte]").forEach(function(btn){
-    btn.addEventListener("click", function(){
-      const id = btn.dataset.karte;
-      const d = loadLedger().find(function(x){ return x.id === id; });
-      if(!d) return;
-      const merged = mergedReportFieldsFor(d.patient_id);
-      if(!merged.latestOverall){
-        alert("患者ID " + d.patient_id + "「" + d.patient_name + "」はまだレポートが取り込まれていません。");
-        return;
-      }
-      const text = buildKarteText(merged.get, d.device_type);
-      document.querySelectorAll("nav button").forEach(function(b){ b.setAttribute("aria-selected", String(b.dataset.t==="imp")); });
-      ["imp","lst","rpt","opd"].forEach(function(sec){ document.getElementById(sec).hidden = (sec !== "imp"); });
-      document.getElementById("resultCard").hidden = true;
-      document.getElementById("karteText").textContent = text;
-      document.getElementById("karteCard").hidden = false;
-      document.getElementById("karteDraftBadge").hidden = true; // 保存済みデータの表示なので下書きではない
-      document.getElementById("karteHint").textContent =
-        "イベントの有無・前回との比較コメントは自動生成しません。人が判断して追記してください。";
-      window.scrollTo(0,0);
-    });
+    btn.addEventListener("click", function(){ showKarteModal(btn.dataset.karte); });
   });
   tbody.querySelectorAll("[data-del]").forEach(function(btn){
     btn.addEventListener("click", function(){
@@ -1024,21 +1052,7 @@ function renderReports(){
   });
   // 患者の現時点の合成カルテ文を見る（②台帳の「カルテ文」ボタンと同じ挙動）
   tbody.querySelectorAll("[data-rkarte]").forEach(function(btn){
-    btn.addEventListener("click", function(){
-      const patientId = btn.dataset.rkarte;
-      const d = byId[patientId];
-      const merged = mergedReportFieldsFor(patientId);
-      const text = buildKarteText(merged.get, d ? d.device_type : "");
-      document.querySelectorAll("nav button").forEach(function(b){ b.setAttribute("aria-selected", String(b.dataset.t==="imp")); });
-      ["imp","lst","rpt","opd"].forEach(function(sec){ document.getElementById(sec).hidden = (sec !== "imp"); });
-      document.getElementById("resultCard").hidden = true;
-      document.getElementById("karteText").textContent = text;
-      document.getElementById("karteCard").hidden = false;
-      document.getElementById("karteDraftBadge").hidden = true;
-      document.getElementById("karteHint").textContent =
-        "イベントの有無・前回との比較コメントは自動生成しません。人が判断して追記してください。";
-      window.scrollTo(0,0);
-    });
+    btn.addEventListener("click", function(){ showKarteModal(btn.dataset.rkarte); });
   });
   // この1件の取り込み記録だけを削除する（台帳・他のレポートには影響しない）
   tbody.querySelectorAll("[data-rdel]").forEach(function(btn){
