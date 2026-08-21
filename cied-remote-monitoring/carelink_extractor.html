@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CareLinkレポート 項目抽出（Medtronic）</title>
+<style>
+  :root{
+    --bg:#0b1220; --panel:#121a2b; --panel2:#0e1626; --line:#22304a;
+    --txt:#eaf0fb; --muted:#93a4c3; --accent:#5fb3f6; --accent2:#34d399;
+    --warm:#f6b26b; --danger:#f87171; --gold:#ffd479;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP",system-ui,sans-serif;
+    font-size:14px}
+  header{padding:14px 16px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#101a2e,#0b1220)}
+  header h1{font-size:16px;margin:0}
+  header .sub{color:var(--muted);font-size:12px;margin-top:3px}
+  main{max-width:920px;margin:0 auto;padding:16px;display:flex;flex-direction:column;gap:16px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}
+  .card h2{font-size:13px;margin:0 0 10px;color:var(--accent);text-transform:uppercase;letter-spacing:.04em}
+  textarea{width:100%;min-height:220px;background:#0a0f18;border:1px solid var(--line);color:var(--txt);
+    border-radius:8px;padding:10px;font-size:13px;line-height:1.5;resize:vertical;font-family:inherit}
+  .hint{color:var(--muted);font-size:12px;margin-top:8px;line-height:1.6}
+  button.btn{background:var(--accent);color:#04222e;border:none;border-radius:10px;padding:11px 18px;
+    font-size:14px;font-weight:800;cursor:pointer}
+  button.btn:active{filter:brightness(.95)}
+  button.btn.ghost{background:#1f2937;color:var(--txt);border:1px solid var(--line)}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .hidden{display:none!important}
+
+  table.results{width:100%;border-collapse:collapse;font-size:13px}
+  table.results th{text-align:left;color:var(--muted);font-weight:600;font-size:11px;
+    text-transform:uppercase;letter-spacing:.03em;padding:6px 8px;border-bottom:1px solid var(--line)}
+  table.results td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+  table.results tr:last-child td{border-bottom:none}
+  .fname{color:var(--muted)}
+  .fval{font-weight:700;font-variant-numeric:tabular-nums}
+  .fval input{background:#0a0f18;border:1px solid var(--line);color:var(--txt);border-radius:6px;
+    padding:5px 7px;font-size:13px;width:100%;font-weight:700;font-variant-numeric:tabular-nums}
+  .badge{display:inline-block;font-size:10.5px;font-weight:800;border-radius:999px;padding:2px 8px;margin-left:6px}
+  .badge.ok{background:#0f3d2a;color:var(--accent2)}
+  .badge.warn{background:#42320f;color:var(--gold)}
+  .badge.miss{background:#3a1620;color:var(--danger)}
+
+  .karte{white-space:pre-wrap;background:#0a0f18;border:1px solid var(--line);border-radius:8px;
+    padding:12px;font-size:13px;line-height:1.7;font-family:ui-monospace,Menlo,Consolas,monospace}
+  .copybar{display:flex;justify-content:flex-end;margin-top:8px}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+    background:var(--accent2);color:#04240f;padding:9px 18px;border-radius:999px;font-weight:700;
+    font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s}
+  .toast.show{opacity:1}
+  .privacy{font-size:11.5px;color:var(--muted);line-height:1.7;background:var(--panel2);
+    border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  .privacy b{color:var(--txt)}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>CareLinkレポート 項目抽出（Medtronic）</h1>
+  <div class="sub">インストール不要・ブラウザだけで動作。データはこの端末の外に一切送信されません</div>
+</header>
+
+<main>
+  <div class="privacy">
+    <b>このページはインターネット通信を一切行いません。</b>
+    JavaScriptがブラウザの中だけで完結して動いています（開発者ツールのネットワークタブで確認できます）。
+    貼り付けた内容がどこかに送信されることはありません。
+  </div>
+
+  <div class="card">
+    <h2>1. レポートのテキストを貼り付け</h2>
+    <p class="hint">
+      CareLinkレポートのPDFをビューアで開き、<b>Ctrl+A</b>（全選択）→<b>Ctrl+C</b>（コピー）して、
+      下の欄に<b>Ctrl+V</b>で貼り付けてください。複数ページまとめて貼り付けて構いません。
+    </p>
+    <textarea id="input" placeholder="ここにコピーしたレポートのテキストを貼り付け..."></textarea>
+    <div class="row" style="margin-top:10px">
+      <button class="btn" id="btnExtract">項目を抽出する</button>
+      <button class="btn ghost" id="btnClear">クリア</button>
+      <button class="btn ghost" id="btnSample">サンプルで試す</button>
+    </div>
+  </div>
+
+  <div class="card hidden" id="resultsCard">
+    <h2>2. 抽出結果（必ず確認してください）</h2>
+    <p class="hint">
+      値はすべて<b>編集できます</b>。「未検出」の項目や、明らかにおかしい値は
+      元のレポートを見ながら手で直してください。<b>このツールは値を確定しません — 最終確認は人が行います。</b>
+    </p>
+    <table class="results" id="resultsTable">
+      <thead><tr><th>項目</th><th>値</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <div class="card hidden" id="karteCard">
+    <h2>3. カルテ転記文</h2>
+    <p class="hint">
+      上の値を編集すると自動的に更新されます。イベントの有無・前回との比較コメントは
+      このツールでは判断せず、空欄のままにしています。
+    </p>
+    <div class="karte" id="karteText"></div>
+    <div class="copybar">
+      <button class="btn" id="btnCopy">クリップボードにコピー</button>
+    </div>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ------------------------------------------------------------------
+  // 抽出ルール（Medtronic CareLink専用）
+  // src/profiles/medtronic_carelink.yaml の内容をJavaScriptに移植したもの。
+  // value_pattern はラベル文字列を含めて自己完結させている（同じ行に複数項目が
+  // 並ぶ実レポートで、隣の項目の値を誤って拾わないため）。
+  // ------------------------------------------------------------------
+  const FIELDS = [
+    { path: "device.model_name", label: "機種名",
+      pattern: /デバイス[：:]\s*(.+?)\s+[A-Z]\d[A-Z]{2}\d{2}\s+シリアル番号/, type: "str" },
+    { path: "device.model_number", label: "型番",
+      pattern: /デバイス[：:].+?\s+([A-Z]\d[A-Z]{2}\d{2})\s+シリアル番号/, type: "str" },
+    { path: "device.serial_number", label: "シリアル番号",
+      pattern: /シリアル番号[：:]\s*([A-Za-z0-9]+)/, type: "str" },
+    { path: "device.implant_date", label: "植込み日",
+      pattern: /植込み日[：:]\s*(\d{2}-[A-Za-z]{3}-\d{4})/, type: "date" },
+    { path: "device.programmed_mode", label: "モード",
+      pattern: /モード\s+([A-Z<>=]+)\s+基本レート/, type: "str" },
+    { path: "device.lower_rate", label: "基本レート(bpm)",
+      pattern: /基本レート\s+(\d+)\s*bpm/, type: "int" },
+    { path: "device.upper_rate", label: "上限トラッキング(bpm)",
+      pattern: /上限トラッキング\s*(\d+)\s*bpm/, type: "int" },
+
+    { path: "battery.remaining_months", label: "予測寿命 推定値(年)",
+      pattern: /推定値[：:]\s*(\d+(?:\.\d+)?)\s*years?/, type: "float" },
+    { path: "battery.remaining_months_min", label: "予測寿命 最小値(年)",
+      pattern: /最小値[：:]\s*(\d+(?:\.\d+)?)\s*years?/, type: "float" },
+    { path: "battery.remaining_months_max", label: "予測寿命 最大値(年)",
+      pattern: /最大値[：:]\s*(\d+(?:\.\d+)?)\s*years?/, type: "float" },
+    { path: "battery.voltage", label: "電池電圧(V)",
+      pattern: /電圧\s+(\d+\.\d+)\s*V/, type: "float" },
+    { path: "battery.rrt_voltage", label: "RRT電圧(V)",
+      pattern: /RRT=(\d+\.\d+)V/, type: "float" },
+
+    { path: "leads.RA.impedance", label: "RAリードインピーダンス(Ω)",
+      pattern: /Aペーシング[^\d]*(\d+)\s*Ω/, type: "int" },
+    { path: "leads.RV.impedance", label: "RVリードインピーダンス(Ω)",
+      pattern: /RVペーシング[^\d]*(\d+)\s*Ω/, type: "int" },
+
+    { path: "leads.RA.threshold_voltage", label: "RA閾値 電圧(V)", type: "float",
+      pattern: /ペーシング閾値\s+(\d+\.\d+)\s*V\s*\((\d+\.\d+)\s*ms\)\s+(\d+\.\d+)\s*V\s*\((\d+\.\d+)\s*ms\)/,
+      groupIndex: 1 },
+    { path: "leads.RA.threshold_pulse_width", label: "RA閾値 パルス幅(ms)", type: "float",
+      pattern: /ペーシング閾値\s+(\d+\.\d+)\s*V\s*\((\d+\.\d+)\s*ms\)\s+(\d+\.\d+)\s*V\s*\((\d+\.\d+)\s*ms\)/,
+      groupIndex: 2 },
+    { path: "leads.RV.threshold_voltage", label: "RV閾値 電圧(V)", type: "float",
+      pattern: /ペーシング閾値\s+(\d+\.\d+)\s*V\s*\((\d+\.\d+)\s*ms\)\s+(\d+\.\d+)\s*V\s*\((\d+\.\d+)\s*ms\)/,
+      groupIndex: 3 },
+    { path: "leads.RV.threshold_pulse_width", label: "RV閾値 パルス幅(ms)", type: "float",
+      pattern: /ペーシング閾値\s+(\d+\.\d+)\s*V\s*\((\d+\.\d+)\s*ms\)\s+(\d+\.\d+)\s*V\s*\((\d+\.\d+)\s*ms\)/,
+      groupIndex: 4 },
+
+    { path: "leads.RA.sensing_amplitude", label: "P波高値(mV)",
+      pattern: /P波高値\s+(\d+\.\d+)\s*mV/, type: "float" },
+    { path: "leads.RV.sensing_amplitude", label: "R波高値(mV)",
+      // 「P/R波高値」の部分文字列として誤マッチしないよう直前が"/"でないことを要求
+      pattern: /(?<![/／])R波高値\s+(\d+\.\d+)\s*mV/, type: "float" },
+
+    { path: "pacing.as_vs_percent", label: "AS-VS(%)　※直近期間",
+      pattern: /AS-VS\s+(?:<?\s*\d+(?:\.\d+)?)\s*%\s+(<?\s*\d+(?:\.\d+)?)\s*%/, type: "float" },
+    { path: "pacing.as_vp_percent", label: "AS-VP(%)　※直近期間",
+      pattern: /AS-VP\s+(?:<?\s*\d+(?:\.\d+)?)\s*%\s+(<?\s*\d+(?:\.\d+)?)\s*%/, type: "float" },
+    { path: "pacing.ap_vs_percent", label: "AP-VS(%)　※直近期間",
+      pattern: /AP-VS\s+(?:<?\s*\d+(?:\.\d+)?)\s*%\s+(<?\s*\d+(?:\.\d+)?)\s*%/, type: "float" },
+    { path: "pacing.ap_vp_percent", label: "AP-VP(%)　※直近期間",
+      pattern: /AP-VP\s+(?:<?\s*\d+(?:\.\d+)?)\s*%\s+(<?\s*\d+(?:\.\d+)?)\s*%/, type: "float" },
+
+    { path: "arrhythmia.vt_episode_count", label: "VT(>4 beat) 件数",
+      pattern: /VT \(>4 beat\)\s+(\d+)/, type: "int" },
+  ];
+
+  // ------------------------------------------------------------------
+  function extractOne(text, field){
+    const m = field.pattern.exec(text);
+    if(!m) return { value: null, found: false };
+    const idx = field.groupIndex || 1;
+    let raw = m[idx];
+    if(raw === undefined) return { value: null, found: false };
+    raw = raw.trim();
+    return { value: coerce(raw, field.type), found: true, raw: raw };
+  }
+
+  function coerce(raw, type){
+    if(type === "int"){
+      const n = parseInt(raw.replace(/[^\d-]/g, ""), 10);
+      return isNaN(n) ? null : n;
+    }
+    if(type === "float"){
+      const cleaned = raw.replace(/^</, "").trim();
+      const n = parseFloat(cleaned);
+      return isNaN(n) ? null : n;
+    }
+    return raw;
+  }
+
+  function fmtValue(v, type){
+    if(v === null || v === undefined || v === "") return "";
+    if(type === "float") return String(v);
+    return String(v);
+  }
+
+  // ------------------------------------------------------------------
+  let currentResults = []; // [{field, value, found}]
+
+  function runExtraction(){
+    const text = document.getElementById("input").value;
+    if(!text.trim()){
+      alert("テキストを貼り付けてください");
+      return;
+    }
+    currentResults = FIELDS.map(function(field){
+      const r = extractOne(text, field);
+      return { field: field, value: r.value, found: r.found };
+    });
+    renderResults();
+    document.getElementById("resultsCard").classList.remove("hidden");
+    document.getElementById("karteCard").classList.remove("hidden");
+  }
+
+  function renderResults(){
+    const tbody = document.querySelector("#resultsTable tbody");
+    tbody.innerHTML = "";
+    currentResults.forEach(function(r, i){
+      const tr = document.createElement("tr");
+      const badge = r.found
+        ? '<span class="badge ok">検出</span>'
+        : '<span class="badge miss">未検出</span>';
+      tr.innerHTML =
+        '<td class="fname">' + escapeHtml(r.field.label) + badge + '</td>' +
+        '<td class="fval"><input type="text" data-idx="' + i + '" value="' +
+          escapeHtml(fmtValue(r.value, r.field.type)) + '"></td>';
+      tbody.appendChild(tr);
+    });
+    tbody.querySelectorAll("input").forEach(function(inp){
+      inp.addEventListener("input", function(){
+        const idx = parseInt(inp.dataset.idx, 10);
+        currentResults[idx].value = inp.value;
+        currentResults[idx].found = inp.value !== "";
+        renderKarte();
+      });
+    });
+    renderKarte();
+  }
+
+  function getVal(path){
+    const r = currentResults.find(function(x){ return x.field.path === path; });
+    if(!r || r.value === null || r.value === undefined || r.value === "") return "";
+    return r.value;
+  }
+
+  function renderKarte(){
+    const eriMin = getVal("battery.remaining_months");
+    const eriMax = getVal("battery.remaining_months_max");
+    const eri = (eriMin !== "" && eriMax !== "") ? (eriMin + "-" + eriMax + "（y）") : "";
+
+    const lines = [
+      "【遠隔モニタリング】",
+      "○デバイス種類　（" + getVal("device.model_name") + "）　" + getVal("device.model_number"),
+      "○測定値",
+      "・電池電圧　" + getVal("battery.voltage") + "V",
+      "・ERI：" + eri,
+      "・閾値　RA：" + getVal("leads.RA.threshold_voltage") + "V（" + getVal("leads.RA.threshold_pulse_width") + "ms）、" +
+        "RV：" + getVal("leads.RV.threshold_voltage") + "V（" + getVal("leads.RV.threshold_pulse_width") + "ms）",
+      "・波高値　P波：" + getVal("leads.RA.sensing_amplitude") + "mV、R波：" + getVal("leads.RV.sensing_amplitude") + "mV",
+      "・AS-VS：" + getVal("pacing.as_vs_percent") + "%、AS-VP：" + getVal("pacing.as_vp_percent") + "%",
+      "・AP-VS：" + getVal("pacing.ap_vs_percent") + "%、AP-VP：" + getVal("pacing.ap_vp_percent") + "%",
+      "・リード抵抗　RA：" + getVal("leads.RA.impedance") + "Ω、RV：" + getVal("leads.RV.impedance") + "Ω",
+      "",
+      "（前回との比較・イベント有無はここに手入力）",
+    ];
+    document.getElementById("karteText").textContent = lines.join("\n");
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, function(ch){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch];
+    });
+  }
+
+  function showToast(msg){
+    const t = document.getElementById("toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    setTimeout(function(){ t.classList.remove("show"); }, 1600);
+  }
+
+  document.getElementById("btnExtract").addEventListener("click", runExtraction);
+  document.getElementById("btnClear").addEventListener("click", function(){
+    document.getElementById("input").value = "";
+    document.getElementById("resultsCard").classList.add("hidden");
+    document.getElementById("karteCard").classList.add("hidden");
+  });
+  document.getElementById("btnCopy").addEventListener("click", function(){
+    const text = document.getElementById("karteText").textContent;
+    navigator.clipboard.writeText(text).then(function(){
+      showToast("コピーしました");
+    }).catch(function(){
+      showToast("コピーに失敗しました。手動で選択してください");
+    });
+  });
+
+  // サンプル（ダミーデータ。実患者情報は一切含まない）
+  const SAMPLE = [
+    "Quick Look II",
+    "デバイス： Azure XT DR MRI W2DR01 シリアル番号：BBB",
+    " 送信日時： 20-Aug-2026 19:28:59",
+    "患者名：A",
+    "ID： 0000000",
+    "医師： A",
+    "既往： 洞房結節機能障害、 正常なAV伝導",
+    "デバイスステータス (植込み日：01-Apr-2025)",
+    "予測寿命 10.7 years (20-Aug-2026)",
+    "RA(3830) RV",
+    "リードインピーダンス 380 Ω 532 Ω",
+    "ペーシング閾値 1.500 V (0.40 ms) 1.000 V (0.40 ms)",
+    "P/R波高値 2.5 mV 18.0 mV",
+    "モード AAI<=>DDD 基本レート 60 bpm ペースAV 180 ms",
+    "モードスイッチ 171 bpm 上限トラッキング130 bpm センスAV 150 ms",
+    "VT (>4 beat) 0",
+    "",
+    "電池およびリード測定",
+    "推定値： 10.7 years",
+    "最小値： 10.2 years",
+    "最大値： 11.2 years",
+    "電圧 3.01 V",
+    "(RRT=2.63V)",
+    "Aペーシング (バイポーラ) 380 Ω 20-Aug-2026",
+    "RVペーシング (バイポーラ) 532 Ω 20-Aug-2026",
+    "P波高値 2.5 mV 20-Aug-2026",
+    "R波高値 18.0 mV 20-Aug-2026",
+    "",
+    "レートヒストグラム",
+    "時間% 総VP < 0.1% < 0.1%",
+    "総AP 52.9% 62.0%",
+    "時間% AS-VS 47.1% 38.1%",
+    "(AT/AF外) AS-VP < 0.1% < 0.1%",
+    "AP-VS 52.9% 61.9%",
+    "AP-VP < 0.1% < 0.1%",
+  ].join("\n");
+
+  document.getElementById("btnSample").addEventListener("click", function(){
+    document.getElementById("input").value = SAMPLE;
+    runExtraction();
+  });
+})();
+</script>
+</body>
+</html>

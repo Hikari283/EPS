@@ -1,28 +1,33 @@
 # 06. ロードマップ・次アクション
 
-## 6.1 次にやること（2026/08/20 時点）
+## 6.1 次にやること（2026/08/21 時点）
 
 ### 現在地
 
-**Medtronic (CareLink) の実レポート1件（イベントなしの基本パターン）を、
-ユーザーがPDFビューアでコピー&ペーストして共有してくれた。** 氏名・ID・医師名・シリアル番号は
-ダミー値に置換済みで、項目名・書式（3ページ構成: Quick Look II / 電池およびリード測定 /
-レートヒストグラム）が判明した。これをもとに `src/profiles/medtronic_carelink.yaml` の
-たたき台を作成済み（[04.4](04-data-model.md#medtronic-carelinkquick-look-ii実測分)に詳細）。
-画面イメージは [mockups/ui-mockup.html](../mockups/ui-mockup.html) で確認できる（5画面・ダミーデータ）。
+**動くツールができた。`carelink_extractor.html` をブラウザで開き、CareLinkレポートを
+コピー&ペーストすると、項目を抽出してカルテ転記文を生成する。** Pythonのインストールは
+不要（2026/08/21、ユーザーの決定でPythonを使わない方針に転換。[02.0](02-architecture.md#20-方針転換20260821-単体html--javascriptpythonは使わない)）。
+
+抽出ルールはMedtronicの実レポート3ページ分の実データで検証済み
+（`tests/test_extract_engine.py` のPython版で先に検証し、同じロジックをJSに移植。
+`carelink_extractor.html` 自体もヘッドレスブラウザで動作確認済み）。
+
+対応済みの項目: 機種名／型番／シリアル番号／植込み日／モード／基本レート／上限トラッキング／
+予測寿命（推定・最小・最大）／電池電圧／RRT電圧／RA・RVのリードインピーダンス／
+RA・RVのペーシング閾値／P波・R波高値／AS-VS・AS-VP・AP-VS・AP-VP（直近期間）／VT件数。
 
 **次にやること:**
 
-1. `medtronic_carelink.yaml` の優先項目（電池電圧・予測寿命・リードインピーダンス／閾値・
-   AT/AF時間・VP/AP率）でよいか確認する（B-1と同じ論点）。「これは要らない」「これも欲しい」があれば教える
-2. `direction`/`window`（ラベルから見た値の位置）は、bbox座標のない**貼り付けテキストからの
-   推測なので未検証。** 実PDFで動かして初めて確認できる
-3. 他メーカー（Abbott/Boston Scientific/MicroPort/WCD）でも同様にレポートを開いて
-   コピー&ペーストしてもらえれば、同じ要領でプロファイルを増やせる
+1. **実際にツールを使ってみる。** `carelink_extractor.html` で実レポートを何件か試し、
+   誤って抽出される項目・見た目のおかしい所があれば教える
+2. カルテ転記文のテンプレート（`○デバイス種類`の行など）が実際の書き方と合っているか確認する
+3. 他メーカー（Abbott/Boston Scientific/MicroPort/WCD）は台帳登録のみ対応（自動抽出は対象外、
+   [01.要件定義](01-requirements.md#対象メーカー--システム)）。もし将来メーカーを増やす場合も
+   同じHTML+JS方式で追加できる
 
-`python -m cli.list_labels`（`src/cli/list_labels.py`）や
-オフラインPCへのPython持ち込み手順（`docs/08-offline-setup.md`）も実装・作成済みだが、
-数十件のPDFを一括処理する必要が出るM2以降まで着手を保留する（理由は6.1-E参照）。
+`python -m cli.list_labels` やオフラインPCへのPython持ち込み手順（`docs/08-offline-setup.md`）、
+Python版の抽出エンジン（`src/core/extract/`）は実装・検証済みだが、**Pythonを使わない方針に
+転換したため、当面は参照実装として残すのみで使わない。**
 数件程度のレポートを見るだけなら、今回のようにコピー&ペーストで十分。
 
 決まったこと:
