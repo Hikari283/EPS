@@ -5,6 +5,7 @@ description = "CIED遠隔モニタリング デバイス一元管理システム
 requires-python = ">=3.12"
 dependencies = [
     "pypdfium2",
+    "pyyaml",
 ]
 
 [project.optional-dependencies]

@@ -4,13 +4,15 @@
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any
 
 
 class Source(Enum):
     TEXT_LAYER = "text_layer"
     OCR = "ocr"
+    MANUAL = "manual"
 
 
 @dataclass(frozen=True)
@@ -39,3 +41,34 @@ class LabelCandidate:
     text: str
     first_page: int  # 最初に出現したページ（1始まり）
     count: int  # 文書内での出現回数（同じラベルが複数ページ/複数リードで繰り返す帳票が多いため）
+
+
+@dataclass
+class FieldValue:
+    """抽出エンジン（core/extract/engine.py）が1フィールドについて返す値。
+
+    抽出できなかった場合は value=None, confidence=0.0 で返す。推測で埋めない
+    （CLAUDE.md 絶対5）。UIはこれをそのまま確定させず、必ず人の確認を経由させる
+    （CLAUDE.md 絶対4）。
+
+    参照: docs/04-data-model.md 4.3
+    """
+
+    field_path: str  # 例: "battery.voltage"
+    value: Any
+    confidence: float  # 0.0-1.0。0.0はfield未検出
+    source: Source
+    raw_text: str | None = None  # マッチした元の行テキスト（確認画面での表示・デバッグ用）
+    page: int | None = None
+    reason: str | None = None  # 未検出/低信頼の理由（例: "label_not_found", "pattern_mismatch"）
+
+
+@dataclass
+class ExtractionResult:
+    """1つのレポートに対する抽出結果一式。"""
+
+    manufacturer: str
+    fields: dict[str, FieldValue] = field(default_factory=dict)
+
+    def get(self, field_path: str) -> FieldValue | None:
+        return self.fields.get(field_path)

@@ -1,31 +1,21 @@
-# Medtronic CareLink（Azure XT DR 等）抽出プロファイル
+# Medtronic CareLink（Azure XT DR 等）抽出プロファイル — v1（行ベース方式）
 #
-# 実レポート1件（イベントなしの基本パターン、Quick Look II /
-# 電池およびリード測定 / レートヒストグラム の3ページ）の項目名・書式と、
-# 実際のカルテ転記例（氏名・ID等の患者情報は一切含まない）をもとに作成。
-# 患者の氏名・ID・実測値は使わず、項目名（ラベル）と書式のパターンのみを反映している。
+# 実レポート1件（イベントなしの基本パターン、Quick Look II / 電池およびリード測定 /
+# レートヒストグラム の3ページ）の実際のテキストと、実際のカルテ転記例（いずれも
+# 氏名・ID・シリアル番号等は置換済み）をもとに作成。value_pattern は実際の行に対して
+# 動作確認済み（tests/test_extract_engine.py）。
 #
-# ★仮: direction / window（ラベルからのbbox相対位置）は、実PDFの座標情報なしに
-# コピー&ペーストしたテキストから作成したため未検証。実PDFで
-# core/pdf.py 経由のbbox付きトークンを使って動作確認すること
-# （docs/06-roadmap.md 6.1「次にやること」参照）。
+# 設計方針（2026/08/21、実データ検証を経て決定）:
+# 当初はラベルの位置（bbox）を起点に値を探す方式（docs/03-extraction-design.md 3.5）を
+# 想定していたが、実レポートは「項目名 値1 値2 ...」の形で1行に収まることが多いとわかった。
+# そこで value_pattern はラベル文字列を含めて自己完結させ、1行に対してそのまま
+# 正規表現マッチさせる方式にした。同じ行に複数項目が並ぶ場合（例:
+# 「モードスイッチ 171 bpm 上限トラッキング130 bpm センスAV 150 ms」）に、
+# 隣の項目の値を誤って拾わないための設計。
 #
-# カルテ転記例（実際にこう書いている。ERIはこのプロファイルの抽出結果から
-# アプリ側で `f"{推定値}-{最大値}（y）"` として組み立てる派生値。抽出ルールではない）:
-#
-#   【遠隔モニタリング】
-#   ○デバイス種類　PM（Azure XT DR MRI）　W2DR01
-#   ○測定値（測定日）
-#   ・電池電圧　3.19V
-#   ・ERI：13.1-13.7（y）              ← battery.remaining_months 〜 battery.remaining_months_max
-#   ・閾値　RA：0.50V（0.4ms）、RV：0.750V（0.4ms）
-#   ・波高値　P波：2.3mV、R波：- mV     ← 未測定は「-」（=null。推測で埋めない）
-#   ・AS-VS：<0.1%、AS-VP：98.7%
-#   ・AP-VS：0.0%、AP-VP：1.2%
-#   ・リード抵抗　RA：437Ω、RV：608Ω
-#   （前回と著変なし / イベントなし　← 臨床判断の自由記述。システムは生成しない）
-#
-# 参照: docs/03-extraction-design.md 3.5, docs/04-data-model.md 4.3/4.4
+# 参照: docs/03-extraction-design.md 3.5・3.9、docs/04-data-model.md 4.3/4.4
+
+manufacturer: Medtronic
 
 identify:
   any_of:
@@ -36,264 +26,157 @@ identify:
 
 fields:
   # --- デバイス情報 ---
-  # 「デバイス： Azure™ XT DR MRI W2DR01　シリアル番号：BBB」のように、
-  # デバイス名の行の末尾に型番（英数字コード）が続けて書かれている。
-  # カルテでは機種名と型番を分けて書く（例: 「PM（Azure XT DR MRI）　W2DR01」）ので、
-  # ここでも分離して抽出する。
+  # 「デバイス： Azure™ XT DR MRI W2DR01 シリアル番号：BBB」
+  # 型番の書式（英字1+数字1+英字2+数字2）は今回の1例からの推測。他機種で当てはまらなければ見直す。
   device.model_name:
-    labels: ["デバイス"]
-    label_match: exact
-    direction: right
-    value_pattern: '(.+?)\s+[A-Z]\d[A-Z]{2}\d{2}\s+シリアル番号'
+    value_pattern: 'デバイス[：:]\s*(.+?)\s+[A-Z]\d[A-Z]{2}\d{2}\s+シリアル番号'
     type: str
 
   device.model_number:
-    labels: ["デバイス"]
-    label_match: exact
-    direction: right
-    # 型番の書式は要実測。今回の例（W2DR01）は「英字1+数字1+英字2+数字2」。
-    # 他機種で当てはまらない場合はこのパターンを見直す。
-    value_pattern: '([A-Z]\d[A-Z]{2}\d{2})\s+シリアル番号'
+    value_pattern: 'デバイス[：:].+?\s+([A-Z]\d[A-Z]{2}\d{2})\s+シリアル番号'
     type: str
 
   device.serial_number:
-    labels: ["シリアル番号"]
-    label_match: exact
-    direction: right
-    value_pattern: '([A-Za-z0-9]+)'
+    value_pattern: 'シリアル番号[：:]\s*([A-Za-z0-9]+)'
     type: str
 
+  # 「デバイスステータス (植込み日：01-Apr-2025)」
   device.implant_date:
-    labels: ["植込み日"]
-    label_match: fuzzy
-    fuzzy_threshold: 0.80
-    direction: right
-    value_pattern: '(\d{2}-[A-Za-z]{3}-\d{4})'
+    value_pattern: '植込み日[：:]\s*(\d{2}-[A-Za-z]{3}-\d{4})'
     type: date
 
+  # 「モード AAI<=>DDD 基本レート 60 bpm ペースAV 180 ms」
   device.programmed_mode:
-    labels: ["モード"]
-    label_match: exact
-    scope:
-      labels: ["パラメータサマリ"]
-      extent: below
-    direction: right
-    value_pattern: '([A-Z<>=]+)'
+    value_pattern: 'モード\s+([A-Z<>=]+)\s+基本レート'
     type: str
 
   device.lower_rate:
-    labels: ["基本レート"]
-    label_match: exact
-    direction: right
-    value_pattern: '(\d+)\s*bpm'
+    value_pattern: '基本レート\s+(\d+)\s*bpm'
     type: int
 
+  # 「モードスイッチ 171 bpm 上限トラッキング130 bpm センスAV 150 ms」
+  # コピー&ペーストで項目名と数字の間の空白が消えることがある（"トラッキング130"）。空白なしでも通す。
   device.upper_rate:
-    labels: ["上限トラッキング"]
-    label_match: fuzzy
-    fuzzy_threshold: 0.85
-    direction: right
-    value_pattern: '(\d+)\s*bpm'
+    value_pattern: '上限トラッキング\s*(\d+)\s*bpm'
     type: int
 
   # --- 電池 ---
-  # 「予測寿命」はページ1（要約値のみ）とページ2（推定/最小/最大）の両方に出る。
-  # カルテの「ERI：13.1-13.7（y）」は、この推定値〜最大値をアプリ側で
-  # 文字列に組み立てた派生表示（ユーザー確認済み）。抽出自体は推定値・最大値を別々に行う。
+  # 「電池およびリード測定」ページの「推定値：10.7 years」「最大値：11.2 years」より。
+  # カルテの「ERI：13.1-13.7（y）」はこの2値をアプリ側で組み立てた表示（ユーザー確認済み）。
+  # 帳票に「ERI」という単語自体は印字されていない。
   battery.remaining_months:
-    labels:
-      - "予測寿命"
-      - "推定値"
-      - "Longevity"
-      - "Estimated Remaining Longevity"
-    label_match: fuzzy
-    fuzzy_threshold: 0.80
-    direction: right
-    value_pattern: '(\d+(?:\.\d+)?)\s*years?'
-    unit_map:
-      years: months_x12
-      year: months_x12
+    value_pattern: '推定値[：:]\s*(\d+(?:\.\d+)?)\s*years?'
+    unit_map: {years: months_x12, year: months_x12}
+    type: float
+    range: [0, 240]
+
+  battery.remaining_months_min:
+    value_pattern: '最小値[：:]\s*(\d+(?:\.\d+)?)\s*years?'
+    unit_map: {years: months_x12, year: months_x12}
     type: float
     range: [0, 240]
 
   battery.remaining_months_max:
-    labels: ["最大値"]
-    label_match: exact
-    scope:
-      labels: ["予測寿命"]
-      extent: below
-    direction: right
-    value_pattern: '(\d+(?:\.\d+)?)\s*years?'
-    unit_map:
-      years: months_x12
-      year: months_x12
+    value_pattern: '最大値[：:]\s*(\d+(?:\.\d+)?)\s*years?'
+    unit_map: {years: months_x12, year: months_x12}
     type: float
     range: [0, 240]
 
+  # 「電圧 3.01 V」（セクション見出しの「電池電圧 20-Aug-2026」には数値+Vが無いので誤マッチしない）
   battery.voltage:
-    labels: ["電池電圧", "電圧"]
-    label_match: fuzzy
-    scope:
-      labels: ["電池電圧"]
-      extent: below
-    direction: right
-    value_pattern: '(\d+\.\d+)\s*V'
+    value_pattern: '電圧\s+(\d+\.\d+)\s*V'
     type: float
     range: [1.5, 4.0]
 
-  # RRT（Recommended Replacement Time）電圧は「(RRT=2.63V)」のように
-  # 電圧の値の直後に括弧書きで出る。今回のカルテ例では使われていないが、
-  # 電池関連の重要情報として抽出だけはしておく（転記するかは別途判断）。
+  # 「(RRT=2.63V)」。今回のカルテ例では転記されていないが、電池関連情報として抽出はしておく。
   battery.rrt_voltage:
-    labels: ["RRT"]
-    label_match: fuzzy
-    direction: right
     value_pattern: 'RRT=(\d+\.\d+)V'
     type: float
     range: [1.5, 4.0]
 
-  # --- リード（RA / RV。CRTならLVも追加する） ---
+  # --- リード ---
+  # 「電池およびリード測定」ページの「Aペーシング (バイポーラ) 380 Ω」
+  # 「RVペーシング (バイポーラ) 532 Ω」より（ラベルにRA/RVが直接含まれ、1行1項目で明確）。
   leads.RA.impedance:
-    labels: ["リードインピーダンス", "Aペーシング"]
-    label_match: fuzzy
-    scope:
-      labels: ["RA"]
-      extent: right   # 表の列見出しがRA/RVで、値は見出しの下に並ぶ
-    value_pattern: '(\d+)\s*Ω'
+    value_pattern: 'Aペーシング[^\d]*(\d+)\s*Ω'
     type: int
     range: [200, 2000]
 
   leads.RV.impedance:
-    labels: ["リードインピーダンス", "RVペーシング"]
-    label_match: fuzzy
-    scope:
-      labels: ["RV"]
-      extent: right
-    value_pattern: '(\d+)\s*Ω'
+    value_pattern: 'RVペーシング[^\d]*(\d+)\s*Ω'
     type: int
     range: [200, 2000]
 
-  # 「1.500 V (0.40 ms)」のように電圧とパルス幅が1セットで出る。value_patternで両方を捕まえる。
-  leads.RA.threshold:
-    labels: ["ペーシング閾値"]
-    label_match: exact
-    scope:
-      labels: ["RA"]
-      extent: right
-    value_pattern: '(\d+\.\d+)\s*V\s*\((\d+\.\d+)\s*ms\)'
-    type: "tuple[float, float]"  # (threshold_voltage, threshold_pulse_width)
+  # 「ペーシング閾値 1.500 V (0.40 ms) 1.000 V (0.40 ms)」（Quick Look IIページ、RA→RVの順で1行に並ぶ）
+  leads.threshold_pair:
+    value_pattern: 'ペーシング閾値\s+(\d+\.\d+)\s*V\s*\((\d+\.\d+)\s*ms\)\s+(\d+\.\d+)\s*V\s*\((\d+\.\d+)\s*ms\)'
+    parts:
+      - leads.RA.threshold_voltage
+      - leads.RA.threshold_pulse_width
+      - leads.RV.threshold_voltage
+      - leads.RV.threshold_pulse_width
+    type: float
 
-  leads.RV.threshold:
-    labels: ["ペーシング閾値"]
-    label_match: exact
-    scope:
-      labels: ["RV"]
-      extent: right
-    value_pattern: '(\d+\.\d+)\s*V\s*\((\d+\.\d+)\s*ms\)'
-    type: "tuple[float, float]"
-
-  # 未測定のときは数値の代わりに「-」（例:「R波：- mV」）と書かれる。
-  # value_pattern は数字にしかマッチしないため、「-」は自然に不一致となり
-  # null（要確認扱い）になる。ここで推測して埋めない（CLAUDE.md 絶対5）。
+  # 「電池およびリード測定」ページの「P波高値 2.5 mV」「R波高値 18.0 mV」より（1行1項目）。
+  # 未測定は数値の代わりに「-」等が入り \d+\.\d+ にマッチしないため、自然にnullになる。
+  # 「R波高値」は他ページの「P/R波高値」の部分文字列として誤マッチするため、
+  # 直前が「/」でないことを要求する（negative lookbehind）。
   leads.RA.sensing_amplitude:
-    labels: ["P波高値", "P/R波高値"]
-    label_match: fuzzy
-    scope:
-      labels: ["RA"]
-      extent: right
-    value_pattern: '(\d+\.\d+)\s*mV'
+    value_pattern: 'P波高値\s+(\d+\.\d+)\s*mV'
     type: float
     range: [0, 30]
 
   leads.RV.sensing_amplitude:
-    labels: ["R波高値", "P/R波高値"]
-    label_match: fuzzy
-    scope:
-      labels: ["RV"]
-      extent: right
-    value_pattern: '(\d+\.\d+)\s*mV'
+    value_pattern: '(?<!/)R波高値\s+(\d+\.\d+)\s*mV'
     type: float
     range: [0, 30]
 
-  # --- 不整脈 ---
-  # 今回見せてもらったカルテ例は「イベントなし」のケースで、AT/AF時間やVT回数には
-  # 触れていなかった（0件のときは書かない可能性がある）。イベントありの例が見られたら
-  # 転記対象として確定させる。抽出ルール自体は残しておく。
-  arrhythmia.af_burden_percent:
-    labels: ["AT/AF時間"]
-    label_match: exact
-    direction: right
-    # 帳票内でパーセント表記（"<0.1% (<0.1%)"）と秒数表記（"= 4 sec"）の
-    # 2通りの書式で出てくる（要約ページ vs レートヒストグラムページ）。両対応。
-    value_pattern: '<?(\d+(?:\.\d+)?)\s*%|=\s*(\d+)\s*sec'
-    type: float
-    range: [0, 100]
-
-  arrhythmia.vt_episode_count:
-    labels: ["VT (>4 beat)", "VT(>4 beat)"]
-    label_match: fuzzy
-    direction: right
-    value_pattern: '(\d+)'
-    type: int
-    range: [0, 9999]
-
-  # --- ペーシング率 ---
-  # AS-VS/AS-VP/AP-VS/AP-VPは実際のカルテ転記例で確認済み（★最優先）。
-  # A=心房/V=心室、S=センシング(自己)/P=ペーシング。例: AS-VP = 心房を感知してから心室をペーシング。
+  # --- ペーシング率（レートヒストグラムページ） ---
+  # 各行に「前回チェックまで」「前回チェック以降」の2値が並ぶ。カルテには「前回チェック以降」
+  # （＝今回時点で新しい方の期間）の値を書いていたため、2つ目の数値を採用する。
+  # 例:「時間% AS-VS 47.1% 38.1%」→ 38.1% を採用。
+  # カルテ転記例で確認済み（優先度：高）。
   pacing.as_vs_percent:
-    labels: ["AS-VS"]
-    label_match: exact
-    direction: right
-    value_pattern: '<?(\d+(?:\.\d+)?)\s*%'
+    value_pattern: 'AS-VS\s+(?:<?\s*\d+(?:\.\d+)?)\s*%\s+(<?\s*\d+(?:\.\d+)?)\s*%'
     type: float
     range: [0, 100]
 
   pacing.as_vp_percent:
-    labels: ["AS-VP"]
-    label_match: exact
-    direction: right
-    value_pattern: '<?(\d+(?:\.\d+)?)\s*%'
+    value_pattern: 'AS-VP\s+(?:<?\s*\d+(?:\.\d+)?)\s*%\s+(<?\s*\d+(?:\.\d+)?)\s*%'
     type: float
     range: [0, 100]
 
   pacing.ap_vs_percent:
-    labels: ["AP-VS"]
-    label_match: exact
-    direction: right
-    value_pattern: '<?(\d+(?:\.\d+)?)\s*%'
+    value_pattern: 'AP-VS\s+(?:<?\s*\d+(?:\.\d+)?)\s*%\s+(<?\s*\d+(?:\.\d+)?)\s*%'
     type: float
     range: [0, 100]
 
   pacing.ap_vp_percent:
-    labels: ["AP-VP"]
-    label_match: exact
-    direction: right
-    value_pattern: '<?(\d+(?:\.\d+)?)\s*%'
+    value_pattern: 'AP-VP\s+(?:<?\s*\d+(?:\.\d+)?)\s*%\s+(<?\s*\d+(?:\.\d+)?)\s*%'
     type: float
     range: [0, 100]
 
-  # 総VP/総APはカルテ転記例には出てこなかったが、レポートには載っているので抽出はしておく。
+  # 総VP/総APはカルテ転記例には出てこなかったが、参考として抽出しておく（優先度：中）。
   pacing.ventricular_pacing_percent:
-    labels: ["総VP", "VP"]
-    label_match: exact
-    direction: right
-    value_pattern: '<?(\d+(?:\.\d+)?)\s*%'
+    value_pattern: '総VP\s+(?:<?\s*\d+(?:\.\d+)?)\s*%\s+(<?\s*\d+(?:\.\d+)?)\s*%'
     type: float
     range: [0, 100]
 
   pacing.atrial_pacing_percent:
-    labels: ["総AP", "AP"]
-    label_match: exact
-    direction: right
-    value_pattern: '<?(\d+(?:\.\d+)?)\s*%'
+    value_pattern: '総AP\s+(?:<?\s*\d+(?:\.\d+)?)\s*%\s+(<?\s*\d+(?:\.\d+)?)\s*%'
     type: float
     range: [0, 100]
 
-  # --- メーカー固有（extras） ---
-  # 以下はMedtronic固有、または優先度が低いと判断して今回はルール化を見送った項目。
-  # 必要になったら fields に昇格させる。
+  # --- 不整脈 ---
+  # 「イベントなし」のカルテ例には出てこなかった項目。イベントありの実例で優先度を確定させる（★仮）。
+  arrhythmia.vt_episode_count:
+    value_pattern: 'VT \(>4 beat\)\s+(\d+)'
+    type: int
+    range: [0, 9999]
+
+  # --- メーカー固有（extras、今回は未対応） ---
   # - センシング・インテグリティ・カウンタ（短いV-Vインターバル）
   # - 心房リードポジションチェック
-  # - モードスイッチ回数（帳票の「モードスイッチ」欄はレート閾値の可能性が高く、回数ではなさそう。要確認）
+  # - AT/AF時間（ページによって "hr/day (%)" と "= n sec" で書式が異なり、今回は未対応）
   # - Cardiac Compassトレンド（グラフなので値の抽出は別途検討）
   # - オブザベーション（自由記述コメント）
