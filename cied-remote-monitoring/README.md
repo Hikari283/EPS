@@ -28,7 +28,10 @@ M1（抽出ルール作成）の最初の一歩。PDFから項目名らしき文
 
 1. このフォルダを丸ごと院内PCに置く
 2. 初回だけ [python.org](https://www.python.org/downloads/) からPythonをインストール
-   （「Add python.exe to PATH」に必ずチェック）
+   （「Add python.exe to PATH」に必ずチェック）。
+   **このPCがインターネットに繋がっていない場合は
+   [docs/08-offline-setup.md](docs/08-offline-setup.md) の持ち込み版手順を使う**
+   （このPCには何もインストールせず、別の端末で用意した2つのフォルダをUSBで運ぶだけで動く）
 3. Windowsなら `run_label_extraction.bat`、Macなら `run_label_extraction.command` に
    レポートPDFをドラッグ＆ドロップ
 4. 初回はライブラリの自動インストールが走り、少し待つと `labels.csv` が自動で開く
