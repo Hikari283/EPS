@@ -137,7 +137,8 @@ th.s.on{color:var(--accent)} th.s.on .ar{opacity:1}
 <nav role="tablist">
   <button role="tab" aria-selected="true" data-t="imp">① レポート取り込み</button>
   <button role="tab" aria-selected="false" data-t="lst">② デバイス台帳</button>
-  <button role="tab" aria-selected="false" data-t="opd">③ 外来準備シート</button>
+  <button role="tab" aria-selected="false" data-t="rpt">③ 遠隔モニタリング記録</button>
+  <button role="tab" aria-selected="false" data-t="opd">④ 外来準備シート</button>
 </nav>
 
 <main>
@@ -280,7 +281,28 @@ th.s.on{color:var(--accent)} th.s.on .ar{opacity:1}
   </div>
 </section>
 
-<!-- ============ ③ 外来準備シート ============ -->
+<!-- ============ ③ 遠隔モニタリング記録 ============ -->
+<section id="rpt" hidden>
+  <h2>遠隔モニタリング記録</h2>
+  <p class="sub">
+    ①レポート取り込みで「確定」した記録の一覧です。日付でソートできます。
+    台帳（②）が「患者ごとの現在の状態」であるのに対し、こちらは「いつ・誰のレポートを取り込んだか」の履歴です。
+  </p>
+  <div class="card">
+    <div class="bar">
+      <input class="inp" id="reportSearchBox" style="width:220px" placeholder="患者ID・氏名で検索">
+      <span class="right muted" style="font-size:12px" id="reportsNote"></span>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr id="reportsHead"></tr></thead>
+        <tbody id="reportsBody"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ④ 外来準備シート ============ -->
 <section id="opd" hidden>
   <h2>外来準備シート（デバイス確認シート）</h2>
   <p class="sub">
@@ -355,8 +377,9 @@ function saveReports(r){ localStorage.setItem("cied_reports", JSON.stringify(r))
 document.querySelectorAll("nav button").forEach(function(b){
   b.onclick = function(){
     document.querySelectorAll("nav button").forEach(function(x){ x.setAttribute("aria-selected", x===b); });
-    ["imp","lst","opd"].forEach(function(id){ document.getElementById(id).hidden = (id!==b.dataset.t); });
+    ["imp","lst","rpt","opd"].forEach(function(id){ document.getElementById(id).hidden = (id!==b.dataset.t); });
     if(b.dataset.t === "lst") renderLedger();
+    if(b.dataset.t === "rpt") renderReports();
     if(b.dataset.t === "opd") runPaste();
     window.scrollTo(0,0);
   };
@@ -720,7 +743,7 @@ function renderLedger(){
       }
       const text = buildKarteText(merged.get, d.device_type);
       document.querySelectorAll("nav button").forEach(function(b){ b.setAttribute("aria-selected", String(b.dataset.t==="imp")); });
-      ["imp","lst","opd"].forEach(function(sec){ document.getElementById(sec).hidden = (sec !== "imp"); });
+      ["imp","lst","rpt","opd"].forEach(function(sec){ document.getElementById(sec).hidden = (sec !== "imp"); });
       document.getElementById("resultCard").hidden = true;
       document.getElementById("karteText").textContent = text;
       document.getElementById("karteCard").hidden = false;
@@ -927,7 +950,115 @@ document.getElementById("btnCsvExport").addEventListener("click", function(){
 });
 
 /* ============================================================
-   ③ 外来準備シート
+   ③ 遠隔モニタリング記録
+   ============================================================ */
+const REPORT_COLS = [
+  {k:"date", t:"確定日時"}, {k:"pid", t:"患者ID"}, {k:"name", t:"氏名"},
+  {k:"type", t:"種別"}, {k:"maker", t:"メーカー/機種"},
+];
+let reportSortKey = "date", reportSortAsc = false; // 既定は新しい順
+let reportSearch = "";
+
+function renderReports(){
+  const ledger = loadLedger();
+  const byId = {}; ledger.forEach(function(d){ byId[d.patient_id] = d; });
+
+  let rows = loadReports().map(function(r){
+    const d = byId[r.patient_id];
+    return {
+      id: r.id, patient_id: r.patient_id,
+      date: r.created_at,
+      pid: r.patient_id,
+      name: d ? d.patient_name : "（台帳になし）",
+      type: d ? d.device_type : "",
+      maker: d ? ((d.manufacturer||"") + (d.model_name ? " / "+d.model_name : "")) : "",
+    };
+  });
+
+  if(reportSearch){
+    const q = reportSearch.toLowerCase();
+    rows = rows.filter(function(r){
+      return (r.pid||"").includes(q) || (r.name||"").toLowerCase().includes(q);
+    });
+  }
+  rows.sort(function(a,b){
+    let x=a[reportSortKey], y=b[reportSortKey];
+    const v = (reportSortKey==="date") ? (new Date(x) - new Date(y)) : String(x).localeCompare(String(y),"ja");
+    return reportSortAsc ? v : -v;
+  });
+
+  document.getElementById("reportsHead").innerHTML =
+    REPORT_COLS.map(function(c){
+      return '<th class="s ' + (reportSortKey===c.k?'on':'') + '" data-k="' + c.k + '">' + c.t +
+        '<span class="ar">' + (reportSortKey===c.k ? (reportSortAsc?'▲':'▼') : '⇅') + '</span></th>';
+    }).join("") + '<th></th>';
+
+  const tbody = document.getElementById("reportsBody");
+  if(rows.length === 0){
+    tbody.innerHTML = '<tr><td colspan="6" class="muted" style="text-align:center;padding:20px">記録がありません</td></tr>';
+  } else {
+    tbody.innerHTML = rows.map(function(r){
+      const dt = new Date(r.date);
+      const dateStr = isNaN(dt) ? r.date : (dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0")+"-"+
+        String(dt.getDate()).padStart(2,"0")+" "+String(dt.getHours()).padStart(2,"0")+":"+String(dt.getMinutes()).padStart(2,"0"));
+      return '<tr>' +
+        '<td class="mono">' + escapeHtml(dateStr) + '</td>' +
+        '<td class="mono">' + escapeHtml(r.pid) + '</td>' +
+        '<td>' + escapeHtml(r.name) + '</td>' +
+        '<td>' + escapeHtml(r.type) + '</td>' +
+        '<td>' + escapeHtml(r.maker) + '</td>' +
+        '<td>' +
+          '<button class="btn ghost small" data-rkarte="' + r.patient_id + '">カルテ文</button> ' +
+          '<button class="btn ghost small" data-rdel="' + r.id + '" style="color:var(--bad)">削除</button>' +
+        '</td></tr>';
+    }).join("");
+  }
+
+  document.querySelectorAll("#reportsHead th.s").forEach(function(th){
+    th.onclick = function(){
+      const k = th.dataset.k;
+      reportSortAsc = (reportSortKey===k) ? !reportSortAsc : (k==="date" ? false : true);
+      reportSortKey = k;
+      renderReports();
+    };
+  });
+  // 患者の現時点の合成カルテ文を見る（②台帳の「カルテ文」ボタンと同じ挙動）
+  tbody.querySelectorAll("[data-rkarte]").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      const patientId = btn.dataset.rkarte;
+      const d = byId[patientId];
+      const merged = mergedReportFieldsFor(patientId);
+      const text = buildKarteText(merged.get, d ? d.device_type : "");
+      document.querySelectorAll("nav button").forEach(function(b){ b.setAttribute("aria-selected", String(b.dataset.t==="imp")); });
+      ["imp","lst","rpt","opd"].forEach(function(sec){ document.getElementById(sec).hidden = (sec !== "imp"); });
+      document.getElementById("resultCard").hidden = true;
+      document.getElementById("karteText").textContent = text;
+      document.getElementById("karteCard").hidden = false;
+      document.getElementById("karteDraftBadge").hidden = true;
+      document.getElementById("karteHint").textContent =
+        "イベントの有無・前回との比較コメントは自動生成しません。人が判断して追記してください。";
+      window.scrollTo(0,0);
+    });
+  });
+  // この1件の取り込み記録だけを削除する（台帳・他のレポートには影響しない）
+  tbody.querySelectorAll("[data-rdel]").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      if(!confirm("この取り込み記録を削除します。よろしいですか？")) return;
+      saveReports(loadReports().filter(function(r){ return r.id !== btn.dataset.rdel; }));
+      renderReports();
+      showToast("削除しました");
+    });
+  });
+
+  document.getElementById("reportsNote").textContent = rows.length + "件表示（全" + loadReports().length + "件）";
+}
+document.getElementById("reportSearchBox").addEventListener("input", function(e){
+  reportSearch = e.target.value.trim();
+  renderReports();
+});
+
+/* ============================================================
+   ④ 外来準備シート
    ============================================================ */
 function parseIds(text){
   const norm = text.replace(/[０-９]/g, function(c){ return String.fromCharCode(c.charCodeAt(0)-0xFEE0); });
