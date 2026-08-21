@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CIED遠隔モニタリング管理システム</title>
+<style>
+:root{
+  --bg:#f5f6f8; --panel:#fff; --ink:#1c2430; --muted:#6b7684; --line:#dfe3e8;
+  --accent:#1f6feb; --accent-soft:#e8f0fe;
+  --ok:#1a7f4b; --ok-bg:#e7f6ee;
+  --warn:#9a6400; --warn-bg:#fff5dd;
+  --bad:#b3261e; --bad-bg:#fdeceb;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#161a1f; --panel:#1e242b; --ink:#e6eaef; --muted:#98a2ad; --line:#313a44;
+    --accent:#5b9bff; --accent-soft:#1d2b45;
+    --ok:#5fd39a; --ok-bg:#14301f;
+    --warn:#ecb64b; --warn-bg:#3a2e12;
+    --bad:#ff8078; --bad-bg:#3d1d1a;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic UI",sans-serif;
+  background:var(--bg);color:var(--ink);font-size:14px;line-height:1.6}
+.note{background:var(--ok-bg);color:var(--ok);padding:10px 18px;font-size:12.5px;
+  border-bottom:1px solid var(--line);font-weight:600}
+header{background:var(--panel);border-bottom:1px solid var(--line);padding:12px 18px;
+  display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.logo{font-weight:700;font-size:15px;letter-spacing:.02em}
+.offline{margin-left:auto;font-size:12px;color:var(--ok);background:var(--ok-bg);
+  padding:3px 10px;border-radius:99px;font-weight:600;white-space:nowrap}
+nav{display:flex;gap:2px;padding:0 18px;background:var(--panel);border-bottom:1px solid var(--line);
+  overflow-x:auto}
+nav button{appearance:none;background:none;border:0;border-bottom:2px solid transparent;
+  padding:11px 16px;font:inherit;font-size:13.5px;color:var(--muted);cursor:pointer;white-space:nowrap}
+nav button[aria-selected=true]{color:var(--accent);border-bottom-color:var(--accent);font-weight:700}
+main{padding:20px;max-width:1280px;margin:0 auto}
+section[hidden]{display:none}
+h2{font-size:16px;margin:0 0 4px}
+.sub{color:var(--muted);font-size:12.5px;margin:0 0 18px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;margin-bottom:16px}
+.btn{appearance:none;border:1px solid var(--accent);background:var(--accent);color:#fff;
+  padding:8px 18px;border-radius:7px;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--accent)}
+.btn.danger{background:var(--bad);border-color:var(--bad)}
+.btn.small{padding:4px 12px;font-size:12px}
+.stats{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0}
+.stat{flex:1;min-width:130px;background:var(--panel);border:1px solid var(--line);
+  border-radius:10px;padding:14px 16px}
+.stat b{display:block;font-size:24px;line-height:1.2}
+.stat span{color:var(--muted);font-size:12px}
+.stat.ok b{color:var(--ok)} .stat.warn b{color:var(--warn)} .stat.bad b{color:var(--bad)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{color:var(--muted);font-weight:600;font-size:12px;white-space:nowrap}
+.tbl-wrap{overflow-x:auto}
+.pill{display:inline-block;padding:2px 9px;border-radius:99px;font-size:11.5px;font-weight:700;white-space:nowrap}
+.pill.ok{background:var(--ok-bg);color:var(--ok)}
+.pill.warn{background:var(--warn-bg);color:var(--warn)}
+.pill.bad{background:var(--bad-bg);color:var(--bad)}
+.pill.dim{background:var(--line);color:var(--muted)}
+.bar{display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+.right{margin-left:auto}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.muted{color:var(--muted)}
+.inp{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:6px;
+  padding:6px 9px;font:inherit;font-size:13px}
+textarea.inp{width:100%;resize:vertical;font-family:inherit}
+textarea.paste{width:100%;min-height:200px;border:1px solid var(--line);border-radius:8px;
+  background:var(--panel);color:var(--ink);padding:11px 13px;font:inherit;font-size:12.5px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;line-height:1.7;resize:vertical}
+.seg{display:inline-flex;background:var(--panel);border:1px solid var(--line);border-radius:9px;
+  padding:3px;gap:3px;margin-bottom:16px;flex-wrap:wrap}
+.seg button{appearance:none;border:0;background:none;color:var(--muted);font:inherit;font-size:13px;
+  padding:7px 15px;border-radius:7px;cursor:pointer;white-space:nowrap}
+.seg button b{font-size:13px;margin-left:5px;opacity:.75}
+.seg button.on{background:var(--accent);color:#fff;font-weight:700}
+.seg button.on b{opacity:1}
+
+/* extraction results */
+.fields{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.f{display:grid;grid-template-columns:1fr 160px auto;gap:4px 10px;padding:9px 14px;
+  border-bottom:1px solid var(--line);align-items:center}
+.f .lab{font-size:12px;color:var(--muted)}
+.f input{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:6px;
+  padding:5px 8px;font:inherit;font-size:13px;font-weight:600;width:100%}
+.f .pill{justify-self:end}
+
+.formgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px 14px}
+.formgrid label{display:block;font-size:11.5px;color:var(--muted);margin-bottom:3px}
+.formgrid .fld{display:flex;flex-direction:column}
+
+pre.karte{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;white-space:pre-wrap;
+  line-height:1.8;margin:0}
+.miss{background:var(--warn-bg);border:1px solid var(--warn);border-radius:8px;
+  padding:11px 14px;margin-bottom:14px;font-size:12.5px;color:var(--warn)}
+.miss b{color:var(--warn)}
+tr.alertrow td{background:var(--bad-bg)}
+tr.warnrow td{background:var(--warn-bg)}
+th.s{cursor:pointer;user-select:none;white-space:nowrap}
+th.s:hover{color:var(--accent)}
+th.s .ar{opacity:.3;margin-left:3px}
+th.s.on{color:var(--accent)} th.s.on .ar{opacity:1}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+  background:var(--ok);color:#fff;padding:9px 18px;border-radius:999px;font-weight:700;
+  font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:50}
+.toast.show{opacity:1}
+@media print{
+  .note,header,nav,.bar,textarea.paste,.card.noprint{display:none!important}
+  section[hidden]{display:none} body{background:#fff}
+  .card{border:0;padding:0} main{padding:0}
+}
+</style>
+</head>
+<body>
+
+<div class="note">✅ このページは通信を一切行いません。すべてこのブラウザの中（localStorage）だけにデータが保存されます。</div>
+
+<header>
+  <div class="logo">CIED遠隔モニタリング管理システム</div>
+  <span class="muted" style="font-size:12px">Phase 1 / 単独運用・自動抽出はMedtronicのみ対応</span>
+  <span class="offline">● オフライン動作中</span>
+</header>
+
+<nav role="tablist">
+  <button role="tab" aria-selected="true" data-t="imp">① レポート取り込み</button>
+  <button role="tab" aria-selected="false" data-t="lst">② デバイス台帳</button>
+  <button role="tab" aria-selected="false" data-t="opd">③ 外来準備シート</button>
+</nav>
+
+<main>
+
+<!-- ============ ① レポート取り込み（取り込み＋確認・修正＋カルテ転記を統合） ============ -->
+<section id="imp">
+  <h2>レポート取り込み（Medtronic CareLink）</h2>
+  <p class="sub">
+    PDFビューアでレポートを開き、全選択(Ctrl+A)→コピー(Ctrl+C)して下に貼り付けてください。
+    自動抽出はMedtronicのみ対応。他メーカーは②の台帳から手動登録してください。
+  </p>
+
+  <div class="card">
+    <div class="bar"><strong style="font-size:13.5px">1. レポートを貼り付け</strong></div>
+    <textarea class="paste" id="reportInput" placeholder="ここにコピーしたレポートのテキストを貼り付け..."></textarea>
+    <div class="bar" style="margin-top:10px">
+      <button class="btn" id="btnExtract">項目を抽出する</button>
+      <button class="btn ghost" id="btnClearReport">クリア</button>
+      <button class="btn ghost" id="btnSample">サンプルで試す</button>
+    </div>
+  </div>
+
+  <div class="card noprint" id="resultCard" hidden>
+    <div class="bar">
+      <strong style="font-size:13.5px">2. 抽出結果の確認・修正</strong>
+      <span class="muted" style="font-size:12px">値はすべて編集できます。自動では確定しません。</span>
+    </div>
+    <div class="formgrid" style="margin-bottom:14px">
+      <div class="fld"><label>患者ID（7桁数字）</label><input class="inp" id="in_patient_id"></div>
+      <div class="fld"><label>患者氏名</label><input class="inp" id="in_patient_name"></div>
+      <div class="fld"><label>デバイス種別</label>
+        <select class="inp" id="in_device_type">
+          <option value="PM">PM（ペースメーカー）</option>
+          <option value="ICD">ICD</option>
+          <option value="CRT-P">CRT-P</option>
+          <option value="CRT-D">CRT-D</option>
+          <option value="ILR">ILR</option>
+        </select>
+      </div>
+      <div class="fld"><label>レポート日</label><input class="inp" type="date" id="in_report_date"></div>
+    </div>
+    <div id="patientIdWarn" class="miss" hidden>⚠️ 患者IDが7桁の数字になっていません。確認してください。</div>
+
+    <div class="fields" id="fieldsBox"></div>
+
+    <div class="bar" style="margin-top:14px">
+      <button class="btn" id="btnConfirm">確定して台帳に保存＋カルテ文を生成</button>
+      <span class="muted" style="font-size:12px" id="confirmInfo"></span>
+    </div>
+  </div>
+
+  <div class="card" id="karteCard" hidden>
+    <div class="bar">
+      <strong style="font-size:13.5px">3. カルテ転記用テキスト</strong>
+      <button class="btn right" id="btnCopyKarte">📋 クリップボードにコピー</button>
+    </div>
+    <pre class="karte" id="karteText"></pre>
+    <p class="sub" style="margin-top:10px;margin-bottom:0">
+      イベントの有無・前回との比較コメントは自動生成しません。人が判断して追記してください。
+    </p>
+  </div>
+</section>
+
+<!-- ============ ② デバイス台帳 ============ -->
+<section id="lst" hidden>
+  <h2>デバイス台帳</h2>
+  <p class="sub">
+    院内の全CIED患者を一元管理します。<strong>遠隔モニタリングをしていない患者（外来チェックのみ）も登録対象</strong>です。
+    全メーカー登録できますが、レポートからの自動抽出はMedtronicのみです。
+  </p>
+
+  <div class="seg" id="seg">
+    <button data-f="all" class="on">全デバイス <b id="cnt_all">0</b></button>
+    <button data-f="ACTIVE">遠隔モニタリング中 <b id="cnt_yes">0</b></button>
+    <button data-f="NONE">遠隔なし（外来のみ） <b id="cnt_no">0</b></button>
+    <button data-f="STOPPED">中止 <b id="cnt_stopped">0</b></button>
+  </div>
+
+  <div class="card">
+    <div class="bar">
+      <input class="inp" id="searchBox" style="width:220px" placeholder="患者ID・氏名・シリアルで検索">
+      <button class="btn small" id="btnNewDevice">＋ デバイスを登録</button>
+      <button class="btn ghost small" id="btnCsvImport">CSV取込</button>
+      <input type="file" id="csvFile" accept=".csv" hidden>
+      <button class="btn ghost small" id="btnCsvExport">CSV出力</button>
+      <span class="right muted" style="font-size:12px" id="ledgerNote"></span>
+    </div>
+    <div class="tbl-wrap">
+    <table>
+      <thead><tr>
+        <th>遠隔</th><th>患者ID</th><th>氏名</th><th>種別</th><th>メーカー / 機種</th>
+        <th>シリアル</th><th>植込み日</th><th>MRI</th><th>最終フォロー</th><th>備考</th><th></th>
+      </tr></thead>
+      <tbody id="ledgerBody"></tbody>
+    </table>
+    </div>
+  </div>
+
+  <div class="card noprint" id="deviceForm" hidden>
+    <h3 id="formTitle" style="font-size:13.5px;margin:0 0 12px">デバイスを登録</h3>
+    <div class="formgrid">
+      <div class="fld"><label>患者ID（7桁数字・必須）</label><input class="inp" id="f_patient_id"></div>
+      <div class="fld"><label>患者氏名（必須）</label><input class="inp" id="f_patient_name"></div>
+      <div class="fld"><label>デバイス種別</label>
+        <select class="inp" id="f_device_type">
+          <option>PM</option><option>ICD</option><option>CRT-P</option><option>CRT-D</option>
+          <option>ILR</option><option>WCD</option>
+        </select>
+      </div>
+      <div class="fld"><label>メーカー</label>
+        <select class="inp" id="f_manufacturer">
+          <option>Medtronic</option><option>Abbott</option><option>Boston Scientific</option>
+          <option>MicroPort</option><option>ZOLL</option><option>Biotronik</option><option>その他</option>
+        </select>
+      </div>
+      <div class="fld"><label>機種名</label><input class="inp" id="f_model_name"></div>
+      <div class="fld"><label>シリアル番号</label><input class="inp" id="f_serial_number"></div>
+      <div class="fld"><label>植込み日</label><input class="inp" type="date" id="f_implant_date"></div>
+      <div class="fld"><label>MRI対応</label>
+        <select class="inp" id="f_mri"><option value="">未確認</option><option value="yes">可</option><option value="no">不可</option></select>
+      </div>
+      <div class="fld"><label>遠隔状況</label>
+        <select class="inp" id="f_remote_status">
+          <option value="ACTIVE">遠隔中</option><option value="NONE">未導入</option><option value="STOPPED">中止</option>
+        </select>
+      </div>
+      <div class="fld"><label>最終フォロー日</label><input class="inp" type="date" id="f_last_followup"></div>
+      <div class="fld"><label>次回予定</label><input class="inp" id="f_next_followup"></div>
+      <div class="fld"><label>担当医</label><input class="inp" id="f_doctor"></div>
+    </div>
+    <div class="fld" style="margin-top:10px"><label>備考</label><textarea class="inp" id="f_note" rows="2"></textarea></div>
+    <div class="bar" style="margin-top:14px">
+      <button class="btn" id="btnSaveDevice">保存</button>
+      <button class="btn ghost" id="btnCancelDevice">キャンセル</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ③ 外来準備シート ============ -->
+<section id="opd" hidden>
+  <h2>外来準備シート</h2>
+  <p class="sub">電子カルテから患者IDをまとめてコピーして貼り付けると、台帳と照合して外来準備用の一覧を作ります。</p>
+
+  <div class="card noprint">
+    <div class="bar" style="margin-bottom:8px">
+      <strong style="font-size:13.5px">患者IDを貼り付け</strong>
+      <span class="muted" style="font-size:12px">7桁の数字を拾います。改行・タブ・カンマ区切り対応。</span>
+    </div>
+    <textarea class="paste" id="pasteBox" spellcheck="false" placeholder="例）
+09:00　1234567　患者A
+09:15　0012339　患者B"></textarea>
+    <div class="bar" style="margin:12px 0 0">
+      <button class="btn" id="runPaste">読み込む</button>
+      <button class="btn ghost small" id="clearPaste">クリア</button>
+      <span class="muted right" style="font-size:12px" id="parseInfo"></span>
+    </div>
+  </div>
+
+  <div id="opdResult" hidden>
+    <div id="missBox"></div>
+    <div class="card">
+      <div class="bar">
+        <strong style="font-size:13.5px" id="sheetTitle">外来準備シート</strong>
+        <span class="muted" style="font-size:12px" id="sortInfo">貼り付け順（＝受診順）で表示中</span>
+        <button class="btn ghost small right" id="resetSort">貼り付け順に戻す</button>
+        <button class="btn ghost small" onclick="window.print()">🖨 印刷</button>
+      </div>
+      <div class="tbl-wrap">
+        <table><thead><tr id="opdHead"></tr></thead><tbody id="opdBody"></tbody></table>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+
+/* ============================================================
+   共通ユーティリティ
+   ============================================================ */
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+function escapeHtml(s){
+  return String(s==null?"":s).replace(/[&<>"']/g, function(ch){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch];
+  });
+}
+function showToast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  setTimeout(function(){ t.classList.remove("show"); }, 1600);
+}
+function loadLedger(){ try{ return JSON.parse(localStorage.getItem("cied_ledger")||"[]"); }catch(e){ return []; } }
+function saveLedger(l){ localStorage.setItem("cied_ledger", JSON.stringify(l)); }
+function loadReports(){ try{ return JSON.parse(localStorage.getItem("cied_reports")||"[]"); }catch(e){ return []; } }
+function saveReports(r){ localStorage.setItem("cied_reports", JSON.stringify(r)); }
+
+/* タブ切り替え */
+document.querySelectorAll("nav button").forEach(function(b){
+  b.onclick = function(){
+    document.querySelectorAll("nav button").forEach(function(x){ x.setAttribute("aria-selected", x===b); });
+    ["imp","lst","opd"].forEach(function(id){ document.getElementById(id).hidden = (id!==b.dataset.t); });
+    if(b.dataset.t === "lst") renderLedger();
+    if(b.dataset.t === "opd") runPaste();
+    window.scrollTo(0,0);
+  };
+});
+
+/* ============================================================
+   ① レポート取り込み（Medtronic CareLink抽出。carelink_extractor.html と同じロジック）
+   ============================================================ */
+const FIELDS = [
+  { path:"device.model_name", label:"機種名", pattern:/デバイス[：:]\s*(.+?)\s+[A-Z]\d[A-Z]{2}\d{2}\s+シリアル番号/, type:"str" },
+  { path:"device.serial_number", label:"シリアル番号", pattern:/シリアル番号[：:]\s*([A-Za-z0-9]+)/, type:"str" },
+  { path:"device.implant_date_raw", label:"植込み日(帳票表記)", pattern:/植込み日[：:]\s*(\d{2}-[A-Za-z]{3}-\d{4})/, type:"str" },
+  { path:"battery.remaining_months", label:"予測寿命 推定値(年)", pattern:/推定値[：:]\s*(\d+(?:\.\d+)?)\s*years?/, type:"float" },
+  { path:"battery.remaining_months_max", label:"予測寿命 最大値(年)", pattern:/最大値[：:]\s*(\d+(?:\.\d+)?)\s*years?/, type:"float" },
+  { path:"battery.voltage", label:"電池電圧(V)", pattern:/電圧\s+(\d+\.\d+)\s*V/, type:"float" },
+  { path:"leads.RA.impedance", label:"RAリードインピーダンス(Ω)", pattern:/Aペーシング[^\d]*(\d+)\s*Ω/, type:"int" },
+  { path:"leads.RV.impedance", label:"RVリードインピーダンス(Ω)", pattern:/RVペーシング[^\d]*(\d+)\s*Ω/, type:"int" },
+  { path:"leads.RA.threshold_voltage", label:"RA閾値 電圧(V)", type:"float", groupIndex:1,
+    pattern:/ペーシング閾値\s+(\d+\.\d+)\s*V\s*\((\d+\.\d+)\s*ms\)\s+(\d+\.\d+)\s*V\s*\((\d+\.\d+)\s*ms\)/ },
+  { path:"leads.RA.threshold_pulse_width", label:"RA閾値 パルス幅(ms)", type:"float", groupIndex:2,
+    pattern:/ペーシング閾値\s+(\d+\.\d+)\s*V\s*\((\d+\.\d+)\s*ms\)\s+(\d+\.\d+)\s*V\s*\((\d+\.\d+)\s*ms\)/ },
+  { path:"leads.RV.threshold_voltage", label:"RV閾値 電圧(V)", type:"float", groupIndex:3,
+    pattern:/ペーシング閾値\s+(\d+\.\d+)\s*V\s*\((\d+\.\d+)\s*ms\)\s+(\d+\.\d+)\s*V\s*\((\d+\.\d+)\s*ms\)/ },
+  { path:"leads.RV.threshold_pulse_width", label:"RV閾値 パルス幅(ms)", type:"float", groupIndex:4,
+    pattern:/ペーシング閾値\s+(\d+\.\d+)\s*V\s*\((\d+\.\d+)\s*ms\)\s+(\d+\.\d+)\s*V\s*\((\d+\.\d+)\s*ms\)/ },
+  { path:"leads.RA.sensing_amplitude", label:"P波高値(mV)", pattern:/P波高値\s+(\d+\.\d+)\s*mV/, type:"float" },
+  { path:"leads.RV.sensing_amplitude", label:"R波高値(mV)", pattern:/(?<![/／])R波高値\s+(\d+\.\d+)\s*mV/, type:"float" },
+  { path:"pacing.as_vs_percent", label:"AS-VS(%)　※直近期間", pattern:/AS-VS\s+(?:<?\s*\d+(?:\.\d+)?)\s*%\s+(<?\s*\d+(?:\.\d+)?)\s*%/, type:"float" },
+  { path:"pacing.as_vp_percent", label:"AS-VP(%)　※直近期間", pattern:/AS-VP\s+(?:<?\s*\d+(?:\.\d+)?)\s*%\s+(<?\s*\d+(?:\.\d+)?)\s*%/, type:"float" },
+  { path:"pacing.ap_vs_percent", label:"AP-VS(%)　※直近期間", pattern:/AP-VS\s+(?:<?\s*\d+(?:\.\d+)?)\s*%\s+(<?\s*\d+(?:\.\d+)?)\s*%/, type:"float" },
+  { path:"pacing.ap_vp_percent", label:"AP-VP(%)　※直近期間", pattern:/AP-VP\s+(?:<?\s*\d+(?:\.\d+)?)\s*%\s+(<?\s*\d+(?:\.\d+)?)\s*%/, type:"float" },
+  { path:"arrhythmia.vt_episode_count", label:"VT(>4 beat) 件数", pattern:/VT \(>4 beat\)\s+(\d+)/, type:"int" },
+];
+// 患者ID・氏名は台帳への紐付けに使うため別枠で抽出（見つかれば自動入力、無ければ空欄で人が入れる）
+const PATIENT_ID_PATTERN = /ID[：:]\s*(\d{7,8})/;
+// 日本人氏名は姓と名の間に空白が入ることが多いため、行末までを氏名として拾う（\S+だと姓だけで止まる）
+const PATIENT_NAME_PATTERN = /患者名[：:]\s*(.+?)\s*$/m;
+
+function coerce(raw, type){
+  if(type === "int"){ const n = parseInt(raw.replace(/[^\d-]/g,""),10); return isNaN(n)?null:n; }
+  if(type === "float"){ const n = parseFloat(raw.replace(/^</,"").trim()); return isNaN(n)?null:n; }
+  return raw;
+}
+function extractOne(text, field){
+  const m = field.pattern.exec(text);
+  if(!m) return { value:null, found:false };
+  const idx = field.groupIndex || 1;
+  let raw = m[idx];
+  if(raw === undefined) return { value:null, found:false };
+  raw = raw.trim();
+  return { value: coerce(raw, field.type), found:true };
+}
+function medtronicDateToIso(raw){
+  // "01-Apr-2025" -> "2025-04-01"
+  const months = {Jan:"01",Feb:"02",Mar:"03",Apr:"04",May:"05",Jun:"06",Jul:"07",Aug:"08",Sep:"09",Oct:"10",Nov:"11",Dec:"12"};
+  const m = /^(\d{2})-([A-Za-z]{3})-(\d{4})$/.exec((raw||"").trim());
+  if(!m || !months[m[2]]) return "";
+  return m[3] + "-" + months[m[2]] + "-" + m[1];
+}
+
+let currentResults = [];
+
+function runExtraction(){
+  const text = document.getElementById("reportInput").value;
+  if(!text.trim()){ alert("テキストを貼り付けてください"); return; }
+
+  currentResults = FIELDS.map(function(field){
+    const r = extractOne(text, field);
+    return { field:field, value:r.value, found:r.found };
+  });
+
+  const pid = PATIENT_ID_PATTERN.exec(text);
+  const pname = PATIENT_NAME_PATTERN.exec(text);
+  document.getElementById("in_patient_id").value = pid ? pid[1] : "";
+  document.getElementById("in_patient_name").value = pname ? pname[1] : "";
+
+  const implantRaw = currentResults.find(function(r){ return r.field.path === "device.implant_date_raw"; });
+  document.getElementById("in_report_date").value = "";
+  const implantIso = implantRaw && implantRaw.value ? medtronicDateToIso(implantRaw.value) : "";
+  document.getElementById("in_report_date").dataset.implant = implantIso;
+
+  renderFields();
+  document.getElementById("resultCard").hidden = false;
+  document.getElementById("karteCard").hidden = true;
+  checkPatientId();
+}
+
+function renderFields(){
+  const box = document.getElementById("fieldsBox");
+  box.innerHTML = "";
+  currentResults.forEach(function(r, i){
+    if(r.field.path === "device.implant_date_raw") return; // 内部用。UIには出さない
+    const div = document.createElement("div");
+    div.className = "f";
+    const badge = r.found ? '<span class="pill ok">検出</span>' : '<span class="pill bad">未検出</span>';
+    div.innerHTML =
+      '<div class="lab">' + escapeHtml(r.field.label) + '</div>' +
+      '<input type="text" data-idx="' + i + '" value="' + escapeHtml(r.value==null?"":r.value) + '">' +
+      badge;
+    box.appendChild(div);
+  });
+  box.querySelectorAll("input").forEach(function(inp){
+    inp.addEventListener("input", function(){
+      currentResults[parseInt(inp.dataset.idx,10)].value = inp.value;
+    });
+  });
+}
+
+function checkPatientId(){
+  const v = document.getElementById("in_patient_id").value.trim();
+  document.getElementById("patientIdWarn").hidden = (v === "" || /^\d{7}$/.test(v));
+}
+document.getElementById("in_patient_id").addEventListener("input", checkPatientId);
+
+function getExtractedVal(path){
+  const r = currentResults.find(function(x){ return x.field.path === path; });
+  return (r && r.value !== null && r.value !== undefined) ? r.value : "";
+}
+
+function buildKarteText(){
+  const eriMin = getExtractedVal("battery.remaining_months");
+  const eriMax = getExtractedVal("battery.remaining_months_max");
+  const eri = (eriMin !== "" && eriMax !== "") ? (eriMin + "-" + eriMax + "（y）") : "";
+  const deviceType = document.getElementById("in_device_type").value;
+  const modelName = getExtractedVal("device.model_name");
+
+  return [
+    "【遠隔モニタリング】",
+    "○デバイス種類　" + deviceType + "（" + modelName + "）",
+    "○測定値",
+    "・電池電圧　" + getExtractedVal("battery.voltage") + "V",
+    "・ERI：" + eri,
+    "・閾値　RA：" + getExtractedVal("leads.RA.threshold_voltage") + "V（" + getExtractedVal("leads.RA.threshold_pulse_width") + "ms）、" +
+      "RV：" + getExtractedVal("leads.RV.threshold_voltage") + "V（" + getExtractedVal("leads.RV.threshold_pulse_width") + "ms）",
+    "・波高値　P波：" + getExtractedVal("leads.RA.sensing_amplitude") + "mV、R波：" + getExtractedVal("leads.RV.sensing_amplitude") + "mV",
+    "・AS-VS：" + getExtractedVal("pacing.as_vs_percent") + "%、AS-VP：" + getExtractedVal("pacing.as_vp_percent") + "%",
+    "・AP-VS：" + getExtractedVal("pacing.ap_vs_percent") + "%、AP-VP：" + getExtractedVal("pacing.ap_vp_percent") + "%",
+    "・リード抵抗　RA：" + getExtractedVal("leads.RA.impedance") + "Ω、RV：" + getExtractedVal("leads.RV.impedance") + "Ω",
+    "",
+    "（前回との比較・イベント有無はここに手入力）",
+  ].join("\n");
+}
+
+document.getElementById("btnExtract").addEventListener("click", runExtraction);
+document.getElementById("btnClearReport").addEventListener("click", function(){
+  document.getElementById("reportInput").value = "";
+  document.getElementById("resultCard").hidden = true;
+  document.getElementById("karteCard").hidden = true;
+});
+
+document.getElementById("btnConfirm").addEventListener("click", function(){
+  const patientId = document.getElementById("in_patient_id").value.trim();
+  const patientName = document.getElementById("in_patient_name").value.trim();
+  if(!/^\d{7}$/.test(patientId)){
+    if(!confirm("患者IDが7桁の数字ではありません。このまま保存しますか？")) return;
+  }
+  if(!patientName){
+    alert("患者氏名を入力してください");
+    return;
+  }
+
+  const ledger = loadLedger();
+  let device = ledger.find(function(d){ return d.patient_id === patientId; });
+  const isNew = !device;
+  if(!device){
+    device = {
+      id: uid(), patient_id: patientId, patient_name: patientName,
+      device_type: document.getElementById("in_device_type").value,
+      manufacturer: "Medtronic",
+      model_name: getExtractedVal("device.model_name"),
+      serial_number: getExtractedVal("device.serial_number"),
+      implant_date: document.getElementById("in_report_date").dataset.implant || "",
+      mri: "", remote_status: "ACTIVE", last_followup: "", next_followup: "",
+      doctor: "", note: "",
+    };
+    ledger.push(device);
+  }
+  // レポート取り込みは台帳固有項目（MRI可否・担当医・備考など）を上書きしない。
+  // レポートから読める項目（機種名・シリアル・遠隔状況・最終フォロー日）だけ更新する。
+  device.patient_name = patientName;
+  if(getExtractedVal("device.model_name")) device.model_name = getExtractedVal("device.model_name");
+  if(getExtractedVal("device.serial_number")) device.serial_number = getExtractedVal("device.serial_number");
+  device.remote_status = "ACTIVE";
+  device.last_followup = document.getElementById("in_report_date").value || device.last_followup;
+  saveLedger(ledger);
+
+  const reports = loadReports();
+  reports.push({
+    id: uid(), device_id: device.id, patient_id: patientId,
+    created_at: new Date().toISOString(),
+    fields: currentResults.map(function(r){ return { path:r.field.path, label:r.field.label, value:r.value }; }),
+    karte_text: buildKarteText(),
+  });
+  saveReports(reports);
+
+  document.getElementById("karteText").textContent = buildKarteText();
+  document.getElementById("karteCard").hidden = false;
+  document.getElementById("confirmInfo").textContent =
+    (isNew ? "台帳に新規登録しました" : "台帳を更新しました") + "（患者ID " + patientId + "）";
+  showToast(isNew ? "台帳に新規登録しました" : "台帳を更新しました");
+});
+
+document.getElementById("btnCopyKarte").addEventListener("click", function(){
+  const text = document.getElementById("karteText").textContent;
+  navigator.clipboard.writeText(text).then(function(){ showToast("コピーしました"); })
+    .catch(function(){ showToast("コピーに失敗しました"); });
+});
+
+const SAMPLE = [
+  "Quick Look II","デバイス： Azure XT DR MRI W2DR01 シリアル番号：BBB",
+  "患者名：田中 太郎","ID： 1234567","医師： 山田",
+  "デバイスステータス (植込み日：01-Apr-2025)","予測寿命 10.7 years (20-Aug-2026)",
+  "RA(3830) RV","リードインピーダンス 380 Ω 532 Ω",
+  "ペーシング閾値 1.500 V (0.40 ms) 1.000 V (0.40 ms)","P/R波高値 2.5 mV 18.0 mV",
+  "VT (>4 beat) 0","","電池およびリード測定","推定値： 10.7 years","最大値： 11.2 years",
+  "電圧 3.01 V","Aペーシング (バイポーラ) 380 Ω 20-Aug-2026","RVペーシング (バイポーラ) 532 Ω 20-Aug-2026",
+  "P波高値 2.5 mV 20-Aug-2026","R波高値 18.0 mV 20-Aug-2026",
+  "","レートヒストグラム","時間% 総VP < 0.1% < 0.1%","総AP 52.9% 62.0%",
+  "時間% AS-VS 47.1% 38.1%","(AT/AF外) AS-VP < 0.1% < 0.1%","AP-VS 52.9% 61.9%","AP-VP < 0.1% < 0.1%",
+].join("\n");
+document.getElementById("btnSample").addEventListener("click", function(){
+  document.getElementById("reportInput").value = SAMPLE;
+  runExtraction();
+});
+
+/* ============================================================
+   ② デバイス台帳
+   ============================================================ */
+let ledgerFilter = "all";
+let ledgerSearch = "";
+
+function renderLedger(){
+  const all = loadLedger();
+  document.getElementById("cnt_all").textContent = all.length;
+  document.getElementById("cnt_yes").textContent = all.filter(function(d){ return d.remote_status==="ACTIVE"; }).length;
+  document.getElementById("cnt_no").textContent = all.filter(function(d){ return d.remote_status==="NONE"; }).length;
+  document.getElementById("cnt_stopped").textContent = all.filter(function(d){ return d.remote_status==="STOPPED"; }).length;
+
+  let rows = all;
+  if(ledgerFilter !== "all") rows = rows.filter(function(d){ return d.remote_status === ledgerFilter; });
+  if(ledgerSearch){
+    const q = ledgerSearch.toLowerCase();
+    rows = rows.filter(function(d){
+      return (d.patient_id||"").includes(q) || (d.patient_name||"").toLowerCase().includes(q) ||
+        (d.serial_number||"").toLowerCase().includes(q);
+    });
+  }
+
+  const tbody = document.getElementById("ledgerBody");
+  tbody.innerHTML = "";
+  if(rows.length === 0){
+    tbody.innerHTML = '<tr><td colspan="11" class="muted" style="text-align:center;padding:20px">登録がありません</td></tr>';
+  }
+  rows.forEach(function(d){
+    const rp = d.remote_status==="ACTIVE" ? "ok" : d.remote_status==="STOPPED" ? "warn" : "dim";
+    const rt = d.remote_status==="ACTIVE" ? "遠隔中" : d.remote_status==="STOPPED" ? "中止" : "未導入";
+    const mri = d.mri==="yes" ? '<span class="pill ok">可</span>' : d.mri==="no" ? '<span class="pill bad">不可</span>' : '<span class="pill dim">未確認</span>';
+    const tr = document.createElement("tr");
+    tr.innerHTML =
+      '<td><span class="pill ' + rp + '">' + rt + '</span></td>' +
+      '<td class="mono">' + escapeHtml(d.patient_id) + '</td>' +
+      '<td>' + escapeHtml(d.patient_name) + '</td>' +
+      '<td>' + escapeHtml(d.device_type||"") + '</td>' +
+      '<td>' + escapeHtml(d.manufacturer||"") + ' / ' + escapeHtml(d.model_name||"") + '</td>' +
+      '<td class="mono">' + escapeHtml(d.serial_number||"") + '</td>' +
+      '<td class="mono">' + escapeHtml(d.implant_date||"") + '</td>' +
+      '<td>' + mri + '</td>' +
+      '<td class="mono">' + escapeHtml(d.last_followup||"") + '</td>' +
+      '<td>' + escapeHtml(d.note||"") + '</td>' +
+      '<td><button class="btn ghost small" data-edit="' + d.id + '">編集</button></td>';
+    tbody.appendChild(tr);
+  });
+  tbody.querySelectorAll("[data-edit]").forEach(function(btn){
+    btn.addEventListener("click", function(){ openDeviceForm(btn.dataset.edit); });
+  });
+  document.getElementById("ledgerNote").textContent = rows.length + "件表示（全" + all.length + "件）";
+}
+
+document.getElementById("searchBox").addEventListener("input", function(e){
+  ledgerSearch = e.target.value.trim(); renderLedger();
+});
+document.querySelectorAll("#seg button").forEach(function(b){
+  b.addEventListener("click", function(){
+    document.querySelectorAll("#seg button").forEach(function(x){ x.classList.toggle("on", x===b); });
+    ledgerFilter = b.dataset.f; renderLedger();
+  });
+});
+
+let editingId = null;
+function openDeviceForm(id){
+  editingId = id || null;
+  const form = document.getElementById("deviceForm");
+  form.hidden = false;
+  document.getElementById("formTitle").textContent = id ? "デバイスを編集" : "デバイスを登録";
+  const d = id ? loadLedger().find(function(x){ return x.id===id; }) : null;
+  const set = function(elId, val){ document.getElementById(elId).value = val || ""; };
+  set("f_patient_id", d ? d.patient_id : "");
+  set("f_patient_name", d ? d.patient_name : "");
+  set("f_device_type", d ? d.device_type : "PM");
+  set("f_manufacturer", d ? d.manufacturer : "Medtronic");
+  set("f_model_name", d ? d.model_name : "");
+  set("f_serial_number", d ? d.serial_number : "");
+  set("f_implant_date", d ? d.implant_date : "");
+  set("f_mri", d ? d.mri : "");
+  set("f_remote_status", d ? d.remote_status : "ACTIVE");
+  set("f_last_followup", d ? d.last_followup : "");
+  set("f_next_followup", d ? d.next_followup : "");
+  set("f_doctor", d ? d.doctor : "");
+  set("f_note", d ? d.note : "");
+  form.scrollIntoView({behavior:"smooth", block:"center"});
+}
+document.getElementById("btnNewDevice").addEventListener("click", function(){ openDeviceForm(null); });
+document.getElementById("btnCancelDevice").addEventListener("click", function(){
+  document.getElementById("deviceForm").hidden = true;
+});
+document.getElementById("btnSaveDevice").addEventListener("click", function(){
+  const patientId = document.getElementById("f_patient_id").value.trim();
+  const patientName = document.getElementById("f_patient_name").value.trim();
+  if(!/^\d{7}$/.test(patientId)){
+    if(!confirm("患者IDが7桁の数字ではありません。このまま保存しますか？")) return;
+  }
+  if(!patientName){ alert("患者氏名を入力してください"); return; }
+
+  const ledger = loadLedger();
+  let device = editingId ? ledger.find(function(x){ return x.id===editingId; }) : null;
+  if(!device){
+    device = { id: uid() };
+    ledger.push(device);
+  }
+  device.patient_id = patientId;
+  device.patient_name = patientName;
+  device.device_type = document.getElementById("f_device_type").value;
+  device.manufacturer = document.getElementById("f_manufacturer").value;
+  device.model_name = document.getElementById("f_model_name").value.trim();
+  device.serial_number = document.getElementById("f_serial_number").value.trim();
+  device.implant_date = document.getElementById("f_implant_date").value;
+  device.mri = document.getElementById("f_mri").value;
+  device.remote_status = document.getElementById("f_remote_status").value;
+  device.last_followup = document.getElementById("f_last_followup").value;
+  device.next_followup = document.getElementById("f_next_followup").value;
+  device.doctor = document.getElementById("f_doctor").value.trim();
+  device.note = document.getElementById("f_note").value.trim();
+
+  saveLedger(ledger);
+  document.getElementById("deviceForm").hidden = true;
+  renderLedger();
+  showToast("保存しました");
+});
+
+/* CSV取込・出力 */
+document.getElementById("btnCsvImport").addEventListener("click", function(){
+  document.getElementById("csvFile").click();
+});
+document.getElementById("csvFile").addEventListener("change", function(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev){
+    importCsv(ev.target.result);
+    e.target.value = "";
+  };
+  reader.readAsText(file, "utf-8");
+});
+function parseCsvLine(line){
+  // 簡易CSVパーサ（ダブルクォート対応、ネストしたカンマのみ想定）
+  const out = []; let cur = ""; let inQ = false;
+  for(let i=0;i<line.length;i++){
+    const c = line[i];
+    if(inQ){
+      if(c === '"'){ if(line[i+1]==='"'){ cur+='"'; i++; } else inQ=false; }
+      else cur += c;
+    } else {
+      if(c === '"') inQ = true;
+      else if(c === ',') { out.push(cur); cur=""; }
+      else cur += c;
+    }
+  }
+  out.push(cur);
+  return out.map(function(s){ return s.trim(); });
+}
+function importCsv(text){
+  const lines = text.split(/\r?\n/).filter(function(l){ return l.trim() !== ""; });
+  if(lines.length < 2){ alert("データ行がありません"); return; }
+  const header = parseCsvLine(lines[0]);
+  const idx = {};
+  header.forEach(function(h,i){ idx[h] = i; });
+  const required = ["patient_id","patient_name"];
+  const missingCols = required.filter(function(c){ return !(c in idx); });
+  if(missingCols.length){
+    alert("必須の列がありません: " + missingCols.join(", ") +
+      "\n\n想定するヘッダー: patient_id,patient_name,device_type,manufacturer,model_name,serial_number,implant_date,mri,remote_status,last_followup,next_followup,doctor,note");
+    return;
+  }
+  const ledger = loadLedger();
+  let added = 0, updated = 0;
+  for(let i=1;i<lines.length;i++){
+    const cols = parseCsvLine(lines[i]);
+    const patientId = (cols[idx.patient_id]||"").padStart(7,"0"); // 先頭ゼロを守る。文字列のまま扱う
+    if(!patientId) continue;
+    let device = ledger.find(function(d){ return d.patient_id === patientId; });
+    if(!device){ device = { id: uid(), patient_id: patientId }; ledger.push(device); added++; }
+    else updated++;
+    const get = function(col, def){ return idx[col]!==undefined ? (cols[idx[col]]||def||"") : (device[col]||def||""); };
+    device.patient_name = get("patient_name");
+    device.device_type = get("device_type","PM");
+    device.manufacturer = get("manufacturer","");
+    device.model_name = get("model_name","");
+    device.serial_number = get("serial_number","");
+    device.implant_date = get("implant_date","");
+    device.mri = get("mri","");
+    device.remote_status = get("remote_status","NONE");
+    device.last_followup = get("last_followup","");
+    device.next_followup = get("next_followup","");
+    device.doctor = get("doctor","");
+    device.note = get("note","");
+  }
+  saveLedger(ledger);
+  renderLedger();
+  showToast("取込完了: 新規" + added + "件 / 更新" + updated + "件");
+}
+document.getElementById("btnCsvExport").addEventListener("click", function(){
+  const ledger = loadLedger();
+  const cols = ["patient_id","patient_name","device_type","manufacturer","model_name","serial_number",
+    "implant_date","mri","remote_status","last_followup","next_followup","doctor","note"];
+  const esc = function(v){
+    v = String(v==null?"":v);
+    return /[",\n]/.test(v) ? '"' + v.replace(/"/g,'""') + '"' : v;
+  };
+  const lines = [cols.join(",")];
+  ledger.forEach(function(d){ lines.push(cols.map(function(c){ return esc(d[c]); }).join(",")); });
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "cied_ledger_" + new Date().toISOString().slice(0,10) + ".csv";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
+
+/* ============================================================
+   ③ 外来準備シート
+   ============================================================ */
+function parseIds(text){
+  const norm = text.replace(/[０-９]/g, function(c){ return String.fromCharCode(c.charCodeAt(0)-0xFEE0); });
+  const out = [], seen = new Set();
+  let raw = 0;
+  norm.split(/\r?\n/).forEach(function(line){
+    (line.match(/\d+/g)||[]).filter(function(t){ return t.length===7; }).forEach(function(id){
+      raw++;
+      if(!seen.has(id)){ seen.add(id); out.push(id); }
+    });
+  });
+  return { ids: out, dup: raw - out.length };
+}
+
+const COLS = [
+  {k:"no",t:"順",num:true},{k:"id",t:"患者ID"},{k:"n",t:"氏名"},{k:"t",t:"種別"},
+  {k:"m",t:"メーカー"},{k:"md",t:"機種"},{k:"im",t:"植込み日"},{k:"r",t:"遠隔"},
+  {k:"mri",t:"MRI"},{k:"lf",t:"最終フォロー"},{k:"note",t:"備考"},
+];
+let ROWS = [], sortKey = null, sortAsc = true;
+
+function renderOpd(){
+  document.getElementById("opdHead").innerHTML = COLS.map(function(c){
+    return '<th class="s ' + (sortKey===c.k?'on':'') + '" data-k="' + c.k + '">' + c.t +
+      '<span class="ar">' + (sortKey===c.k ? (sortAsc?'▲':'▼') : '⇅') + '</span></th>';
+  }).join("");
+
+  document.getElementById("opdBody").innerHTML = ROWS.map(function(r){
+    const rp = r.r==="ACTIVE" ? "ok" : r.r==="STOPPED" ? "warn" : "dim";
+    const rt = r.r==="ACTIVE" ? "遠隔中" : r.r==="STOPPED" ? "中止" : "未導入";
+    const mri = r.mri==="yes" ? '<span class="pill ok">可</span>' : r.mri==="no" ? '<span class="pill bad">不可</span>' : '<span class="pill dim">—</span>';
+    return '<tr>' +
+      '<td class="mono">' + r.no + '</td><td class="mono">' + escapeHtml(r.id) + '</td>' +
+      '<td>' + escapeHtml(r.n) + '</td><td>' + escapeHtml(r.t||"") + '</td>' +
+      '<td>' + escapeHtml(r.m||"") + '</td><td>' + escapeHtml(r.md||"") + '</td>' +
+      '<td class="mono">' + escapeHtml(r.im||"") + '</td>' +
+      '<td><span class="pill ' + rp + '">' + rt + '</span></td>' +
+      '<td>' + mri + '</td><td class="mono">' + escapeHtml(r.lf||"") + '</td>' +
+      '<td>' + escapeHtml(r.note||"") + '</td></tr>';
+  }).join("");
+
+  document.querySelectorAll("#opdHead th").forEach(function(th){
+    th.onclick = function(){
+      const k = th.dataset.k;
+      sortAsc = (sortKey===k) ? !sortAsc : true;
+      sortKey = k;
+      const c = COLS.find(function(x){ return x.k===k; });
+      ROWS.sort(function(a,b){
+        let x=a[k], y=b[k];
+        if(x==null||x==="") return 1; if(y==null||y==="") return -1;
+        const v = c.num ? (x-y) : String(x).localeCompare(String(y),"ja");
+        return sortAsc ? v : -v;
+      });
+      document.getElementById("sortInfo").textContent = "「" + c.t + "」の" + (sortAsc?"昇順":"降順") + "で表示中";
+      renderOpd();
+    };
+  });
+}
+
+function runPaste(){
+  const box = document.getElementById("pasteBox");
+  const { ids, dup } = parseIds(box.value);
+  const ledger = loadLedger();
+  const byId = {}; ledger.forEach(function(d){ byId[d.patient_id] = d; });
+
+  const hit = [], miss = [];
+  ids.forEach(function(id){
+    const d = byId[id];
+    if(!d){ miss.push(id); return; }
+    hit.push({ no: hit.length+1, id: id, n:d.patient_name, t:d.device_type, m:d.manufacturer,
+      md:d.model_name, im:d.implant_date, r:d.remote_status, mri:d.mri, lf:d.last_followup, note:d.note });
+  });
+  ROWS = hit; sortKey = null; sortAsc = true;
+
+  document.getElementById("parseInfo").textContent =
+    ids.length + "件の患者IDを認識" + (dup ? "（重複" + dup + "件は除外）" : "");
+  document.getElementById("sortInfo").textContent = "貼り付け順（＝受診順）で表示中";
+  document.getElementById("sheetTitle").textContent = "外来準備シート — " + hit.length + "名";
+  document.getElementById("missBox").innerHTML = miss.length
+    ? '<div class="miss">⚠️ <b>台帳に登録がない患者が' + miss.length + '件</b>あります：' +
+      '<span class="mono">' + miss.map(escapeHtml).join(" / ") + '</span><br>' +
+      '新規植込み・他院植込み・ID入力の誤りが考えられます。台帳へ登録してください。</div>'
+    : "";
+
+  document.getElementById("opdResult").hidden = (ids.length === 0);
+  renderOpd();
+}
+document.getElementById("runPaste").addEventListener("click", runPaste);
+document.getElementById("clearPaste").addEventListener("click", function(){
+  document.getElementById("pasteBox").value = "";
+  document.getElementById("opdResult").hidden = true;
+  document.getElementById("parseInfo").textContent = "";
+});
+document.getElementById("resetSort").addEventListener("click", runPaste);
+
+/* 初期表示 */
+renderLedger();
+</script>
+</body>
+</html>
