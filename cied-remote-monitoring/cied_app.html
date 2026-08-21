@@ -277,8 +277,11 @@ th.s.on{color:var(--accent)} th.s.on .ar{opacity:1}
   <h2>外来準備シート（デバイス確認シート）</h2>
   <p class="sub">
     電子カルテから患者IDをまとめてコピーして貼り付けると、台帳と照合し、
-    その患者の<strong>直近のレポート取り込みで保存したリード値</strong>（インピーダンス・波高値・閾値）を
-    一緒に一覧にします。レポート未取り込みの患者は空欄になります。
+    その患者の<strong>これまでのレポート取り込みで保存したリード値</strong>（インピーダンス・波高値・閾値）を
+    一緒に一覧にします。レポート未取り込みの患者は空欄になります。<br>
+    項目ごとに「一番新しく値が入っていた記録」を使うので、
+    電池情報だけの用紙を確定しても、以前確定した閾値などの情報は消えません
+    （「参照レポート日」はその患者の一番新しい確定日を表示）。
   </p>
 
   <div class="card noprint">
@@ -807,17 +810,28 @@ const COLS = [
 ];
 let ROWS = [], sortKey = null, sortAsc = true;
 
-// 患者の直近レポート（cied_reports）から、指定フィールドの値を取り出す
-function reportFieldVal(report, path){
-  if(!report) return "";
-  const f = report.fields.find(function(x){ return x.path === path; });
-  return (f && f.value !== null && f.value !== undefined && f.value !== "") ? f.value : "";
-}
-function latestReportFor(patientId){
-  const reports = loadReports().filter(function(r){ return r.patient_id === patientId; });
-  if(reports.length === 0) return null;
-  reports.sort(function(a,b){ return new Date(b.created_at) - new Date(a.created_at); });
-  return reports[0];
+// 患者のレポート（cied_reports）をすべて見て、項目ごとに「一番新しく値が入っていた記録」を採用する。
+// 単純に一番新しいレポート1件だけを見ると、例えば「電池情報」だけの用紙を確定した直後は
+// そこに無い項目（閾値など）が、以前確定した分に値があっても消えて見えてしまう。
+// それを避けるため、項目ごとに独立して「最新の非空値」を探す。
+function mergedReportFieldsFor(patientId){
+  const reports = loadReports()
+    .filter(function(r){ return r.patient_id === patientId; })
+    .slice()
+    .sort(function(a,b){ return new Date(b.created_at) - new Date(a.created_at); }); // 新しい順
+  const values = {}; // path -> { value, date }
+  reports.forEach(function(report){
+    report.fields.forEach(function(f){
+      if(f.value === null || f.value === undefined || f.value === "") return;
+      if(!(f.path in values)){ // 新しい順に見ているので、最初に見つかったものが最新の非空値
+        values[f.path] = { value: f.value, date: report.created_at };
+      }
+    });
+  });
+  return {
+    get: function(path){ return values[path] ? values[path].value : ""; },
+    latestOverall: reports.length ? reports[0].created_at : null,
+  };
 }
 
 function renderOpd(){
@@ -874,28 +888,29 @@ function runPaste(){
   ids.forEach(function(id){
     const d = byId[id];
     if(!d){ miss.push(id); return; }
-    const report = latestReportFor(id);
+    const merged = mergedReportFieldsFor(id);
+    const gv = merged.get;
     const thStr = function(vPath, msPath){
-      const v = reportFieldVal(report, vPath), ms = reportFieldVal(report, msPath);
+      const v = gv(vPath), ms = gv(msPath);
       return (v!=="" ) ? (v + "V" + (ms!==""?"("+ms+"ms)":"")) : "";
     };
     hit.push({
       no: hit.length+1, id: id, n:d.patient_name, t:d.device_type,
       m: (d.manufacturer||"") + (d.model_name ? " / "+d.model_name : ""),
       im:d.implant_date, note:d.note,
-      batv: reportFieldVal(report, "battery.voltage"),
+      batv: gv("battery.voltage"),
       batlife: (function(){
-        const lo = reportFieldVal(report, "battery.remaining_months");
-        const hi = reportFieldVal(report, "battery.remaining_months_max");
+        const lo = gv("battery.remaining_months");
+        const hi = gv("battery.remaining_months_max");
         return (lo!=="" && hi!=="") ? (lo+"-"+hi) : (lo!=="" ? String(lo) : "");
       })(),
-      ra_z: reportFieldVal(report, "leads.RA.impedance"),
-      ra_amp: reportFieldVal(report, "leads.RA.sensing_amplitude"),
+      ra_z: gv("leads.RA.impedance"),
+      ra_amp: gv("leads.RA.sensing_amplitude"),
       ra_th: thStr("leads.RA.threshold_voltage","leads.RA.threshold_pulse_width"),
-      rv_z: reportFieldVal(report, "leads.RV.impedance"),
-      rv_amp: reportFieldVal(report, "leads.RV.sensing_amplitude"),
+      rv_z: gv("leads.RV.impedance"),
+      rv_amp: gv("leads.RV.sensing_amplitude"),
       rv_th: thStr("leads.RV.threshold_voltage","leads.RV.threshold_pulse_width"),
-      rdate: report ? report.created_at.slice(0,10) : "",
+      rdate: merged.latestOverall ? merged.latestOverall.slice(0,10) : "",
     });
   });
   ROWS = hit; sortKey = null; sortAsc = true;
