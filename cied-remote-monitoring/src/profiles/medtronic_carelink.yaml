@@ -1,0 +1,220 @@
+# Medtronic CareLink（Azure XT DR 等）抽出プロファイル
+#
+# 実レポート1件（イベントなしの基本パターン、Quick Look II /
+# 電池およびリード測定 / レートヒストグラム の3ページ）の項目名・書式をもとに作成。
+# 患者の氏名・ID・実測値は使わず、項目名（ラベル）と書式のパターンのみを反映している。
+#
+# ★仮: direction / window（ラベルからのbbox相対位置）は、実PDFの座標情報なしに
+# コピー&ペーストしたテキストから作成したため未検証。実PDFで
+# core/pdf.py 経由のbbox付きトークンを使って動作確認すること
+# （docs/06-roadmap.md 6.1「次にやること」参照）。
+#
+# 参照: docs/03-extraction-design.md 3.5, docs/04-data-model.md 4.3/4.4
+
+identify:
+  any_of:
+    - "CareLink"
+    - "Medtronic"
+    - "メドトロニック"
+  min_score: 1
+
+fields:
+  # --- デバイス情報 ---
+  device.model_name:
+    labels: ["デバイス"]
+    label_match: exact
+    direction: right
+    value_pattern: '(.+?)\s+シリアル番号'
+    type: str
+
+  device.serial_number:
+    labels: ["シリアル番号"]
+    label_match: exact
+    direction: right
+    value_pattern: '([A-Za-z0-9]+)'
+    type: str
+
+  device.implant_date:
+    labels: ["植込み日"]
+    label_match: fuzzy
+    fuzzy_threshold: 0.80
+    direction: right
+    value_pattern: '(\d{2}-[A-Za-z]{3}-\d{4})'
+    type: date
+
+  device.programmed_mode:
+    labels: ["モード"]
+    label_match: exact
+    scope:
+      labels: ["パラメータサマリ"]
+      extent: below
+    direction: right
+    value_pattern: '([A-Z<>=]+)'
+    type: str
+
+  device.lower_rate:
+    labels: ["基本レート"]
+    label_match: exact
+    direction: right
+    value_pattern: '(\d+)\s*bpm'
+    type: int
+
+  device.upper_rate:
+    labels: ["上限トラッキング"]
+    label_match: fuzzy
+    fuzzy_threshold: 0.85
+    direction: right
+    value_pattern: '(\d+)\s*bpm'
+    type: int
+
+  # --- 電池 ---
+  # 「予測寿命」はページ1（要約値のみ）とページ2（推定/最小/最大）の両方に出る。
+  # ページ2のほうが情報が多いのでそちらを優先し、ページ1は同一ラベルとして扱う。
+  battery.remaining_months:
+    labels:
+      - "予測寿命"
+      - "推定値"
+      - "Longevity"
+      - "Estimated Remaining Longevity"
+    label_match: fuzzy
+    fuzzy_threshold: 0.80
+    direction: right
+    value_pattern: '(\d+(?:\.\d+)?)\s*years?'
+    unit_map:
+      years: months_x12
+      year: months_x12
+    type: float
+    range: [0, 240]
+
+  battery.voltage:
+    labels: ["電池電圧", "電圧"]
+    label_match: fuzzy
+    scope:
+      labels: ["電池電圧"]
+      extent: below
+    direction: right
+    value_pattern: '(\d+\.\d+)\s*V'
+    type: float
+    range: [1.5, 4.0]
+
+  # RRT（Recommended Replacement Time）電圧は「(RRT=2.63V)」のように
+  # 電圧の値の直後に括弧書きで出る。単独ラベルというより値と同じ行にある点に注意。
+  battery.rrt_voltage:
+    labels: ["RRT"]
+    label_match: fuzzy
+    direction: right
+    value_pattern: 'RRT=(\d+\.\d+)V'
+    type: float
+    range: [1.5, 4.0]
+
+  # --- リード（RA / RV。CRTならLVも追加する） ---
+  leads.RA.impedance:
+    labels: ["リードインピーダンス", "Aペーシング"]
+    label_match: fuzzy
+    scope:
+      labels: ["RA"]
+      extent: right   # 表の列見出しがRA/RVで、値は見出しの下に並ぶ
+    value_pattern: '(\d+)\s*Ω'
+    type: int
+    range: [200, 2000]
+
+  leads.RV.impedance:
+    labels: ["リードインピーダンス", "RVペーシング"]
+    label_match: fuzzy
+    scope:
+      labels: ["RV"]
+      extent: right
+    value_pattern: '(\d+)\s*Ω'
+    type: int
+    range: [200, 2000]
+
+  # 「1.500 V (0.40 ms)」のように電圧とパルス幅が1セットで出る。value_patternで両方を捕まえる。
+  leads.RA.threshold:
+    labels: ["ペーシング閾値"]
+    label_match: exact
+    scope:
+      labels: ["RA"]
+      extent: right
+    value_pattern: '(\d+\.\d+)\s*V\s*\((\d+\.\d+)\s*ms\)'
+    type: "tuple[float, float]"  # (threshold_voltage, threshold_pulse_width)
+
+  leads.RV.threshold:
+    labels: ["ペーシング閾値"]
+    label_match: exact
+    scope:
+      labels: ["RV"]
+      extent: right
+    value_pattern: '(\d+\.\d+)\s*V\s*\((\d+\.\d+)\s*ms\)'
+    type: "tuple[float, float]"
+
+  leads.RA.sensing_amplitude:
+    labels: ["P波高値", "P/R波高値"]
+    label_match: fuzzy
+    scope:
+      labels: ["RA"]
+      extent: right
+    value_pattern: '(\d+\.\d+)\s*mV'
+    type: float
+    range: [0, 30]
+
+  leads.RV.sensing_amplitude:
+    labels: ["R波高値", "P/R波高値"]
+    label_match: fuzzy
+    scope:
+      labels: ["RV"]
+      extent: right
+    value_pattern: '(\d+\.\d+)\s*mV'
+    type: float
+    range: [0, 30]
+
+  # --- 不整脈 ---
+  arrhythmia.af_burden_percent:
+    labels: ["AT/AF時間"]
+    label_match: exact
+    direction: right
+    # 帳票内でパーセント表記（"<0.1% (<0.1%)"）と秒数表記（"= 4 sec"）の
+    # 2通りの書式で出てくる（要約ページ vs レートヒストグラムページ）。両対応。
+    value_pattern: '<?(\d+(?:\.\d+)?)\s*%|=\s*(\d+)\s*sec'
+    type: float
+    range: [0, 100]
+
+  arrhythmia.mode_switch_count:
+    labels: ["モードスイッチ"]
+    label_match: exact
+    direction: right
+    value_pattern: '(\d+)\s*bpm'  # ★仮: レート閾値であり回数ではない可能性。要確認（B-1）
+    type: int
+
+  arrhythmia.vt_episode_count:
+    labels: ["VT (>4 beat)", "VT(>4 beat)"]
+    label_match: fuzzy
+    direction: right
+    value_pattern: '(\d+)'
+    type: int
+    range: [0, 9999]
+
+  # --- ペーシング率 ---
+  pacing.ventricular_pacing_percent:
+    labels: ["総VP", "VP"]
+    label_match: exact
+    direction: right
+    value_pattern: '<?(\d+(?:\.\d+)?)\s*%'
+    type: float
+    range: [0, 100]
+
+  pacing.atrial_pacing_percent:
+    labels: ["総AP", "AP"]
+    label_match: exact
+    direction: right
+    value_pattern: '<?(\d+(?:\.\d+)?)\s*%'
+    type: float
+    range: [0, 100]
+
+  # --- メーカー固有（extras） ---
+  # 以下はMedtronic固有、または優先度が低いと判断して今回はルール化を見送った項目。
+  # 必要になったら fields に昇格させる。
+  # - センシング・インテグリティ・カウンタ（短いV-Vインターバル）
+  # - 心房リードポジションチェック
+  # - AS-VS / AS-VP / AP-VS / AP-VP（レートヒストグラムの詳細内訳）
+  # - Cardiac Compassトレンド（グラフなので値の抽出は別途検討）
+  # - オブザベーション（自由記述コメント）
