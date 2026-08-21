@@ -72,6 +72,7 @@ th{color:var(--muted);font-weight:600;font-size:12px;white-space:nowrap}
 .muted{color:var(--muted)}
 .inp{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:6px;
   padding:6px 9px;font:inherit;font-size:13px}
+.inp.invalid{border-color:var(--bad);background:var(--bad-bg)}
 textarea.inp{width:100%;resize:vertical;font-family:inherit}
 textarea.paste{width:100%;min-height:200px;border:1px solid var(--line);border-radius:8px;
   background:var(--panel);color:var(--ink);padding:11px 13px;font:inherit;font-size:12.5px;
@@ -113,10 +114,13 @@ th.s.on{color:var(--accent)} th.s.on .ar{opacity:1}
   background:var(--ok);color:#fff;padding:9px 18px;border-radius:999px;font-weight:700;
   font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:50}
 .toast.show{opacity:1}
+.opd-edit{border:1px solid var(--line);background:var(--panel2,var(--bg));color:var(--ink);
+  border-radius:5px;padding:4px 6px;font:inherit;font-size:12.5px;width:80px}
 @media print{
   .note,header,nav,.bar,textarea.paste,.card.noprint{display:none!important}
   section[hidden]{display:none} body{background:#fff}
   .card{border:0;padding:0} main{padding:0}
+  .opd-edit{border:none;border-bottom:1px solid #999;background:transparent;color:#000;width:auto;padding:1px 2px}
 }
 </style>
 </head>
@@ -148,9 +152,12 @@ th.s.on{color:var(--accent)} th.s.on .ar{opacity:1}
 
   <div class="card">
     <div class="bar"><strong style="font-size:13.5px">1. レポートを貼り付け</strong></div>
-    <textarea class="paste" id="reportInput" placeholder="ここにコピーしたレポートのテキストを貼り付け..."></textarea>
+    <div class="bar" style="margin-bottom:10px">
+      <button class="btn" id="btnReadClipboard">📋 クリップボードから読み込む（Ctrl+Vも不要）</button>
+    </div>
+    <textarea class="paste" id="reportInput" placeholder="PDFビューアでCtrl+A→Ctrl+Cしたら、上のボタンを押すか、ここにCtrl+Vで貼り付けてください。貼り付けると自動で抽出します。"></textarea>
     <div class="bar" style="margin-top:10px">
-      <button class="btn" id="btnExtract">項目を抽出する</button>
+      <button class="btn ghost" id="btnExtract">項目を抽出し直す</button>
       <button class="btn ghost" id="btnClearReport">クリア</button>
       <button class="btn ghost" id="btnSample">サンプルで試す</button>
     </div>
@@ -281,7 +288,10 @@ th.s.on{color:var(--accent)} th.s.on .ar{opacity:1}
     一緒に一覧にします。レポート未取り込みの患者は空欄になります。<br>
     項目ごとに「一番新しく値が入っていた記録」を使うので、
     電池情報だけの用紙を確定しても、以前確定した閾値などの情報は消えません
-    （「参照レポート日」はその患者の一番新しい確定日を表示）。
+    （「参照レポート日」はその患者の一番新しい確定日を表示）。<br>
+    <strong>数値の欄は自動抽出後でも直接書き換えられます。</strong>
+    「Dr Call」「当日メモ」は自由記入欄です。この画面限りの入力で、保存はされません
+    （次に「読み込む」を押すとリセットされます。印刷してから記入する運用でも構いません）。
   </p>
 
   <div class="card noprint">
@@ -456,7 +466,10 @@ function renderFields(){
 
 function checkPatientId(){
   const v = document.getElementById("in_patient_id").value.trim();
-  document.getElementById("patientIdWarn").hidden = (v === "" || /^\d{8}$/.test(v));
+  const ok = /^\d{8}$/.test(v);
+  // 空欄（＝抽出できなかった）も含めて、8桁ちょうどでなければ常に警告を出す。
+  document.getElementById("patientIdWarn").hidden = ok;
+  document.getElementById("in_patient_id").classList.toggle("invalid", !ok);
 }
 document.getElementById("in_patient_id").addEventListener("input", checkPatientId);
 
@@ -494,6 +507,28 @@ document.getElementById("btnClearReport").addEventListener("click", function(){
   document.getElementById("reportInput").value = "";
   document.getElementById("resultCard").hidden = true;
   document.getElementById("karteCard").hidden = true;
+});
+
+// Ctrl+Vで貼り付けたら、ボタンを押さなくても自動で抽出する。
+// pasteイベントの時点ではまだテキストエリアに反映されていないため、少し待ってから読む。
+document.getElementById("reportInput").addEventListener("paste", function(){
+  setTimeout(runExtraction, 0);
+});
+
+// 「クリップボードから読み込む」— PDFビューアでCtrl+A→Ctrl+Cした後、貼り付け操作すら省略する。
+// 初回はブラウザがクリップボード読み取りの許可を確認するダイアログを出す（一度許可すれば以後は出ない）。
+document.getElementById("btnReadClipboard").addEventListener("click", async function(){
+  try{
+    const text = await navigator.clipboard.readText();
+    if(!text || !text.trim()){
+      alert("クリップボードが空です。PDFビューアで全選択(Ctrl+A)→コピー(Ctrl+C)してから、もう一度押してください。");
+      return;
+    }
+    document.getElementById("reportInput").value = text;
+    runExtraction();
+  }catch(e){
+    alert("クリップボードを読み取れませんでした。ブラウザの権限設定を確認するか、テキストエリアに直接Ctrl+Vで貼り付けてください。\n（" + e.message + "）");
+  }
 });
 
 document.getElementById("btnConfirm").addEventListener("click", function(){
@@ -631,11 +666,30 @@ function renderLedger(){
       '<td>' + mri + '</td>' +
       '<td class="mono">' + escapeHtml(d.last_followup||"") + '</td>' +
       '<td>' + escapeHtml(d.note||"") + '</td>' +
-      '<td><button class="btn ghost small" data-edit="' + d.id + '">編集</button></td>';
+      '<td>' +
+        '<button class="btn ghost small" data-edit="' + d.id + '">編集</button> ' +
+        '<button class="btn ghost small" data-del="' + d.id + '" style="color:var(--bad)">削除</button>' +
+      '</td>';
     tbody.appendChild(tr);
   });
   tbody.querySelectorAll("[data-edit]").forEach(function(btn){
     btn.addEventListener("click", function(){ openDeviceForm(btn.dataset.edit); });
+  });
+  tbody.querySelectorAll("[data-del]").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      const id = btn.dataset.del;
+      const d = loadLedger().find(function(x){ return x.id === id; });
+      if(!d) return;
+      const ok = confirm(
+        "患者ID " + d.patient_id + "「" + d.patient_name + "」を台帳から削除します。\n" +
+        "この患者に紐づく取り込み済みレポートも一緒に削除されます。元に戻せません。\n\n本当に削除しますか？"
+      );
+      if(!ok) return;
+      saveLedger(loadLedger().filter(function(x){ return x.id !== id; }));
+      saveReports(loadReports().filter(function(r){ return r.patient_id !== d.patient_id; }));
+      renderLedger();
+      showToast("削除しました");
+    });
   });
   document.getElementById("ledgerNote").textContent = rows.length + "件表示（全" + all.length + "件）";
 }
@@ -671,8 +725,14 @@ function openDeviceForm(id){
   set("f_next_followup", d ? d.next_followup : "");
   set("f_doctor", d ? d.doctor : "");
   set("f_note", d ? d.note : "");
+  checkDeviceFormId();
   form.scrollIntoView({behavior:"smooth", block:"center"});
 }
+function checkDeviceFormId(){
+  const v = document.getElementById("f_patient_id").value.trim();
+  document.getElementById("f_patient_id").classList.toggle("invalid", !/^\d{8}$/.test(v));
+}
+document.getElementById("f_patient_id").addEventListener("input", checkDeviceFormId);
 document.getElementById("btnNewDevice").addEventListener("click", function(){ openDeviceForm(null); });
 document.getElementById("btnCancelDevice").addEventListener("click", function(){
   document.getElementById("deviceForm").hidden = true;
@@ -830,11 +890,14 @@ function parseIds(text){
 const COLS = [
   {k:"no",t:"順",num:true},{k:"id",t:"患者ID"},{k:"n",t:"氏名"},{k:"t",t:"種別"},
   {k:"m",t:"メーカー/機種"},{k:"im",t:"植込み日"},
-  {k:"batv",t:"電池電圧"},{k:"batlife",t:"予測寿命"},
-  {k:"ra_z",t:"RA抵抗"},{k:"ra_amp",t:"RA波高値"},{k:"ra_th",t:"RA閾値"},
-  {k:"rv_z",t:"RV抵抗"},{k:"rv_amp",t:"RV波高値"},{k:"rv_th",t:"RV閾値"},
+  {k:"batv",t:"電池電圧",editable:true},{k:"batlife",t:"予測寿命",editable:true},
+  {k:"ra_z",t:"RA抵抗",editable:true},{k:"ra_amp",t:"RA波高値",editable:true},{k:"ra_th",t:"RA閾値",editable:true},
+  {k:"rv_z",t:"RV抵抗",editable:true},{k:"rv_amp",t:"RV波高値",editable:true},{k:"rv_th",t:"RV閾値",editable:true},
   {k:"rdate",t:"参照レポート日"},{k:"note",t:"台帳備考"},
+  {k:"drcall",t:"Dr Call",editable:true},{k:"memo",t:"当日メモ",editable:true},
 ];
+// editable列（自動抽出値の手直し・当日の書き込み欄）は印刷・並べ替えのためのその場限りの入力。
+// 保存先が無いため、貼り付け直す（読み込むボタンを再度押す）とリセットされる。
 let ROWS = [], sortKey = null, sortAsc = true;
 
 // 患者のレポート（cied_reports）をすべて見て、項目ごとに「一番新しく値が入っていた記録」を採用する。
@@ -867,25 +930,38 @@ function renderOpd(){
       '<span class="ar">' + (sortKey===c.k ? (sortAsc?'▲':'▼') : '⇅') + '</span></th>';
   }).join("");
 
+  const editableUnit = {batv:"V", batlife:"年", ra_z:"Ω", ra_amp:"mV", rv_z:"Ω", rv_amp:"mV"};
   document.getElementById("opdBody").innerHTML = ROWS.map(function(r){
     const noReport = !r.rdate;
-    const cellOrDash = function(v, unit){ return v==="" ? '<span class="muted">—</span>' : escapeHtml(v)+(unit||""); };
+    const editCell = function(key){
+      return '<input class="opd-edit" data-row="' + r._rowId + '" data-key="' + key + '" ' +
+        'value="' + escapeHtml(r[key]||"") + '" placeholder="' + (editableUnit[key]||"") + '">';
+    };
     return '<tr' + (noReport ? ' style="opacity:.7"' : '') + '>' +
       '<td class="mono">' + r.no + '</td><td class="mono">' + escapeHtml(r.id) + '</td>' +
       '<td>' + escapeHtml(r.n) + '</td><td>' + escapeHtml(r.t||"") + '</td>' +
       '<td>' + escapeHtml(r.m||"") + '</td>' +
       '<td class="mono">' + escapeHtml(r.im||"") + '</td>' +
-      '<td class="mono">' + cellOrDash(r.batv,"V") + '</td>' +
-      '<td class="mono">' + cellOrDash(r.batlife,"年") + '</td>' +
-      '<td class="mono">' + cellOrDash(r.ra_z,"Ω") + '</td>' +
-      '<td class="mono">' + cellOrDash(r.ra_amp,"mV") + '</td>' +
-      '<td class="mono">' + cellOrDash(r.ra_th) + '</td>' +
-      '<td class="mono">' + cellOrDash(r.rv_z,"Ω") + '</td>' +
-      '<td class="mono">' + cellOrDash(r.rv_amp,"mV") + '</td>' +
-      '<td class="mono">' + cellOrDash(r.rv_th) + '</td>' +
+      '<td class="mono">' + editCell("batv") + '</td>' +
+      '<td class="mono">' + editCell("batlife") + '</td>' +
+      '<td class="mono">' + editCell("ra_z") + '</td>' +
+      '<td class="mono">' + editCell("ra_amp") + '</td>' +
+      '<td class="mono">' + editCell("ra_th") + '</td>' +
+      '<td class="mono">' + editCell("rv_z") + '</td>' +
+      '<td class="mono">' + editCell("rv_amp") + '</td>' +
+      '<td class="mono">' + editCell("rv_th") + '</td>' +
       '<td class="mono">' + (noReport ? '<span class="pill warn">レポート未取込</span>' : escapeHtml(r.rdate)) + '</td>' +
-      '<td>' + escapeHtml(r.note||"") + '</td></tr>';
+      '<td>' + escapeHtml(r.note||"") + '</td>' +
+      '<td>' + editCell("drcall") + '</td>' +
+      '<td>' + editCell("memo") + '</td></tr>';
   }).join("");
+
+  document.querySelectorAll(".opd-edit").forEach(function(inp){
+    inp.addEventListener("input", function(){
+      const row = ROWS.find(function(x){ return x._rowId === inp.dataset.row; });
+      if(row) row[inp.dataset.key] = inp.value;
+    });
+  });
 
   document.querySelectorAll("#opdHead th").forEach(function(th){
     th.onclick = function(){
@@ -922,9 +998,10 @@ function runPaste(){
       return (v!=="" ) ? (v + "V" + (ms!==""?"("+ms+"ms)":"")) : "";
     };
     hit.push({
+      _rowId: uid(),
       no: hit.length+1, id: id, n:d.patient_name, t:d.device_type,
       m: (d.manufacturer||"") + (d.model_name ? " / "+d.model_name : ""),
-      im:d.implant_date, note:d.note,
+      im:d.implant_date, note:d.note, drcall:"", memo:"",
       batv: gv("battery.voltage"),
       batlife: (function(){
         const lo = gv("battery.remaining_months");
