@@ -162,7 +162,7 @@ th.s.on{color:var(--accent)} th.s.on .ar{opacity:1}
       <span class="muted" style="font-size:12px">値はすべて編集できます。自動では確定しません。</span>
     </div>
     <div class="formgrid" style="margin-bottom:14px">
-      <div class="fld"><label>患者ID（7桁数字）</label><input class="inp" id="in_patient_id"></div>
+      <div class="fld"><label>患者ID（8桁数字）</label><input class="inp" id="in_patient_id"></div>
       <div class="fld"><label>患者氏名</label><input class="inp" id="in_patient_name"></div>
       <div class="fld"><label>デバイス種別</label>
         <select class="inp" id="in_device_type">
@@ -175,7 +175,7 @@ th.s.on{color:var(--accent)} th.s.on .ar{opacity:1}
       </div>
       <div class="fld"><label>レポート日</label><input class="inp" type="date" id="in_report_date"></div>
     </div>
-    <div id="patientIdWarn" class="miss" hidden>⚠️ 患者IDが7桁の数字になっていません。確認してください。</div>
+    <div id="patientIdWarn" class="miss" hidden>⚠️ 患者IDが8桁の数字になっていません。確認してください。</div>
 
     <div class="fields" id="fieldsBox"></div>
 
@@ -235,7 +235,7 @@ th.s.on{color:var(--accent)} th.s.on .ar{opacity:1}
   <div class="card noprint" id="deviceForm" hidden>
     <h3 id="formTitle" style="font-size:13.5px;margin:0 0 12px">デバイスを登録</h3>
     <div class="formgrid">
-      <div class="fld"><label>患者ID（7桁数字・必須）</label><input class="inp" id="f_patient_id"></div>
+      <div class="fld"><label>患者ID（8桁数字・必須）</label><input class="inp" id="f_patient_id"></div>
       <div class="fld"><label>患者氏名（必須）</label><input class="inp" id="f_patient_name"></div>
       <div class="fld"><label>デバイス種別</label>
         <select class="inp" id="f_device_type">
@@ -287,10 +287,10 @@ th.s.on{color:var(--accent)} th.s.on .ar{opacity:1}
   <div class="card noprint">
     <div class="bar" style="margin-bottom:8px">
       <strong style="font-size:13.5px">患者IDを貼り付け</strong>
-      <span class="muted" style="font-size:12px">7桁の数字を拾います。改行・タブ・カンマ区切り対応。</span>
+      <span class="muted" style="font-size:12px">8桁の数字を拾います。改行・タブ・カンマ区切り対応。</span>
     </div>
     <textarea class="paste" id="pasteBox" spellcheck="false" placeholder="例）
-09:00　1234567　患者A
+09:00　12345678　患者A
 09:15　0012339　患者B"></textarea>
     <div class="bar" style="margin:12px 0 0">
       <button class="btn" id="runPaste">読み込む</button>
@@ -380,7 +380,7 @@ const FIELDS = [
   { path:"arrhythmia.vt_episode_count", label:"VT(>4 beat) 件数", pattern:/VT \(>4 beat\)\s+(\d+)/, type:"int" },
 ];
 // 患者ID・氏名は台帳への紐付けに使うため別枠で抽出（見つかれば自動入力、無ければ空欄で人が入れる）
-const PATIENT_ID_PATTERN = /ID[：:]\s*(\d{7,8})/;
+const PATIENT_ID_PATTERN = /ID[：:]\s*(\d{8})/;
 // 日本人氏名は姓と名の間に空白が入ることが多いため、行末までを氏名として拾う（\S+だと姓だけで止まる）
 const PATIENT_NAME_PATTERN = /患者名[：:]\s*(.+?)\s*$/m;
 
@@ -456,7 +456,7 @@ function renderFields(){
 
 function checkPatientId(){
   const v = document.getElementById("in_patient_id").value.trim();
-  document.getElementById("patientIdWarn").hidden = (v === "" || /^\d{7}$/.test(v));
+  document.getElementById("patientIdWarn").hidden = (v === "" || /^\d{8}$/.test(v));
 }
 document.getElementById("in_patient_id").addEventListener("input", checkPatientId);
 
@@ -499,8 +499,12 @@ document.getElementById("btnClearReport").addEventListener("click", function(){
 document.getElementById("btnConfirm").addEventListener("click", function(){
   const patientId = document.getElementById("in_patient_id").value.trim();
   const patientName = document.getElementById("in_patient_name").value.trim();
-  if(!/^\d{7}$/.test(patientId)){
-    if(!confirm("患者IDが7桁の数字ではありません。このまま保存しますか？")) return;
+  // 患者IDが8桁でない状態での保存はブロックする（確認ダイアログで素通りさせない）。
+  // 空欄/不正なIDのまま保存を許すと、複数の別患者のレポートが同じ台帳行に重なって
+  // 氏名などが意図せず書き換わり続ける事故につながるため。
+  if(!/^\d{8}$/.test(patientId)){
+    alert("患者IDが8桁の数字になっていません。正しいIDを入力してから確定してください。");
+    return;
   }
   if(!patientName){
     alert("患者氏名を入力してください");
@@ -510,7 +514,20 @@ document.getElementById("btnConfirm").addEventListener("click", function(){
   const ledger = loadLedger();
   let device = ledger.find(function(d){ return d.patient_id === patientId; });
   const isNew = !device;
+  // ID入力ミスの早期発見: 既存デバイスの氏名と、今回入力した氏名が食い違う場合は
+  // 別人の可能性があるため必ず確認する（台帳の氏名は変更しない前提のため、ここで止めないと
+  // 誤ったIDに別患者のレポートが紐付いてしまう）。
+  if(device && device.patient_name && device.patient_name.trim() !== patientName){
+    const proceed = confirm(
+      "患者ID " + patientId + " は台帳に「" + device.patient_name + "」として登録されています。\n" +
+      "今回入力した氏名は「" + patientName + "」です。\n\n" +
+      "同一人物で間違いなければ「OK」、IDを確認し直す場合は「キャンセル」を押してください。\n" +
+      "（台帳の氏名は変更されません。氏名の表記ゆれだけなら②デバイス台帳の編集から直してください）"
+    );
+    if(!proceed) return;
+  }
   if(!device){
+    // 新規登録時のみ、氏名・機種・シリアル等をレポートの抽出値で初期設定する。
     device = {
       id: uid(), patient_id: patientId, patient_name: patientName,
       device_type: document.getElementById("in_device_type").value,
@@ -523,11 +540,10 @@ document.getElementById("btnConfirm").addEventListener("click", function(){
     };
     ledger.push(device);
   }
-  // レポート取り込みは台帳固有項目（MRI可否・担当医・備考など）を上書きしない。
-  // レポートから読める項目（機種名・シリアル・遠隔状況・最終フォロー日）だけ更新する。
-  device.patient_name = patientName;
-  if(getExtractedVal("device.model_name")) device.model_name = getExtractedVal("device.model_name");
-  if(getExtractedVal("device.serial_number")) device.serial_number = getExtractedVal("device.serial_number");
+  // 既存デバイスへのレポート取り込みでは、氏名・ID・種別・メーカー・機種・シリアル・
+  // 植込み日・MRIを一切変更しない。これらは台帳の編集フォームからのみ変更する
+  // （docs/04-data-model.md 4.2「レポート取り込みが台帳の項目を上書きしないこと」）。
+  // 更新するのは「レポートを取り込んだ」という事実そのものを表す項目のみ。
   device.remote_status = "ACTIVE";
   device.last_followup = document.getElementById("in_report_date").value || device.last_followup;
   saveLedger(ledger);
@@ -556,7 +572,7 @@ document.getElementById("btnCopyKarte").addEventListener("click", function(){
 
 const SAMPLE = [
   "Quick Look II","デバイス： Azure XT DR MRI W2DR01 シリアル番号：BBB",
-  "患者名：田中 太郎","ID： 1234567","医師： 山田",
+  "患者名：田中 太郎","ID： 12345678","医師： 山田",
   "デバイスステータス (植込み日：01-Apr-2025)","予測寿命 10.7 years (20-Aug-2026)",
   "RA(3830) RV","リードインピーダンス 380 Ω 532 Ω",
   "ペーシング閾値 1.500 V (0.40 ms) 1.000 V (0.40 ms)","P/R波高値 2.5 mV 18.0 mV",
@@ -664,8 +680,9 @@ document.getElementById("btnCancelDevice").addEventListener("click", function(){
 document.getElementById("btnSaveDevice").addEventListener("click", function(){
   const patientId = document.getElementById("f_patient_id").value.trim();
   const patientName = document.getElementById("f_patient_name").value.trim();
-  if(!/^\d{7}$/.test(patientId)){
-    if(!confirm("患者IDが7桁の数字ではありません。このまま保存しますか？")) return;
+  if(!/^\d{8}$/.test(patientId)){
+    alert("患者IDが8桁の数字になっていません。正しいIDを入力してから保存してください。");
+    return;
   }
   if(!patientName){ alert("患者氏名を入力してください"); return; }
 
@@ -740,11 +757,15 @@ function importCsv(text){
     return;
   }
   const ledger = loadLedger();
-  let added = 0, updated = 0;
+  let added = 0, updated = 0, skipped = 0;
   for(let i=1;i<lines.length;i++){
     const cols = parseCsvLine(lines[i]);
-    const patientId = (cols[idx.patient_id]||"").padStart(7,"0"); // 先頭ゼロを守る。文字列のまま扱う
-    if(!patientId) continue;
+    // 先頭ゼロを守るため文字列のまま扱う。8桁ちょうどでない行は取り込まない
+    // （空欄IDを "0000000" などに丸めると、別々の行が同じ台帳エントリに重なって
+    // 氏名などが上書きされ続ける事故になるため。取込後にID未入力の行を手で直す運用にする）。
+    const rawId = (cols[idx.patient_id]||"").trim();
+    if(!/^\d{8}$/.test(rawId)){ skipped++; continue; }
+    const patientId = rawId;
     let device = ledger.find(function(d){ return d.patient_id === patientId; });
     if(!device){ device = { id: uid(), patient_id: patientId }; ledger.push(device); added++; }
     else updated++;
@@ -764,7 +785,13 @@ function importCsv(text){
   }
   saveLedger(ledger);
   renderLedger();
-  showToast("取込完了: 新規" + added + "件 / 更新" + updated + "件");
+  if(skipped > 0){
+    alert("取込完了: 新規" + added + "件 / 更新" + updated + "件\n\n" +
+      "⚠️ 患者IDが8桁の数字になっていない行が" + skipped + "件あり、取り込みませんでした。" +
+      "該当行のIDを直してから再度取り込んでください。");
+  } else {
+    showToast("取込完了: 新規" + added + "件 / 更新" + updated + "件");
+  }
 }
 document.getElementById("btnCsvExport").addEventListener("click", function(){
   const ledger = loadLedger();
@@ -792,7 +819,7 @@ function parseIds(text){
   const out = [], seen = new Set();
   let raw = 0;
   norm.split(/\r?\n/).forEach(function(line){
-    (line.match(/\d+/g)||[]).filter(function(t){ return t.length===7; }).forEach(function(id){
+    (line.match(/\d+/g)||[]).filter(function(t){ return t.length===8; }).forEach(function(id){
       raw++;
       if(!seen.has(id)){ seen.add(id); out.push(id); }
     });
