@@ -21,12 +21,26 @@
 M1（抽出ルール作成）の最初の一歩。PDFから項目名らしき文字列を一覧CSVに出す。
 値そのものは扱わない（項目名は個人情報ではないため、そのまま目視確認できる）。
 
+**実PDFはこのフォルダ（＝院内PCのローカル）でだけ開くこと。** クラウドのClaude Codeや
+他のAIサービスに患者データを見せないための境界線はここに引く（[CLAUDE.md](CLAUDE.md) 絶対1）。
+
+### 簡単な使い方（コマンド操作なし）
+
+1. このフォルダを丸ごと院内PCに置く
+2. 初回だけ [python.org](https://www.python.org/downloads/) からPythonをインストール
+   （「Add python.exe to PATH」に必ずチェック）
+3. Windowsなら `run_label_extraction.bat`、Macなら `run_label_extraction.command` に
+   レポートPDFをドラッグ＆ドロップ
+4. 初回はライブラリの自動インストールが走り、少し待つと `labels.csv` が自動で開く
+5. 開いた `labels.csv` を目視で確認し、患者の氏名・ID・生年月日が紛れていないか確認する
+
+### コマンドで使う場合
+
 ```bash
 pip install -e ".[dev]"
 python -m cli.list_labels report1.pdf report2.pdf --out labels.csv
 ```
 
-出力後は必ず `labels.csv` を目視確認し、患者の識別情報が紛れていないか確かめること
 （詳細は [docs/06-roadmap.md 6.1-E](docs/06-roadmap.md#6.1-次にやること2026-08-20-時点)）。
 
 ## ステータス（2026/08/20）
