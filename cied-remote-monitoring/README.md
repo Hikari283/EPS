@@ -16,41 +16,28 @@
 一部は実際に動く（確認画面の該当箇所ハイライト、台帳の遠隔有無の絞り込み、
 外来準備シートの患者ID貼り付け・照合・並べ替え）。
 
-## ラベル抽出スクリプト
+## 項目名（ラベル）の洗い出し方（今はこれでよい）
 
-M1（抽出ルール作成）の最初の一歩。PDFから項目名らしき文字列を一覧CSVに出す。
-値そのものは扱わない（項目名は個人情報ではないため、そのまま目視確認できる）。
+今やりたいことは「レポートPDFにどんな項目名が載っているか」を確認すること。
+**PDFビューアで開いて全選択（Ctrl+A）→コピー（Ctrl+C）→メモ帳に貼り付けるだけで十分。**
+ソフトのインストールやUSB持ち込みは不要。
 
-**実PDFはこのフォルダ（＝院内PCのローカル）でだけ開くこと。** クラウドのClaude Codeや
+**実PDFはこの操作もこのPCの中だけで完結させること。** クラウドのClaude Codeや
 他のAIサービスに患者データを見せないための境界線はここに引く（[CLAUDE.md](CLAUDE.md) 絶対1）。
 
-### 簡単な使い方（コマンド操作なし）
+### `cli.list_labels` スクリプト（今は使わなくてよい）
 
-1. このフォルダを丸ごと院内PCに置く
-2. 初回だけ [python.org](https://www.python.org/downloads/) からPythonをインストール
-   （「Add python.exe to PATH」に必ずチェック）。
-   **このPCがインターネットに繋がっていない場合は
-   [docs/08-offline-setup.md](docs/08-offline-setup.md) の持ち込み版手順を使う**
-   （このPCには何もインストールせず、別の端末で用意した2つのフォルダをUSBで運ぶだけで動く）
-3. Windowsなら `run_label_extraction.bat`、Macなら `run_label_extraction.command` に
-   レポートPDFをドラッグ＆ドロップ
-4. 初回はライブラリの自動インストールが走り、少し待つと `labels.csv` が自動で開く
-5. 開いた `labels.csv` を目視で確認し、患者の氏名・ID・生年月日が紛れていないか確認する
-
-### コマンドで使う場合
-
-```bash
-pip install -e ".[dev]"
-python -m cli.list_labels report1.pdf report2.pdf --out labels.csv
-```
-
-（詳細は [docs/06-roadmap.md 6.1-E](docs/06-roadmap.md#6.1-次にやること2026-08-20-時点)）。
+数十件のPDFを一括処理する必要が出るM2以降のための下準備として、
+ラベル一覧を自動で出すスクリプトも用意してある（`run_label_extraction.bat` /
+`.command`、コマンドなら `python -m cli.list_labels`）。ただし今の段階では
+Python環境の用意（オフラインPCへの持ち込みを含む）というコストとリスクに見合わないため、
+**着手を保留している。** 詳細と持ち込み手順は [docs/08-offline-setup.md](docs/08-offline-setup.md)
+と [docs/06-roadmap.md 6.1-E](docs/06-roadmap.md#6.1-次にやること2026-08-20-時点) を参照。
 
 ## ステータス（2026/08/20）
 
-**設計フェーズ完了。M1（抽出ルール作成）に着手し、最初の一歩「ラベル抽出スクリプト」を実装。**
-`python -m cli.list_labels <PDF...> --out labels.csv` でPDFから項目名候補の一覧を出せる。
-**ただし未実機検証**（開発環境からPyPIに到達できず `pypdfium2` の動作確認ができていない）。
+**設計フェーズ完了。次のアクションは「PDFを開いてコピー＆ペーストで項目名を洗い出す」という手作業。**
+`cli.list_labels` スクリプトは実装済みだが、今は使わなくてよい（上記参照）。
 
 👉 **再開するときは [docs/06-roadmap.md](docs/06-roadmap.md) の「6.1 次にやること」を読む。**
 現在地・決定事項・次のアクションがまとまっている。
