@@ -269,8 +269,12 @@ th.s.on{color:var(--accent)} th.s.on .ar{opacity:1}
 
 <!-- ============ ③ 外来準備シート ============ -->
 <section id="opd" hidden>
-  <h2>外来準備シート</h2>
-  <p class="sub">電子カルテから患者IDをまとめてコピーして貼り付けると、台帳と照合して外来準備用の一覧を作ります。</p>
+  <h2>外来準備シート（デバイス確認シート）</h2>
+  <p class="sub">
+    電子カルテから患者IDをまとめてコピーして貼り付けると、台帳と照合し、
+    その患者の<strong>直近のレポート取り込みで保存したリード値</strong>（インピーダンス・波高値・閾値）を
+    一緒に一覧にします。レポート未取り込みの患者は空欄になります。
+  </p>
 
   <div class="card noprint">
     <div class="bar" style="margin-bottom:8px">
@@ -790,10 +794,26 @@ function parseIds(text){
 
 const COLS = [
   {k:"no",t:"順",num:true},{k:"id",t:"患者ID"},{k:"n",t:"氏名"},{k:"t",t:"種別"},
-  {k:"m",t:"メーカー"},{k:"md",t:"機種"},{k:"im",t:"植込み日"},{k:"r",t:"遠隔"},
-  {k:"mri",t:"MRI"},{k:"lf",t:"最終フォロー"},{k:"note",t:"備考"},
+  {k:"m",t:"メーカー/機種"},{k:"im",t:"植込み日"},
+  {k:"batv",t:"電池電圧"},{k:"batlife",t:"予測寿命"},
+  {k:"ra_z",t:"RA抵抗"},{k:"ra_amp",t:"RA波高値"},{k:"ra_th",t:"RA閾値"},
+  {k:"rv_z",t:"RV抵抗"},{k:"rv_amp",t:"RV波高値"},{k:"rv_th",t:"RV閾値"},
+  {k:"rdate",t:"参照レポート日"},{k:"note",t:"台帳備考"},
 ];
 let ROWS = [], sortKey = null, sortAsc = true;
+
+// 患者の直近レポート（cied_reports）から、指定フィールドの値を取り出す
+function reportFieldVal(report, path){
+  if(!report) return "";
+  const f = report.fields.find(function(x){ return x.path === path; });
+  return (f && f.value !== null && f.value !== undefined && f.value !== "") ? f.value : "";
+}
+function latestReportFor(patientId){
+  const reports = loadReports().filter(function(r){ return r.patient_id === patientId; });
+  if(reports.length === 0) return null;
+  reports.sort(function(a,b){ return new Date(b.created_at) - new Date(a.created_at); });
+  return reports[0];
+}
 
 function renderOpd(){
   document.getElementById("opdHead").innerHTML = COLS.map(function(c){
@@ -802,16 +822,22 @@ function renderOpd(){
   }).join("");
 
   document.getElementById("opdBody").innerHTML = ROWS.map(function(r){
-    const rp = r.r==="ACTIVE" ? "ok" : r.r==="STOPPED" ? "warn" : "dim";
-    const rt = r.r==="ACTIVE" ? "遠隔中" : r.r==="STOPPED" ? "中止" : "未導入";
-    const mri = r.mri==="yes" ? '<span class="pill ok">可</span>' : r.mri==="no" ? '<span class="pill bad">不可</span>' : '<span class="pill dim">—</span>';
-    return '<tr>' +
+    const noReport = !r.rdate;
+    const cellOrDash = function(v, unit){ return v==="" ? '<span class="muted">—</span>' : escapeHtml(v)+(unit||""); };
+    return '<tr' + (noReport ? ' style="opacity:.7"' : '') + '>' +
       '<td class="mono">' + r.no + '</td><td class="mono">' + escapeHtml(r.id) + '</td>' +
       '<td>' + escapeHtml(r.n) + '</td><td>' + escapeHtml(r.t||"") + '</td>' +
-      '<td>' + escapeHtml(r.m||"") + '</td><td>' + escapeHtml(r.md||"") + '</td>' +
+      '<td>' + escapeHtml(r.m||"") + '</td>' +
       '<td class="mono">' + escapeHtml(r.im||"") + '</td>' +
-      '<td><span class="pill ' + rp + '">' + rt + '</span></td>' +
-      '<td>' + mri + '</td><td class="mono">' + escapeHtml(r.lf||"") + '</td>' +
+      '<td class="mono">' + cellOrDash(r.batv,"V") + '</td>' +
+      '<td class="mono">' + cellOrDash(r.batlife,"年") + '</td>' +
+      '<td class="mono">' + cellOrDash(r.ra_z,"Ω") + '</td>' +
+      '<td class="mono">' + cellOrDash(r.ra_amp,"mV") + '</td>' +
+      '<td class="mono">' + cellOrDash(r.ra_th) + '</td>' +
+      '<td class="mono">' + cellOrDash(r.rv_z,"Ω") + '</td>' +
+      '<td class="mono">' + cellOrDash(r.rv_amp,"mV") + '</td>' +
+      '<td class="mono">' + cellOrDash(r.rv_th) + '</td>' +
+      '<td class="mono">' + (noReport ? '<span class="pill warn">レポート未取込</span>' : escapeHtml(r.rdate)) + '</td>' +
       '<td>' + escapeHtml(r.note||"") + '</td></tr>';
   }).join("");
 
@@ -843,8 +869,29 @@ function runPaste(){
   ids.forEach(function(id){
     const d = byId[id];
     if(!d){ miss.push(id); return; }
-    hit.push({ no: hit.length+1, id: id, n:d.patient_name, t:d.device_type, m:d.manufacturer,
-      md:d.model_name, im:d.implant_date, r:d.remote_status, mri:d.mri, lf:d.last_followup, note:d.note });
+    const report = latestReportFor(id);
+    const thStr = function(vPath, msPath){
+      const v = reportFieldVal(report, vPath), ms = reportFieldVal(report, msPath);
+      return (v!=="" ) ? (v + "V" + (ms!==""?"("+ms+"ms)":"")) : "";
+    };
+    hit.push({
+      no: hit.length+1, id: id, n:d.patient_name, t:d.device_type,
+      m: (d.manufacturer||"") + (d.model_name ? " / "+d.model_name : ""),
+      im:d.implant_date, note:d.note,
+      batv: reportFieldVal(report, "battery.voltage"),
+      batlife: (function(){
+        const lo = reportFieldVal(report, "battery.remaining_months");
+        const hi = reportFieldVal(report, "battery.remaining_months_max");
+        return (lo!=="" && hi!=="") ? (lo+"-"+hi) : (lo!=="" ? String(lo) : "");
+      })(),
+      ra_z: reportFieldVal(report, "leads.RA.impedance"),
+      ra_amp: reportFieldVal(report, "leads.RA.sensing_amplitude"),
+      ra_th: thStr("leads.RA.threshold_voltage","leads.RA.threshold_pulse_width"),
+      rv_z: reportFieldVal(report, "leads.RV.impedance"),
+      rv_amp: reportFieldVal(report, "leads.RV.sensing_amplitude"),
+      rv_th: thStr("leads.RV.threshold_voltage","leads.RV.threshold_pulse_width"),
+      rdate: report ? report.created_at.slice(0,10) : "",
+    });
   });
   ROWS = hit; sortKey = null; sortAsc = true;
 
