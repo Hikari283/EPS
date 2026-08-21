@@ -195,10 +195,11 @@ th.s.on{color:var(--accent)} th.s.on .ar{opacity:1}
   <div class="card" id="karteCard" hidden>
     <div class="bar">
       <strong style="font-size:13.5px">3. カルテ転記用テキスト</strong>
+      <span class="pill warn" id="karteDraftBadge" hidden>下書き（まだ保存されていません）</span>
       <button class="btn right" id="btnCopyKarte">📋 クリップボードにコピー</button>
     </div>
     <pre class="karte" id="karteText"></pre>
-    <p class="sub" style="margin-top:10px;margin-bottom:0">
+    <p class="sub" style="margin-top:10px;margin-bottom:0" id="karteHint">
       イベントの有無・前回との比較コメントは自動生成しません。人が判断して追記してください。
     </p>
   </div>
@@ -441,8 +442,8 @@ function runExtraction(){
 
   renderFields();
   document.getElementById("resultCard").hidden = false;
-  document.getElementById("karteCard").hidden = true;
   checkPatientId();
+  showKarteDraft(); // 貼り付けた瞬間から下書きを見せる（まだ保存はしない）
 }
 
 function renderFields(){
@@ -462,8 +463,21 @@ function renderFields(){
   box.querySelectorAll("input").forEach(function(inp){
     inp.addEventListener("input", function(){
       currentResults[parseInt(inp.dataset.idx,10)].value = inp.value;
+      showKarteDraft(); // 値を直すたびに下書きも即座に更新
     });
   });
+}
+
+// 貼り付け直後・項目の手直し直後に、その場のカルテ文の下書きを表示する。
+// これは「今貼り付けた1枚分」だけの内容（まだ他のレポートとは合成していない）。
+// 保存（台帳への反映・他レポートとの合成）は引き続き「確定」ボタンを押したときだけ行う
+// （CLAUDE.md 絶対4「抽出値を自動確定しない」は守ったまま、プレビューだけ早く見せる）。
+function showKarteDraft(){
+  document.getElementById("karteText").textContent = buildKarteText();
+  document.getElementById("karteCard").hidden = false;
+  document.getElementById("karteDraftBadge").hidden = false;
+  document.getElementById("karteHint").textContent =
+    "これは下書きです。台帳には反映されていません。内容を確認し、「確定して台帳に保存」を押すと確定します。";
 }
 
 function checkPatientId(){
@@ -474,6 +488,9 @@ function checkPatientId(){
   document.getElementById("in_patient_id").classList.toggle("invalid", !ok);
 }
 document.getElementById("in_patient_id").addEventListener("input", checkPatientId);
+document.getElementById("in_device_type").addEventListener("change", function(){
+  if(!document.getElementById("resultCard").hidden) showKarteDraft();
+});
 
 function getExtractedVal(path){
   const r = currentResults.find(function(x){ return x.field.path === path; });
@@ -604,6 +621,9 @@ document.getElementById("btnConfirm").addEventListener("click", function(){
   const merged = mergedReportFieldsFor(patientId);
   document.getElementById("karteText").textContent = buildKarteText(merged.get, device.device_type);
   document.getElementById("karteCard").hidden = false;
+  document.getElementById("karteDraftBadge").hidden = true; // 保存済みなので「下書き」表示を外す
+  document.getElementById("karteHint").textContent =
+    "イベントの有無・前回との比較コメントは自動生成しません。人が判断して追記してください。";
   document.getElementById("confirmInfo").textContent =
     (isNew ? "台帳に新規登録しました" : "台帳を更新しました") + "（患者ID " + patientId + "）";
   showToast(isNew ? "台帳に新規登録しました" : "台帳を更新しました");
@@ -704,6 +724,9 @@ function renderLedger(){
       document.getElementById("resultCard").hidden = true;
       document.getElementById("karteText").textContent = text;
       document.getElementById("karteCard").hidden = false;
+      document.getElementById("karteDraftBadge").hidden = true; // 保存済みデータの表示なので下書きではない
+      document.getElementById("karteHint").textContent =
+        "イベントの有無・前回との比較コメントは自動生成しません。人が判断して追記してください。";
       window.scrollTo(0,0);
     });
   });
