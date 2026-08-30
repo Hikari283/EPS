@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>高配当株ルールチェッカー</title>
+<style>
+  :root{
+    --bg:#f4f6fa; --panel:#ffffff; --line:#e2e8f0; --txt:#1e293b; --muted:#64748b;
+    --accent:#2563eb; --accent-d:#1d4ed8; --ok:#16a34a; --ok-bg:#ecfdf3; --ok-line:#bbf7d0;
+    --bad:#dc2626; --bad-bg:#fef2f2; --bad-line:#fecaca; --warn:#d97706; --warn-bg:#fffbeb; --warn-line:#fde68a;
+    --def:#0891b2; --cyc:#c2410c;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif;font-size:14px;line-height:1.5}
+  .wrap{max-width:1080px;margin:0 auto;padding:16px 16px 60px}
+  header{padding:18px 4px 10px}
+  header h1{font-size:20px;margin:0 0 4px}
+  header p{color:var(--muted);font-size:12.5px;margin:0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px;
+    box-shadow:0 1px 2px rgba(15,23,42,.04)}
+  .card h2{font-size:14px;margin:0 0 12px;display:flex;align-items:center;gap:8px}
+  .card h2 .n{width:20px;height:20px;border-radius:50%;background:var(--accent);color:#fff;font-size:11px;
+    display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media (max-width:760px){.grid2{grid-template-columns:1fr}}
+  label{display:block;font-size:11.5px;color:var(--muted);margin:8px 0 3px}
+  input,select{width:100%;background:#f8fafc;border:1px solid var(--line);color:var(--txt);
+    border-radius:7px;padding:8px 9px;font-size:13.5px}
+  input:focus,select:focus{outline:2px solid var(--accent);outline-offset:-1px;background:#fff}
+  button{background:#eef2f7;border:1px solid var(--line);color:var(--txt);
+    border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer;font-weight:600}
+  button:hover{background:#e2e8f0}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent-d)}
+  button.primary:hover{background:var(--accent-d)}
+  button.danger{background:var(--bad-bg);color:var(--bad);border-color:var(--bad-line)}
+  button.danger:hover{background:#fee2e2}
+  button.ghost{background:transparent;border-color:transparent;color:var(--muted);padding:4px 8px}
+  button.small{padding:5px 10px;font-size:12px}
+  .row{display:flex;gap:8px;flex-wrap:wrap}
+  .row>*{flex:1}
+  table{width:100%;border-collapse:collapse;font-size:12.8px}
+  th,td{padding:7px 8px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+  th:first-child,td:first-child{text-align:left}
+  th{color:var(--muted);font-weight:600;font-size:11.5px}
+  tbody tr:hover{background:#f8fafc}
+  .tblwrap{overflow-x:auto}
+  .badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:11.5px;font-weight:700}
+  .badge.ok{background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok-line)}
+  .badge.bad{background:var(--bad-bg);color:var(--bad);border:1px solid var(--bad-line)}
+  .badge.warn{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-line)}
+  .badge.def{background:#ecfeff;color:var(--def);border:1px solid #a5f3fc}
+  .badge.cyc{background:#fff7ed;color:var(--cyc);border:1px solid #fed7aa}
+  .rulebox{border:1px solid var(--line);border-radius:10px;padding:12px;display:flex;justify-content:space-between;
+    align-items:center;gap:10px;margin-bottom:8px}
+  .rulebox.ok{background:var(--ok-bg);border-color:var(--ok-line)}
+  .rulebox.bad{background:var(--bad-bg);border-color:var(--bad-line)}
+  .rulebox .rtitle{font-weight:700;font-size:13px}
+  .rulebox .rdetail{color:var(--muted);font-size:12px;margin-top:2px}
+  .bar{height:9px;border-radius:5px;background:#e2e8f0;overflow:hidden;margin-top:4px}
+  .bar>i{display:block;height:100%;background:var(--accent)}
+  .bar>i.over{background:var(--bad)}
+  .sectorrow{margin-bottom:8px}
+  .sectorrow .lbl{display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px}
+  .muted{color:var(--muted)}
+  .small{font-size:11.5px;color:var(--muted)}
+  .flex-between{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+  .pill-toggle{display:inline-flex;border:1px solid var(--line);border-radius:20px;overflow:hidden}
+  .pill-toggle button{border:0;border-radius:0;background:#fff;margin:0}
+  .pill-toggle button.on{background:var(--accent);color:#fff}
+  details{margin-top:4px}
+  summary{cursor:pointer;color:var(--accent);font-size:12.5px;font-weight:600}
+  .settingsgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+  .sectorlist{max-height:260px;overflow-y:auto;border:1px solid var(--line);border-radius:8px}
+  .sectorlist .srow{display:flex;justify-content:space-between;align-items:center;padding:6px 10px;border-bottom:1px solid var(--line);font-size:12.5px}
+  .sectorlist .srow:last-child{border-bottom:0}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1e293b;color:#fff;
+    padding:10px 18px;border-radius:8px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .25s;z-index:50}
+  .toast.show{opacity:1}
+  .simresult{border-top:1px dashed var(--line);margin-top:12px;padding-top:12px}
+  .verdict{padding:12px 14px;border-radius:10px;font-weight:700;font-size:14px;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+  .verdict.ok{background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok-line)}
+  .verdict.bad{background:var(--bad-bg);color:var(--bad);border:1px solid var(--bad-line)}
+  .empty{color:var(--muted);font-size:12.5px;text-align:center;padding:20px}
+  .iconbtn{background:transparent;border:0;padding:2px 6px;cursor:pointer;font-size:13px}
+  .link{color:var(--accent);cursor:pointer;font-size:12px;background:none;border:none;padding:0;font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>📊 高配当株ルールチェッカー</h1>
+    <p>買い増しを検討するときに「①候補探し ②セクター20%上限 ③個別銘柄の配当3%上限 ④ディフェンシブ50%下限 ⑤▲20%/▲40%ナンピン」を守れているか、その場で確認するツールです。</p>
+  </header>
+
+  <!-- ルール①：月次ルーティン -->
+  <div class="card">
+    <h2><span class="n">1</span>候補銘柄探しルーティン</h2>
+    <div class="row" style="align-items:flex-end">
+      <div>
+        <label>前回、候補銘柄を探した日</label>
+        <input type="date" id="lastSearchDate">
+      </div>
+      <div style="flex:0 0 auto">
+        <button class="primary" onclick="setSearchToday()">今日探した ✓</button>
+      </div>
+    </div>
+    <div id="searchReminder" style="margin-top:10px"></div>
+  </div>
+
+  <!-- ダッシュボード -->
+  <div class="card">
+    <h2><span class="n">2-4</span>現在のポートフォリオ ルール判定</h2>
+    <div id="ruleDashboard"></div>
+    <div class="grid2" style="margin-top:14px">
+      <div>
+        <div class="small" style="margin-bottom:6px;font-weight:700">セクター別割合（20%上限）</div>
+        <div id="sectorBars"></div>
+      </div>
+      <div>
+        <div class="small" style="margin-bottom:6px;font-weight:700">ディフェンシブ / 景気敏感（50%下限）</div>
+        <div id="defBar"></div>
+        <div class="small" style="margin-top:10px;font-weight:700">配当集中度（銘柄別・3%上限）</div>
+        <div id="divTopList"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ルール⑤：ナンピン状況 -->
+  <div class="card">
+    <h2><span class="n">5</span>買い増し（ナンピン）ライン到達チェック</h2>
+    <div id="nanpinList"></div>
+  </div>
+
+  <!-- 買い増しシミュレーター -->
+  <div class="card" style="border:2px solid var(--accent)">
+    <h2><span class="n" style="background:var(--accent)">★</span>買い増しシミュレーター</h2>
+    <p class="small">これから買おうとしている銘柄の情報を入れると、買った"後"にルールを守れているか事前に判定します。</p>
+    <div class="grid2">
+      <div>
+        <label>対象銘柄</label>
+        <select id="simTarget" onchange="onSimTargetChange()">
+          <option value="__new__">➕ 新規銘柄を追加する</option>
+        </select>
+      </div>
+      <div>
+        <label>銘柄名</label>
+        <input type="text" id="simName" placeholder="例）三井住友フィナンシャルグループ">
+      </div>
+      <div>
+        <label>セクター（業種）</label>
+        <select id="simSector"></select>
+      </div>
+      <div>
+        <label>ディフェンシブ判定</label>
+        <div class="pill-toggle" id="simDefToggle" style="width:100%">
+          <button type="button" data-v="auto" class="on" onclick="setSimDef('auto')" style="flex:1">セクター準拠</button>
+          <button type="button" data-v="true" onclick="setSimDef('true')" style="flex:1">ディフェンシブ</button>
+          <button type="button" data-v="false" onclick="setSimDef('false')" style="flex:1">景気敏感</button>
+        </div>
+      </div>
+      <div>
+        <label>買い増し株数</label>
+        <input type="number" id="simShares" min="0" step="1" placeholder="例）100">
+      </div>
+      <div>
+        <label>購入単価（円）</label>
+        <input type="number" id="simPrice" min="0" step="0.1" placeholder="例）3500">
+      </div>
+      <div>
+        <label>1株あたり年間配当金（円）</label>
+        <input type="number" id="simDiv" min="0" step="0.1" placeholder="例）120">
+      </div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button class="primary" onclick="runSimulation()" style="flex:0 0 auto">この買い増しを判定する</button>
+      <span style="flex:1"></span>
+    </div>
+    <div id="simResult"></div>
+  </div>
+
+  <!-- 保有銘柄一覧 -->
+  <div class="card">
+    <h2 class="flex-between">
+      <span style="display:flex;align-items:center;gap:8px"><span class="n" style="background:#64748b">P</span>保有銘柄一覧</span>
+      <button class="small" onclick="openHoldingForm()">＋ 銘柄を追加</button>
+    </h2>
+    <div class="tblwrap">
+      <table id="holdingsTable">
+        <thead>
+          <tr>
+            <th>銘柄名</th><th>セクター</th><th>区分</th><th>株数</th><th>取得単価</th>
+            <th>現在値</th><th>評価額</th><th>年間配当</th><th>下落率</th><th>ナンピン</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="holdingsBody"></tbody>
+      </table>
+      <div id="holdingsEmpty" class="empty" style="display:none">まだ銘柄が登録されていません。「＋ 銘柄を追加」から登録するか、上のシミュレーターで買い増しを確定してください。</div>
+    </div>
+  </div>
+
+  <!-- 設定 -->
+  <div class="card">
+    <details>
+      <summary>⚙️ ルールのしきい値・セクター分類を編集する</summary>
+      <div style="margin-top:12px">
+        <div class="settingsgrid">
+          <div><label>セクター上限（%）</label><input type="number" id="setSectorMax" step="1"></div>
+          <div><label>個別銘柄配当上限（%）</label><input type="number" id="setDivMax" step="0.5"></div>
+          <div><label>ディフェンシブ下限（%）</label><input type="number" id="setDefMin" step="1"></div>
+          <div><label>1回目ナンピン（下落%）</label><input type="number" id="setDrop1" step="1"></div>
+          <div><label>2回目ナンピン（下落%）</label><input type="number" id="setDrop2" step="1"></div>
+        </div>
+        <button class="small" style="margin-top:10px" onclick="saveSettings()">設定を保存</button>
+        <div style="margin-top:14px">
+          <div class="small" style="font-weight:700;margin-bottom:6px">東証33業種のディフェンシブ／景気敏感 分類（自分の判断で変更可）</div>
+          <div class="sectorlist" id="sectorSettingsList"></div>
+        </div>
+      </div>
+    </details>
+  </div>
+
+  <div class="row" style="margin-top:4px">
+    <button class="small" onclick="exportData()">📤 データをエクスポート</button>
+    <button class="small" onclick="document.getElementById('importFile').click()">📥 インポート</button>
+    <input type="file" id="importFile" accept="application/json" style="display:none" onchange="importData(event)">
+    <span style="flex:2"></span>
+  </div>
+</div>
+
+<!-- 保有銘柄 編集モーダル -->
+<div id="modalBg" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:100;align-items:center;justify-content:center;padding:16px">
+  <div class="card" style="width:min(480px,100%);margin:0;max-height:90vh;overflow-y:auto">
+    <h2 id="modalTitle">銘柄を追加</h2>
+    <input type="hidden" id="hId">
+    <label>銘柄名</label><input type="text" id="hName">
+    <label>証券コード（任意）</label><input type="text" id="hTicker">
+    <label>セクター（業種）</label><select id="hSector"></select>
+    <label>ディフェンシブ判定</label>
+    <div class="pill-toggle" id="hDefToggle" style="width:100%">
+      <button type="button" data-v="auto" class="on" onclick="setHDef('auto')" style="flex:1">セクター準拠</button>
+      <button type="button" data-v="true" onclick="setHDef('true')" style="flex:1">ディフェンシブ</button>
+      <button type="button" data-v="false" onclick="setHDef('false')" style="flex:1">景気敏感</button>
+    </div>
+    <div class="row">
+      <div><label>保有株数</label><input type="number" id="hShares" min="0" step="1"></div>
+      <div><label>当初買値（円）</label><input type="number" id="hAvgCost" min="0" step="0.1"></div>
+    </div>
+    <div class="row">
+      <div><label>現在株価（円）</label><input type="number" id="hCurrentPrice" min="0" step="0.1"></div>
+      <div><label>1株年間配当（円）</label><input type="number" id="hDiv" min="0" step="0.1"></div>
+    </div>
+    <label>これまでのナンピン回数</label>
+    <select id="hNanpin"><option value="0">0回</option><option value="1">1回</option><option value="2">2回（上限）</option></select>
+    <div class="row" style="margin-top:14px">
+      <button class="primary" onclick="saveHolding()">保存</button>
+      <button onclick="closeHoldingForm()">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ==================== データ定義 ==================== */
+const SECTORS_DEFAULT = [
+  ["水産・農林業", true], ["鉱業", false], ["建設業", false], ["食料品", true],
+  ["繊維製品", false], ["パルプ・紙", false], ["化学", false], ["医薬品", true],
+  ["石油・石炭製品", false], ["ゴム製品", false], ["ガラス・土石製品", false], ["鉄鋼", false],
+  ["非鉄金属", false], ["金属製品", false], ["機械", false], ["電気機器", false],
+  ["輸送用機器", false], ["精密機器", false], ["その他製品", false], ["電気・ガス業", true],
+  ["陸運業", true], ["海運業", false], ["空運業", false], ["倉庫・運輸関連業", false],
+  ["情報・通信業", true], ["卸売業", false], ["小売業", false], ["銀行業", false],
+  ["証券、商品先物取引業", false], ["保険業", false], ["その他金融業", false],
+  ["不動産業", false], ["サービス業", false],
+];
+
+const STORE_KEY = "divRuleChecker_v1";
+
+function defaultState(){
+  const sectors = {};
+  SECTORS_DEFAULT.forEach(([name, def]) => sectors[name] = { defensive: def });
+  return {
+    holdings: [],
+    sectors,
+    settings: { sectorMax: 20, divMax: 3, defMin: 50, drop1: 20, drop2: 40 },
+    lastSearchDate: null,
+  };
+}
+
+let STATE = loadState();
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(!raw) return defaultState();
+    const parsed = JSON.parse(raw);
+    const base = defaultState();
+    return {
+      holdings: Array.isArray(parsed.holdings) ? parsed.holdings : [],
+      sectors: Object.assign({}, base.sectors, parsed.sectors || {}),
+      settings: Object.assign({}, base.settings, parsed.settings || {}),
+      lastSearchDate: parsed.lastSearchDate || null,
+    };
+  }catch(e){ return defaultState(); }
+}
+
+function saveState(){
+  localStorage.setItem(STORE_KEY, JSON.stringify(STATE));
+}
+
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toast._h);
+  toast._h = setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
+/* ==================== 集計ロジック ==================== */
+function isDefensive(h){
+  if(h.defOverride === true) return true;
+  if(h.defOverride === false) return false;
+  const s = STATE.sectors[h.sector];
+  return s ? !!s.defensive : false;
+}
+
+function computeAgg(holdings){
+  const totalValue = holdings.reduce((s,h)=> s + h.shares*h.currentPrice, 0);
+  const totalDividend = holdings.reduce((s,h)=> s + h.shares*h.divPerShare, 0);
+
+  const bySector = {};
+  holdings.forEach(h=>{
+    const v = h.shares*h.currentPrice;
+    bySector[h.sector] = (bySector[h.sector]||0) + v;
+  });
+  const sectorPct = Object.entries(bySector).map(([name,val])=>({
+    name, value: val, pct: totalValue>0 ? val/totalValue*100 : 0
+  })).sort((a,b)=>b.pct-a.pct);
+
+  const defValue = holdings.reduce((s,h)=> s + (isDefensive(h) ? h.shares*h.currentPrice : 0), 0);
+  const defPct = totalValue>0 ? defValue/totalValue*100 : 0;
+
+  const divByStock = holdings.map(h=>{
+    const d = h.shares*h.divPerShare;
+    return { id:h.id, name:h.name, dividend:d, pct: totalDividend>0 ? d/totalDividend*100 : 0 };
+  }).sort((a,b)=>b.pct-a.pct);
+
+  return { totalValue, totalDividend, sectorPct, defValue, defPct, divByStock };
+}
+
+/* ==================== 初期化・セクターセレクト ==================== */
+function fillSectorSelect(sel, selected){
+  sel.innerHTML = '';
+  Object.keys(STATE.sectors).forEach(name=>{
+    const o = document.createElement('option');
+    o.value = name; o.textContent = name;
+    if(name===selected) o.selected = true;
+    sel.appendChild(o);
+  });
+}
+
+/* ==================== ルール① 月次ルーティン ==================== */
+function setSearchToday(){
+  STATE.lastSearchDate = new Date().toISOString().slice(0,10);
+  saveState();
+  render();
+  toast('候補探しの実施日を記録しました');
+}
+
+function renderSearchReminder(){
+  const input = document.getElementById('lastSearchDate');
+  input.value = STATE.lastSearchDate || '';
+  input.onchange = ()=>{ STATE.lastSearchDate = input.value || null; saveState(); renderSearchReminder(); };
+
+  const box = document.getElementById('searchReminder');
+  if(!STATE.lastSearchDate){
+    box.innerHTML = `<span class="badge warn">未記録</span> <span class="small">まだ候補探しの記録がありません。月イチのルーティンとして記録しておきましょう。</span>`;
+    return;
+  }
+  const last = new Date(STATE.lastSearchDate);
+  const days = Math.floor((Date.now() - last.getTime())/86400000);
+  if(days >= 31){
+    box.innerHTML = `<span class="badge bad">${days}日経過</span> <span class="small">そろそろ今月の候補銘柄を探すタイミングです。</span>`;
+  }else{
+    box.innerHTML = `<span class="badge ok">OK</span> <span class="small">前回から${days}日経過（目安31日以内）。</span>`;
+  }
+}
+
+/* ==================== ルール②③④ ダッシュボード ==================== */
+function renderDashboard(){
+  const agg = computeAgg(STATE.holdings);
+  const st = STATE.settings;
+  const dash = document.getElementById('ruleDashboard');
+
+  if(STATE.holdings.length===0){
+    dash.innerHTML = `<div class="empty">まだ保有銘柄が登録されていません。下の「保有銘柄一覧」から追加してください。</div>`;
+  } else {
+    const worstSector = agg.sectorPct[0];
+    const sectorOk = !worstSector || worstSector.pct <= st.sectorMax;
+    const worstStock = agg.divByStock[0];
+    const divOk = !worstStock || worstStock.pct <= st.divMax;
+    const defOk = agg.defPct >= st.defMin;
+
+    dash.innerHTML = [
+      ruleBox('②セクター集中', sectorOk,
+        worstSector ? `最大：${worstSector.name} ${worstSector.pct.toFixed(1)}%（上限${st.sectorMax}%）` : '銘柄なし'),
+      ruleBox('③個別銘柄の配当集中', divOk,
+        worstStock ? `最大：${worstStock.name} ${worstStock.pct.toFixed(1)}%（上限${st.divMax}%）` : '配当データなし'),
+      ruleBox('④ディフェンシブ比率', defOk,
+        `ディフェンシブ ${agg.defPct.toFixed(1)}%（下限${st.defMin}%）`),
+    ].join('');
+  }
+
+  renderSectorBars(agg);
+  renderDefBar(agg);
+  renderDivTop(agg);
+}
+
+function ruleBox(title, ok, detail){
+  return `<div class="rulebox ${ok?'ok':'bad'}">
+    <div><div class="rtitle">${title}</div><div class="rdetail">${detail}</div></div>
+    <div class="badge ${ok?'ok':'bad'}">${ok?'OK':'抵触'}</div>
+  </div>`;
+}
+
+function renderSectorBars(agg){
+  const el = document.getElementById('sectorBars');
+  if(agg.sectorPct.length===0){ el.innerHTML = `<div class="empty">データなし</div>`; return; }
+  const max = STATE.settings.sectorMax;
+  el.innerHTML = agg.sectorPct.map(s=>`
+    <div class="sectorrow">
+      <div class="lbl"><span>${s.name}</span><span>${s.pct.toFixed(1)}%</span></div>
+      <div class="bar"><i class="${s.pct>max?'over':''}" style="width:${Math.min(100,s.pct)}%"></i></div>
+    </div>`).join('');
+}
+
+function renderDefBar(agg){
+  const el = document.getElementById('defBar');
+  const pct = agg.defPct;
+  const min = STATE.settings.defMin;
+  const cycPct = 100 - pct;
+  el.innerHTML = `
+    <div class="sectorrow">
+      <div class="lbl"><span class="badge def">ディフェンシブ</span><span>${pct.toFixed(1)}%</span></div>
+      <div class="bar"><i class="${pct<min?'over':''}" style="width:${Math.min(100,pct)}%"></i></div>
+    </div>
+    <div class="sectorrow">
+      <div class="lbl"><span class="badge cyc">景気敏感</span><span>${cycPct.toFixed(1)}%</span></div>
+      <div class="bar"><i style="width:${Math.min(100,cycPct)}%;background:var(--cyc)"></i></div>
+    </div>`;
+}
+
+function renderDivTop(agg){
+  const el = document.getElementById('divTopList');
+  if(agg.divByStock.length===0){ el.innerHTML = `<div class="empty">データなし</div>`; return; }
+  const max = STATE.settings.divMax;
+  el.innerHTML = agg.divByStock.slice(0,6).map(d=>`
+    <div class="sectorrow">
+      <div class="lbl"><span>${d.name}</span><span>${d.pct.toFixed(1)}%</span></div>
+      <div class="bar"><i class="${d.pct>max?'over':''}" style="width:${Math.min(100,d.pct*10)}%"></i></div>
+    </div>`).join('');
+}
+
+/* ==================== ルール⑤ ナンピン判定 ==================== */
+function nanpinStatus(h){
+  const st = STATE.settings;
+  if(!h.avgCost || h.avgCost<=0) return { label:'取得単価未入力', cls:'warn' };
+  const drop = (h.avgCost - h.currentPrice) / h.avgCost * 100;
+  const count = h.nanpinCount||0;
+  if(drop >= st.drop2 && count < 2){
+    return { label:`▲${drop.toFixed(1)}% 2回目の買い増しライン到達`, cls:'bad' };
+  }
+  if(drop >= st.drop1 && count < 1){
+    return { label:`▲${drop.toFixed(1)}% 1回目の買い増しライン到達`, cls:'bad' };
+  }
+  if(count >= 2){
+    return { label:`▲${drop.toFixed(1)}%（ナンピン上限2回に到達済み）`, cls:'warn' };
+  }
+  return { label: drop>0 ? `▲${drop.toFixed(1)}%（ライン未到達）` : `含み益 +${(-drop).toFixed(1)}%`, cls:'ok' };
+}
+
+function renderNanpinList(){
+  const el = document.getElementById('nanpinList');
+  if(STATE.holdings.length===0){ el.innerHTML = `<div class="empty">保有銘柄がありません。</div>`; return; }
+  const rows = STATE.holdings.map(h=>({h, s: nanpinStatus(h)}))
+    .sort((a,b)=> (a.s.cls==='bad'?0:1) - (b.s.cls==='bad'?0:1));
+  el.innerHTML = rows.map(({h,s})=>`
+    <div class="rulebox ${s.cls==='ok'?'ok':(s.cls==='bad'?'bad':'')}" style="${s.cls==='warn'?'background:var(--warn-bg);border-color:var(--warn-line)':''}">
+      <div><div class="rtitle">${h.name}</div><div class="rdetail">当初買値 ¥${fmt(h.avgCost)} → 現在値 ¥${fmt(h.currentPrice)}</div></div>
+      <div class="badge ${s.cls}">${s.label}</div>
+    </div>`).join('');
+}
+
+/* ==================== 保有銘柄 一覧・CRUD ==================== */
+function fmt(n){ return (n===undefined||n===null||isNaN(n)) ? '-' : Number(n).toLocaleString('ja-JP',{maximumFractionDigits:1}); }
+
+function renderHoldingsTable(){
+  const body = document.getElementById('holdingsBody');
+  const empty = document.getElementById('holdingsEmpty');
+  if(STATE.holdings.length===0){
+    body.innerHTML = ''; empty.style.display='block'; return;
+  }
+  empty.style.display='none';
+  body.innerHTML = STATE.holdings.map(h=>{
+    const value = h.shares*h.currentPrice;
+    const dividend = h.shares*h.divPerShare;
+    const drop = h.avgCost>0 ? (h.avgCost-h.currentPrice)/h.avgCost*100 : null;
+    const ns = nanpinStatus(h);
+    return `<tr>
+      <td style="text-align:left">${h.name}${h.ticker?`<div class="small">${h.ticker}</div>`:''}</td>
+      <td style="text-align:left">${h.sector}</td>
+      <td>${isDefensive(h)?'<span class="badge def">defensive</span>':'<span class="badge cyc">cyclical</span>'}</td>
+      <td>${fmt(h.shares)}</td>
+      <td>¥${fmt(h.avgCost)}</td>
+      <td>¥${fmt(h.currentPrice)}</td>
+      <td>¥${fmt(value)}</td>
+      <td>¥${fmt(dividend)}</td>
+      <td>${drop===null?'-':(drop>0?'▲':'+')+Math.abs(drop).toFixed(1)+'%'}</td>
+      <td><span class="badge ${ns.cls}">${ns.cls==='bad'?'買い増し可':(ns.cls==='warn'?'上限':'未到達')}</span></td>
+      <td><button class="iconbtn" onclick="openHoldingForm('${h.id}')" title="編集">✏️</button><button class="iconbtn" onclick="deleteHolding('${h.id}')" title="削除">🗑️</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function openHoldingForm(id){
+  const modal = document.getElementById('modalBg');
+  fillSectorSelect(document.getElementById('hSector'));
+  if(id){
+    const h = STATE.holdings.find(x=>x.id===id);
+    document.getElementById('modalTitle').textContent = '銘柄を編集';
+    document.getElementById('hId').value = h.id;
+    document.getElementById('hName').value = h.name;
+    document.getElementById('hTicker').value = h.ticker||'';
+    document.getElementById('hSector').value = h.sector;
+    setHDef(h.defOverride===true?'true':(h.defOverride===false?'false':'auto'));
+    document.getElementById('hShares').value = h.shares;
+    document.getElementById('hAvgCost').value = h.avgCost;
+    document.getElementById('hCurrentPrice').value = h.currentPrice;
+    document.getElementById('hDiv').value = h.divPerShare;
+    document.getElementById('hNanpin').value = h.nanpinCount||0;
+  }else{
+    document.getElementById('modalTitle').textContent = '銘柄を追加';
+    document.getElementById('hId').value = '';
+    ['hName','hTicker','hShares','hAvgCost','hCurrentPrice','hDiv'].forEach(id2=>document.getElementById(id2).value='');
+    setHDef('auto');
+    document.getElementById('hNanpin').value = 0;
+  }
+  modal.style.display = 'flex';
+}
+function closeHoldingForm(){ document.getElementById('modalBg').style.display='none'; }
+
+let hDefVal = 'auto';
+function setHDef(v){
+  hDefVal = v;
+  document.querySelectorAll('#hDefToggle button').forEach(b=>b.classList.toggle('on', b.dataset.v===v));
+}
+
+function saveHolding(){
+  const name = document.getElementById('hName').value.trim();
+  if(!name){ toast('銘柄名を入力してください'); return; }
+  const id = document.getElementById('hId').value || ('h'+Date.now()+Math.random().toString(36).slice(2,6));
+  const h = {
+    id,
+    name,
+    ticker: document.getElementById('hTicker').value.trim(),
+    sector: document.getElementById('hSector').value,
+    defOverride: hDefVal==='auto' ? null : (hDefVal==='true'),
+    shares: Number(document.getElementById('hShares').value)||0,
+    avgCost: Number(document.getElementById('hAvgCost').value)||0,
+    currentPrice: Number(document.getElementById('hCurrentPrice').value)||0,
+    divPerShare: Number(document.getElementById('hDiv').value)||0,
+    nanpinCount: Number(document.getElementById('hNanpin').value)||0,
+  };
+  const idx = STATE.holdings.findIndex(x=>x.id===id);
+  if(idx>=0) STATE.holdings[idx] = h; else STATE.holdings.push(h);
+  saveState();
+  closeHoldingForm();
+  render();
+  toast('保存しました');
+}
+
+function deleteHolding(id){
+  if(!confirm('この銘柄を削除しますか？')) return;
+  STATE.holdings = STATE.holdings.filter(h=>h.id!==id);
+  saveState();
+  render();
+}
+
+/* ==================== 買い増しシミュレーター ==================== */
+function refreshSimTargetOptions(){
+  const sel = document.getElementById('simTarget');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="__new__">➕ 新規銘柄を追加する</option>' +
+    STATE.holdings.map(h=>`<option value="${h.id}">${h.name}（既存に買い増し）</option>`).join('');
+  sel.value = cur && [...sel.options].some(o=>o.value===cur) ? cur : '__new__';
+}
+
+function onSimTargetChange(){
+  const val = document.getElementById('simTarget').value;
+  const nameInput = document.getElementById('simName');
+  if(val==='__new__'){
+    nameInput.value=''; nameInput.disabled=false;
+    document.getElementById('simSector').disabled=false;
+    setSimDef('auto');
+    document.getElementById('simDefToggle').querySelectorAll('button').forEach(b=>b.disabled=false);
+    document.getElementById('simPrice').value='';
+    document.getElementById('simDiv').value='';
+  }else{
+    const h = STATE.holdings.find(x=>x.id===val);
+    nameInput.value = h.name; nameInput.disabled = true;
+    document.getElementById('simSector').value = h.sector; document.getElementById('simSector').disabled = true;
+    setSimDef(h.defOverride===true?'true':(h.defOverride===false?'false':'auto'));
+    document.getElementById('simDefToggle').querySelectorAll('button').forEach(b=>b.disabled=true);
+    document.getElementById('simPrice').value = h.currentPrice || '';
+    document.getElementById('simDiv').value = h.divPerShare || '';
+  }
+}
+
+let simDefVal = 'auto';
+function setSimDef(v){
+  simDefVal = v;
+  document.querySelectorAll('#simDefToggle button').forEach(b=>b.classList.toggle('on', b.dataset.v===v));
+}
+
+function runSimulation(){
+  const targetId = document.getElementById('simTarget').value;
+  const name = document.getElementById('simName').value.trim();
+  const sector = document.getElementById('simSector').value;
+  const shares = Number(document.getElementById('simShares').value)||0;
+  const price = Number(document.getElementById('simPrice').value)||0;
+  const div = Number(document.getElementById('simDiv').value)||0;
+
+  if(!name){ toast('銘柄名を入力してください'); return; }
+  if(shares<=0 || price<=0){ toast('株数と購入単価を入力してください'); return; }
+
+  const clone = STATE.holdings.map(h=>Object.assign({}, h));
+  let mergedHolding;
+  if(targetId==='__new__'){
+    mergedHolding = {
+      id: '__sim__'+Date.now(),
+      name, ticker:'', sector,
+      defOverride: simDefVal==='auto'?null:(simDefVal==='true'),
+      shares, avgCost: price, currentPrice: price, divPerShare: div, nanpinCount: 0,
+    };
+    clone.push(mergedHolding);
+  }else{
+    const idx = clone.findIndex(h=>h.id===targetId);
+    const orig = clone[idx];
+    const newShares = orig.shares + shares;
+    mergedHolding = Object.assign({}, orig, {
+      shares: newShares,
+      currentPrice: price,
+      divPerShare: div || orig.divPerShare,
+    });
+    clone[idx] = mergedHolding;
+  }
+
+  const before = computeAgg(STATE.holdings);
+  const after = computeAgg(clone);
+  const st = STATE.settings;
+
+  const sectorAfter = after.sectorPct.find(s=>s.name===sector);
+  const sectorOk = !sectorAfter || sectorAfter.pct <= st.sectorMax;
+
+  const stockAfter = after.divByStock.find(d=> targetId==='__new__' ? d.id===mergedHolding.id : d.id===targetId);
+  const stockOk = !stockAfter || stockAfter.pct <= st.divMax;
+
+  const defOk = after.defPct >= st.defMin;
+
+  let nanpinNote = '';
+  if(targetId!=='__new__'){
+    const orig = STATE.holdings.find(h=>h.id===targetId);
+    const ns = nanpinStatus(orig);
+    nanpinNote = `<div class="small" style="margin-top:6px">⑤ナンピン状況：${ns.label}（買い増し前時点）</div>`;
+  }
+
+  const allOk = sectorOk && stockOk && defOk;
+
+  const el = document.getElementById('simResult');
+  el.innerHTML = `
+    <div class="simresult">
+      <div class="verdict ${allOk?'ok':'bad'}">${allOk?'✅ この買い増しはルールの範囲内です':'⚠️ この買い増しはルールに抵触します'}</div>
+      ${ruleBoxDelta('②セクター集中：'+sector, sectorOk, before.sectorPct.find(s=>s.name===sector), sectorAfter, st.sectorMax)}
+      ${ruleBoxDelta('③個別銘柄の配当集中：'+name, stockOk, before.divByStock.find(d=>d.name===name), stockAfter, st.divMax)}
+      ${ruleBoxDelta('④ディフェンシブ比率', defOk, {pct:before.defPct}, {pct:after.defPct}, st.defMin, true)}
+      ${nanpinNote}
+      <button class="primary" style="margin-top:10px" onclick="commitSimulation('${targetId}', ${JSON.stringify(mergedHolding).replace(/"/g,'&quot;')})">この買い増しを保有銘柄に反映する</button>
+    </div>`;
+}
+
+function ruleBoxDelta(title, ok, beforeObj, afterObj, threshold, isMin){
+  const b = beforeObj ? beforeObj.pct.toFixed(1) : '0.0';
+  const a = afterObj ? afterObj.pct.toFixed(1) : '0.0';
+  const dir = isMin ? `下限${threshold}%` : `上限${threshold}%`;
+  return `<div class="rulebox ${ok?'ok':'bad'}">
+    <div><div class="rtitle">${title}</div><div class="rdetail">買い増し前 ${b}% → 買い増し後 ${a}%（${dir}）</div></div>
+    <div class="badge ${ok?'ok':'bad'}">${ok?'OK':'抵触'}</div>
+  </div>`;
+}
+
+function commitSimulation(targetId, mergedHoldingJson){
+  const merged = typeof mergedHoldingJson==='string' ? JSON.parse(mergedHoldingJson) : mergedHoldingJson;
+  if(targetId==='__new__'){
+    STATE.holdings.push(merged);
+  }else{
+    const idx = STATE.holdings.findIndex(h=>h.id===targetId);
+    if(idx>=0) STATE.holdings[idx] = merged;
+  }
+  saveState();
+  document.getElementById('simResult').innerHTML='';
+  document.getElementById('simShares').value='';
+  render();
+  toast('保有銘柄に反映しました');
+}
+
+/* ==================== 設定 ==================== */
+function renderSettingsForm(){
+  const st = STATE.settings;
+  document.getElementById('setSectorMax').value = st.sectorMax;
+  document.getElementById('setDivMax').value = st.divMax;
+  document.getElementById('setDefMin').value = st.defMin;
+  document.getElementById('setDrop1').value = st.drop1;
+  document.getElementById('setDrop2').value = st.drop2;
+
+  const list = document.getElementById('sectorSettingsList');
+  list.innerHTML = Object.entries(STATE.sectors).map(([name,cfg])=>`
+    <div class="srow">
+      <span>${name}</span>
+      <div class="pill-toggle" style="transform:scale(.9)">
+        <button type="button" class="${cfg.defensive?'':'on'}" onclick="setSectorDef('${name}',false)">景気敏感</button>
+        <button type="button" class="${cfg.defensive?'on':''}" onclick="setSectorDef('${name}',true)">ディフェンシブ</button>
+      </div>
+    </div>`).join('');
+}
+
+function setSectorDef(name, val){
+  STATE.sectors[name].defensive = val;
+  saveState();
+  renderSettingsForm();
+  render();
+}
+
+function saveSettings(){
+  STATE.settings = {
+    sectorMax: Number(document.getElementById('setSectorMax').value)||20,
+    divMax: Number(document.getElementById('setDivMax').value)||3,
+    defMin: Number(document.getElementById('setDefMin').value)||50,
+    drop1: Number(document.getElementById('setDrop1').value)||20,
+    drop2: Number(document.getElementById('setDrop2').value)||40,
+  };
+  saveState();
+  render();
+  toast('設定を保存しました');
+}
+
+/* ==================== エクスポート／インポート ==================== */
+function exportData(){
+  const blob = new Blob([JSON.stringify(STATE, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'dividend-portfolio-'+new Date().toISOString().slice(0,10)+'.json';
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function importData(ev){
+  const file = ev.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    try{
+      const parsed = JSON.parse(reader.result);
+      const base = defaultState();
+      STATE = {
+        holdings: Array.isArray(parsed.holdings) ? parsed.holdings : [],
+        sectors: Object.assign({}, base.sectors, parsed.sectors || {}),
+        settings: Object.assign({}, base.settings, parsed.settings || {}),
+        lastSearchDate: parsed.lastSearchDate || null,
+      };
+      saveState();
+      render();
+      toast('インポートしました');
+    }catch(e){ toast('読み込みに失敗しました'); }
+  };
+  reader.readAsText(file);
+  ev.target.value = '';
+}
+
+/* ==================== 全体描画 ==================== */
+function render(){
+  fillSectorSelect(document.getElementById('simSector'));
+  refreshSimTargetOptions();
+  renderSearchReminder();
+  renderDashboard();
+  renderNanpinList();
+  renderHoldingsTable();
+  renderSettingsForm();
+}
+
+render();
+</script>
+</body>
+</html>
