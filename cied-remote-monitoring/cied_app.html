@@ -439,10 +439,13 @@ const FIELDS = [
     pattern:/ペーシング閾値\s+(\d+\.\d+)\s*V\s*\((\d+\.\d+)\s*ms\)\s+(\d+\.\d+)\s*V\s*\((\d+\.\d+)\s*ms\)/ },
   { path:"leads.RA.sensing_amplitude", label:"P波高値(mV)", pattern:/P波高値\s+(\d+\.\d+)\s*mV/, type:"float" },
   { path:"leads.RV.sensing_amplitude", label:"R波高値(mV)", pattern:/(?<![/／])R波高値\s+(\d+\.\d+)\s*mV/, type:"float" },
-  { path:"pacing.as_vs_percent", label:"AS-VS(%)　※直近期間", pattern:/AS-VS\s+(?:<?\s*\d+(?:\.\d+)?)\s*%\s+(<?\s*\d+(?:\.\d+)?)\s*%/, type:"float" },
-  { path:"pacing.as_vp_percent", label:"AS-VP(%)　※直近期間", pattern:/AS-VP\s+(?:<?\s*\d+(?:\.\d+)?)\s*%\s+(<?\s*\d+(?:\.\d+)?)\s*%/, type:"float" },
-  { path:"pacing.ap_vs_percent", label:"AP-VS(%)　※直近期間", pattern:/AP-VS\s+(?:<?\s*\d+(?:\.\d+)?)\s*%\s+(<?\s*\d+(?:\.\d+)?)\s*%/, type:"float" },
-  { path:"pacing.ap_vp_percent", label:"AP-VP(%)　※直近期間", pattern:/AP-VP\s+(?:<?\s*\d+(?:\.\d+)?)\s*%\s+(<?\s*\d+(?:\.\d+)?)\s*%/, type:"float" },
+  // ラベル直後に並ぶ「数値%」を貪欲に消費しつつ、最後の1つだけを捕捉する。
+  // 帳票によって、この項目が単一期間の値1個だけの場合と、前回チェックまで/以降の2個並ぶ場合の
+  // 両方があるため、どちらでも「一番最後（＝直近）の値」を同じ書き方で拾えるようにしている。
+  { path:"pacing.as_vs_percent", label:"AS-VS(%)　※直近期間", pattern:/AS-VS\s+(?:<?\s*\d+(?:\.\d+)?\s*%\s+)*(<?\s*\d+(?:\.\d+)?)\s*%/, type:"float" },
+  { path:"pacing.as_vp_percent", label:"AS-VP(%)　※直近期間", pattern:/AS-VP\s+(?:<?\s*\d+(?:\.\d+)?\s*%\s+)*(<?\s*\d+(?:\.\d+)?)\s*%/, type:"float" },
+  { path:"pacing.ap_vs_percent", label:"AP-VS(%)　※直近期間", pattern:/AP-VS\s+(?:<?\s*\d+(?:\.\d+)?\s*%\s+)*(<?\s*\d+(?:\.\d+)?)\s*%/, type:"float" },
+  { path:"pacing.ap_vp_percent", label:"AP-VP(%)　※直近期間", pattern:/AP-VP\s+(?:<?\s*\d+(?:\.\d+)?\s*%\s+)*(<?\s*\d+(?:\.\d+)?)\s*%/, type:"float" },
   { path:"arrhythmia.vt_episode_count", label:"VT(>4 beat) 件数", pattern:/VT \(>4 beat\)\s+(\d+)/, type:"int" },
 ];
 // 患者ID・氏名は台帳への紐付けに使うため別枠で抽出（見つかれば自動入力、無ければ空欄で人が入れる）
