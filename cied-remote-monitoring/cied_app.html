@@ -77,6 +77,8 @@ textarea.inp{width:100%;resize:vertical;font-family:inherit}
 textarea.paste{width:100%;min-height:200px;border:1px solid var(--line);border-radius:8px;
   background:var(--panel);color:var(--ink);padding:11px 13px;font:inherit;font-size:12.5px;
   font-family:ui-monospace,SFMono-Regular,Menlo,monospace;line-height:1.7;resize:vertical}
+.pageSlot{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:10px;background:var(--bg)}
+.pageSlot textarea.paste{min-height:140px}
 .seg{display:inline-flex;background:var(--panel);border:1px solid var(--line);border-radius:9px;
   padding:3px;gap:3px;margin-bottom:16px;flex-wrap:wrap}
 .seg button{appearance:none;border:0;background:none;color:var(--muted);font:inherit;font-size:13px;
@@ -153,18 +155,19 @@ th.s.on{color:var(--accent)} th.s.on .ar{opacity:1}
   <h2>レポート取り込み（Medtronic CareLink）</h2>
   <p class="sub">
     PDFビューアでレポートを開き、全選択(Ctrl+A)→コピー(Ctrl+C)して下に貼り付けてください。
-    <strong>1ページずつしかコピーできない場合は、1ページ目を貼り付けた後、続けて2ページ目・3ページ目も
-    同じ枠に貼り付けてください（自動で追記され、貼り付けるたびに抽出し直します）。</strong>
+    <strong>1ページずつしかコピーできない場合は、「＋ページを追加」でページごとに分けて貼り付けられます
+    （何ページでも追加できます）。</strong>
     自動抽出はMedtronicのみ対応。他メーカーは②の台帳から手動登録してください。
   </p>
 
   <div class="card">
     <div class="bar"><strong style="font-size:13.5px">1. レポートを貼り付け</strong></div>
     <div class="bar" style="margin-bottom:10px">
-      <button class="btn" id="btnReadClipboard">📋 クリップボードから読み込む（続けて押すと追記されます）</button>
+      <button class="btn" id="btnReadClipboard">📋 クリップボードから新しいページとして読み込む</button>
     </div>
-    <textarea class="paste" id="reportInput" placeholder="PDFビューアでCtrl+A→Ctrl+Cしたら、上のボタンを押すか、ここにCtrl+Vで貼り付けてください。貼り付けると自動で抽出します。1ページずつしかコピーできない場合は、2ページ目・3ページ目も続けて貼り付ければ追記されます。"></textarea>
+    <div id="pageSlots"></div>
     <div class="bar" style="margin-top:10px">
+      <button class="btn ghost" id="btnAddPage">＋ ページを追加</button>
       <button class="btn ghost" id="btnExtract">項目を抽出し直す</button>
       <button class="btn ghost" id="btnClearReport">クリア</button>
       <button class="btn ghost" id="btnSample">サンプルで試す</button>
@@ -462,9 +465,62 @@ function medtronicDateToIso(raw){
 
 let currentResults = [];
 
+// ページごとに分けて貼り付けられるように、レポート欄を「ページ」単位の可変個の
+// テキストエリアにしている（何ページでも追加できる）。抽出は全ページを結合したテキストに対して行う。
+function getCombinedReportText(){
+  return Array.from(document.querySelectorAll("#pageSlots .pageInput"))
+    .map(function(t){ return t.value.trim(); })
+    .filter(function(v){ return v; })
+    .join("\n\n");
+}
+
+function renumberPageSlots(){
+  document.querySelectorAll("#pageSlots .pageSlot").forEach(function(slot, i){
+    slot.querySelector(".pageLabel").textContent = "ページ " + (i + 1);
+  });
+}
+
+function handlePageChange(){
+  if(!getCombinedReportText()){
+    document.getElementById("resultCard").hidden = true;
+    document.getElementById("karteCard").hidden = true;
+    return;
+  }
+  runExtraction();
+}
+
+function addPageSlot(initialText, focus){
+  const wrap = document.getElementById("pageSlots");
+  const slot = document.createElement("div");
+  slot.className = "pageSlot";
+  slot.innerHTML =
+    '<div class="bar" style="margin-bottom:4px">' +
+      '<span class="muted pageLabel" style="font-size:12px"></span>' +
+      '<button type="button" class="btn ghost small" data-removepage style="margin-left:auto">✕ このページを削除</button>' +
+    '</div>' +
+    '<textarea class="paste pageInput" placeholder="PDFビューアでCtrl+A→Ctrl+Cしたら、ここにCtrl+Vで貼り付けてください。貼り付けると自動で抽出します。"></textarea>';
+  wrap.appendChild(slot);
+
+  const ta = slot.querySelector(".pageInput");
+  if(initialText) ta.value = initialText;
+  // pasteイベントの時点ではまだテキストエリアに反映されていないため、少し待ってから読む。
+  ta.addEventListener("paste", function(){ setTimeout(handlePageChange, 0); });
+  ta.addEventListener("input", handlePageChange);
+  slot.querySelector("[data-removepage]").addEventListener("click", function(){
+    slot.remove();
+    if(!document.querySelector("#pageSlots .pageSlot")) addPageSlot();
+    renumberPageSlots();
+    handlePageChange();
+  });
+
+  renumberPageSlots();
+  if(focus) ta.focus();
+  return ta;
+}
+
 function runExtraction(){
-  const text = document.getElementById("reportInput").value;
-  if(!text.trim()){ alert("テキストを貼り付けてください"); return; }
+  const text = getCombinedReportText();
+  if(!text){ return; }
 
   currentResults = FIELDS.map(function(field){
     const r = extractOne(text, field);
@@ -597,23 +653,24 @@ document.addEventListener("keydown", function(e){
   if(e.key === "Escape" && !document.getElementById("karteModalOverlay").hidden) closeKarteModal();
 });
 
-document.getElementById("btnExtract").addEventListener("click", runExtraction);
+document.getElementById("btnExtract").addEventListener("click", function(){
+  if(!getCombinedReportText()){ alert("テキストを貼り付けてください"); return; }
+  runExtraction();
+});
 document.getElementById("btnClearReport").addEventListener("click", function(){
-  document.getElementById("reportInput").value = "";
+  document.getElementById("pageSlots").innerHTML = "";
+  addPageSlot();
   document.getElementById("resultCard").hidden = true;
   document.getElementById("karteCard").hidden = true;
 });
-
-// Ctrl+Vで貼り付けたら、ボタンを押さなくても自動で抽出する。
-// pasteイベントの時点ではまだテキストエリアに反映されていないため、少し待ってから読む。
-document.getElementById("reportInput").addEventListener("paste", function(){
-  setTimeout(runExtraction, 0);
+document.getElementById("btnAddPage").addEventListener("click", function(){
+  addPageSlot("", true);
 });
 
 // 「クリップボードから読み込む」— PDFビューアでCtrl+A→Ctrl+Cした後、貼り付け操作すら省略する。
 // 初回はブラウザがクリップボード読み取りの許可を確認するダイアログを出す（一度許可すれば以後は出ない）。
-// PDFビューアによっては1ページずつしかコピーできないため、上書きではなく末尾に追記する
-// （1ページ目を読み込んだ後、2ページ目・3ページ目も続けて同じボタンで読み込めるように）。
+// PDFビューアによっては1ページずつしかコピーできないため、押すたびに新しいページとして追加する
+// （空欄のページが残っていればそこに入れる。1ページ目→2ページ目→3ページ目と続けて押せる）。
 document.getElementById("btnReadClipboard").addEventListener("click", async function(){
   try{
     const text = await navigator.clipboard.readText();
@@ -621,13 +678,17 @@ document.getElementById("btnReadClipboard").addEventListener("click", async func
       alert("クリップボードが空です。PDFビューアで全選択(Ctrl+A)→コピー(Ctrl+C)してから、もう一度押してください。");
       return;
     }
-    const box = document.getElementById("reportInput");
-    box.value = box.value.trim() ? (box.value.trim() + "\n\n" + text) : text;
+    const slots = document.querySelectorAll("#pageSlots .pageInput");
+    const last = slots[slots.length - 1];
+    if(last && !last.value.trim()){ last.value = text; }
+    else { addPageSlot(text); }
     runExtraction();
   }catch(e){
     alert("クリップボードを読み取れませんでした。ブラウザの権限設定を確認するか、テキストエリアに直接Ctrl+Vで貼り付けてください。\n（" + e.message + "）");
   }
 });
+
+addPageSlot();
 
 document.getElementById("btnConfirm").addEventListener("click", function(){
   const patientId = document.getElementById("in_patient_id").value.trim();
@@ -723,7 +784,8 @@ const SAMPLE = [
   "時間% AS-VS 47.1% 38.1%","(AT/AF外) AS-VP < 0.1% < 0.1%","AP-VS 52.9% 61.9%","AP-VP < 0.1% < 0.1%",
 ].join("\n");
 document.getElementById("btnSample").addEventListener("click", function(){
-  document.getElementById("reportInput").value = SAMPLE;
+  document.getElementById("pageSlots").innerHTML = "";
+  addPageSlot(SAMPLE);
   runExtraction();
 });
 
