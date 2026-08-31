@@ -134,6 +134,7 @@ th.s.on{color:var(--accent)} th.s.on .ar{opacity:1}
 <body>
 
 <div class="note">✅ このページは通信を一切行いません。すべてこのブラウザの中（localStorage）だけにデータが保存されます。</div>
+<div id="jsErrorBanner" class="note" style="background:var(--bad-bg);color:var(--bad)" hidden></div>
 
 <header>
   <div class="logo">CIED遠隔モニタリング管理システム</div>
@@ -375,6 +376,16 @@ th.s.on{color:var(--accent)} th.s.on .ar{opacity:1}
 <script>
 "use strict";
 
+// 内部エラーが起きても画面が固まって無反応になるだけだと原因を報告してもらえないため、
+// エラーメッセージを画面上部に出す（開発者ツールがなくても内容を伝えてもらえるように）。
+window.addEventListener("error", function(e){
+  const box = document.getElementById("jsErrorBanner");
+  if(!box) return;
+  box.hidden = false;
+  box.textContent = "⚠️ 内部エラーが発生しました。この文言をそのまま伝えてください: " +
+    (e.message || (e.error && e.error.message) || "不明なエラー");
+});
+
 /* ============================================================
    共通ユーティリティ
    ============================================================ */
@@ -522,9 +533,15 @@ function runExtraction(){
   const text = getCombinedReportText();
   if(!text){ return; }
 
+  // 1項目の抽出中に例外が起きても他の項目まで巻き込んで止まらないようにする
+  // （項目ごとに独立させ、失敗した項目だけ「未検出」にする）。
   currentResults = FIELDS.map(function(field){
-    const r = extractOne(text, field);
-    return { field:field, value:r.value, found:r.found };
+    try{
+      const r = extractOne(text, field);
+      return { field:field, value:r.value, found:r.found };
+    }catch(e){
+      return { field:field, value:"", found:false };
+    }
   });
 
   const pid = PATIENT_ID_PATTERN.exec(text);
