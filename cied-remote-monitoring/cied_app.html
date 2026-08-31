@@ -153,15 +153,17 @@ th.s.on{color:var(--accent)} th.s.on .ar{opacity:1}
   <h2>レポート取り込み（Medtronic CareLink）</h2>
   <p class="sub">
     PDFビューアでレポートを開き、全選択(Ctrl+A)→コピー(Ctrl+C)して下に貼り付けてください。
+    <strong>1ページずつしかコピーできない場合は、1ページ目を貼り付けた後、続けて2ページ目・3ページ目も
+    同じ枠に貼り付けてください（自動で追記され、貼り付けるたびに抽出し直します）。</strong>
     自動抽出はMedtronicのみ対応。他メーカーは②の台帳から手動登録してください。
   </p>
 
   <div class="card">
     <div class="bar"><strong style="font-size:13.5px">1. レポートを貼り付け</strong></div>
     <div class="bar" style="margin-bottom:10px">
-      <button class="btn" id="btnReadClipboard">📋 クリップボードから読み込む（Ctrl+Vも不要）</button>
+      <button class="btn" id="btnReadClipboard">📋 クリップボードから読み込む（続けて押すと追記されます）</button>
     </div>
-    <textarea class="paste" id="reportInput" placeholder="PDFビューアでCtrl+A→Ctrl+Cしたら、上のボタンを押すか、ここにCtrl+Vで貼り付けてください。貼り付けると自動で抽出します。"></textarea>
+    <textarea class="paste" id="reportInput" placeholder="PDFビューアでCtrl+A→Ctrl+Cしたら、上のボタンを押すか、ここにCtrl+Vで貼り付けてください。貼り付けると自動で抽出します。1ページずつしかコピーできない場合は、2ページ目・3ページ目も続けて貼り付ければ追記されます。"></textarea>
     <div class="bar" style="margin-top:10px">
       <button class="btn ghost" id="btnExtract">項目を抽出し直す</button>
       <button class="btn ghost" id="btnClearReport">クリア</button>
@@ -610,6 +612,8 @@ document.getElementById("reportInput").addEventListener("paste", function(){
 
 // 「クリップボードから読み込む」— PDFビューアでCtrl+A→Ctrl+Cした後、貼り付け操作すら省略する。
 // 初回はブラウザがクリップボード読み取りの許可を確認するダイアログを出す（一度許可すれば以後は出ない）。
+// PDFビューアによっては1ページずつしかコピーできないため、上書きではなく末尾に追記する
+// （1ページ目を読み込んだ後、2ページ目・3ページ目も続けて同じボタンで読み込めるように）。
 document.getElementById("btnReadClipboard").addEventListener("click", async function(){
   try{
     const text = await navigator.clipboard.readText();
@@ -617,7 +621,8 @@ document.getElementById("btnReadClipboard").addEventListener("click", async func
       alert("クリップボードが空です。PDFビューアで全選択(Ctrl+A)→コピー(Ctrl+C)してから、もう一度押してください。");
       return;
     }
-    document.getElementById("reportInput").value = text;
+    const box = document.getElementById("reportInput");
+    box.value = box.value.trim() ? (box.value.trim() + "\n\n" + text) : text;
     runExtraction();
   }catch(e){
     alert("クリップボードを読み取れませんでした。ブラウザの権限設定を確認するか、テキストエリアに直接Ctrl+Vで貼り付けてください。\n（" + e.message + "）");
