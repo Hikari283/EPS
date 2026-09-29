@@ -1,0 +1,372 @@
+<title>ウチカラ図説</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: 一枚の縦長図説。見出し→名前の意味→0円の中身→仕組み図→参加の2ルート→日程。図は横並び、スマホでは縦積み。 */
+:root {
+  --bg: #eef2f0;
+  --card: #ffffff;
+  --ink: #1d2a33;
+  --muted: #5b6a72;
+  --line: #c9d3d0;
+  --sun: #e8a317;
+  --sun-soft: #fbeccb;
+  --cell: #2f8a5c;
+  --cell-soft: #d7eee1;
+  --grid: #3a5a8c;
+  --display: "Dela Gothic One", "Hiragino Kaku Gothic StdN", "Yu Gothic", sans-serif;
+  --body: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121a1f; --card: #1b252c; --ink: #e6ecea; --muted: #9aa9ae; --line: #33424a;
+    --sun: #f2b53a; --sun-soft: #3a2f16; --cell: #5cc28c; --cell-soft: #183326; --grid: #7fa3dc;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121a1f; --card: #1b252c; --ink: #e6ecea; --muted: #9aa9ae; --line: #33424a;
+  --sun: #f2b53a; --sun-soft: #3a2f16; --cell: #5cc28c; --cell-soft: #183326; --grid: #7fa3dc;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.75; }
+.wrap { max-width: 980px; margin: 0 auto; padding-inline: 20px; padding-block: 40px 64px; display: grid; gap: 64px; }
+h1, h2, h3 { text-wrap: balance; margin: 0; }
+h2 { font-family: var(--display); font-weight: 400; font-size: clamp(24px, 4vw, 32px); line-height: 1.3; }
+h3 { font-size: 18px; font-weight: 700; line-height: 1.4; }
+p { margin: 0; }
+.eyebrow { font-size: 12px; letter-spacing: .16em; color: var(--muted); font-weight: 700; }
+.sec { display: grid; gap: 24px; }
+.sec-head { display: grid; gap: 8px; max-width: 42em; }
+.sec-head p { color: var(--muted); }
+
+/* Hero */
+.hero { display: grid; gap: 20px; padding-top: 8px; }
+.hero h1 { font-family: var(--display); font-weight: 400; font-size: clamp(56px, 13vw, 120px); line-height: 1; letter-spacing: .02em; }
+.hero h1 .k { color: var(--sun); }
+.hero h1 .c { color: var(--cell); }
+.tagline { font-size: clamp(18px, 3vw, 24px); font-weight: 700; }
+.tagline ruby rt { font-size: .5em; color: var(--muted); font-weight: 500; }
+.lede { color: var(--muted); max-width: 40em; }
+
+.meanings { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.meaning { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 20px; display: grid; gap: 8px; align-content: start; }
+.meaning .word { font-family: var(--display); font-size: 26px; line-height: 1.2; }
+.meaning p { color: var(--muted); font-size: 15px; }
+
+/* Zero yen */
+.zero-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.zero { border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 4px; background: var(--card); }
+.zero .what { font-size: 14px; color: var(--muted); }
+.zero .yen { font-family: var(--display); font-size: 30px; line-height: 1.1; }
+.zero .yen small { font-family: var(--body); font-size: 14px; font-weight: 700; margin-left: 2px; }
+.minus { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 20px; align-items: center; background: var(--sun-soft); border-radius: 12px; padding: 24px; }
+.minus .big { font-family: var(--display); font-size: clamp(40px, 8vw, 64px); line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums; }
+.minus .big span { font-size: .4em; font-family: var(--body); font-weight: 700; }
+.minus p { font-size: 15px; }
+.minus .calc { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+
+/* Diagrams */
+.compare { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.panel { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+.panel.now { border-color: var(--cell); border-width: 2px; }
+.panel .tag { font-size: 12px; font-weight: 700; letter-spacing: .12em; color: var(--muted); }
+.panel.now .tag { color: var(--cell); }
+.panel p { font-size: 15px; color: var(--muted); }
+.panel svg { width: 100%; height: auto; display: block; }
+svg text { font-family: var(--body); }
+.flowdash { animation: flow 1.6s linear infinite; }
+@keyframes flow { to { stroke-dashoffset: -16; } }
+@media (prefers-reduced-motion: reduce) { .flowdash { animation: none; } }
+
+.day { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.slot { border-radius: 12px; padding: 20px; display: grid; gap: 10px; align-content: start; }
+.slot.surplus { background: var(--sun-soft); }
+.slot.short { background: var(--cell-soft); }
+.slot .when { font-size: 13px; font-weight: 700; letter-spacing: .1em; }
+.slot ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.slot li { display: flex; gap: 10px; align-items: baseline; }
+.slot li::before { content: "↓"; color: var(--muted); font-weight: 700; }
+.slot li:first-child::before { content: "●"; font-size: 10px; }
+
+.chain { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.chain .step { background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 8px 16px; font-weight: 700; font-size: 15px; }
+.chain .step.goal { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.chain .arrow { color: var(--muted); font-weight: 700; }
+
+/* Paths */
+.paths { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.path { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px; display: grid; gap: 10px; align-content: start; }
+.path .who { font-size: 13px; font-weight: 700; color: var(--muted); }
+.path ul { margin: 0; padding-left: 1.2em; font-size: 15px; }
+.pill { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 10px; border-radius: 999px; border: 1px solid currentColor; }
+.pill.go { color: var(--cell); }
+.pill.plan { color: var(--grid); }
+.merge { text-align: center; display: grid; gap: 6px; justify-items: center; }
+.merge .v { color: var(--muted); font-size: 20px; line-height: 1; }
+.merge .goalbox { font-family: var(--display); font-size: clamp(20px, 3.5vw, 28px); border: 2px dashed var(--cell); border-radius: 12px; padding: 12px 24px; }
+
+/* Timeline */
+.timeline { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; border-top: 3px solid var(--line); }
+.tl { padding-top: 16px; padding-right: 16px; position: relative; display: grid; gap: 6px; align-content: start; }
+.tl::before { content: ""; position: absolute; top: -9px; left: 0; width: 15px; height: 15px; border-radius: 50%; background: var(--bg); border: 3px solid var(--line); }
+.tl.key::before { background: var(--sun); border-color: var(--sun); }
+.tl .date { font-family: var(--display); font-size: 26px; line-height: 1.2; }
+.tl .date.tbd { font-family: var(--body); font-size: 16px; font-weight: 700; color: var(--muted); }
+.tl p { font-size: 15px; color: var(--muted); }
+
+.closing { background: var(--ink); color: var(--bg); border-radius: 14px; padding: 32px 24px; display: grid; gap: 16px; }
+.closing .pair { display: flex; flex-wrap: wrap; gap: 12px 28px; align-items: baseline; }
+.closing .pair div { display: grid; }
+.closing .pair small { font-size: 12px; letter-spacing: .1em; opacity: .7; }
+.closing .pair strong { font-family: var(--display); font-weight: 400; font-size: clamp(24px, 5vw, 36px); line-height: 1.2; }
+.closing .pair .to { font-size: 24px; opacity: .6; }
+.closing p { opacity: .8; font-size: 15px; }
+
+.notes { font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 16px; display: grid; gap: 4px; }
+
+@media (max-width: 720px) {
+  .wrap { padding-inline: 16px; gap: 48px; }
+  .meanings, .compare, .day, .paths, .timeline { grid-template-columns: minmax(0, 1fr); }
+  .timeline { border-top: 0; border-left: 3px solid var(--line); gap: 20px; }
+  .tl { padding: 0 0 0 20px; }
+  .tl::before { top: 6px; left: -9px; }
+  .minus { grid-template-columns: minmax(0, 1fr); }
+}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="house" viewBox="0 0 48 48">
+      <polygon points="4,24 24,7 44,24" style="fill:var(--ink)"/>
+      <rect x="10" y="23" width="28" height="20" style="fill:var(--card);stroke:var(--ink);stroke-width:2"/>
+      <rect x="20" y="31" width="8" height="12" style="fill:var(--line)"/>
+    </symbol>
+    <symbol id="house-vpp" viewBox="0 0 48 48">
+      <polygon points="4,24 24,7 44,24" style="fill:var(--ink)"/>
+      <polygon points="12,20 22,11.5 30,18.5 20,27" style="fill:var(--sun)"/>
+      <rect x="10" y="23" width="28" height="20" style="fill:var(--card);stroke:var(--ink);stroke-width:2"/>
+      <rect x="14" y="29" width="9" height="12" rx="1.5" style="fill:var(--cell)"/>
+      <rect x="16.5" y="27" width="4" height="2" style="fill:var(--cell)"/>
+      <rect x="27" y="31" width="7" height="12" style="fill:var(--line)"/>
+    </symbol>
+    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" style="fill:var(--muted)"/>
+    </marker>
+  </defs>
+</svg>
+
+<main class="wrap">
+
+  <header class="hero">
+    <div class="eyebrow">カブアンド 第二フェーズ ／ VPP（仮想発電所）事業</div>
+    <h1><span class="k">ウチ</span><span class="c">カラ</span></h1>
+    <p class="tagline"><ruby>家<rt>ウチ</rt></ruby>から、<ruby>電気<rt>チカラ</rt></ruby>をつくる。</p>
+    <p class="lede">参加する家に太陽光パネルと蓄電池を無料で置き、その蓄電池をまとめて動かして「みんなで一つの発電所」にする事業です。第1期の募集は10月2日から、カブアンドの株主限定で始まります。</p>
+  </header>
+
+  <section class="sec" aria-labelledby="name-h">
+    <div class="sec-head">
+      <div class="eyebrow">名前にこめた3つの意味</div>
+      <h2 id="name-h">「ウチカラ」の読み方</h2>
+    </div>
+    <div class="meanings">
+      <div class="meaning">
+        <div class="word">家から</div>
+        <p>電気を遠くの大きな発電所だけでつくるのではなく、それぞれの家からつくる。</p>
+      </div>
+      <div class="meaning">
+        <div class="word">内から</div>
+        <p>誰かに任せず、自分たちの暮らしの中からエネルギーの未来を変えていく。</p>
+      </div>
+      <div class="meaning">
+        <div class="word">家＋力</div>
+        <p>一軒の力は小さくても、たくさんつながれば大きな発電所にも負けない力になる。</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" aria-labelledby="svc-h">
+    <div class="sec-head">
+      <div class="eyebrow">サービス内容 ※1 ※2</div>
+      <h2 id="svc-h">参加する家庭の負担は0円</h2>
+      <p>設備をもらって終わりではなく、その後の使用料や修理費もかかりません。</p>
+    </div>
+    <div class="zero-grid">
+      <div class="zero"><span class="what">太陽光パネル</span><span class="yen">0<small>円</small></span></div>
+      <div class="zero"><span class="what">蓄電池</span><span class="yen">0<small>円</small></span></div>
+      <div class="zero"><span class="what">初期費用・設置費用</span><span class="yen">0<small>円</small></span></div>
+      <div class="zero"><span class="what">月額の使用料</span><span class="yen">0<small>円</small></span></div>
+      <div class="zero"><span class="what">故障・修理（ウチカラが全額負担）</span><span class="yen">0<small>円</small></span></div>
+    </div>
+    <div class="minus">
+      <div class="big">−5,000<span>円／月</span></div>
+      <div style="display:grid;gap:6px">
+        <p><strong>さらに、毎月の電気代が5,000円安くなります。</strong></p>
+        <p class="calc">参考計算: 5,000円 × 12か月 = 年60,000円</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" aria-labelledby="how-h">
+    <div class="sec-head">
+      <div class="eyebrow">なぜ無料にできるのか</div>
+      <h2 id="how-h">カギは各家庭の「蓄電池」</h2>
+      <p>電気の流れを逆にします。大きな発電所から家へ届けるのではなく、家そのものを発電所にします。</p>
+    </div>
+
+    <div class="compare">
+      <figure class="panel" style="margin:0">
+        <div class="tag">これまで</div>
+        <h3>大きな発電所 → 各家庭</h3>
+        <svg viewBox="0 0 340 280" role="img" aria-label="一つの大きな発電所から4軒の家へ、一方向に電気が送られる図">
+          <g>
+            <rect x="130" y="40" width="80" height="50" style="fill:var(--line);stroke:var(--ink);stroke-width:2"/>
+            <rect x="145" y="12" width="14" height="30" style="fill:var(--line);stroke:var(--ink);stroke-width:2"/>
+            <rect x="181" y="20" width="14" height="22" style="fill:var(--line);stroke:var(--ink);stroke-width:2"/>
+            <path d="M150,58 l8,-8 v16 l8,-8" style="fill:none;stroke:var(--sun);stroke-width:3;stroke-linejoin:round"/>
+            <text x="170" y="112" text-anchor="middle" font-size="13" font-weight="700" style="fill:var(--ink)">大きな発電所</text>
+          </g>
+          <g style="stroke:var(--muted);stroke-width:2;fill:none" marker-end="url(#arr)">
+            <path d="M170,122 L55,196"/>
+            <path d="M170,122 L130,196"/>
+            <path d="M170,122 L210,196"/>
+            <path d="M170,122 L285,196"/>
+          </g>
+          <use href="#house" x="33" y="200" width="44" height="44"/>
+          <use href="#house" x="108" y="200" width="44" height="44"/>
+          <use href="#house" x="188" y="200" width="44" height="44"/>
+          <use href="#house" x="263" y="200" width="44" height="44"/>
+          <text x="170" y="268" text-anchor="middle" font-size="12" style="fill:var(--muted)">家は電気を受け取るだけ</text>
+        </svg>
+        <p>遠くでまとめてつくり、各家庭に届ける一方通行の仕組み。</p>
+      </figure>
+
+      <figure class="panel now" style="margin:0">
+        <div class="tag">ウチカラ（VPP）</div>
+        <h3>みんなの家 ＝ 一つの発電所</h3>
+        <svg viewBox="0 0 340 280" role="img" aria-label="太陽光と蓄電池のある6軒の家が中央のウチカラ制御につながり、全体で一つの仮想発電所になる図">
+          <rect x="8" y="8" width="324" height="264" rx="18" style="fill:none;stroke:var(--cell);stroke-width:2;stroke-dasharray:6 6"/>
+          <text x="22" y="30" font-size="12" font-weight="700" style="fill:var(--cell)">仮想発電所（VPP）</text>
+          <g style="stroke:var(--grid);stroke-width:2;fill:none;stroke-dasharray:4 4" class="flowdash">
+            <path d="M170,140 L170,62"/>
+            <path d="M170,140 L262,95"/>
+            <path d="M170,140 L262,190"/>
+            <path d="M170,140 L170,222"/>
+            <path d="M170,140 L78,190"/>
+            <path d="M170,140 L78,95"/>
+          </g>
+          <circle cx="170" cy="140" r="38" style="fill:var(--ink)"/>
+          <text x="170" y="136" text-anchor="middle" font-size="13" font-weight="700" style="fill:var(--bg)">ウチカラ</text>
+          <text x="170" y="153" text-anchor="middle" font-size="11" style="fill:var(--bg)">まとめて制御</text>
+          <use href="#house-vpp" x="148" y="26" width="44" height="44"/>
+          <use href="#house-vpp" x="248" y="66" width="44" height="44"/>
+          <use href="#house-vpp" x="248" y="170" width="44" height="44"/>
+          <use href="#house-vpp" x="148" y="208" width="44" height="44"/>
+          <use href="#house-vpp" x="48" y="170" width="44" height="44"/>
+          <use href="#house-vpp" x="48" y="66" width="44" height="44"/>
+        </svg>
+        <p>各家の蓄電池をネットワークでつなぎ、何万軒・何十万軒がまるで一つの大きな発電所のように動きます。</p>
+      </figure>
+    </div>
+
+    <div class="day">
+      <div class="slot surplus">
+        <div class="when">電気が余っている時間</div>
+        <ol>
+          <li>屋根の太陽光で発電する</li>
+          <li>余った電気を蓄電池にためる</li>
+        </ol>
+      </div>
+      <div class="slot short">
+        <div class="when">電気が足りない時間</div>
+        <ol>
+          <li>参加家庭の蓄電池をまとめて動かす</li>
+          <li>ためた電気を出して、足りない分を補う</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="chain" aria-label="価値が参加者に戻る流れ">
+      <span class="step">蓄電池をまとめて制御</span><span class="arrow">→</span>
+      <span class="step">一つの発電所として価値が生まれる</span><span class="arrow">→</span>
+      <span class="step goal">参加者に還元（設備0円・電気代−5,000円）</span>
+    </div>
+  </section>
+
+  <section class="sec" aria-labelledby="join-h">
+    <div class="sec-head">
+      <div class="eyebrow">参加のしかた</div>
+      <h2 id="join-h">屋根があってもなくても参加できる</h2>
+      <p>マンションや賃貸で設備を置けない人のために、お金で参加する「共創債」を検討中です。</p>
+    </div>
+    <div class="paths">
+      <div class="path">
+        <div class="who">屋根がある家（持ち家など）</div>
+        <h3>自分の屋根に設備を置く</h3>
+        <ul>
+          <li>太陽光パネルと蓄電池を無料で設置</li>
+          <li>電気代が毎月5,000円安くなる</li>
+        </ul>
+        <div><span class="pill go">第1期 10月2日募集開始</span></div>
+      </div>
+      <div class="path">
+        <div class="who">屋根がない家（マンション・賃貸など）</div>
+        <h3>「共創債」で資金を出す ※3</h3>
+        <ul>
+          <li>数万〜数十万軒に設備を置く資金を、銀行や大口投資家だけでなくみんなから募る</li>
+          <li>投資という形で設備を増やす側に回る</li>
+        </ul>
+        <div><span class="pill plan">検討中</span></div>
+      </div>
+    </div>
+    <div class="merge" aria-hidden="true">
+      <div class="v">↓　　↓</div>
+      <div class="goalbox">みんなで一つの大きな発電所</div>
+    </div>
+  </section>
+
+  <section class="sec" aria-labelledby="when-h">
+    <div class="sec-head">
+      <div class="eyebrow">スケジュール</div>
+      <h2 id="when-h">まずは株主から</h2>
+      <p>申し込みが多く見込まれ、初年度に設置できる設備の数にも限りがあるため、一般募集の前にカブアンドの株主を優先します。</p>
+    </div>
+    <div class="timeline">
+      <div class="tl key">
+        <div class="date">10月2日</div>
+        <h3>第1期募集スタート</h3>
+        <p>カブアンドの株主限定。</p>
+      </div>
+      <div class="tl">
+        <div class="date tbd">初年度</div>
+        <h3>順次設置</h3>
+        <p>設置できる数には限りがあります。</p>
+      </div>
+      <div class="tl">
+        <div class="date tbd">時期は未発表</div>
+        <h3>一般向け募集・共創債</h3>
+        <p>本文では時期に触れていません。共創債は検討段階です。</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="closing" aria-label="目指すもの">
+    <div class="pair">
+      <div><small>カブアンドが目指すのは</small><strong>国民総株主</strong></div>
+      <span class="to">→</span>
+      <div><small>ウチカラが目指すのは</small><strong>国民総発電所</strong></div>
+    </div>
+    <p>一人ひとりの家や資金をつなげて、みんなで大きな発電所をつくる。カブアンドの第二フェーズの中核となる共創事業です。</p>
+  </section>
+
+  <footer class="notes">
+    <p>出典: 前澤友作氏によるウチカラ（カブアンドVPP事業）の発表文。内容をもとに図解したものです。</p>
+    <p>本文の ※1〜※3 の注記内容は発表文に含まれていなかったため、この図説には載せていません。参加条件などの詳細は公式の案内を確認してください。</p>
+    <p>「年60,000円」は月5,000円を12か月分に換算した参考値です。</p>
+  </footer>
+
+</main>
