@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PaceGuard LATITUDE 自動モード（β）</title>
+<style>
+  :root{ --bg:#0b1120; --card:#111a2b; --line:#22314a; --tx:#e6eefb; --sub:#9aa8bf; --accent:#38bdf8; --ok:#34d399; --warn:#fbbf24; --bad:#f87171; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--tx);font-family:-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;font-size:14px;line-height:1.6}
+  header{padding:14px 20px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+  header h1{font-size:19px;margin:0}
+  header .tag{font-size:11px;color:var(--accent);border:1px solid var(--line);border-radius:999px;padding:2px 10px}
+  header .dis{font-size:11px;color:var(--warn);margin-left:auto}
+  .wrap{max-width:1200px;margin:0 auto;padding:16px}
+  .bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:14px}
+  .grid{display:grid;grid-template-columns:1.3fr 1fr;gap:14px}
+  @media(max-width:900px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+  .card h2{font-size:14px;margin:0 0 8px;color:#bfe3fb}
+  .drop{border:2px dashed var(--line);border-radius:10px;padding:16px;text-align:center;color:var(--sub);cursor:pointer}
+  .drop.over{border-color:var(--accent);background:rgba(56,189,248,.06)}
+  button{background:#16233a;color:var(--tx);border:1px solid var(--line);border-radius:8px;padding:7px 12px;font-size:13px;cursor:pointer}
+  button:hover{border-color:var(--accent)}
+  button.primary{background:var(--accent);color:#04222e;border-color:var(--accent);font-weight:700}
+  .field{display:flex;align-items:center;gap:8px;margin:6px 0}
+  .field label{width:88px;font-size:12px;color:var(--sub)}
+  .field input{flex:1;background:#0a1320;color:var(--tx);border:1px solid var(--line);border-radius:8px;padding:6px 8px}
+  canvas{display:block;max-width:100%;border-radius:8px;background:#050a12;border:1px solid var(--line);margin-top:8px}
+  #pageWrap{position:relative;overflow:auto;max-height:560px;border:1px solid var(--line);border-radius:8px;margin-top:8px}
+  #cropHint{font-size:12px;color:var(--accent);margin-top:6px}
+  .verdict{margin-top:12px;border-radius:12px;padding:14px 16px;border:1px solid var(--line)}
+  .verdict.ok{background:rgba(52,211,153,.10);border-color:#1f6b52}
+  .verdict.bad{background:rgba(248,113,113,.10);border-color:#7a2e2e}
+  .verdict.info{background:rgba(56,189,248,.08)}
+  .verdict h2{margin:0 0 4px;font-size:18px}
+  .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:10px}
+  .m{background:#0a1320;border:1px solid var(--line);border-radius:9px;padding:8px 10px}
+  .m .k{font-size:10.5px;color:var(--sub)} .m .v{font-size:18px;font-weight:800}
+  .m.flag{border-color:#7a2e2e} .m.good{border-color:#1f6b52}
+  .hint{font-size:11.5px;color:var(--sub)}
+  .status{font-size:12px;color:var(--sub)}
+  .ok-t{color:var(--ok)} .bad-t{color:var(--bad)} .warn-t{color:var(--warn)}
+  footer{color:var(--sub);font-size:11px;margin-top:22px;border-top:1px solid var(--line);padding-top:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>PaceGuard <span style="color:var(--sub);font-weight:400">LATITUDE 自動モード</span></h1><span class="tag">β</span>
+  <span class="dis">⚠️ 研究・院内検証用。完全ローカル処理（PHIは端末外に出ません）。最終判断は医師。</span>
+</header>
+
+<div class="wrap">
+  <div class="bar">
+    <button id="pickFolder">📁 データフォルダを選択</button>
+    <span class="status" id="folderStatus">フォルダ未選択（比較結果の保存に必要）</span>
+    <span style="flex:1"></span>
+    <button id="redrawCrop">✂️ S-ECGの切り出し枠を引き直す</button>
+    <button id="demoBtn">▶ 動作デモ</button>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>① LATITUDE レポートPDF</h2>
+      <div class="drop" id="drop">PDFをドロップ / クリックで選択</div>
+      <div id="pageWrap"><canvas id="page"></canvas></div>
+      <div id="cropHint">初回のみ：S-ECG波形の上をドラッグして解析範囲を指定してください（次回から自動）。</div>
+    </div>
+
+    <div class="card">
+      <h2>② 抽出情報（自動）</h2>
+      <div class="field"><label>患者ID</label><input id="fId" placeholder="自動抽出"></div>
+      <div class="field"><label>氏名</label><input id="fName" placeholder="自動抽出"></div>
+      <div class="field"><label>照会日</label><input id="fDate" placeholder="自動抽出"></div>
+      <div class="field"><label>デバイス</label><input id="fDev" placeholder="自動抽出"></div>
+      <div class="hint">自動抽出が違う場合は直接修正してください（IDが正しければ自動照合されます）。</div>
+      <div style="margin-top:10px"><button class="primary" id="evalBtn">🔍 前回と比較して評価</button></div>
+      <div id="result"></div>
+    </div>
+  </div>
+
+  <div class="card" id="overlayCard" hidden style="margin-top:14px">
+    <h2>重ね描き（青=前回 / 橙=今回）と差分</h2>
+    <canvas id="overlay" height="180"></canvas>
+    <canvas id="diff" height="80"></canvas>
+  </div>
+
+  <footer>
+    PaceGuard LATITUDE β — Boston LATITUDE の S-ECG を前回自動比較。pdf.jsをCDNから読み込みます（初回のみ要ネット）。<br>
+    フォルダ内に <code>&lt;患者ID&gt;.json</code> として基準波形を保存し、同IDの新規レポートを自動照合します。医療機器ではありません。
+  </footer>
+</div>
+
+<script type="module">
+const PDFJS_URL='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs';
+const PDFJS_WORKER='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs';
+let pdfjsLib=null;
+async function ensurePdfjs(){
+  if(pdfjsLib)return pdfjsLib;
+  pdfjsLib=await import(PDFJS_URL);
+  pdfjsLib.GlobalWorkerOptions.workerSrc=PDFJS_WORKER;
+  return pdfjsLib;
+}
+const $=id=>document.getElementById(id);
+
+// ===== 信号エンジン（PaceGuard共通）=====
+const mean=a=>{let s=0;for(const x of a)s+=x;return s/a.length;};
+const std=a=>{const m=mean(a);let s=0;for(const x of a)s+=(x-m)**2;return Math.sqrt(s/a.length);};
+const normalize=a=>{const m=mean(a),sd=std(a)||1;return a.map(x=>(x-m)/sd);};
+function resample(a,N){const o=new Float32Array(N),n=a.length;for(let i=0;i<N;i++){const t=i*(n-1)/(N-1),j=Math.floor(t),f=t-j;o[i]=a[j]*(1-f)+a[Math.min(n-1,j+1)]*f;}return o;}
+function bestXcorr(a,b,maxLag){const A=normalize(Array.from(a)),B=normalize(Array.from(b));let best=-2,bl=0;for(let lag=-maxLag;lag<=maxLag;lag++){let s=0,n=0;for(let i=0;i<A.length;i++){const j=i+lag;if(j<0||j>=B.length)continue;s+=A[i]*B[j];n++;}if(n){const c=s/n;if(c>best){best=c;bl=lag;}}}return {corr:best,lag:bl};}
+function autoPeriod(sig){const s=normalize(Array.from(sig)),N=s.length;let best=-1,bl=Math.round(N*0.1);const mn=Math.round(N*0.05),mx=Math.round(N*0.45);for(let lag=mn;lag<=mx;lag++){let a=0,n=0;for(let i=0;i+lag<N;i++){a+=s[i]*s[i+lag];n++;}const c=a/n;if(c>best){best=c;bl=lag;}}return bl;}
+function foldTemplate(sig){const T=autoPeriod(sig),s=Array.from(sig),N=s.length;if(T<8)return resample(sig,200);const half=Math.round(T/2);const acc=new Float64Array(2*half);let cnt=0;for(let st=0;st+T<=N;st+=T){let ri=st,rv=-1;for(let i=st;i<st+T;i++){const v=Math.abs(s[i]);if(v>rv){rv=v;ri=i;}}if(ri-half<0||ri+half>=N)continue;for(let k=0;k<2*half;k++)acc[k]+=s[ri-half+k];cnt++;}if(!cnt)return resample(sig,200);return resample(Float32Array.from(acc.map(x=>x/cnt)),200);}
+function qrsWidth(t){const a=Array.from(t).map(Math.abs),mx=Math.max(...a),th=mx*0.2;let b=0,c=0;for(const v of a){if(v>th){c++;b=Math.max(b,c);}else c=0;}return b/t.length;}
+// キャンバス矩形から波形を1次元トレース（各列の最も濃い画素）
+function traceRegion(ctx,r){
+  const d=ctx.getImageData(r.x,r.y,Math.max(1,r.w),Math.max(1,r.h));const {width:W,height:H,data:D}=d;
+  const sig=new Float32Array(W);
+  for(let x=0;x<W;x++){let by=H/2,bs=-1;for(let y=0;y<H;y++){const i=(y*W+x)*4;const lum=(D[i]+D[i+1]+D[i+2])/3;const dk=255-lum;if(dk>bs){bs=dk;by=y;}}sig[x]=H/2-by;}
+  const sm=new Float32Array(W);for(let x=0;x<W;x++){let s=0,n=0;for(let k=-1;k<=1;k++){const j=x+k;if(j>=0&&j<W){s+=sig[j];n++;}}sm[x]=s/n;}
+  return sm;
+}
+
+// ===== PDF 読み込み・描画・抽出 =====
+let pageCanvas=$('page'), pctx=pageCanvas.getContext('2d');
+let renderScale=1.6, curSig=null, meta={};
+const cropKey='pg_lat_crop';
+let crop=JSON.parse(localStorage.getItem(cropKey)||'null'); // 正規化 {x,y,w,h}（0-1）
+
+async function loadPDF(file){
+  try{
+    const lib=await ensurePdfjs();
+    const buf=await file.arrayBuffer();
+    const pdf=await lib.getDocument({data:buf}).promise;
+    const page=await pdf.getPage(1);
+    const vp=page.getViewport({scale:renderScale});
+    pageCanvas.width=vp.width; pageCanvas.height=vp.height;
+    await page.render({canvasContext:pctx,viewport:vp}).promise;
+    const tc=await page.getTextContent();
+    extractFields(tc.items.map(it=>({s:it.str,x:it.transform[4],y:it.transform[5]})));
+    if(crop) autoTrace();
+    $('cropHint').textContent = crop ? 'S-ECG枠は記憶済み（引き直すには上の✂️ボタン）。' : '初回のみ：S-ECG波形の上をドラッグして解析範囲を指定してください。';
+  }catch(e){ $('result').innerHTML=`<div class="verdict bad"><h2>PDF読み込みエラー</h2>${e}<br><span class="hint">pdf.jsの読み込みにインターネットが必要です（初回のみ）。院内でCDNが塞がれている場合はpdf.jsを同梱版に切り替えます。</span></div>`; }
+}
+function extractFields(items){
+  const all=items.map(i=>i.s).join(' ');
+  // 日付：YYYY年MM月DD日（時刻付き＝照会日）
+  const dts=[...all.matchAll(/(\d{4})年(\d{2})月(\d{2})日(?:\s*(\d{2}:\d{2}))?/g)];
+  const withTime=dts.find(m=>m[4]); const interro=withTime?`${withTime[1]}年${withTime[2]}月${withTime[3]}日 ${withTime[4]}`:(dts[0]?`${dts[0][1]}年${dts[0][2]}月${dts[0][3]}日`:'');
+  // デバイス：A219/xxxxx などの型式/シリアル
+  const dev=(all.match(/[A-Z]\d{2,4}\s*\/\s*\d{4,7}/)||all.match(/EMBLEM[^|]*|[A-Z]\d{3}\/\d+/)||[''])[0].trim();
+  // 患者ID：日付・シリアルを除いた 7-10桁の数字（近傍を優先）
+  const nums=[...all.matchAll(/\b(\d[\d ]{5,10}\d)\b/g)].map(m=>m[1].replace(/\s/g,''));
+  const serial=(dev.match(/\/\s*(\d+)/)||[])[1];
+  const idCand=nums.find(n=>n.length>=7&&n.length<=10&&n!==serial&&!/^(19|20)\d\d/.test(n));
+  // 氏名：ASCIIでない（日本語）まとまり。ふりがなや記号を避けて最長の和文
+  const nameCand=items.map(i=>i.s).filter(s=>/[぀-ヿ一-鿿]/.test(s)&&!/年|月|日|レポート|ページ|波形|プログラム|ゲイン|センシング/.test(s)).sort((a,b)=>b.length-a.length)[0]||'';
+  $('fId').value=idCand||''; $('fName').value=(nameCand||'').trim(); $('fDate').value=interro; $('fDev').value=dev;
+  meta={id:idCand||'',name:(nameCand||'').trim(),date:interro,device:dev};
+}
+function autoTrace(){
+  if(!crop)return;
+  const r={x:crop.x*pageCanvas.width,y:crop.y*pageCanvas.height,w:crop.w*pageCanvas.width,h:crop.h*pageCanvas.height};
+  curSig=traceRegion(pctx,r);
+  // 枠を描く
+  drawCropBox(r);
+}
+function drawCropBox(r){ pctx.save();pctx.strokeStyle='#38bdf8';pctx.lineWidth=2;pctx.setLineDash([6,4]);pctx.strokeRect(r.x,r.y,r.w,r.h);pctx.setLineDash([]);pctx.restore(); }
+
+// クロップのドラッグ
+let dragging=false,sx=0,sy=0;
+pageCanvas.addEventListener('mousedown',e=>{const b=pageCanvas.getBoundingClientRect();const sc=pageCanvas.width/b.width;sx=(e.clientX-b.left)*sc;sy=(e.clientY-b.top)*sc;dragging=true;});
+pageCanvas.addEventListener('mousemove',e=>{if(!dragging)return;const b=pageCanvas.getBoundingClientRect();const sc=pageCanvas.width/b.width;const x=(e.clientX-b.left)*sc,y=(e.clientY-b.top)*sc;
+  // 再描画が重いので枠だけ（軽く）：一旦画像はそのまま、枠は最後に。
+});
+pageCanvas.addEventListener('mouseup',e=>{if(!dragging)return;dragging=false;const b=pageCanvas.getBoundingClientRect();const sc=pageCanvas.width/b.width;const x=(e.clientX-b.left)*sc,y=(e.clientY-b.top)*sc;
+  const r={x:Math.min(sx,x),y:Math.min(sy,y),w:Math.abs(x-sx),h:Math.abs(y-sy)};
+  if(r.w<15||r.h<8)return;
+  crop={x:r.x/pageCanvas.width,y:r.y/pageCanvas.height,w:r.w/pageCanvas.width,h:r.h/pageCanvas.height};
+  localStorage.setItem(cropKey,JSON.stringify(crop));
+  curSig=traceRegion(pctx,r);drawCropBox(r);
+  $('cropHint').textContent='S-ECG枠を保存しました（次回から自動）。';
+});
+$('redrawCrop').onclick=()=>{crop=null;localStorage.removeItem(cropKey);$('cropHint').textContent='S-ECG波形の上をドラッグして枠を指定してください。';};
+
+// ドロップ/選択
+const drop=$('drop');
+drop.onclick=()=>{const i=document.createElement('input');i.type='file';i.accept='application/pdf';i.onchange=e=>e.target.files[0]&&loadPDF(e.target.files[0]);i.click();};
+drop.addEventListener('dragover',e=>{e.preventDefault();drop.classList.add('over');});
+drop.addEventListener('dragleave',()=>drop.classList.remove('over'));
+drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('over');e.dataTransfer.files[0]&&loadPDF(e.dataTransfer.files[0]);});
+
+// ===== データフォルダ（File System Access）=====
+let dirHandle=null;
+$('pickFolder').onclick=async()=>{
+  try{ dirHandle=await window.showDirectoryPicker({mode:'readwrite'}); $('folderStatus').innerHTML='<span class="ok-t">フォルダ選択済み：'+dirHandle.name+'</span>'; }
+  catch(e){ $('folderStatus').textContent='選択がキャンセルされました'; }
+};
+async function readBaseline(id){ if(!dirHandle)return null; try{const fh=await dirHandle.getFileHandle(id+'.json');const f=await fh.getFile();return JSON.parse(await f.text());}catch(e){return null;} }
+async function writeBaseline(id,obj){ if(!dirHandle)return; try{const fh=await dirHandle.getFileHandle(id+'.json',{create:true});const w=await fh.createWritable();await w.write(JSON.stringify(obj));await w.close();}catch(e){} }
+
+// ===== 評価 =====
+$('evalBtn').onclick=async()=>{
+  const id=$('fId').value.trim();
+  if(!curSig){ $('result').innerHTML='<div class="verdict bad"><h2>波形が未取得</h2>S-ECGの枠を指定してください。</div>';return; }
+  if(!id){ $('result').innerHTML='<div class="verdict bad"><h2>患者IDがありません</h2>IDを入力してください。</div>';return; }
+  const tpl=Array.from(foldTemplate(resample(curSig,1000)));
+  const base=await readBaseline(id);
+  const now={id,name:$('fName').value,date:$('fDate').value,device:$('fDev').value,template:tpl,ts:Date.now()};
+  if(!base||!base.template){
+    await writeBaseline(id,{...now,history:[{date:now.date,note:'初回登録'}]});
+    $('result').innerHTML=`<div class="verdict info"><h2>初回登録しました</h2>この患者（ID:${id}）の基準波形として保存しました。次回レポートから自動比較されます。${dirHandle?'':'<br><b>※フォルダ未選択のため保存できていません。</b>'}</div>`;
+    $('overlayCard').hidden=true; return;
+  }
+  // 比較
+  const a=Float32Array.from(base.template), b=Float32Array.from(tpl);
+  const {corr,lag}=bestXcorr(a,b,Math.round(a.length*0.25));
+  const ampRatio=(std(Array.from(b))||1)/(std(Array.from(a))||1);
+  const widthRatio=qrsWidth(b)/(qrsWidth(a)||1);
+  const THR=0.94;
+  const flags=[];
+  if(corr<THR)flags.push(`波形相関の低下（${corr.toFixed(3)} < ${THR}）＝形態変化`);
+  if(ampRatio<0.7)flags.push(`振幅低下（前回比 ${(ampRatio*100|0)}%）＝センシング/リード要確認`);
+  if(ampRatio>1.4)flags.push(`振幅増大（前回比 ${(ampRatio*100|0)}%）`);
+  if(widthRatio>1.4)flags.push(`波形幅の増大（${widthRatio.toFixed(2)}倍）`);
+  const changed=flags.length>0;
+  const m=(k,v,u,f,g)=>`<div class="m ${f?'flag':(g?'good':'')}"><div class="k">${k}</div><div class="v">${v}<small>${u||''}</small></div></div>`;
+  $('result').innerHTML=`<div class="verdict ${changed?'bad':'ok'}"><h2>${changed?'⚠️ 変化あり — 要確認':'✅ 変化なし（前回と同等）'}</h2>
+    <div>前回：${base.date||'?'} → 今回：${now.date||'?'}</div>
+    <div>${changed?flags.map(f=>'・'+f).join('<br>'):'前回のS-ECGと有意な形態変化は検出されませんでした。'}</div>
+    <div class="metrics">${m('波形相関',corr.toFixed(3),'',corr<THR,corr>=THR)}${m('振幅比',(ampRatio*100).toFixed(0),'%',ampRatio<0.7||ampRatio>1.4,ampRatio>=0.85&&ampRatio<=1.18)}${m('幅比',widthRatio.toFixed(2),'倍',widthRatio>1.4,widthRatio<=1.15)}</div></div>`;
+  // 履歴更新＋baselineは最新に更新（運用に応じて固定も可）
+  const history=(base.history||[]).concat([{date:now.date,corr:+corr.toFixed(3),amp:+ampRatio.toFixed(2),changed}]);
+  await writeBaseline(id,{...now,history});
+  drawOverlay(a,b,lag);$('overlayCard').hidden=false;
+};
+function drawOverlay(a,b,lag){const cv=$('overlay');const W=cv.clientWidth||900;cv.width=W;cv.height=180;const c=cv.getContext('2d');c.clearRect(0,0,W,180);
+  const A=normalize(Array.from(a)),B=normalize(Array.from(b));const mx=Math.max(1,...A.map(Math.abs),...B.map(Math.abs));
+  const pl=(arr,col,off)=>{c.strokeStyle=col;c.lineWidth=1.8;c.beginPath();for(let i=0;i<arr.length;i++){const x=i*(W-1)/(arr.length-1),y=90-(arr[i+off]||arr[i])/mx*72;i?c.lineTo(x,y):c.moveTo(x,y);}c.stroke();};
+  c.strokeStyle='#1a2740';c.beginPath();c.moveTo(0,90);c.lineTo(W,90);c.stroke();pl(A,'#38bdf8',0);pl(B,'#fbbf24',lag);
+  const d=$('diff');d.width=W;d.height=80;const dc=d.getContext('2d');dc.clearRect(0,0,W,80);dc.strokeStyle='#f87171';dc.lineWidth=1.4;dc.beginPath();
+  for(let i=0;i<A.length;i++){const df=(A[i]-(B[i+lag]||B[i])),x=i*(W-1)/(A.length-1),y=40-df/mx*34;i?dc.lineTo(x,y):dc.moveTo(x,y);}dc.stroke();
+  dc.fillStyle='#7c8aa0';dc.font='11px sans-serif';dc.fillText('差分（前回−今回）',8,14);}
+
+// ===== デモ（PDFなしで動作確認）=====
+$('demoBtn').onclick=()=>{
+  function ecg(N,{amp=1,width=1}={}){const o=new Float32Array(N),fs=250,beat=60/75*fs;const w=t=>{const g=(c,ww,a)=>a*Math.exp(-((t-c)**2)/(2*ww*ww));let v=0;v+=g(.16*fs,.03*fs,.12);v+=g(.33*fs,.012*fs*width,1*amp);v+=g(.36*fs,.012*fs*width,-.3*amp);v+=g(.55*fs,.05*fs,.22);return v;};for(let i=0;i<N;i++)o[i]=w(i%beat)+(Math.random()-.5)*.05;return o;}
+  const base={id:'DEMO001',name:'デモ 太郎',date:'2026年06月01日',template:Array.from(foldTemplate(ecg(1000,{}))),history:[]};
+  const now=foldTemplate(ecg(1000,{width:2.0,amp:0.8}));
+  const a=Float32Array.from(base.template),b=now;const {corr,lag}=bestXcorr(a,b,50);
+  const ampRatio=(std(Array.from(b)))/(std(Array.from(a)));const widthRatio=qrsWidth(b)/qrsWidth(a);
+  $('fId').value='DEMO001';$('fName').value='デモ 太郎';$('fDate').value='2026年09月28日';$('fDev').value='EMBLEM MRI S-ICD';
+  $('result').innerHTML=`<div class="verdict bad"><h2>⚠️ 変化あり — 要確認（デモ）</h2><div>前回:2026年06月01日 → 今回:2026年09月28日</div><div>・S-ECG波形の相関が低下（${corr.toFixed(3)}）＝形態変化（新規伝導異常/リード移動などを要確認）</div><div class="metrics"><div class="m flag"><div class="k">波形相関</div><div class="v">${corr.toFixed(3)}</div></div><div class="m"><div class="k">振幅比</div><div class="v">${(ampRatio*100).toFixed(0)}%</div></div><div class="m"><div class="k">幅比</div><div class="v">${widthRatio.toFixed(2)}倍</div></div></div></div>`;
+  drawOverlay(a,b,lag);$('overlayCard').hidden=false;
+};
+</script>
+</body>
+</html>
