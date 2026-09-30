@@ -148,11 +148,20 @@ let pageCanvas=$('page'), pctx=pageCanvas.getContext('2d');
 let renderScale=1.6, curSig=null, meta={};
 // ---- PDFのテキストをpdf.jsに頼らず自前抽出（FlateDecodeを展開しTj/TJ文字列を回収）----
 // LATITUDEはpdf.jsのgetTextContentが空を返すため、圧縮ストリームを直接展開して数字（ID・日付）を得る。
-async function inflateMaybe(bytes){
-  for(const fmt of ['deflate','deflate-raw']){
-    try{const ds=new DecompressionStream(fmt);const rd=new Response(ds.readable).arrayBuffer();
-      const w=ds.writable.getWriter();await w.write(bytes);await w.close();
-      return new Uint8Array(await rd);}catch(e){}
+// DecompressionStreamは圧縮データ後ろの余分なバイト（streamとendstreamの間の改行）でエラーになるため、
+// /Length があればその長さで切り、無ければ末尾のCR/LFを削ったものから順に試す。
+async function inflateOnce(bytes,fmt){
+  try{const ds=new DecompressionStream(fmt);const rd=new Response(ds.readable).arrayBuffer();
+    const w=ds.writable.getWriter();w.write(bytes).catch(()=>{});w.close().catch(()=>{});
+    return new Uint8Array(await rd);}catch(e){return null;}
+}
+async function inflateMaybe(bytes,len){
+  const cands=[];
+  if(len>0&&len<=bytes.length)cands.push(bytes.subarray(0,len));
+  let n=bytes.length;while(n>0&&(bytes[n-1]===10||bytes[n-1]===13))n--;
+  for(let k=n;k<=bytes.length;k++)cands.push(bytes.subarray(0,k));
+  for(const c of cands)for(const fmt of ['deflate','deflate-raw']){
+    const out=await inflateOnce(c,fmt);if(out&&out.length)return out;
   }
   return null;
 }
@@ -166,7 +175,8 @@ async function extractRawPdfText(ab){
     streams++;
     let start=i+6;if(bytes[start]===13)start++;if(bytes[start]===10)start++;
     const end=bin.indexOf('endstream',start);if(end===-1){i=start+6;continue;}
-    const dec=await inflateMaybe(bytes.subarray(start,end));i=end+9;
+    const dict=bin.slice(Math.max(0,bin.lastIndexOf('obj',i)),i);const lm=dict.match(/\/Length\s+(\d+)(?!\d)(?!\s+\d+\s+R)/);
+    const dec=await inflateMaybe(bytes.subarray(start,end),lm?+lm[1]:0);i=end+9;
     if(!dec)continue; inflated++;
     let s='';for(let o=0;o<dec.length;o+=CH)s+=String.fromCharCode.apply(null,dec.subarray(o,o+CH));
     for(const m of s.matchAll(/\(((?:[^()\\]|\\.)*)\)\s*Tj/g))text+=m[1]+' ';
