@@ -352,11 +352,33 @@ drop.addEventListener('dragleave',()=>drop.classList.remove('over'));
 drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('over');e.dataTransfer.files[0]&&loadPDF(e.dataTransfer.files[0]);});
 
 // ===== データフォルダ（File System Access）=====
-let dirHandle=null;
+let dirHandle=null, savedHandle=null;
+// 選んだフォルダをIndexedDBに記憶し、次回から選び直さずに使う（ブラウザが再許可を求めることがある）
+function idb(mode,fn){return new Promise((res,rej)=>{const o=indexedDB.open('pg_lat',1);o.onupgradeneeded=()=>o.result.createObjectStore('kv');
+  o.onerror=()=>rej(o.error);o.onsuccess=()=>{let tx,r;try{tx=o.result.transaction('kv',mode);r=fn(tx.objectStore('kv'));}catch(e){rej(e);return;}tx.oncomplete=()=>res(r&&r.result);tx.onerror=()=>rej(tx.error);};});}
+const setFolderStatus=(html)=>{$('folderStatus').innerHTML=html;};
 $('pickFolder').onclick=async()=>{
-  try{ dirHandle=await window.showDirectoryPicker({mode:'readwrite'}); $('folderStatus').innerHTML='<span class="ok-t">フォルダ選択済み：'+dirHandle.name+'</span>'; }
-  catch(e){ $('folderStatus').textContent='選択がキャンセルされました'; }
+  try{ dirHandle=await window.showDirectoryPicker({mode:'readwrite'}); savedHandle=dirHandle;
+    try{await idb('readwrite',st=>st.put(dirHandle,'dir'));}catch(_){}
+    setFolderStatus('<span class="ok-t">フォルダ選択済み：'+dirHandle.name+'（次回から自動）</span>'); }
+  catch(e){ if(!dirHandle) $('folderStatus').textContent='選択がキャンセルされました'; }
 };
+// 評価ボタンなどのクリック時に呼ぶ（再許可のダイアログはクリック操作の中でしか出せない）
+async function ensureDir(){
+  if(dirHandle)return true;
+  if(!savedHandle)return false;
+  try{ if(await savedHandle.requestPermission({mode:'readwrite'})==='granted'){dirHandle=savedHandle;
+    setFolderStatus('<span class="ok-t">フォルダ接続済み：'+dirHandle.name+'（自動）</span>');return true;} }catch(_){}
+  setFolderStatus('<span class="warn-t">フォルダ「'+savedHandle.name+'」へのアクセスが許可されませんでした。📁から選び直してください。</span>');
+  return false;
+}
+(async()=>{
+  try{ savedHandle=await idb('readonly',st=>st.get('dir')); }catch(_){ savedHandle=null; }
+  if(!savedHandle)return;
+  let perm='prompt'; try{ perm=await savedHandle.queryPermission({mode:'readwrite'}); }catch(_){}
+  if(perm==='granted'){ dirHandle=savedHandle; setFolderStatus('<span class="ok-t">フォルダ接続済み：'+dirHandle.name+'（自動）</span>'); }
+  else setFolderStatus('<span class="ok-t">前回のフォルダ：'+savedHandle.name+'</span>（評価時に自動で接続。許可を聞かれたら「許可」）');
+})();
 async function readBaseline(id){ if(!dirHandle)return null; try{const fh=await dirHandle.getFileHandle(id+'.json');const f=await fh.getFile();return JSON.parse(await f.text());}catch(e){return null;} }
 async function writeBaseline(id,obj){ if(!dirHandle)return; try{const fh=await dirHandle.getFileHandle(id+'.json',{create:true});const w=await fh.createWritable();await w.write(JSON.stringify(obj));await w.close();}catch(e){} }
 
@@ -375,6 +397,7 @@ function compareRow(base,cur){
   return {a,b,corr,lag,ampRatio,widthRatio,flags};
 }
 $('evalBtn').onclick=async()=>{
+  await ensureDir(); // 記憶したフォルダに接続（最初に呼ぶ：許可ダイアログはクリック直後のみ可）
   const id=$('fId').value.trim();
   if(!curSig){ $('result').innerHTML='<div class="verdict bad"><h2>波形が未取得</h2>S-ECGの枠を指定してください。</div>';return; }
   if(!id){ $('result').innerHTML='<div class="verdict bad"><h2>患者IDがありません</h2>IDを入力してください。</div>';return; }
