@@ -215,13 +215,15 @@ function extractFields(items, annotStrs){
   const interro=wt?`${wt[1]}年${wt[2]}月${wt[3]}日 ${wt[4]}`:(dts[0]?`${dts[0][1]}年${dts[0][2]}月${dts[0][3]}日`:'');
   // デバイス：型式/シリアル（A219/156652 等）
   const dev=(t.match(/[A-Z]\d{3}\/\d{4,8}/)||t.match(/[A-Z]{1,6}\d{2,4}\/\d{4,8}/)||raw.match(/EMBLEM[^\s|]*/)||[''])[0].trim();
-  // 患者ID：日付・シリアル・年を除いた 6-10桁の数字
+  // 患者ID：LATITUDEは「氏名（ふりがな）（8桁ID）」形式 → 括弧内8桁を最優先
   const serial=(dev.match(/\/(\d+)/)||[])[1];
-  const nums=[...t.matchAll(/\d{6,10}/g)].map(m=>m[0]).filter(n=>n!==serial&&!/^(19|20)\d\d(0\d|1[0-2])/.test(n));
-  const idCand=nums.sort((a,b)=>Math.abs(a.length-8)-Math.abs(b.length-8))[0]||'';
-  // 氏名：注釈テキスト優先（'Aさん'等）。かな/漢字を含み、ラベル語・年月日・IDを除く
-  const bad=/ふりがな|フリガナ|レポート|ページ|波形|ゲイン|センシング|プログラム|バージョン|Boston|LATITUDE|Scientific|reserved|©|MRI|S-ICD|S-ECG|センス|ペース|Noise|検出|充電|結果|イベント/i;
-  const nameCand=(annotStrs.concat(lines).find(l=>/[぀-ヿ一-鿿]/.test(l)&&l.length<=16&&!/^\d+$/.test(l)&&!/年|月|日/.test(l)&&!bad.test(l))||'').replace(/[（(].*?[）)]/g,'').trim();
+  const idParen=(t.match(/[（(](\d{8})[）)]/)||[])[1];
+  const nums=[...t.matchAll(/\d{8}/g)].map(m=>m[0]).filter(n=>n!==serial&&!/^(19|20)\d\d(0[1-9]|1[0-2])/.test(n));
+  const idCand=idParen||nums[0]||'';
+  // 氏名：漢字/かな名の直後に（ふりがな）が続く形（田中太郎（たなか…））
+  const nameParen=(t.match(/([一-鿿々]{1,10})[（(][ぁ-ゟ][ぁ-ゟ　\s]*[）)]/)||[])[1];
+  const bad=/ふりがな|フリガナ|レポート|ページ|波形|ゲイン|センシング|プログラム|バージョン|Boston|LATITUDE|Scientific|reserved|©|MRI|S-ICD|S-ECG|センス|ペース|Noise|検出|充電|結果|イベント|病院|施設|患者管理/i;
+  const nameCand=nameParen||(annotStrs.concat(lines).find(l=>/[぀-ヿ一-鿿]/.test(l)&&l.length<=16&&!/^\d+$/.test(l)&&!/年|月|日/.test(l)&&!bad.test(l))||'').replace(/[（(].*?[）)]/g,'').trim();
   $('fId').value=idCand||''; $('fName').value=nameCand; $('fDate').value=interro; $('fDev').value=dev;
   meta={id:idCand||'',name:nameCand,date:interro,device:dev};
   // デバッグ：文字項目数＋注釈数＋抽出テキスト先頭を表示
