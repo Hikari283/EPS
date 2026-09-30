@@ -67,6 +67,7 @@
       <div id="pageWrap"><canvas id="page"></canvas></div>
       <div id="cropHint">初回のみ：S-ECG波形の上をドラッグして解析範囲を指定してください（次回から自動）。</div>
       <canvas id="sigPreview" height="70" style="display:none"></canvas>
+      <canvas id="sigPreview2" height="70" style="display:none"></canvas>
       <div id="traceMsg" class="hint"></div>
     </div>
 
@@ -86,8 +87,14 @@
 
   <div class="card" id="overlayCard" hidden style="margin-top:14px">
     <h2>重ね描き（青=前回 / 橙=今回）と差分</h2>
+    <div class="hint">上段</div>
     <canvas id="overlay" height="180"></canvas>
     <canvas id="diff" height="80"></canvas>
+    <div id="row2Wrap" hidden>
+      <div class="hint" style="margin-top:10px">下段</div>
+      <canvas id="overlay2" height="180"></canvas>
+      <canvas id="diff2" height="80"></canvas>
+    </div>
   </div>
 
   <footer>
@@ -145,7 +152,7 @@ function traceRegion(ctx,r){
 
 // ===== PDF 読み込み・描画・抽出 =====
 let pageCanvas=$('page'), pctx=pageCanvas.getContext('2d');
-let renderScale=1.6, curSig=null, meta={};
+let renderScale=1.6, curSig=null, curSig2=null, meta={};
 // ---- PDFのテキストをpdf.jsに頼らず自前抽出（FlateDecodeを展開しTj/TJ文字列を回収）----
 // LATITUDEはpdf.jsのgetTextContentが空を返すため、圧縮ストリームを直接展開して数字（ID・日付）を得る。
 // DecompressionStreamは圧縮データ後ろの余分なバイト（streamとendstreamの間の改行）でエラーになるため、
@@ -186,7 +193,15 @@ async function extractRawPdfText(ab){
   return text.replace(/\\([()\\])/g,'$1').replace(/[\x00-\x1f\x7f]/g,'').replace(/ +/g,'');
 }
 const cropKey='pg_lat_crop';
-let crop=JSON.parse(localStorage.getItem(cropKey)||'null'); // 正規化 {x,y,w,h}（0-1）
+let crop=JSON.parse(localStorage.getItem(cropKey)||'null'); // 上段 正規化 {x,y,w,h}（0-1）
+const crop2Key='pg_lat_crop2';
+let crop2=JSON.parse(localStorage.getItem(crop2Key)||'null'); // 下段（任意）
+const toPx=c=>({x:c.x*pageCanvas.width,y:c.y*pageCanvas.height,w:c.w*pageCanvas.width,h:c.h*pageCanvas.height});
+function updateCropHint(){
+  $('cropHint').innerHTML = !crop?'初回のみ：S-ECG波形の<b>上段</b>1列を横長にドラッグして枠を指定してください。'
+    : !crop2?'続けて<b>下段</b>の1列もドラッグしてください（下段なしでも比較できます）。'
+    : 'S-ECG枠（上段・下段）は記憶済み（引き直すには✂️）。';
+}
 const idBoxKey='pg_lat_idbox';
 let idBox=JSON.parse(localStorage.getItem(idBoxKey)||'null');
 let drawMode='crop'; // 'crop' | 'id'
@@ -274,13 +289,14 @@ function extractFields(items, annotStrs, rawPdfText){
   const dbg=$('dbg');
   if(dbg) dbg.innerHTML = `文字項目：<b>${items.length}</b>／注釈：<b>${annotStrs.length}</b>／自前抽出：<b>${rawPdfText.length}</b>字（stream ${rawDiag.streams}／展開 ${rawDiag.inflated}）`
     + `<br>ID:<b>${idCand||'—'}</b> 氏名:<b>${nameCand||'—'}</b> 照会:<b>${interro||'—'}</b> 機種:<b>${dev||'—'}</b>`;
-  $('cropHint').innerHTML = (crop?'S-ECG枠は記憶済み（引き直すには✂️）。':'初回のみ：S-ECG波形の上段1列を横長にドラッグして枠を指定してください。');
+  updateCropHint();
 }
 function autoTrace(){
   if(!crop)return;
-  const r={x:crop.x*pageCanvas.width,y:crop.y*pageCanvas.height,w:crop.w*pageCanvas.width,h:crop.h*pageCanvas.height};
-  curSig=traceRegion(pctx,r);
-  drawCropBox(r);
+  // 枠を描く前に両段をトレース（枠線を波形として拾わないように）
+  curSig=traceRegion(pctx,toPx(crop));
+  curSig2=crop2?traceRegion(pctx,toPx(crop2)):null;
+  drawCropBox(toPx(crop)); if(crop2) drawCropBox(toPx(crop2));
   showSigPreview();
 }
 function drawCropBox(r){ pctx.save();pctx.strokeStyle='#38bdf8';pctx.lineWidth=2;pctx.setLineDash([6,4]);pctx.strokeRect(r.x,r.y,r.w,r.h);pctx.setLineDash([]);pctx.restore(); }
@@ -290,12 +306,16 @@ let pageBackup=document.createElement('canvas');
 function savePageBackup(){ pageBackup.width=pageCanvas.width;pageBackup.height=pageCanvas.height;pageBackup.getContext('2d').drawImage(pageCanvas,0,0); }
 function restorePage(){ if(pageBackup.width){pctx.drawImage(pageBackup,0,0);} }
 // 切り出した波形のプレビュー（認識できたか一目で分かる）
-function showSigPreview(){
-  const cv=$('sigPreview');if(!curSig||!curSig.length){cv.style.display='none';$('traceMsg').textContent='';return;}
+function drawSigPreview(cv,sig){
+  if(!sig||!sig.length){cv.style.display='none';return;}
   cv.style.display='block';const W=cv.clientWidth||520;cv.width=W;cv.height=70;const c=cv.getContext('2d');
-  c.fillStyle='#050a12';c.fillRect(0,0,W,70);const n=normalize(Array.from(curSig));const mx=Math.max(1,...n.map(Math.abs));
+  c.fillStyle='#050a12';c.fillRect(0,0,W,70);const n=normalize(Array.from(sig));const mx=Math.max(1,...n.map(Math.abs));
   c.strokeStyle='#34d399';c.lineWidth=1.4;c.beginPath();for(let i=0;i<n.length;i++){const x=i*(W-1)/(n.length-1),y=35-n[i]/mx*30;i?c.lineTo(x,y):c.moveTo(x,y);}c.stroke();
-  $('traceMsg').innerHTML='<span class="ok-t">✅ 波形を認識しました（'+curSig.length+'点）。「🔍 前回と比較して評価」へ。</span>';
+}
+function showSigPreview(){
+  drawSigPreview($('sigPreview'),curSig); drawSigPreview($('sigPreview2'),curSig2);
+  if(!curSig||!curSig.length){$('traceMsg').textContent='';return;}
+  $('traceMsg').innerHTML='<span class="ok-t">✅ 波形を認識しました（'+(curSig2?'上段・下段':'上段のみ')+'）。「🔍 前回と比較して評価」へ。</span>';
 }
 
 // クロップのドラッグ
@@ -316,11 +336,13 @@ pageCanvas.addEventListener('mouseup',e=>{if(!dragging)return;dragging=false;con
     if(crop)autoTrace(); ocrId();
     return;
   }
-  crop={x:r.x/pageCanvas.width,y:r.y/pageCanvas.height,w:r.w/pageCanvas.width,h:r.h/pageCanvas.height};
-  localStorage.setItem(cropKey,JSON.stringify(crop));
-  restorePage();curSig=traceRegion(pctx,r);drawCropBox(r);if(idBox)drawIdBox();showSigPreview();
+  // 1回目=上段、2回目=下段。両方ある状態でドラッグしたら上段から引き直し。
+  const nc={x:r.x/pageCanvas.width,y:r.y/pageCanvas.height,w:r.w/pageCanvas.width,h:r.h/pageCanvas.height};
+  if(crop&&!crop2){crop2=nc;localStorage.setItem(crop2Key,JSON.stringify(crop2));}
+  else{crop=nc;crop2=null;localStorage.setItem(cropKey,JSON.stringify(crop));localStorage.removeItem(crop2Key);}
+  restorePage();autoTrace();if(idBox)drawIdBox();updateCropHint();
 });
-$('redrawCrop').onclick=()=>{crop=null;localStorage.removeItem(cropKey);restorePage();$('cropHint').textContent='S-ECG波形の上をドラッグして枠を指定してください。';$('sigPreview').style.display='none';$('traceMsg').textContent='';};
+$('redrawCrop').onclick=()=>{crop=null;crop2=null;curSig=null;curSig2=null;localStorage.removeItem(cropKey);localStorage.removeItem(crop2Key);restorePage();updateCropHint();showSigPreview();};
 
 // ドロップ/選択
 const drop=$('drop');
@@ -339,45 +361,60 @@ async function readBaseline(id){ if(!dirHandle)return null; try{const fh=await d
 async function writeBaseline(id,obj){ if(!dirHandle)return; try{const fh=await dirHandle.getFileHandle(id+'.json',{create:true});const w=await fh.createWritable();await w.write(JSON.stringify(obj));await w.close();}catch(e){} }
 
 // ===== 評価 =====
-$('evalBtn').onclick=async()=>{
-  const id=$('fId').value.trim();
-  if(!curSig){ $('result').innerHTML='<div class="verdict bad"><h2>波形が未取得</h2>S-ECGの枠を指定してください。</div>';return; }
-  if(!id){ $('result').innerHTML='<div class="verdict bad"><h2>患者IDがありません</h2>IDを入力してください。</div>';return; }
-  const tpl=Array.from(foldTemplate(resample(curSig,1000)));
-  const base=await readBaseline(id);
-  const now={id,name:$('fName').value,date:$('fDate').value,device:$('fDev').value,template:tpl,ts:Date.now()};
-  if(!base||!base.template){
-    await writeBaseline(id,{...now,history:[{date:now.date,note:'初回登録'}]});
-    $('result').innerHTML=`<div class="verdict info"><h2>初回登録しました</h2>この患者（ID:${id}）の基準波形として保存しました。次回レポートから自動比較されます。${dirHandle?'':'<br><b>※フォルダ未選択のため保存できていません。</b>'}</div>`;
-    $('overlayCard').hidden=true; return;
-  }
-  // 比較
-  const a=Float32Array.from(base.template), b=Float32Array.from(tpl);
+const THR=0.94;
+function compareRow(base,cur){
+  const a=Float32Array.from(base), b=Float32Array.from(cur);
   const {corr,lag}=bestXcorr(a,b,Math.round(a.length*0.25));
   const ampRatio=(std(Array.from(b))||1)/(std(Array.from(a))||1);
   const widthRatio=qrsWidth(b)/(qrsWidth(a)||1);
-  const THR=0.94;
   const flags=[];
   if(corr<THR)flags.push(`波形相関の低下（${corr.toFixed(3)} < ${THR}）＝形態変化`);
   if(ampRatio<0.7)flags.push(`振幅低下（前回比 ${(ampRatio*100|0)}%）＝センシング/リード要確認`);
   if(ampRatio>1.4)flags.push(`振幅増大（前回比 ${(ampRatio*100|0)}%）`);
   if(widthRatio>1.4)flags.push(`波形幅の増大（${widthRatio.toFixed(2)}倍）`);
-  const changed=flags.length>0;
+  return {a,b,corr,lag,ampRatio,widthRatio,flags};
+}
+$('evalBtn').onclick=async()=>{
+  const id=$('fId').value.trim();
+  if(!curSig){ $('result').innerHTML='<div class="verdict bad"><h2>波形が未取得</h2>S-ECGの枠を指定してください。</div>';return; }
+  if(!id){ $('result').innerHTML='<div class="verdict bad"><h2>患者IDがありません</h2>IDを入力してください。</div>';return; }
+  const tpls=[curSig,curSig2].map(sg=>sg?Array.from(foldTemplate(resample(sg,1000))):null);
+  const base=await readBaseline(id);
+  // 旧形式（templateのみ＝上段）にも対応
+  const baseTpls=base?(base.templates||[base.template||null,null]):[null,null];
+  const now={id,name:$('fName').value,date:$('fDate').value,device:$('fDev').value,ts:Date.now()};
+  now.templates=tpls.map((t,k)=>t||baseTpls[k]||null); now.template=now.templates[0];
+  const rowName=['上段','下段'];
+  const rows=[0,1].filter(k=>tpls[k]&&baseTpls[k]).map(k=>({k,...compareRow(baseTpls[k],tpls[k])}));
+  if(!rows.length){
+    await writeBaseline(id,{...now,history:[...(base&&base.history||[]),{date:now.date,note:'初回登録'}]});
+    $('result').innerHTML=`<div class="verdict info"><h2>初回登録しました</h2>この患者（ID:${id}）の基準波形（${tpls[1]?'上段・下段':'上段'}）として保存しました。次回レポートから自動比較されます。${dirHandle?'':'<br><b>※フォルダ未選択のため保存できていません。</b>'}</div>`;
+    $('overlayCard').hidden=true; return;
+  }
+  const newRows=[0,1].filter(k=>tpls[k]&&!baseTpls[k]).map(k=>rowName[k]);
+  const changed=rows.some(r=>r.flags.length);
   const m=(k,v,u,f,g)=>`<div class="m ${f?'flag':(g?'good':'')}"><div class="k">${k}</div><div class="v">${v}<small>${u||''}</small></div></div>`;
+  const rowHtml=r=>`<div style="margin-top:10px"><b>${rowName[r.k]}</b>：${r.flags.length?r.flags.map(f=>'<br>・'+f).join(''):'有意な変化なし'}</div>
+    <div class="metrics">${m(rowName[r.k]+' 波形相関',r.corr.toFixed(3),'',r.corr<THR,r.corr>=THR)}${m(rowName[r.k]+' 振幅比',(r.ampRatio*100).toFixed(0),'%',r.ampRatio<0.7||r.ampRatio>1.4,r.ampRatio>=0.85&&r.ampRatio<=1.18)}${m(rowName[r.k]+' 幅比',r.widthRatio.toFixed(2),'倍',r.widthRatio>1.4,r.widthRatio<=1.15)}</div>`;
   $('result').innerHTML=`<div class="verdict ${changed?'bad':'ok'}"><h2>${changed?'⚠️ 変化あり — 要確認':'✅ 変化なし（前回と同等）'}</h2>
     <div>前回：${base.date||'?'} → 今回：${now.date||'?'}</div>
-    <div>${changed?flags.map(f=>'・'+f).join('<br>'):'前回のS-ECGと有意な形態変化は検出されませんでした。'}</div>
-    <div class="metrics">${m('波形相関',corr.toFixed(3),'',corr<THR,corr>=THR)}${m('振幅比',(ampRatio*100).toFixed(0),'%',ampRatio<0.7||ampRatio>1.4,ampRatio>=0.85&&ampRatio<=1.18)}${m('幅比',widthRatio.toFixed(2),'倍',widthRatio>1.4,widthRatio<=1.15)}</div></div>`;
-  // 履歴更新＋baselineは最新に更新（運用に応じて固定も可）
-  const history=(base.history||[]).concat([{date:now.date,corr:+corr.toFixed(3),amp:+ampRatio.toFixed(2),changed}]);
+    ${rows.map(rowHtml).join('')}
+    ${newRows.length?`<div class="hint" style="margin-top:8px">${newRows.join('・')}は前回データが無いため、今回を基準として登録しました（次回から比較）。</div>`:''}</div>`;
+  // 履歴更新＋baselineは最新に更新（運用に応じて固定も可）。corr/ampは上段（旧形式互換）。
+  const r0=rows.find(r=>r.k===0)||rows[0];
+  const history=(base.history||[]).concat([{date:now.date,corr:+r0.corr.toFixed(3),amp:+r0.ampRatio.toFixed(2),changed,
+    rows:rows.map(r=>({row:rowName[r.k],corr:+r.corr.toFixed(3),amp:+r.ampRatio.toFixed(2),width:+r.widthRatio.toFixed(2),changed:r.flags.length>0}))}]);
   await writeBaseline(id,{...now,history});
-  drawOverlay(a,b,lag);$('overlayCard').hidden=false;
+  const r1=rows.find(r=>r.k===0), r2=rows.find(r=>r.k===1);
+  if(r1) drawOverlay(r1.a,r1.b,r1.lag); else { $('overlay').getContext('2d').clearRect(0,0,$('overlay').width,$('overlay').height); $('diff').getContext('2d').clearRect(0,0,$('diff').width,$('diff').height); }
+  $('row2Wrap').hidden=!r2; $('overlayCard').hidden=false;
+  if(r2) drawOverlay(r2.a,r2.b,r2.lag,'overlay2','diff2');
 };
-function drawOverlay(a,b,lag){const cv=$('overlay');const W=cv.clientWidth||900;cv.width=W;cv.height=180;const c=cv.getContext('2d');c.clearRect(0,0,W,180);
+function drawOverlay(a,b,lag,ovId='overlay',diffId='diff'){const cv=$(ovId);const W=cv.clientWidth||900;cv.width=W;cv.height=180;const c=cv.getContext('2d');c.clearRect(0,0,W,180);
   const A=normalize(Array.from(a)),B=normalize(Array.from(b));const mx=Math.max(1,...A.map(Math.abs),...B.map(Math.abs));
   const pl=(arr,col,off)=>{c.strokeStyle=col;c.lineWidth=1.8;c.beginPath();for(let i=0;i<arr.length;i++){const x=i*(W-1)/(arr.length-1),y=90-(arr[i+off]||arr[i])/mx*72;i?c.lineTo(x,y):c.moveTo(x,y);}c.stroke();};
   c.strokeStyle='#1a2740';c.beginPath();c.moveTo(0,90);c.lineTo(W,90);c.stroke();pl(A,'#38bdf8',0);pl(B,'#fbbf24',lag);
-  const d=$('diff');d.width=W;d.height=80;const dc=d.getContext('2d');dc.clearRect(0,0,W,80);dc.strokeStyle='#f87171';dc.lineWidth=1.4;dc.beginPath();
+  const d=$(diffId);d.width=W;d.height=80;const dc=d.getContext('2d');dc.clearRect(0,0,W,80);dc.strokeStyle='#f87171';dc.lineWidth=1.4;dc.beginPath();
   for(let i=0;i<A.length;i++){const df=(A[i]-(B[i+lag]||B[i])),x=i*(W-1)/(A.length-1),y=40-df/mx*34;i?dc.lineTo(x,y):dc.moveTo(x,y);}dc.stroke();
   dc.fillStyle='#7c8aa0';dc.font='11px sans-serif';dc.fillText('差分（前回−今回）',8,14);}
 
@@ -390,7 +427,7 @@ $('demoBtn').onclick=()=>{
   const ampRatio=(std(Array.from(b)))/(std(Array.from(a)));const widthRatio=qrsWidth(b)/qrsWidth(a);
   $('fId').value='DEMO001';$('fName').value='デモ 太郎';$('fDate').value='2026年09月28日';$('fDev').value='EMBLEM MRI S-ICD';
   $('result').innerHTML=`<div class="verdict bad"><h2>⚠️ 変化あり — 要確認（デモ）</h2><div>前回:2026年06月01日 → 今回:2026年09月28日</div><div>・S-ECG波形の相関が低下（${corr.toFixed(3)}）＝形態変化（新規伝導異常/リード移動などを要確認）</div><div class="metrics"><div class="m flag"><div class="k">波形相関</div><div class="v">${corr.toFixed(3)}</div></div><div class="m"><div class="k">振幅比</div><div class="v">${(ampRatio*100).toFixed(0)}%</div></div><div class="m"><div class="k">幅比</div><div class="v">${widthRatio.toFixed(2)}倍</div></div></div></div>`;
-  drawOverlay(a,b,lag);$('overlayCard').hidden=false;
+  drawOverlay(a,b,lag);$('row2Wrap').hidden=true;$('overlayCard').hidden=false;
 };
 </script>
 </body>
