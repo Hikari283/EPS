@@ -209,7 +209,9 @@ async function loadPDF(file){
   try{
     const lib=await ensurePdfjs();
     const buf=await file.arrayBuffer();
-    const pdf=await lib.getDocument({data:buf}).promise;
+    // ★pdf.jsはdataのArrayBufferを転送（detach）して空にするため、先にコピーから自前抽出しておく
+    let rawPdfText=''; try{ rawPdfText=await extractRawPdfText(buf.slice(0)); }catch(_){}
+    const pdf=await lib.getDocument({data:new Uint8Array(buf)}).promise;
     const page=await pdf.getPage(1);
     const vp=page.getViewport({scale:renderScale});
     pageCanvas.width=vp.width; pageCanvas.height=vp.height;
@@ -219,8 +221,6 @@ async function loadPDF(file){
     // 患者情報は FreeText 注釈に入っていることがある（通常描画・テキスト抽出では出ない）→ 注釈からも取得
     let annotStrs=[];
     try{ const ans=await page.getAnnotations(); annotStrs=ans.map(a=>(a.contentsObj&&a.contentsObj.str)||a.contents||'').filter(s=>s&&s.trim()); }catch(_){}
-    // pdf.jsが空を返すLATITUDE用：圧縮ストリームから直接テキスト（数字）を抽出
-    let rawPdfText=''; try{ rawPdfText=await extractRawPdfText(buf); }catch(_){}
     extractFields(tc.items.map(it=>({s:it.str,x:it.transform[4],y:it.transform[5]})), annotStrs, rawPdfText);
     if(crop) autoTrace();
     // 注釈/テキストでIDが取れていれば優先。取れない時だけOCRを試す（枠を教えてある場合）。
