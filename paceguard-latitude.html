@@ -65,6 +65,8 @@
       <div class="drop" id="drop">PDFをドロップ / クリックで選択</div>
       <div id="pageWrap"><canvas id="page"></canvas></div>
       <div id="cropHint">初回のみ：S-ECG波形の上をドラッグして解析範囲を指定してください（次回から自動）。</div>
+      <canvas id="sigPreview" height="70" style="display:none"></canvas>
+      <div id="traceMsg" class="hint"></div>
     </div>
 
     <div class="card">
@@ -112,11 +114,28 @@ function bestXcorr(a,b,maxLag){const A=normalize(Array.from(a)),B=normalize(Arra
 function autoPeriod(sig){const s=normalize(Array.from(sig)),N=s.length;let best=-1,bl=Math.round(N*0.1);const mn=Math.round(N*0.05),mx=Math.round(N*0.45);for(let lag=mn;lag<=mx;lag++){let a=0,n=0;for(let i=0;i+lag<N;i++){a+=s[i]*s[i+lag];n++;}const c=a/n;if(c>best){best=c;bl=lag;}}return bl;}
 function foldTemplate(sig){const T=autoPeriod(sig),s=Array.from(sig),N=s.length;if(T<8)return resample(sig,200);const half=Math.round(T/2);const acc=new Float64Array(2*half);let cnt=0;for(let st=0;st+T<=N;st+=T){let ri=st,rv=-1;for(let i=st;i<st+T;i++){const v=Math.abs(s[i]);if(v>rv){rv=v;ri=i;}}if(ri-half<0||ri+half>=N)continue;for(let k=0;k<2*half;k++)acc[k]+=s[ri-half+k];cnt++;}if(!cnt)return resample(sig,200);return resample(Float32Array.from(acc.map(x=>x/cnt)),200);}
 function qrsWidth(t){const a=Array.from(t).map(Math.abs),mx=Math.max(...a),th=mx*0.2;let b=0,c=0;for(const v of a){if(v>th){c++;b=Math.max(b,c);}else c=0;}return b/t.length;}
-// キャンバス矩形から波形を1次元トレース（各列の最も濃い画素）
+// キャンバス矩形から波形を1次元トレース。LATITUDEのS-ECGは「白＋グリッド背景に緑の線」なので
+// “最も暗い画素”ではなく“最も緑の画素”を各列で拾う（枠・グリッド・S等の黒文字を無視）。
 function traceRegion(ctx,r){
   const d=ctx.getImageData(r.x,r.y,Math.max(1,r.w),Math.max(1,r.h));const {width:W,height:H,data:D}=d;
-  const sig=new Float32Array(W);
-  for(let x=0;x<W;x++){let by=H/2,bs=-1;for(let y=0;y<H;y++){const i=(y*W+x)*4;const lum=(D[i]+D[i+1]+D[i+2])/3;const dk=255-lum;if(dk>bs){bs=dk;by=y;}}sig[x]=H/2-by;}
+  const sig=new Float32Array(W).fill(NaN);
+  for(let x=0;x<W;x++){
+    let by=-1,bs=18; // 緑らしさの閾値
+    for(let y=0;y<H;y++){const i=(y*W+x)*4;const R=D[i],G=D[i+1],B=D[i+2];const green=G-Math.max(R,B);if(green>bs){bs=green;by=y;}}
+    if(by>=0) sig[x]=H/2-by;
+  }
+  // 緑が無い列（コマの隙間・枠）は線形補間
+  let first=-1;for(let x=0;x<W;x++)if(!isNaN(sig[x])){first=x;break;}
+  if(first<0){return new Float32Array(W);} // 緑が全く無い＝範囲外
+  for(let x=0;x<first;x++)sig[x]=sig[first];
+  let last=first;
+  for(let x=first+1;x<W;x++){
+    if(isNaN(sig[x]))continue;
+    if(x-last>1){const a=sig[last],b=sig[x];for(let k=last+1;k<x;k++)sig[k]=a+(b-a)*(k-last)/(x-last);}
+    last=x;
+  }
+  for(let x=last+1;x<W;x++)sig[x]=sig[last];
+  // 平滑化
   const sm=new Float32Array(W);for(let x=0;x<W;x++){let s=0,n=0;for(let k=-1;k<=1;k++){const j=x+k;if(j>=0&&j<W){s+=sig[j];n++;}}sm[x]=s/n;}
   return sm;
 }
@@ -136,6 +155,7 @@ async function loadPDF(file){
     const vp=page.getViewport({scale:renderScale});
     pageCanvas.width=vp.width; pageCanvas.height=vp.height;
     await page.render({canvasContext:pctx,viewport:vp}).promise;
+    savePageBackup();
     const tc=await page.getTextContent();
     extractFields(tc.items.map(it=>({s:it.str,x:it.transform[4],y:it.transform[5]})));
     if(crop) autoTrace();
@@ -172,26 +192,39 @@ function autoTrace(){
   if(!crop)return;
   const r={x:crop.x*pageCanvas.width,y:crop.y*pageCanvas.height,w:crop.w*pageCanvas.width,h:crop.h*pageCanvas.height};
   curSig=traceRegion(pctx,r);
-  // 枠を描く
   drawCropBox(r);
+  showSigPreview();
 }
 function drawCropBox(r){ pctx.save();pctx.strokeStyle='#38bdf8';pctx.lineWidth=2;pctx.setLineDash([6,4]);pctx.strokeRect(r.x,r.y,r.w,r.h);pctx.setLineDash([]);pctx.restore(); }
+// 描画したページのバックアップ（ドラッグ中の再描画用）
+let pageBackup=document.createElement('canvas');
+function savePageBackup(){ pageBackup.width=pageCanvas.width;pageBackup.height=pageCanvas.height;pageBackup.getContext('2d').drawImage(pageCanvas,0,0); }
+function restorePage(){ if(pageBackup.width){pctx.drawImage(pageBackup,0,0);} }
+// 切り出した波形のプレビュー（認識できたか一目で分かる）
+function showSigPreview(){
+  const cv=$('sigPreview');if(!curSig||!curSig.length){cv.style.display='none';$('traceMsg').textContent='';return;}
+  cv.style.display='block';const W=cv.clientWidth||520;cv.width=W;cv.height=70;const c=cv.getContext('2d');
+  c.fillStyle='#050a12';c.fillRect(0,0,W,70);const n=normalize(Array.from(curSig));const mx=Math.max(1,...n.map(Math.abs));
+  c.strokeStyle='#34d399';c.lineWidth=1.4;c.beginPath();for(let i=0;i<n.length;i++){const x=i*(W-1)/(n.length-1),y=35-n[i]/mx*30;i?c.lineTo(x,y):c.moveTo(x,y);}c.stroke();
+  $('traceMsg').innerHTML='<span class="ok-t">✅ 波形を認識しました（'+curSig.length+'点）。「🔍 前回と比較して評価」へ。</span>';
+}
 
 // クロップのドラッグ
 let dragging=false,sx=0,sy=0;
 pageCanvas.addEventListener('mousedown',e=>{const b=pageCanvas.getBoundingClientRect();const sc=pageCanvas.width/b.width;sx=(e.clientX-b.left)*sc;sy=(e.clientY-b.top)*sc;dragging=true;});
 pageCanvas.addEventListener('mousemove',e=>{if(!dragging)return;const b=pageCanvas.getBoundingClientRect();const sc=pageCanvas.width/b.width;const x=(e.clientX-b.left)*sc,y=(e.clientY-b.top)*sc;
-  // 再描画が重いので枠だけ（軽く）：一旦画像はそのまま、枠は最後に。
+  restorePage(); // 元のページを描き直してから枠を重ねる（ライブ表示）
+  pctx.save();pctx.strokeStyle='#38bdf8';pctx.lineWidth=2;pctx.setLineDash([6,4]);
+  pctx.strokeRect(Math.min(sx,x),Math.min(sy,y),Math.abs(x-sx),Math.abs(y-sy));pctx.setLineDash([]);pctx.restore();
 });
 pageCanvas.addEventListener('mouseup',e=>{if(!dragging)return;dragging=false;const b=pageCanvas.getBoundingClientRect();const sc=pageCanvas.width/b.width;const x=(e.clientX-b.left)*sc,y=(e.clientY-b.top)*sc;
   const r={x:Math.min(sx,x),y:Math.min(sy,y),w:Math.abs(x-sx),h:Math.abs(y-sy)};
-  if(r.w<15||r.h<8)return;
+  if(r.w<15||r.h<8){restorePage();return;}
   crop={x:r.x/pageCanvas.width,y:r.y/pageCanvas.height,w:r.w/pageCanvas.width,h:r.h/pageCanvas.height};
   localStorage.setItem(cropKey,JSON.stringify(crop));
-  curSig=traceRegion(pctx,r);drawCropBox(r);
-  $('cropHint').textContent='S-ECG枠を保存しました（次回から自動）。';
+  restorePage();curSig=traceRegion(pctx,r);drawCropBox(r);showSigPreview();
 });
-$('redrawCrop').onclick=()=>{crop=null;localStorage.removeItem(cropKey);$('cropHint').textContent='S-ECG波形の上をドラッグして枠を指定してください。';};
+$('redrawCrop').onclick=()=>{crop=null;localStorage.removeItem(cropKey);restorePage();$('cropHint').textContent='S-ECG波形の上をドラッグして枠を指定してください。';$('sigPreview').style.display='none';$('traceMsg').textContent='';};
 
 // ドロップ/選択
 const drop=$('drop');
