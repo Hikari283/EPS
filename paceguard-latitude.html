@@ -174,8 +174,8 @@ async function ocrId(){
     const {data}=await T.recognize(tmp,'eng',{tessedit_char_whitelist:'0123456789'});
     const digits=(data.text.match(/\d/g)||[]).join('');
     const id=(digits.match(/\d{8}/)||[digits])[0]||'';
-    $('fId').value=id;
-    $('dbg').innerHTML=`OCR読取：<code>${(data.text.trim()||'（空）').replace(/</g,'&lt;')}</code> → <b>ID候補：${id||'（8桁が取れませんでした）'}</b>`;
+    if(id) $('fId').value=id; // 取れた時だけ反映（空で上書きしない）
+    $('dbg').innerHTML += `<br>OCR読取：<code>${(data.text.trim()||'（空）').replace(/</g,'&lt;')}</code> → <b>ID候補：${id||'（8桁が取れませんでした）'}</b>`;
   }catch(e){ $('dbg').innerHTML='OCR失敗：'+e+'<br><span class="hint">ネット接続が必要です（初回のみ）。院内で遮断されている場合は同梱OCRに切替します。</span>'; }
 }
 $('teachId').onclick=()=>{ if(!pageBackup.width){alert('先にPDFを読み込んでください');return;} drawMode='id'; $('dbg').innerHTML='<b>IDの数字の上をドラッグして囲んでください</b>（8桁の数字だけを枠に入れる）。'; };
@@ -196,7 +196,8 @@ async function loadPDF(file){
     try{ const ans=await page.getAnnotations(); annotStrs=ans.map(a=>(a.contentsObj&&a.contentsObj.str)||a.contents||'').filter(s=>s&&s.trim()); }catch(_){}
     extractFields(tc.items.map(it=>({s:it.str,x:it.transform[4],y:it.transform[5]})), annotStrs);
     if(crop) autoTrace();
-    if(idBox){ drawIdBox(); ocrId(); }
+    // 注釈/テキストでIDが取れていれば優先。取れない時だけOCRを試す（枠を教えてある場合）。
+    if(idBox){ drawIdBox(); if(!$('fId').value) ocrId(); }
   }catch(e){ $('result').innerHTML=`<div class="verdict bad"><h2>PDF読み込みエラー</h2>${e}<br><span class="hint">pdf.jsの読み込みにインターネットが必要です（初回のみ）。院内でCDNが塞がれている場合はpdf.jsを同梱版に切り替えます。</span></div>`; }
 }
 function extractFields(items, annotStrs){
@@ -225,7 +226,9 @@ function extractFields(items, annotStrs){
   meta={id:idCand||'',name:nameCand,date:interro,device:dev};
   // デバッグ：文字項目数＋注釈数＋抽出テキスト先頭を表示
   const dbg=$('dbg');
-  if(dbg) dbg.innerHTML = `文字項目：<b>${items.length}</b>／注釈：<b>${annotStrs.length}</b>／文字数：<b>${t.length}</b><br>抽出：<code style="color:#7c8aa0">${(t.slice(0,180)||'（空）').replace(/</g,'&lt;')}</code>`;
+  if(dbg) dbg.innerHTML = `文字項目：<b>${items.length}</b>／注釈：<b>${annotStrs.length}</b>／文字数：<b>${t.length}</b>`
+    + `<br>注釈内容：<code style="color:#7c8aa0">${(annotStrs.join(' ┃ ').slice(0,160)||'（注釈なし）').replace(/</g,'&lt;')}</code>`
+    + `<br>抽出：<code style="color:#7c8aa0">${(t.slice(0,120)||'（空）').replace(/</g,'&lt;')}</code>`;
   $('cropHint').innerHTML = (crop?'S-ECG枠は記憶済み（引き直すには✂️）。':'初回のみ：S-ECG波形の上段1列を横長にドラッグして枠を指定してください。');
 }
 function autoTrace(){
