@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PaceGuard（波形変化 自動チェック β）</title>
+<style>
+  :root{ --bg:#0b1120; --card:#111a2b; --line:#22314a; --tx:#e6eefb; --sub:#9aa8bf; --accent:#38bdf8; --ok:#34d399; --warn:#fbbf24; --bad:#f87171; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--tx);font-family:-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;font-size:14px;line-height:1.6}
+  header{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+  header h1{font-size:20px;margin:0}
+  header .tag{font-size:11px;color:var(--accent);border:1px solid var(--line);border-radius:999px;padding:2px 10px}
+  header .dis{font-size:11px;color:var(--warn);margin-left:auto}
+  .wrap{max-width:1180px;margin:0 auto;padding:18px 16px 80px}
+  .pair{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:820px){.pair{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+  .card h2{font-size:14px;margin:0 0 8px;color:#bfe3fb}
+  .drop{border:2px dashed var(--line);border-radius:10px;padding:14px;text-align:center;color:var(--sub);cursor:pointer;transition:.15s}
+  .drop.over{border-color:var(--accent);background:rgba(56,189,248,.06)}
+  canvas{display:block;width:100%;border-radius:8px;background:#050a12;border:1px solid var(--line);margin-top:8px}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
+  button{background:#16233a;color:var(--tx);border:1px solid var(--line);border-radius:8px;padding:7px 12px;font-size:13px;cursor:pointer}
+  button:hover{border-color:var(--accent)}
+  button.primary{background:var(--accent);color:#04222e;border-color:var(--accent);font-weight:700}
+  select,input[type=range]{background:#0a1320;color:var(--tx);border:1px solid var(--line);border-radius:8px;padding:6px}
+  .hint{font-size:11.5px;color:var(--sub)}
+  .verdict{margin-top:16px;border-radius:14px;padding:16px 18px;border:1px solid var(--line)}
+  .verdict.ok{background:rgba(52,211,153,.10);border-color:#1f6b52}
+  .verdict.bad{background:rgba(248,113,113,.10);border-color:#7a2e2e}
+  .verdict h2{margin:0 0 4px;font-size:20px}
+  .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:12px}
+  .m{background:#0a1320;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  .m .k{font-size:11px;color:var(--sub)}
+  .m .v{font-size:20px;font-weight:800;margin-top:2px}
+  .m .v small{font-size:12px;font-weight:500;color:var(--sub)}
+  .m.flag{border-color:#7a2e2e;background:rgba(248,113,113,.08)}
+  .m.good{border-color:#1f6b52}
+  .tools{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-top:14px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+  label.sl{display:flex;flex-direction:column;font-size:11px;color:var(--sub);gap:2px}
+  footer{color:var(--sub);font-size:11px;margin-top:26px;border-top:1px solid var(--line);padding-top:12px}
+  .roihint{font-size:11px;color:var(--accent);margin-top:4px}
+</style>
+</head>
+<body>
+<header>
+  <h1>PaceGuard</h1><span class="tag">波形変化 自動チェック β</span>
+  <span class="dis">⚠️ 研究・院内検証用プロトタイプ。診断は必ず担当医が波形を確認して判断してください。</span>
+</header>
+
+<div class="wrap">
+
+  <div class="tools">
+    <button class="primary" id="loadPairBtn">▶ デモのペアを読み込む</button>
+    <label class="sl">デモの変化パターン
+      <select id="demoKind">
+        <option value="same">変化なし（同一＋微小ノイズ）</option>
+        <option value="amp">振幅低下（リード不全/接続不良 疑い）</option>
+        <option value="width">QRS幅増大（新規脚ブロック/リード移動 疑い）</option>
+        <option value="noise">ノイズ・オーバーセンシング</option>
+        <option value="morph">形態変化（極性反転など）</option>
+      </select>
+    </label>
+    <label class="sl">感度（相関しきい値 <span id="thrLbl">0.95</span>）
+      <input type="range" id="thr" min="0.80" max="0.99" step="0.01" value="0.95">
+    </label>
+    <button id="compareBtn" class="primary">🔍 比較する</button>
+  </div>
+
+  <div class="pair" style="margin-top:16px">
+    <div class="card" id="cardA">
+      <h2>① 前回（基準）ベースライン</h2>
+      <div class="drop" data-side="A">画像をドロップ / クリックで選択 / 貼り付け(Ctrl+V)</div>
+      <canvas id="cvA" height="150"></canvas>
+      <div class="roihint" id="roiA">枠をドラッグして解析範囲（1チャンネル）を指定できます</div>
+      <canvas id="sigA" height="80"></canvas>
+    </div>
+    <div class="card" id="cardB">
+      <h2>② 今回（新規データ）</h2>
+      <div class="drop" data-side="B">画像をドロップ / クリックで選択 / 貼り付け(Ctrl+V)</div>
+      <canvas id="cvB" height="150"></canvas>
+      <div class="roihint" id="roiB">枠をドラッグして解析範囲（1チャンネル）を指定できます</div>
+      <canvas id="sigB" height="80"></canvas>
+    </div>
+  </div>
+
+  <div id="result"></div>
+
+  <div class="card" style="margin-top:16px" id="overlayCard" hidden>
+    <h2>重ね描き（青=前回 / 橙=今回）と差分</h2>
+    <canvas id="overlay" height="200"></canvas>
+    <canvas id="diff" height="90"></canvas>
+    <div class="hint">代表1拍を時間正規化して重ねています。橙が青から外れている区間ほど「変化」が大きい部分です。</div>
+  </div>
+
+  <footer>
+    PaceGuard β — 遠隔モニタリングEGM/ECGの前回比較（形態変化の自動スクリーニング）。<br>
+    画像からの自動トレースは画質・レイアウトに依存します。実運用前に自施設データでの検証が必要です。本ツールは医療機器ではありません。
+  </footer>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+// ============ 信号ユーティリティ ============
+function mean(a){let s=0;for(const x of a)s+=x;return s/a.length;}
+function std(a){const m=mean(a);let s=0;for(const x of a)s+=(x-m)*(x-m);return Math.sqrt(s/a.length);}
+function normalize(a){const m=mean(a),sd=std(a)||1;return a.map(x=>(x-m)/sd);}
+function resample(a,N){const out=new Float32Array(N);const n=a.length;for(let i=0;i<N;i++){const t=i*(n-1)/(N-1);const j=Math.floor(t),f=t-j;out[i]=a[j]*(1-f)+(a[Math.min(n-1,j+1)])*f;}return out;}
+// 最良ラグでの正規化相互相関（-maxLag..maxLag）
+function bestXcorr(a,b,maxLag){
+  const A=normalize(Array.from(a)), B=normalize(Array.from(b));
+  let best=-2,bestLag=0;
+  for(let lag=-maxLag;lag<=maxLag;lag++){
+    let s=0,n=0;
+    for(let i=0;i<A.length;i++){const j=i+lag;if(j<0||j>=B.length)continue;s+=A[i]*B[j];n++;}
+    if(n>0){const c=s/n;if(c>best){best=c;bestLag=lag;}}
+  }
+  return {corr:best,lag:bestLag};
+}
+// 拍検出（Rピーク）：絶対値の閾値＋不応期
+function detectBeats(sig){
+  const s=normalize(Array.from(sig)).map(Math.abs);
+  const thr=1.4; const refr=Math.round(sig.length*0.04);
+  const peaks=[];let last=-1e9;
+  for(let i=1;i<s.length-1;i++){if(s[i]>thr&&s[i]>=s[i-1]&&s[i]>=s[i+1]&&i-last>refr){peaks.push(i);last=i;}}
+  return peaks;
+}
+// 自己相関で1拍周期を推定
+function autoPeriod(sig){
+  const s=normalize(Array.from(sig));const N=s.length;
+  let best=-1,bestLag=Math.round(N*0.1);
+  const minLag=Math.round(N*0.05),maxLag=Math.round(N*0.45);
+  for(let lag=minLag;lag<=maxLag;lag++){let acc=0,n=0;for(let i=0;i+lag<N;i++){acc+=s[i]*s[i+lag];n++;}const c=acc/n;if(c>best){best=c;bestLag=lag;}}
+  return bestLag;
+}
+// 周期で折り畳み、各拍のRピーク中心で平均した「きれいな代表1拍」
+function foldTemplate(sig){
+  const T=autoPeriod(sig);const s=Array.from(sig);const N=s.length;
+  if(T<8)return resample(sig,180);
+  const half=Math.round(T/2);const acc=new Float64Array(2*half);let cnt=0;
+  for(let start=0;start+T<=N;start+=T){
+    let ri=start,rv=-1;for(let i=start;i<start+T;i++){const v=Math.abs(s[i]);if(v>rv){rv=v;ri=i;}}
+    if(ri-half<0||ri+half>=N)continue;
+    for(let k=0;k<2*half;k++)acc[k]+=s[ri-half+k];cnt++;
+  }
+  if(cnt===0)return resample(sig,2*half);
+  return resample(Float32Array.from(acc.map(x=>x/cnt)),200); // 長さ固定
+}
+// QRS幅の推定（テンプレの|信号|が最大の20%を超える連続区間長）
+function qrsWidth(tpl){
+  const a=Array.from(tpl).map(Math.abs);const mx=Math.max(...a);const th=mx*0.2;
+  let best=0,cur=0;for(const v of a){if(v>th){cur++;best=Math.max(best,cur);}else cur=0;}
+  return best/tpl.length; // 0-1（テンプレ長比）
+}
+
+// ============ 画像→信号トレース ============
+const imgData={A:null,B:null}; const roi={A:null,B:null}; const rawSig={A:null,B:null};
+function drawImageTo(side,img){
+  const cv=$('cv'+side);const W=cv.clientWidth||520;cv.width=W;cv.height=Math.round(W*img.height/img.width);
+  const ctx=cv.getContext('2d');ctx.drawImage(img,0,0,cv.width,cv.height);
+  imgData[side]={w:cv.width,h:cv.height};roi[side]=null;traceSide(side);
+}
+function traceSide(side){
+  const cv=$('cv'+side);const ctx=cv.getContext('2d');
+  const r=roi[side]||{x:0,y:0,w:cv.width,h:cv.height};
+  let dat;try{dat=ctx.getImageData(r.x,r.y,Math.max(1,r.w),Math.max(1,r.h));}catch(e){return;}
+  const {width:W,height:H,data:D}=dat;
+  const sig=new Float32Array(W);
+  for(let x=0;x<W;x++){
+    // 各列で最も濃い（暗い/彩度高い）画素のy位置を波形位置とする
+    let bestY=H/2,bestScore=-1;
+    for(let y=0;y<H;y++){const i=(y*W+x)*4;const rr=D[i],gg=D[i+1],bb=D[i+2];
+      const lum=(rr+gg+bb)/3; const darkness=255-lum; if(darkness>bestScore){bestScore=darkness;bestY=y;}}
+    sig[x]=(H/2-bestY); // 上向き正
+  }
+  // 平滑化
+  const sm=new Float32Array(W);for(let x=0;x<W;x++){let s=0,n=0;for(let k=-1;k<=1;k++){const j=x+k;if(j>=0&&j<W){s+=sig[j];n++;}}sm[x]=s/n;}
+  rawSig[side]=sm;drawSig(side,sm);redrawROI(side);
+}
+function drawSig(side,sig){
+  const cv=$('sig'+side);const W=cv.clientWidth||520;cv.width=W;cv.height=80;const ctx=cv.getContext('2d');
+  ctx.clearRect(0,0,W,80);const n=normalize(Array.from(sig));const mx=Math.max(1,...n.map(Math.abs));
+  ctx.strokeStyle=side==='A'?'#38bdf8':'#fbbf24';ctx.lineWidth=1.4;ctx.beginPath();
+  for(let i=0;i<n.length;i++){const x=i*(W-1)/(n.length-1);const y=40-(n[i]/mx)*34;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}
+  ctx.stroke();
+}
+function redrawROI(side){
+  if(!roi[side])return;const cv=$('cv'+side);const ctx=cv.getContext('2d');
+  ctx.strokeStyle='#38bdf8';ctx.lineWidth=2;ctx.setLineDash([5,4]);
+  ctx.strokeRect(roi[side].x,roi[side].y,roi[side].w,roi[side].h);ctx.setLineDash([]);
+}
+// ROIドラッグ
+['A','B'].forEach(side=>{
+  const cv=$('cv'+side);let dragging=false,sx=0,sy=0;
+  cv.addEventListener('mousedown',e=>{const rect=cv.getBoundingClientRect();const sc=cv.width/rect.width;
+    sx=(e.clientX-rect.left)*sc;sy=(e.clientY-rect.top)*sc;dragging=true;});
+  cv.addEventListener('mousemove',e=>{if(!dragging)return;const rect=cv.getBoundingClientRect();const sc=cv.width/rect.width;
+    const x=(e.clientX-rect.left)*sc,y=(e.clientY-rect.top)*sc;
+    roi[side]={x:Math.min(sx,x),y:Math.min(sy,y),w:Math.abs(x-sx),h:Math.abs(y-sy)};
+    // 再描画（画像＋ROI）
+    if(imgData[side]&&imgData[side].img){const ctx=cv.getContext('2d');ctx.clearRect(0,0,cv.width,cv.height);ctx.drawImage(imgData[side].img,0,0,cv.width,cv.height);}
+    redrawROI(side);});
+  cv.addEventListener('mouseup',()=>{if(dragging){dragging=false;if(roi[side]&&roi[side].w>10&&roi[side].h>6)traceSide(side);}});
+});
+// ドロップ/選択/貼り付け
+function handleFile(side,file){const url=URL.createObjectURL(file);const img=new Image();img.onload=()=>{imgData[side]={img,w:img.width,h:img.height};drawImageToKeep(side,img);};img.src=url;}
+function drawImageToKeep(side,img){const cv=$('cv'+side);const W=cv.clientWidth||520;cv.width=W;cv.height=Math.round(W*img.height/img.width);
+  const ctx=cv.getContext('2d');ctx.drawImage(img,0,0,cv.width,cv.height);imgData[side]={img,w:cv.width,h:cv.height};roi[side]=null;traceSide(side);}
+document.querySelectorAll('.drop').forEach(d=>{const side=d.dataset.side;
+  d.addEventListener('click',()=>{const inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.onchange=e=>{if(e.target.files[0])handleFile(side,e.target.files[0]);};inp.click();});
+  d.addEventListener('dragover',e=>{e.preventDefault();d.classList.add('over');});
+  d.addEventListener('dragleave',()=>d.classList.remove('over'));
+  d.addEventListener('drop',e=>{e.preventDefault();d.classList.remove('over');if(e.dataTransfer.files[0])handleFile(side,e.dataTransfer.files[0]);});
+});
+window.addEventListener('paste',e=>{for(const it of e.clipboardData.items){if(it.type.startsWith('image/')){handleFile(lastFocusSide,it.getAsFile());}}});
+let lastFocusSide='B';
+$('cardA').addEventListener('mouseenter',()=>lastFocusSide='A');
+$('cardB').addEventListener('mouseenter',()=>lastFocusSide='B');
+
+// ============ デモ波形生成 ============
+function ecg(N,{amp=1,width=1,polarity=1,noise=0.02,bpm=75,extra=null}={}){
+  const out=new Float32Array(N);const fs=250;const beat=60/bpm*fs;
+  function wave(t){ // 1拍（tは拍先頭からのサンプル）
+    const g=(c,w,a)=>a*Math.exp(-((t-c)*(t-c))/(2*w*w));
+    let v=0;
+    v+=g(0.16*fs,0.03*fs,0.12);            // P
+    v+=g(0.30*fs,0.010*fs*width,-0.18*amp);// Q
+    v+=g(0.33*fs,0.012*fs*width, 1.0*amp); // R
+    v+=g(0.36*fs,0.012*fs*width,-0.30*amp);// S
+    v+=g(0.55*fs,0.05*fs,0.22);            // T
+    return v*polarity;
+  }
+  for(let i=0;i<N;i++){const ph=i%beat;out[i]=wave(ph)+ (Math.random()-0.5)*2*noise;}
+  if(extra==='noise'){for(let i=0;i<N;i++)out[i]+=(Math.random()-0.5)*0.5 + 0.15*Math.sin(i*0.9);}
+  return out;
+}
+function loadDemoPair(kind){
+  const N=1200;
+  rawSig.A=ecg(N,{});
+  if(kind==='same')      rawSig.B=ecg(N,{noise:0.035});
+  else if(kind==='amp')  rawSig.B=ecg(N,{amp:0.45});
+  else if(kind==='width')rawSig.B=ecg(N,{width:2.1,amp:0.9});
+  else if(kind==='noise')rawSig.B=ecg(N,{extra:'noise'});
+  else if(kind==='morph')rawSig.B=ecg(N,{polarity:-1,amp:0.85});
+  // プレビュー描画（画像なしなので信号のみ）
+  ['A','B'].forEach(s=>{const cv=$('cv'+s);const ctx=cv.getContext('2d');cv.width=cv.clientWidth||520;cv.height=150;
+    ctx.fillStyle='#050a12';ctx.fillRect(0,0,cv.width,cv.height);ctx.fillStyle='#3a4a63';ctx.font='12px sans-serif';ctx.fillText('（デモ波形：画像なし）',10,20);
+    const sig=rawSig[s];const n=normalize(Array.from(sig));ctx.strokeStyle=s==='A'?'#38bdf8':'#fbbf24';ctx.lineWidth=1.3;ctx.beginPath();
+    for(let i=0;i<n.length;i++){const x=i*(cv.width-1)/(n.length-1);const y=cv.height/2-n[i]*40;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}ctx.stroke();});
+  drawSig('A',rawSig.A);drawSig('B',rawSig.B);
+  $('result').innerHTML='<div class="hint" style="margin-top:14px">デモを読み込みました。「🔍 比較する」を押してください。</div>';
+}
+$('loadPairBtn').onclick=()=>loadDemoPair($('demoKind').value);
+$('thr').oninput=e=>$('thrLbl').textContent=(+e.target.value).toFixed(2);
+
+// ============ 比較 ============
+$('compareBtn').onclick=()=>{
+  if(!rawSig.A||!rawSig.B){$('result').innerHTML='<div class="verdict bad"><h2>データがありません</h2>両側に画像を読み込むか、デモを読み込んでください。</div>';return;}
+  const N=1000;
+  const a=resample(rawSig.A,N), b=resample(rawSig.B,N);
+  // 全体アライン＆相関
+  const {corr,lag}=bestXcorr(a,b,Math.round(N*0.15));
+  // 代表1拍テンプレート（周期折り畳み）で形態比較
+  const ta=foldTemplate(a), tb=foldTemplate(b);
+  const {corr:tcorr,lag:tlag}=bestXcorr(ta,tb,Math.round(ta.length*0.25));
+  // 振幅比：信号全体の標準偏差比（ノイズに強い）
+  const ampRatio=(std(Array.from(b))||1)/(std(Array.from(a))||1);
+  // 幅変化（きれいなテンプレから）
+  const wa=qrsWidth(ta), wb=qrsWidth(tb);const widthRatio=wb/(wa||1);
+  // 心拍数
+  const pa=detectBeats(a), pb=detectBeats(b);
+  const bpm=(peaks)=>peaks.length>1?Math.round(60/((peaks[peaks.length-1]-peaks[0])/(peaks.length-1)/250)):null;
+  const rmA=bpm(pa), rmB=bpm(pb);
+  // 判定
+  const THR=+$('thr').value;
+  const flags=[];
+  const cUse=Math.max(corr,tcorr);
+  if(cUse<THR) flags.push(`波形の相関が低下（${cUse.toFixed(3)} < ${THR}）＝形態が変化`);
+  if(ampRatio<0.7) flags.push(`振幅が低下（前回比 ${(ampRatio*100|0)}%）＝センシング/リード不全を要確認`);
+  if(ampRatio>1.4) flags.push(`振幅が増大（前回比 ${(ampRatio*100|0)}%）`);
+  if(widthRatio>1.4) flags.push(`QRS幅が増大（前回比 ${widthRatio.toFixed(2)}倍）＝新規脚ブロック/リード移動を要確認`);
+  const changed=flags.length>0;
+  const rms=(()=>{const A=normalize(Array.from(ta)),B=normalize(Array.from(tb));let s=0;for(let i=0;i<A.length;i++){const d=A[i]-B[i+tlag]||A[i];s+=d*d;}return Math.sqrt(s/A.length);})();
+
+  const m=(k,v,unit,flag,good)=>`<div class="m ${flag?'flag':(good?'good':'')}"><div class="k">${k}</div><div class="v">${v}<small> ${unit||''}</small></div></div>`;
+  $('result').innerHTML=`
+    <div class="verdict ${changed?'bad':'ok'}">
+      <h2>${changed?'⚠️ 変化あり — 要確認':'✅ 変化なし（前回と同等）'}</h2>
+      <div>${changed?flags.map(f=>'・'+f).join('<br>'):'前回の波形と有意な形態変化は検出されませんでした。（担当医の最終確認は必要）'}</div>
+      <div class="metrics">
+        ${m('波形相関（最良）',cUse.toFixed(3),'',cUse<THR,cUse>=THR)}
+        ${m('振幅比（今回/前回）',(ampRatio*100).toFixed(0),'%',ampRatio<0.7||ampRatio>1.4,ampRatio>=0.85&&ampRatio<=1.18)}
+        ${m('QRS幅比',widthRatio.toFixed(2),'倍',widthRatio>1.4,widthRatio<=1.15)}
+        ${m('差分RMS',rms.toFixed(3),'',rms>0.5,rms<0.3)}
+        ${m('心拍数 前回→今回',(rmA||'?')+'→'+(rmB||'?'),'bpm')}
+      </div>
+    </div>`;
+  // 重ね描き
+  $('overlayCard').hidden=false;
+  drawOverlay(ta,tb,tlag);
+};
+function drawOverlay(ta,tb,lag){
+  const cv=$('overlay');const W=cv.clientWidth||900;cv.width=W;cv.height=200;const ctx=cv.getContext('2d');
+  ctx.clearRect(0,0,W,200);
+  const A=normalize(Array.from(ta)),B=normalize(Array.from(tb));
+  const mx=Math.max(1,...A.map(Math.abs),...B.map(Math.abs));
+  const plot=(arr,col,off)=>{ctx.strokeStyle=col;ctx.lineWidth=1.8;ctx.beginPath();for(let i=0;i<arr.length;i++){const x=i*(W-1)/(arr.length-1);const y=100-(arr[i+off]||arr[i])/mx*80;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}ctx.stroke();};
+  ctx.strokeStyle='#1a2740';ctx.beginPath();ctx.moveTo(0,100);ctx.lineTo(W,100);ctx.stroke();
+  plot(A,'#38bdf8',0);plot(B,'#fbbf24',lag);
+  // 差分
+  const dcv=$('diff');dcv.width=W;dcv.height=90;const d=dcv.getContext('2d');d.clearRect(0,0,W,90);
+  d.strokeStyle='#f87171';d.lineWidth=1.4;d.beginPath();
+  for(let i=0;i<A.length;i++){const diff=(A[i]-(B[i+lag]||B[i]));const x=i*(W-1)/(A.length-1);const y=45-diff/mx*38;i?d.lineTo(x,y):d.moveTo(x,y);}
+  d.stroke();d.fillStyle='#7c8aa0';d.font='11px sans-serif';d.fillText('差分（前回−今回）',8,14);
+}
+// 初期デモ
+loadDemoPair('width');
+</script>
+</body>
+</html>
