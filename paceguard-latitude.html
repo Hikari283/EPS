@@ -146,6 +146,30 @@ function traceRegion(ctx,r){
 // ===== PDF 読み込み・描画・抽出 =====
 let pageCanvas=$('page'), pctx=pageCanvas.getContext('2d');
 let renderScale=1.6, curSig=null, meta={};
+// ---- PDFのテキストをpdf.jsに頼らず自前抽出（FlateDecodeを展開しTj/TJ文字列を回収）----
+// LATITUDEはpdf.jsのgetTextContentが空を返すため、圧縮ストリームを直接展開して数字（ID・日付）を得る。
+async function inflateMaybe(bytes){
+  for(const fmt of ['deflate','deflate-raw']){
+    try{const ds=new DecompressionStream(fmt);const w=ds.writable.getWriter();w.write(bytes);w.close();
+      return new Uint8Array(await new Response(ds.readable).arrayBuffer());}catch(e){}
+  }
+  return null;
+}
+async function extractRawPdfText(ab){
+  const bytes=new Uint8Array(ab);
+  let bin='';const CH=8192;for(let o=0;o<bytes.length;o+=CH)bin+=String.fromCharCode.apply(null,bytes.subarray(o,o+CH));
+  let text='',i=0;
+  while((i=bin.indexOf('stream',i))!==-1){
+    let start=i+6;if(bytes[start]===13)start++;if(bytes[start]===10)start++;
+    const end=bin.indexOf('endstream',start);if(end===-1){i=start+6;continue;}
+    const dec=await inflateMaybe(bytes.subarray(start,end));i=end+9;
+    if(!dec)continue;
+    let s='';for(let o=0;o<dec.length;o+=CH)s+=String.fromCharCode.apply(null,dec.subarray(o,o+CH));
+    for(const m of s.matchAll(/\(((?:[^()\\]|\\.)*)\)\s*Tj/g))text+=m[1]+' ';
+    for(const m of s.matchAll(/\[([^\]]*)\]\s*TJ/g)){for(const p of m[1].matchAll(/\(((?:[^()\\]|\\.)*)\)/g))text+=p[1];text+=' ';}
+  }
+  return text.replace(/\\([()\\])/g,'$1').replace(/[\x00-\x1f\x7f]/g,'').replace(/ +/g,'');
+}
 const cropKey='pg_lat_crop';
 let crop=JSON.parse(localStorage.getItem(cropKey)||'null'); // 正規化 {x,y,w,h}（0-1）
 const idBoxKey='pg_lat_idbox';
@@ -195,25 +219,29 @@ async function loadPDF(file){
     // 患者情報は FreeText 注釈に入っていることがある（通常描画・テキスト抽出では出ない）→ 注釈からも取得
     let annotStrs=[];
     try{ const ans=await page.getAnnotations(); annotStrs=ans.map(a=>(a.contentsObj&&a.contentsObj.str)||a.contents||'').filter(s=>s&&s.trim()); }catch(_){}
-    extractFields(tc.items.map(it=>({s:it.str,x:it.transform[4],y:it.transform[5]})), annotStrs);
+    // pdf.jsが空を返すLATITUDE用：圧縮ストリームから直接テキスト（数字）を抽出
+    let rawPdfText=''; try{ rawPdfText=await extractRawPdfText(buf); }catch(_){}
+    extractFields(tc.items.map(it=>({s:it.str,x:it.transform[4],y:it.transform[5]})), annotStrs, rawPdfText);
     if(crop) autoTrace();
     // 注釈/テキストでIDが取れていれば優先。取れない時だけOCRを試す（枠を教えてある場合）。
     if(idBox){ drawIdBox(); if(!$('fId').value) ocrId(); }
   }catch(e){ $('result').innerHTML=`<div class="verdict bad"><h2>PDF読み込みエラー</h2>${e}<br><span class="hint">pdf.jsの読み込みにインターネットが必要です（初回のみ）。院内でCDNが塞がれている場合はpdf.jsを同梱版に切り替えます。</span></div>`; }
 }
-function extractFields(items, annotStrs){
-  annotStrs=annotStrs||[];
-  // pdf.jsは文字を細切れで返す・患者情報は注釈側にあることがある → 両方を合わせて解析
-  const raw=items.map(i=>i.s).join('')+' '+annotStrs.join(' ');
+function extractFields(items, annotStrs, rawPdfText){
+  annotStrs=annotStrs||[]; rawPdfText=rawPdfText||'';
+  // pdf.jsの文字・注釈・自前抽出（圧縮ストリーム）を合わせて解析
+  const raw=items.map(i=>i.s).join('')+' '+annotStrs.join(' ')+' '+rawPdfText;
   const t=raw.replace(/\s+/g,'');
   // 行を再構成（同じy付近の項目をxでソートして連結）＝氏名など人が読む単位
   const rows={};
   for(const it of items){ if(!it.s.trim())continue; const key=Math.round(it.y/3); (rows[key]=rows[key]||[]).push(it); }
   const lines=Object.keys(rows).sort((a,b)=>b-a).map(k=>rows[k].sort((p,q)=>p.x-q.x).map(o=>o.s).join('').replace(/\s+/g,' ').trim()).filter(Boolean);
-  // 日付：YYYY年MM月DD日（時刻付き＝照会日を優先）
+  // 日付：まず「YYYY年MM月DD日」。取れない（年月日が文字化け）時は JST 時刻を手がかりに緩く抽出
   const dts=[...t.matchAll(/(\d{4})年(\d{1,2})月(\d{1,2})日(\d{2}:\d{2})?/g)];
   const wt=dts.find(m=>m[4]);
-  const interro=wt?`${wt[1]}年${wt[2]}月${wt[3]}日 ${wt[4]}`:(dts[0]?`${dts[0][1]}年${dts[0][2]}月${dts[0][3]}日`:'');
+  let interro=wt?`${wt[1]}年${wt[2]}月${wt[3]}日 ${wt[4]}`:(dts[0]?`${dts[0][1]}年${dts[0][2]}月${dts[0][3]}日`:'');
+  if(!interro){ const j=t.match(/(\d{4})\D{1,4}(\d{1,2})\D{1,4}(\d{1,2})\D{0,6}(\d{1,2}:\d{2})\D{0,4}JST/);
+    if(j) interro=`${j[1]}年${j[2]}月${j[3]}日 ${j[4]} JST`; }
   // デバイス：型式/シリアル（A219/156652 等）
   const dev=(t.match(/[A-Z]\d{3}\/\d{4,8}/)||t.match(/[A-Z]{1,6}\d{2,4}\/\d{4,8}/)||raw.match(/EMBLEM[^\s|]*/)||[''])[0].trim();
   // 患者ID：LATITUDEは「氏名（ふりがな）（8桁ID）」形式 → 括弧内8桁を最優先
@@ -229,9 +257,8 @@ function extractFields(items, annotStrs){
   meta={id:idCand||'',name:nameCand,date:interro,device:dev};
   // デバッグ：文字項目数＋注釈数＋抽出テキスト先頭を表示
   const dbg=$('dbg');
-  if(dbg) dbg.innerHTML = `文字項目：<b>${items.length}</b>／注釈：<b>${annotStrs.length}</b>／文字数：<b>${t.length}</b>`
-    + `<br>注釈内容：<code style="color:#7c8aa0">${(annotStrs.join(' ┃ ').slice(0,160)||'（注釈なし）').replace(/</g,'&lt;')}</code>`
-    + `<br>抽出：<code style="color:#7c8aa0">${(t.slice(0,120)||'（空）').replace(/</g,'&lt;')}</code>`;
+  if(dbg) dbg.innerHTML = `文字項目：<b>${items.length}</b>／注釈：<b>${annotStrs.length}</b>／自前抽出：<b>${rawPdfText.length}</b>字`
+    + `<br>ID:<b>${idCand||'—'}</b> 氏名:<b>${nameCand||'—'}</b> 照会:<b>${interro||'—'}</b> 機種:<b>${dev||'—'}</b>`;
   $('cropHint').innerHTML = (crop?'S-ECG枠は記憶済み（引き直すには✂️）。':'初回のみ：S-ECG波形の上段1列を横長にドラッグして枠を指定してください。');
 }
 function autoTrace(){
