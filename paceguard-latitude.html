@@ -246,7 +246,7 @@ async function loadPDF(file){
     const vp=page.getViewport({scale:renderScale});
     pageCanvas.width=vp.width; pageCanvas.height=vp.height;
     await page.render({canvasContext:pctx,viewport:vp}).promise;
-    savePageBackup();
+    savePageBackup(); pdfLoaded=true;
     const tc=await page.getTextContent();
     // 患者情報は FreeText 注釈に入っていることがある（通常描画・テキスト抽出では出ない）→ 注釈からも取得
     let annotStrs=[];
@@ -302,7 +302,7 @@ function autoTrace(){
 function drawCropBox(r){ pctx.save();pctx.strokeStyle='#38bdf8';pctx.lineWidth=2;pctx.setLineDash([6,4]);pctx.strokeRect(r.x,r.y,r.w,r.h);pctx.setLineDash([]);pctx.restore(); }
 function drawIdBox(){ if(!idBox)return;const r={x:idBox.x*pageCanvas.width,y:idBox.y*pageCanvas.height,w:idBox.w*pageCanvas.width,h:idBox.h*pageCanvas.height};pctx.save();pctx.strokeStyle='#fbbf24';pctx.lineWidth=2;pctx.setLineDash([4,3]);pctx.strokeRect(r.x,r.y,r.w,r.h);pctx.setLineDash([]);pctx.restore(); }
 // 描画したページのバックアップ（ドラッグ中の再描画用）
-let pageBackup=document.createElement('canvas');
+let pageBackup=document.createElement('canvas'), pdfLoaded=false;
 function savePageBackup(){ pageBackup.width=pageCanvas.width;pageBackup.height=pageCanvas.height;pageBackup.getContext('2d').drawImage(pageCanvas,0,0); }
 function restorePage(){ if(pageBackup.width){pctx.drawImage(pageBackup,0,0);} }
 // 切り出した波形のプレビュー（認識できたか一目で分かる）
@@ -358,6 +358,7 @@ function idb(mode,fn){return new Promise((res,rej)=>{const o=indexedDB.open('pg_
   o.onerror=()=>rej(o.error);o.onsuccess=()=>{let tx,r;try{tx=o.result.transaction('kv',mode);r=fn(tx.objectStore('kv'));}catch(e){rej(e);return;}tx.oncomplete=()=>res(r&&r.result);tx.onerror=()=>rej(tx.error);};});}
 const setFolderStatus=(html)=>{$('folderStatus').innerHTML=html;};
 $('pickFolder').onclick=async()=>{
+  if(!dirHandle&&savedHandle&&await ensureDir())return; // 記憶済みフォルダは許可だけで再接続
   try{ dirHandle=await window.showDirectoryPicker({mode:'readwrite'}); savedHandle=dirHandle;
     try{await idb('readwrite',st=>st.put(dirHandle,'dir'));}catch(_){}
     setFolderStatus('<span class="ok-t">フォルダ選択済み：'+dirHandle.name+'（次回から自動）</span>'); }
@@ -399,6 +400,7 @@ function compareRow(base,cur){
 $('evalBtn').onclick=async()=>{
   await ensureDir(); // 記憶したフォルダに接続（最初に呼ぶ：許可ダイアログはクリック直後のみ可）
   const id=$('fId').value.trim();
+  if(!pdfLoaded){ $('result').innerHTML=`<div class="verdict info"><h2>PDFを読み込んでください</h2>${dirHandle?'フォルダは接続済みです。':''}LATITUDEのPDFをドロップしてから、もう一度押してください。</div>`;return; }
   if(!curSig){ $('result').innerHTML='<div class="verdict bad"><h2>波形が未取得</h2>S-ECGの枠を指定してください。</div>';return; }
   if(!id){ $('result').innerHTML='<div class="verdict bad"><h2>患者IDがありません</h2>IDを入力してください。</div>';return; }
   const tpls=[curSig,curSig2].map(sg=>sg?Array.from(foldTemplate(resample(sg,1000))):null);
