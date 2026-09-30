@@ -76,6 +76,7 @@
       <div class="field"><label>照会日</label><input id="fDate" placeholder="自動抽出"></div>
       <div class="field"><label>デバイス</label><input id="fDev" placeholder="自動抽出"></div>
       <div class="hint">自動抽出が違う場合は直接修正してください（IDが正しければ自動照合されます）。</div>
+      <div id="dbg" class="hint" style="margin-top:8px;padding:8px;background:#0a1320;border:1px solid var(--line);border-radius:8px;word-break:break-all">抽出テキスト：（PDFを読み込むと表示）</div>
       <div style="margin-top:10px"><button class="primary" id="evalBtn">🔍 前回と比較して評価</button></div>
       <div id="result"></div>
     </div>
@@ -184,9 +185,10 @@ function extractFields(items){
   const nameCand=(lines.find(l=>/[一-鿿]/.test(l)&&l.length<=12&&!/年|月|日/.test(l)&&!bad.test(l))||'').replace(/[（(].*?[）)]/g,'').trim();
   $('fId').value=idCand||''; $('fName').value=nameCand; $('fDate').value=interro; $('fDev').value=dev;
   meta={id:idCand||'',name:nameCand,date:interro,device:dev};
-  // デバッグ：抽出テキスト先頭を表示（スクショで調整用）
-  $('cropHint').innerHTML = (crop?'S-ECG枠は記憶済み（引き直すには✂️）。':'初回のみ：S-ECG波形の上をドラッグして枠を指定してください。')
-    + `<br><span class="hint">抽出テキスト先頭：<code style="color:#7c8aa0">${(t.slice(0,120)||'（空＝文字を取得できませんでした）').replace(/</g,'&lt;')}</code></span>`;
+  // デバッグ：抽出できた文字項目数と先頭テキストを常時表示（スクショで調整用）
+  const dbg=$('dbg');
+  if(dbg) dbg.innerHTML = `文字項目数：<b>${items.length}</b>／文字数：<b>${t.length}</b><br>抽出テキスト先頭：<code style="color:#7c8aa0">${(t.slice(0,180)||'（空＝pdf.jsが文字を取得できませんでした→OCR方式に切替が必要）').replace(/</g,'&lt;')}</code>`;
+  $('cropHint').innerHTML = (crop?'S-ECG枠は記憶済み（引き直すには✂️）。':'初回のみ：S-ECG波形の上段1列を横長にドラッグして枠を指定してください。');
 }
 function autoTrace(){
   if(!crop)return;
