@@ -78,6 +78,7 @@
       <div class="field"><label>デバイス</label><input id="fDev" placeholder="自動抽出"></div>
       <div class="hint">自動抽出が違う場合は直接修正してください（IDが正しければ自動照合されます）。</div>
       <div id="dbg" class="hint" style="margin-top:8px;padding:8px;background:#0a1320;border:1px solid var(--line);border-radius:8px;word-break:break-all">抽出テキスト：（PDFを読み込むと表示）</div>
+      <div id="ocrDbg" class="hint" style="margin-top:6px"></div>
       <div style="margin-top:10px"><button class="primary" id="evalBtn">🔍 前回と比較して評価</button></div>
       <div id="result"></div>
     </div>
@@ -168,15 +169,15 @@ async function ocrId(){
   const im=tc.getImageData(0,0,tmp.width,tmp.height),D=im.data;
   for(let i=0;i<D.length;i+=4){const l=(D[i]+D[i+1]+D[i+2])/3,v=l<130?0:255;D[i]=D[i+1]=D[i+2]=v;}
   tc.putImageData(im,0,0);
-  $('dbg').innerHTML='🔎 OCR実行中…（初回はライブラリ読込に少し時間がかかります）';
+  $('ocrDbg').innerHTML='🔎 OCR実行中…（初回はライブラリ読込に少し時間がかかります）';
   try{
     const T=await ensureTesseract();
     const {data}=await T.recognize(tmp,'eng',{tessedit_char_whitelist:'0123456789'});
     const digits=(data.text.match(/\d/g)||[]).join('');
     const id=(digits.match(/\d{8}/)||[digits])[0]||'';
     if(id) $('fId').value=id; // 取れた時だけ反映（空で上書きしない）
-    $('dbg').innerHTML += `<br>OCR読取：<code>${(data.text.trim()||'（空）').replace(/</g,'&lt;')}</code> → <b>ID候補：${id||'（8桁が取れませんでした）'}</b>`;
-  }catch(e){ $('dbg').innerHTML='OCR失敗：'+e+'<br><span class="hint">ネット接続が必要です（初回のみ）。院内で遮断されている場合は同梱OCRに切替します。</span>'; }
+    $('ocrDbg').innerHTML = `OCR読取：<code>${(data.text.trim()||'（空）').replace(/</g,'&lt;')}</code> → <b>ID候補：${id||'（8桁が取れませんでした）'}</b>`;
+  }catch(e){ $('ocrDbg').innerHTML='OCR失敗：'+e; }
 }
 $('teachId').onclick=()=>{ if(!pageBackup.width){alert('先にPDFを読み込んでください');return;} drawMode='id'; $('dbg').innerHTML='<b>IDの数字の上をドラッグして囲んでください</b>（8桁の数字だけを枠に入れる）。'; };
 
