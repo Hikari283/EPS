@@ -150,24 +150,29 @@ let renderScale=1.6, curSig=null, meta={};
 // LATITUDEはpdf.jsのgetTextContentが空を返すため、圧縮ストリームを直接展開して数字（ID・日付）を得る。
 async function inflateMaybe(bytes){
   for(const fmt of ['deflate','deflate-raw']){
-    try{const ds=new DecompressionStream(fmt);const w=ds.writable.getWriter();w.write(bytes);w.close();
-      return new Uint8Array(await new Response(ds.readable).arrayBuffer());}catch(e){}
+    try{const ds=new DecompressionStream(fmt);const rd=new Response(ds.readable).arrayBuffer();
+      const w=ds.writable.getWriter();await w.write(bytes);await w.close();
+      return new Uint8Array(await rd);}catch(e){}
   }
   return null;
 }
+let rawDiag={streams:0,inflated:0};
 async function extractRawPdfText(ab){
   const bytes=new Uint8Array(ab);
   let bin='';const CH=8192;for(let o=0;o<bytes.length;o+=CH)bin+=String.fromCharCode.apply(null,bytes.subarray(o,o+CH));
-  let text='',i=0;
+  let text='',i=0,streams=0,inflated=0;
   while((i=bin.indexOf('stream',i))!==-1){
+    if(bin.substr(i-3,3)==='end'){i+=6;continue;}
+    streams++;
     let start=i+6;if(bytes[start]===13)start++;if(bytes[start]===10)start++;
     const end=bin.indexOf('endstream',start);if(end===-1){i=start+6;continue;}
     const dec=await inflateMaybe(bytes.subarray(start,end));i=end+9;
-    if(!dec)continue;
+    if(!dec)continue; inflated++;
     let s='';for(let o=0;o<dec.length;o+=CH)s+=String.fromCharCode.apply(null,dec.subarray(o,o+CH));
     for(const m of s.matchAll(/\(((?:[^()\\]|\\.)*)\)\s*Tj/g))text+=m[1]+' ';
     for(const m of s.matchAll(/\[([^\]]*)\]\s*TJ/g)){for(const p of m[1].matchAll(/\(((?:[^()\\]|\\.)*)\)/g))text+=p[1];text+=' ';}
   }
+  rawDiag={streams,inflated};
   return text.replace(/\\([()\\])/g,'$1').replace(/[\x00-\x1f\x7f]/g,'').replace(/ +/g,'');
 }
 const cropKey='pg_lat_crop';
@@ -257,7 +262,7 @@ function extractFields(items, annotStrs, rawPdfText){
   meta={id:idCand||'',name:nameCand,date:interro,device:dev};
   // デバッグ：文字項目数＋注釈数＋抽出テキスト先頭を表示
   const dbg=$('dbg');
-  if(dbg) dbg.innerHTML = `文字項目：<b>${items.length}</b>／注釈：<b>${annotStrs.length}</b>／自前抽出：<b>${rawPdfText.length}</b>字`
+  if(dbg) dbg.innerHTML = `文字項目：<b>${items.length}</b>／注釈：<b>${annotStrs.length}</b>／自前抽出：<b>${rawPdfText.length}</b>字（stream ${rawDiag.streams}／展開 ${rawDiag.inflated}）`
     + `<br>ID:<b>${idCand||'—'}</b> 氏名:<b>${nameCand||'—'}</b> 照会:<b>${interro||'—'}</b> 機種:<b>${dev||'—'}</b>`;
   $('cropHint').innerHTML = (crop?'S-ECG枠は記憶済み（引き直すには✂️）。':'初回のみ：S-ECG波形の上段1列を横長にドラッグして枠を指定してください。');
 }
