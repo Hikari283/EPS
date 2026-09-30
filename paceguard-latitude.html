@@ -56,6 +56,7 @@
     <span class="status" id="folderStatus">フォルダ未選択（比較結果の保存に必要）</span>
     <span style="flex:1"></span>
     <button id="redrawCrop">✂️ S-ECGの切り出し枠を引き直す</button>
+    <button id="teachId">🔢 IDの位置を教える</button>
     <button id="demoBtn">▶ 動作デモ</button>
   </div>
 
@@ -146,6 +147,38 @@ let pageCanvas=$('page'), pctx=pageCanvas.getContext('2d');
 let renderScale=1.6, curSig=null, meta={};
 const cropKey='pg_lat_crop';
 let crop=JSON.parse(localStorage.getItem(cropKey)||'null'); // 正規化 {x,y,w,h}（0-1）
+const idBoxKey='pg_lat_idbox';
+let idBox=JSON.parse(localStorage.getItem(idBoxKey)||'null');
+let drawMode='crop'; // 'crop' | 'id'
+// ---- 数字OCR（Tesseract.js を遅延読み込み。院内実データで完結・PHIは端末外に出ません）----
+let _tess=null;
+function ensureTesseract(){
+  if(window.Tesseract)return Promise.resolve(window.Tesseract);
+  if(_tess)return _tess;
+  _tess=new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.0/tesseract.min.js';s.onload=()=>res(window.Tesseract);s.onerror=()=>rej(new Error('Tesseract読込失敗'));document.head.appendChild(s);});
+  return _tess;
+}
+async function ocrId(){
+  if(!idBox||!pageBackup.width)return;
+  const r={x:idBox.x*pageCanvas.width,y:idBox.y*pageCanvas.height,w:idBox.w*pageCanvas.width,h:idBox.h*pageCanvas.height};
+  const sc=3,tmp=document.createElement('canvas');tmp.width=Math.max(1,r.w*sc);tmp.height=Math.max(1,r.h*sc);
+  const tc=tmp.getContext('2d');tc.imageSmoothingEnabled=false;
+  tc.drawImage(pageBackup,r.x,r.y,r.w,r.h,0,0,tmp.width,tmp.height);
+  // 2値化（数字を黒くくっきり）
+  const im=tc.getImageData(0,0,tmp.width,tmp.height),D=im.data;
+  for(let i=0;i<D.length;i+=4){const l=(D[i]+D[i+1]+D[i+2])/3,v=l<130?0:255;D[i]=D[i+1]=D[i+2]=v;}
+  tc.putImageData(im,0,0);
+  $('dbg').innerHTML='🔎 OCR実行中…（初回はライブラリ読込に少し時間がかかります）';
+  try{
+    const T=await ensureTesseract();
+    const {data}=await T.recognize(tmp,'eng',{tessedit_char_whitelist:'0123456789'});
+    const digits=(data.text.match(/\d/g)||[]).join('');
+    const id=(digits.match(/\d{8}/)||[digits])[0]||'';
+    $('fId').value=id;
+    $('dbg').innerHTML=`OCR読取：<code>${(data.text.trim()||'（空）').replace(/</g,'&lt;')}</code> → <b>ID候補：${id||'（8桁が取れませんでした）'}</b>`;
+  }catch(e){ $('dbg').innerHTML='OCR失敗：'+e+'<br><span class="hint">ネット接続が必要です（初回のみ）。院内で遮断されている場合は同梱OCRに切替します。</span>'; }
+}
+$('teachId').onclick=()=>{ if(!pageBackup.width){alert('先にPDFを読み込んでください');return;} drawMode='id'; $('dbg').innerHTML='<b>IDの数字の上をドラッグして囲んでください</b>（8桁の数字だけを枠に入れる）。'; };
 
 async function loadPDF(file){
   try{
@@ -160,6 +193,7 @@ async function loadPDF(file){
     const tc=await page.getTextContent();
     extractFields(tc.items.map(it=>({s:it.str,x:it.transform[4],y:it.transform[5]})));
     if(crop) autoTrace();
+    if(idBox){ drawIdBox(); ocrId(); }
   }catch(e){ $('result').innerHTML=`<div class="verdict bad"><h2>PDF読み込みエラー</h2>${e}<br><span class="hint">pdf.jsの読み込みにインターネットが必要です（初回のみ）。院内でCDNが塞がれている場合はpdf.jsを同梱版に切り替えます。</span></div>`; }
 }
 function extractFields(items){
@@ -198,6 +232,7 @@ function autoTrace(){
   showSigPreview();
 }
 function drawCropBox(r){ pctx.save();pctx.strokeStyle='#38bdf8';pctx.lineWidth=2;pctx.setLineDash([6,4]);pctx.strokeRect(r.x,r.y,r.w,r.h);pctx.setLineDash([]);pctx.restore(); }
+function drawIdBox(){ if(!idBox)return;const r={x:idBox.x*pageCanvas.width,y:idBox.y*pageCanvas.height,w:idBox.w*pageCanvas.width,h:idBox.h*pageCanvas.height};pctx.save();pctx.strokeStyle='#fbbf24';pctx.lineWidth=2;pctx.setLineDash([4,3]);pctx.strokeRect(r.x,r.y,r.w,r.h);pctx.setLineDash([]);pctx.restore(); }
 // 描画したページのバックアップ（ドラッグ中の再描画用）
 let pageBackup=document.createElement('canvas');
 function savePageBackup(){ pageBackup.width=pageCanvas.width;pageBackup.height=pageCanvas.height;pageBackup.getContext('2d').drawImage(pageCanvas,0,0); }
@@ -221,10 +256,17 @@ pageCanvas.addEventListener('mousemove',e=>{if(!dragging)return;const b=pageCanv
 });
 pageCanvas.addEventListener('mouseup',e=>{if(!dragging)return;dragging=false;const b=pageCanvas.getBoundingClientRect();const sc=pageCanvas.width/b.width;const x=(e.clientX-b.left)*sc,y=(e.clientY-b.top)*sc;
   const r={x:Math.min(sx,x),y:Math.min(sy,y),w:Math.abs(x-sx),h:Math.abs(y-sy)};
-  if(r.w<15||r.h<8){restorePage();return;}
+  if(r.w<10||r.h<6){restorePage();return;}
+  if(drawMode==='id'){
+    idBox={x:r.x/pageCanvas.width,y:r.y/pageCanvas.height,w:r.w/pageCanvas.width,h:r.h/pageCanvas.height};
+    localStorage.setItem(idBoxKey,JSON.stringify(idBox));drawMode='crop';
+    restorePage();pctx.save();pctx.strokeStyle='#fbbf24';pctx.lineWidth=2;pctx.setLineDash([4,3]);pctx.strokeRect(r.x,r.y,r.w,r.h);pctx.setLineDash([]);pctx.restore();
+    if(crop)autoTrace(); ocrId();
+    return;
+  }
   crop={x:r.x/pageCanvas.width,y:r.y/pageCanvas.height,w:r.w/pageCanvas.width,h:r.h/pageCanvas.height};
   localStorage.setItem(cropKey,JSON.stringify(crop));
-  restorePage();curSig=traceRegion(pctx,r);drawCropBox(r);showSigPreview();
+  restorePage();curSig=traceRegion(pctx,r);drawCropBox(r);if(idBox)drawIdBox();showSigPreview();
 });
 $('redrawCrop').onclick=()=>{crop=null;localStorage.removeItem(cropKey);restorePage();$('cropHint').textContent='S-ECG波形の上をドラッグして枠を指定してください。';$('sigPreview').style.display='none';$('traceMsg').textContent='';};
 
