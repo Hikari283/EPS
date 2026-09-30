@@ -147,7 +147,18 @@ function traceRegion(ctx,r){
   for(let x=last+1;x<W;x++)sig[x]=sig[last];
   // 平滑化
   const sm=new Float32Array(W);for(let x=0;x<W;x++){let s=0,n=0;for(let k=-1;k<=1;k++){const j=x+k;if(j>=0&&j<W){s+=sig[j];n++;}}sm[x]=s/n;}
+  sm.raw=sig; // ノイズ検出用に平滑化前も保持
   return sm;
+}
+// ノイズ検出：細かい上下の折り返し（ギザギザ）が局所的に多い区間を探す。前回データ不要（同じ列の中で比較）。
+function noiseScan(sig){
+  const x=sig.raw||sig,n=x.length;const res={max:0,med:0,thr:8,bad:[],W:0};if(n<40)return res;
+  const d=new Float32Array(n-1);for(let i=0;i<n-1;i++)d[i]=x[i+1]-x[i];
+  const W=Math.max(16,Math.round(n/24)),step=W>>1,wins=[];
+  for(let st=0;st+W<=n-1;st+=step){let c=0;for(let i=st+1;i<st+W;i++)if(d[i]*d[i-1]<0&&Math.abs(d[i])>=1&&Math.abs(d[i-1])>=1)c++;wins.push({st,c});}
+  const cs=wins.map(w=>w.c).sort((a,b)=>a-b);
+  res.W=W;res.med=cs[cs.length>>1]||0;res.max=cs[cs.length-1]||0;res.thr=Math.max(8,3*(res.med+1));
+  res.bad=wins.filter(w=>w.c>=res.thr);return res;
 }
 
 // ===== PDF 読み込み・描画・抽出 =====
@@ -309,7 +320,9 @@ function restorePage(){ if(pageBackup.width){pctx.drawImage(pageBackup,0,0);} }
 function drawSigPreview(cv,sig){
   if(!sig||!sig.length){cv.style.display='none';return;}
   cv.style.display='block';const W=cv.clientWidth||520;cv.width=W;cv.height=70;const c=cv.getContext('2d');
-  c.fillStyle='#050a12';c.fillRect(0,0,W,70);const n=normalize(Array.from(sig));const mx=Math.max(1,...n.map(Math.abs));
+  c.fillStyle='#050a12';c.fillRect(0,0,W,70);
+  const nz=noiseScan(sig);c.fillStyle='rgba(248,113,113,.28)';for(const b of nz.bad)c.fillRect(b.st*(W-1)/(sig.length-1),0,nz.W*(W-1)/(sig.length-1),70);
+  const n=normalize(Array.from(sig));const mx=Math.max(1,...n.map(Math.abs));
   c.strokeStyle='#34d399';c.lineWidth=1.4;c.beginPath();for(let i=0;i<n.length;i++){const x=i*(W-1)/(n.length-1),y=35-n[i]/mx*30;i?c.lineTo(x,y):c.moveTo(x,y);}c.stroke();
 }
 function showSigPreview(){
@@ -410,32 +423,42 @@ $('evalBtn').onclick=async()=>{
   const now={id,name:$('fName').value,date:$('fDate').value,device:$('fDev').value,ts:Date.now()};
   now.templates=tpls.map((t,k)=>t||baseTpls[k]||null); now.template=now.templates[0];
   const rowName=['上段','下段'];
+  now.crops=[crop,crop2];
+  // ノイズ（前回不要・今回の波形だけで判定）
+  const noise=[curSig,curSig2].map(sg=>sg?noiseScan(sg):null);
+  const noiseFlags=noise.map((z,k)=>z&&z.bad.length?`${rowName[k]}：ノイズ疑い（ギザギザ区間 ${z.bad.length}か所・最大 ${z.max}／閾値 ${z.thr}）＝オーバーセンシング・リード/接触不良などを要確認。プレビューの赤い帯の位置です。`:null).filter(Boolean);
+  const noiseHtml=noiseFlags.length?`<div class="verdict bad" style="margin-top:10px"><b>⚠️ ノイズ</b><br>${noiseFlags.join('<br>')}</div>`:'';
+  // 枠が前回と違うと同じ波形でも一致しない → 警告＋基準の取り直しボタン
+  const cropMoved=base&&base.crops&&[0,1].some(k=>{const p=base.crops[k],q=now.crops[k];if(!p||!q)return false;return ['x','y','w','h'].some(f=>Math.abs(p[f]-q[f])>0.01);});
+  // 基準は毎回「今回」に更新されるので、枠を変えた回の比較だけが参考値になる
+  const reRegHtml=cropMoved?'<div class="hint" style="margin-top:8px"><span class="warn-t">⚠️ 切り出し枠が前回と違うため、今回の比較は参考値です（同じ波形でも一致しにくい）。今回の枠で基準を更新したので、次回から正しく比較されます。</span></div>':'';
   const rows=[0,1].filter(k=>tpls[k]&&baseTpls[k]).map(k=>({k,...compareRow(baseTpls[k],tpls[k])}));
   if(!rows.length){
     await writeBaseline(id,{...now,history:[...(base&&base.history||[]),{date:now.date,note:'初回登録'}]});
-    $('result').innerHTML=`<div class="verdict info"><h2>初回登録しました</h2>この患者（ID:${id}）の基準波形（${tpls[1]?'上段・下段':'上段'}）として保存しました。次回レポートから自動比較されます。${dirHandle?'':'<br><b>※フォルダ未選択のため保存できていません。</b>'}</div>`;
+    $('result').innerHTML=`<div class="verdict info"><h2>初回登録しました</h2>この患者（ID:${id}）の基準波形（${tpls[1]?'上段・下段':'上段'}）として保存しました。次回レポートから自動比較されます。${dirHandle?'':'<br><b>※フォルダ未選択のため保存できていません。</b>'}</div>${noiseHtml}`;
     $('overlayCard').hidden=true; return;
   }
   const newRows=[0,1].filter(k=>tpls[k]&&!baseTpls[k]).map(k=>rowName[k]);
-  const changed=rows.some(r=>r.flags.length);
+  const changed=rows.some(r=>r.flags.length)||noiseFlags.length>0;
   const m=(k,v,u,f,g)=>`<div class="m ${f?'flag':(g?'good':'')}"><div class="k">${k}</div><div class="v">${v}<small>${u||''}</small></div></div>`;
-  const rowHtml=r=>`<div style="margin-top:10px"><b>${rowName[r.k]}</b>：${r.flags.length?r.flags.map(f=>'<br>・'+f).join(''):'有意な変化なし'}</div>
-    <div class="metrics">${m(rowName[r.k]+' 波形相関',r.corr.toFixed(3),'',r.corr<THR,r.corr>=THR)}${m(rowName[r.k]+' 振幅比',(r.ampRatio*100).toFixed(0),'%',r.ampRatio<0.7||r.ampRatio>1.4,r.ampRatio>=0.85&&r.ampRatio<=1.18)}${m(rowName[r.k]+' 幅比',r.widthRatio.toFixed(2),'倍',r.widthRatio>1.4,r.widthRatio<=1.15)}</div>`;
+  const rowHtml=r=>`<div style="margin-top:10px"><b>${rowName[r.k]}</b>：${r.flags.length?r.flags.map(f=>'<br>・'+f).join(''):'有意な形態変化なし'}</div>
+    <div class="metrics">${m(rowName[r.k]+' 波形相関',r.corr.toFixed(3),'',r.corr<THR,r.corr>=THR)}${m(rowName[r.k]+' 振幅比',(r.ampRatio*100).toFixed(0),'%',r.ampRatio<0.7||r.ampRatio>1.4,r.ampRatio>=0.85&&r.ampRatio<=1.18)}${m(rowName[r.k]+' 幅比',r.widthRatio.toFixed(2),'倍',r.widthRatio>1.4,r.widthRatio<=1.15)}${noise[r.k]?m(rowName[r.k]+' ノイズ',noise[r.k].max,'/'+noise[r.k].thr,noise[r.k].bad.length>0,noise[r.k].bad.length===0):''}</div>`;
   $('result').innerHTML=`<div class="verdict ${changed?'bad':'ok'}"><h2>${changed?'⚠️ 変化あり — 要確認':'✅ 変化なし（前回と同等）'}</h2>
     <div>前回：${base.date||'?'} → 今回：${now.date||'?'}</div>
     ${rows.map(rowHtml).join('')}
-    ${newRows.length?`<div class="hint" style="margin-top:8px">${newRows.join('・')}は前回データが無いため、今回を基準として登録しました（次回から比較）。</div>`:''}</div>`;
+    ${newRows.length?`<div class="hint" style="margin-top:8px">${newRows.join('・')}は前回データが無いため、今回を基準として登録しました（次回から比較）。</div>`:''}
+    ${reRegHtml}</div>${noiseHtml}`;
   // 履歴更新＋baselineは最新に更新（運用に応じて固定も可）。corr/ampは上段（旧形式互換）。
   const r0=rows.find(r=>r.k===0)||rows[0];
   const history=(base.history||[]).concat([{date:now.date,corr:+r0.corr.toFixed(3),amp:+r0.ampRatio.toFixed(2),changed,
-    rows:rows.map(r=>({row:rowName[r.k],corr:+r.corr.toFixed(3),amp:+r.ampRatio.toFixed(2),width:+r.widthRatio.toFixed(2),changed:r.flags.length>0}))}]);
+    rows:rows.map(r=>({row:rowName[r.k],corr:+r.corr.toFixed(3),amp:+r.ampRatio.toFixed(2),width:+r.widthRatio.toFixed(2),noise:noise[r.k]?noise[r.k].max:null,changed:r.flags.length>0||!!(noise[r.k]&&noise[r.k].bad.length)}))}]);
   await writeBaseline(id,{...now,history});
   const r1=rows.find(r=>r.k===0), r2=rows.find(r=>r.k===1);
+  $('row2Wrap').hidden=!r2; $('overlayCard').hidden=false; // 先に表示してから描く（幅を正しく取るため）
   if(r1) drawOverlay(r1.a,r1.b,r1.lag); else { $('overlay').getContext('2d').clearRect(0,0,$('overlay').width,$('overlay').height); $('diff').getContext('2d').clearRect(0,0,$('diff').width,$('diff').height); }
-  $('row2Wrap').hidden=!r2; $('overlayCard').hidden=false;
   if(r2) drawOverlay(r2.a,r2.b,r2.lag,'overlay2','diff2');
 };
-function drawOverlay(a,b,lag,ovId='overlay',diffId='diff'){const cv=$(ovId);const W=cv.clientWidth||900;cv.width=W;cv.height=180;const c=cv.getContext('2d');c.clearRect(0,0,W,180);
+function drawOverlay(a,b,lag,ovId='overlay',diffId='diff'){const cv=$(ovId);const W=cv.parentElement.clientWidth||900;cv.width=W;cv.height=180;const c=cv.getContext('2d');c.clearRect(0,0,W,180);
   const A=normalize(Array.from(a)),B=normalize(Array.from(b));const mx=Math.max(1,...A.map(Math.abs),...B.map(Math.abs));
   const pl=(arr,col,off)=>{c.strokeStyle=col;c.lineWidth=1.8;c.beginPath();for(let i=0;i<arr.length;i++){const x=i*(W-1)/(arr.length-1),y=90-(arr[i+off]||arr[i])/mx*72;i?c.lineTo(x,y):c.moveTo(x,y);}c.stroke();};
   c.strokeStyle='#1a2740';c.beginPath();c.moveTo(0,90);c.lineTo(W,90);c.stroke();pl(A,'#38bdf8',0);pl(B,'#fbbf24',lag);
@@ -452,7 +475,7 @@ $('demoBtn').onclick=()=>{
   const ampRatio=(std(Array.from(b)))/(std(Array.from(a)));const widthRatio=qrsWidth(b)/qrsWidth(a);
   $('fId').value='DEMO001';$('fName').value='デモ 太郎';$('fDate').value='2026年09月28日';$('fDev').value='EMBLEM MRI S-ICD';
   $('result').innerHTML=`<div class="verdict bad"><h2>⚠️ 変化あり — 要確認（デモ）</h2><div>前回:2026年06月01日 → 今回:2026年09月28日</div><div>・S-ECG波形の相関が低下（${corr.toFixed(3)}）＝形態変化（新規伝導異常/リード移動などを要確認）</div><div class="metrics"><div class="m flag"><div class="k">波形相関</div><div class="v">${corr.toFixed(3)}</div></div><div class="m"><div class="k">振幅比</div><div class="v">${(ampRatio*100).toFixed(0)}%</div></div><div class="m"><div class="k">幅比</div><div class="v">${widthRatio.toFixed(2)}倍</div></div></div></div>`;
-  drawOverlay(a,b,lag);$('row2Wrap').hidden=true;$('overlayCard').hidden=false;
+  $('row2Wrap').hidden=true;$('overlayCard').hidden=false;drawOverlay(a,b,lag);
 };
 </script>
 </body>
