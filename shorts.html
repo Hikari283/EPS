@@ -193,9 +193,16 @@
   <label class="row hint"><input type="checkbox" id="safe" checked> 文字を置かない範囲（各アプリのボタン等）を表示（書き出しには入りません）</label>
   <div class="row">
     <span class="lbl">レイアウト</span>
-    <select id="mode"><option value="blur">全体を表示（上下ぼかし）</option><option value="crop">画面いっぱいに切り抜き</option></select>
+    <select id="mode">
+      <option value="auto" selected>全画面・人物/動きに自動追従</option>
+      <option value="crop">全画面・位置を固定</option>
+      <option value="band">上下に帯（見出し＋映像＋字幕）</option>
+      <option value="blur">全体を表示＋ぼかし背景</option>
+    </select>
   </div>
-  <div class="row"><span class="lbl">左右</span><input id="pos" type="range" min="0" max="100" value="50"></div>
+  <div class="row" id="posRow" hidden><span class="lbl">左右の位置</span><input id="pos" type="range" min="0" max="100" value="50"></div>
+  <div class="row" id="bandRow" hidden><span class="lbl">帯の色</span><input id="bandColor" type="color" value="#14202c">
+    <span class="pills" id="bandPre"><button data-c="#14202c">紺</button><button data-c="#111111">黒</button><button data-c="#f4efe6">生成り</button><button data-c="#2f5d50">深緑</button><button data-c="#7a3b2e">レンガ</button></span></div>
   <div class="row"><span class="lbl">拡大</span><input id="zoom" type="range" min="100" max="250" value="100"></div>
   <div class="row"><span class="lbl">字幕の大きさ</span><input id="fs" type="range" min="50" max="110" value="72"></div>
 </div>
@@ -311,19 +318,51 @@ function fitSize(txt,maxW,start,min){let s=start;for(;s>min;s-=4){cx.font=`900 $
 
 // ---------- 映像 ----------
 const fxLvl=()=>+(document.querySelector('#fxLevel .on')||{dataset:{v:1}}).dataset.v;
-const small=document.createElement('canvas');small.width=54;small.height=96;const sctx=small.getContext('2d');
-function drawFrame(img,iw,ih,extraZoom=1){
+// ---- 自動追従カメラ：縮小フレームで「肌色」と「動き」が多い列を探し、なめらかに横移動する ----
+const ana=document.createElement('canvas');ana.width=160;ana.height=90;const actx=ana.getContext('2d',{willReadFrequently:true});
+let prevLum=null;const cam={x:.5,target:.5};
+function analyzeX(img,iw,ih,useMotion){
+  if(!iw||!ih)return null;const AW=160,AH=Math.max(20,Math.round(160*ih/iw));if(ana.height!==AH){ana.height=AH;prevLum=null;}
+  actx.drawImage(img,0,0,AW,AH);const d=actx.getImageData(0,0,AW,AH).data,col=new Float32Array(AW),lum=new Float32Array(AW*AH);
+  for(let y=0;y<AH;y++)for(let x=0;x<AW;x++){const i=(y*AW+x)*4,r=d[i],g=d[i+1],b=d[i+2],L=.3*r+.59*g+.11*b;lum[y*AW+x]=L;
+    if(r>95&&g>40&&b>20&&r>g&&r>b&&r-Math.min(g,b)>15&&Math.abs(r-g)>15)col[x]+=1;           // 肌色（人物）
+    if(useMotion&&prevLum&&Math.abs(L-prevLum[y*AW+x])>18)col[x]+=1.5;}                          // 動き
+  prevLum=lum;
+  const sm=new Float32Array(AW);let tot=0;for(let x=0;x<AW;x++){let a=0;for(let k=-10;k<=10;k++){const j=x+k;if(j>=0&&j<AW)a+=col[j];}sm[x]=a;tot+=col[x];}
+  if(tot<AH*1.5)return null; // 手がかりが少ない＝今の位置のまま
+  let bx=0;for(let x=1;x<AW;x++)if(sm[x]>sm[bx])bx=x;
+  let w=0,m=0;for(let x=Math.max(0,bx-25);x<=Math.min(AW-1,bx+25);x++){w+=col[x];m+=col[x]*x;}
+  return w?(m/w+.5)/AW:(bx+.5)/AW;
+}
+function camUpdate(img,iw,ih,snap){
+  if(snap)prevLum=null;
+  const t=analyzeX(img,iw,ih,!snap);
+  if(t!=null&&(snap||Math.abs(t-cam.target)>0.06))cam.target=t;  // 小さな揺れは無視（カメラがふらつかない）
+  cam.x=snap?cam.target:cam.x+(cam.target-cam.x)*0.07;
+  return cam.x;
+}
+// ---- フレーム描画（レイアウト別）。LY に文字の置き場所を返す ----
+let LY={band:false};
+const blurC=document.createElement('canvas');blurC.width=216;blurC.height=384;const bctx=blurC.getContext('2d');
+function coverDraw(img,iw,ih,zoom,camX){ // 9:16全面に、camXを中心にして切り抜き
+  const s=Math.max(H/ih,W/iw)*zoom,dw=iw*s,dh=ih*s;let dx=W/2-camX*dw;dx=Math.min(0,Math.max(W-dw,dx));cx.drawImage(img,dx,(H-dh)/2,dw,dh);}
+function drawFrame(img,iw,ih,extraZoom=1,camX=.5){
+  const mode=$('mode').value;LY={band:false};
   cx.fillStyle='#000';cx.fillRect(0,0,W,H);if(!iw||!ih)return;
-  const pos=$('pos').value/100,zoom=$('zoom').value/100*extraZoom,color=$('fxColor').checked&&fxLvl()>0;
-  if(color)cx.filter='contrast(1.07) saturate(1.18)';
-  if($('mode').value==='crop'){const s=Math.max(H/ih,W/iw)*zoom,dw=iw*s,dh=ih*s;cx.drawImage(img,(W-dw)*pos,(H-dh)/2,dw,dh);}
-  else{ // ぼかし背景は小さく描いて拡大（軽い）
-    const sb=Math.max(96/ih,54/iw);sctx.drawImage(img,(54-iw*sb)/2,(96-ih*sb)/2,iw*sb,ih*sb);
-    cx.imageSmoothingQuality='high';cx.drawImage(small,-20,-20,W+40,H+40);cx.filter='none';cx.fillStyle='rgba(0,0,0,.45)';cx.fillRect(0,0,W,H);
-    if(color)cx.filter='contrast(1.07) saturate(1.18)';
-    const s=(W/iw)*zoom,dw=iw*s,dh=ih*s;cx.drawImage(img,(W-dw)*pos,(H-dh)/2,dw,dh);}
-  cx.filter='none';
-  if(color){const g=cx.createRadialGradient(W/2,H/2,H*0.3,W/2,H/2,H*0.75);g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,'rgba(0,0,0,.35)');cx.fillStyle=g;cx.fillRect(0,0,W,H);}
+  const zoom=$('zoom').value/100*extraZoom,color=$('fxColor').checked&&fxLvl()>0,grade='contrast(1.07) saturate(1.18)';
+  if(mode==='crop')camX=$('pos').value/100;
+  if(mode==='auto'||mode==='crop'){if(color)cx.filter=grade;coverDraw(img,iw,ih,zoom,camX);cx.filter='none';}
+  else if(mode==='band'){
+    cx.fillStyle=$('bandColor').value;cx.fillRect(0,0,W,H);
+    const s=(W/iw)*zoom,dw=iw*s,dh=ih*s,vy=Math.round(H*0.44-dh/2);let dx=W/2-camX*dw;dx=Math.min(0,Math.max(W-dw,dx));
+    cx.save();cx.beginPath();cx.rect(0,vy,W,dh);cx.clip();if(color)cx.filter=grade;cx.drawImage(img,dx,vy,dw,dh);cx.filter='none';cx.restore();
+    LY={band:true,top:vy,bottom:vy+dh};
+  }else{ // ぼかし背景：小さいキャンバスで本物のぼかしをかけてから拡大（モザイクにならない）
+    const sb=Math.max(384/ih,216/iw);bctx.filter='blur(7px)';bctx.drawImage(img,(216-iw*sb)/2,(384-ih*sb)/2,iw*sb,ih*sb);bctx.filter='none';
+    cx.imageSmoothingEnabled=true;cx.imageSmoothingQuality='high';cx.drawImage(blurC,-30,-30,W+60,H+60);cx.fillStyle='rgba(0,0,0,.35)';cx.fillRect(0,0,W,H);
+    if(color)cx.filter=grade;const s=(W/iw)*zoom,dw=iw*s,dh=ih*s;let dx=W/2-camX*dw;dx=Math.min(0,Math.max(W-dw,dx));cx.drawImage(img,dx,(H-dh)/2,dw,dh);cx.filter='none';
+  }
+  if(color&&!LY.band){const g=cx.createRadialGradient(W/2,H/2,H*0.3,W/2,H/2,H*0.75);g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,'rgba(0,0,0,.35)');cx.fillStyle=g;cx.fillRect(0,0,W,H);}
 }
 function drawProgress(p){cx.fillStyle='rgba(255,255,255,.25)';cx.fillRect(0,0,W,14);cx.fillStyle=P.key==='ig'?'#d6249f':'#ff3d57';cx.fillRect(0,0,W*Math.min(1,p),14);}
 const stillV=document.createElement('canvas');
@@ -332,26 +371,30 @@ const ease=t=>1-Math.pow(1-Math.min(1,Math.max(0,t)),3);
 const back=t=>{t=Math.min(1,Math.max(0,t));const c=1.9;return 1+(c+1)*Math.pow(t-1,3)+c*Math.pow(t-1,2);}; // 少し行き過ぎて戻る
 
 // 1フレームの状態（全プラットフォーム共通）→ 各キャンバスに描く
+const LYmode=()=>$('mode').value;
 function renderFrame(f){
   const s=fxLvl();
   if(f.kind==='hook'){
     const shake=s?Math.max(0,1-f.t/0.35)*18*s:0;
     cx.save();cx.translate((Math.random()-.5)*shake,(Math.random()-.5)*shake);
-    drawFrame(stillV,stillV.width,stillV.height,1+0.04*s*f.t);cx.restore();
+    drawFrame(stillV,stillV.width,stillV.height,1+0.04*s*f.t,f.camX??cam.x);cx.restore();
     cx.fillStyle='rgba(0,0,0,.55)';cx.fillRect(0,0,W,H);
     if(s&&f.t<0.08){cx.fillStyle=`rgba(255,255,255,${0.6*(1-f.t/0.08)})`;cx.fillRect(0,0,W,H);}
     const txt=$('hook').value||'…',size=fitSize(txt,P.txtW+60,130,64),k=s?0.75+0.25*back(f.t/0.25):1; // 最初から読める大きさで出して弾ませる
     cx.save();cx.translate(P.txtCX,P.hookY);cx.scale(k,k);drawRich(txt,0,0,size,{anchor:'center',maxW:P.txtW+60});cx.restore();
   }else if(f.kind==='main'){
     const age=f.segAge,punch=s?0.12*s*(1-ease(age/0.28)):0,kb=1+0.05*s*Math.min(1,f.segP);
-    drawFrame(src,src.videoWidth,src.videoHeight,kb+punch);
+    drawFrame(src,src.videoWidth,src.videoHeight,LYmode()==='band'?1+(kb-1)*0.5:kb+punch,f.camX??cam.x);
     if(s&&age<0.14&&f.segIdx>0){cx.fillStyle=`rgba(255,255,255,${0.75*(1-age/0.14)})`;cx.fillRect(0,0,W,H);}
-    drawRich($('head').value,P.txtCX,P.headY,fitSize($('head').value,P.txtW,62,40),{box:true,stroke:0,maxW:P.txtW+40});
+    if(LY.band){ // 上の帯に大きな見出し、下の帯に字幕
+      const hy=Math.max(P.headY+40,LY.top/2+50),hs=fitSize($('head').value,P.txtW+40,92,52);drawRich($('head').value,P.txtCX,hy,hs,{anchor:'center',maxW:P.txtW+40,stroke:.16});
+    }else drawRich($('head').value,P.txtCX,P.headY,fitSize($('head').value,P.txtW,62,40),{box:true,stroke:0,maxW:P.txtW+40});
     if(f.cap){const pop=s?back(f.capAge/0.2):1,hl=hasHl(f.cap),sh=(s&&hl&&f.capAge<0.35)?Math.sin(f.capAge*70)*10*s*(1-f.capAge/0.35):0;
       const sz=+$('fs').value*(hl&&s?1.08:1);
-      cx.save();cx.translate(P.txtCX+sh,P.capY);cx.scale(pop,pop);drawRich(f.cap,0,0,sz,{anchor:'bottom',maxW:P.txtW});cx.restore();}
+      if(LY.band){cx.save();cx.translate(P.txtCX+sh,Math.min(LY.bottom+70,P.capY-sz*1.3));cx.scale(pop,pop);drawRich(f.cap,0,0,sz,{anchor:'top',maxW:P.txtW});cx.restore();}
+      else{cx.save();cx.translate(P.txtCX+sh,P.capY);cx.scale(pop,pop);drawRich(f.cap,0,0,sz,{anchor:'bottom',maxW:P.txtW});cx.restore();}}
   }else if(f.kind==='outro'){
-    drawFrame(stillV,stillV.width,stillV.height,1.06);cx.fillStyle='rgba(0,0,0,.62)';cx.fillRect(0,0,W,H);
+    drawFrame(stillV,stillV.width,stillV.height,1.06,f.camX??cam.x);cx.fillStyle='rgba(0,0,0,.62)';cx.fillRect(0,0,W,H);
     const k=s?back(f.t/0.35):1;cx.save();cx.translate(P.txtCX,P.key==='ig'?420:440);cx.scale(k,k);drawRich($('outroBig').value,0,0,fitSize($('outroBig').value,P.txtW+80,112,60),{anchor:'center',maxW:P.txtW+80});cx.restore();
     const a=ease(f.t/0.4),tw=780,th=439,tx=P.txtCX-tw/2,ty=(P.key==='ig'?600:620)+(1-a)*80;cx.globalAlpha=a;
     cx.save();cx.beginPath();cx.roundRect(tx,ty,tw,th,28);cx.clip();
@@ -386,11 +429,14 @@ function draw(){
   cx=out.getContext('2d');P=PLAT[pvPlat];
   if(lastPreviewFrame){renderFrame(lastPreviewFrame);drawSafe();return;}
   const r=segRanges()[cur]||segRanges()[0];
-  if(src.videoWidth)renderFrame({kind:'main',segAge:9,segP:0,segIdx:0,cap:capAt(src.currentTime,r),capAge:9,p:null});
+  if(src.videoWidth)renderFrame({kind:'main',camX:camUpdate(src,src.videoWidth,src.videoHeight,true),segAge:9,segP:0,segIdx:0,cap:capAt(src.currentTime,r),capAge:9,p:null});
   else{cx.fillStyle='#000';cx.fillRect(0,0,W,H);drawRich($('head').value,P.txtCX,P.headY,62,{box:true,stroke:0,maxW:P.txtW});drawRich('本編の動画を読み込むと\nここに表示されます',W/2,H/2,64,{anchor:'center',stroke:0,color:'#9aa3ad'});}
   drawSafe();
 }
-['mode','pos','zoom','fs','head','hook','outroBig','mainTitle','fxColor','safe'].forEach(id=>$(id).addEventListener('input',()=>{lastPreviewFrame=null;draw();updatePost();}));
+function syncModeUI(){const m=$('mode').value;$('posRow').hidden=m!=='crop';$('bandRow').hidden=m!=='band';}
+$('mode').addEventListener('input',syncModeUI);syncModeUI();
+$('bandPre').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;$('bandColor').value=b.dataset.c;lastPreviewFrame=null;draw();});
+['bandColor','mode','pos','zoom','fs','head','hook','outroBig','mainTitle','fxColor','safe'].forEach(id=>$(id).addEventListener('input',()=>{lastPreviewFrame=null;draw();updatePost();}));
 $('fxLevel').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;for(const x of $('fxLevel').children)x.classList.toggle('on',x===b);draw();});
 $('pvPlat').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;for(const x of $('pvPlat').children)x.classList.toggle('on',x===b);pvPlat=b.dataset.p;draw();});
 src.addEventListener('seeked',()=>{lastPreviewFrame=null;draw();});
@@ -425,27 +471,28 @@ async function runSequence(targets,onProgress,onReady){
   const paint=f=>{for(const tg of targets){cx=tg.ctx;P=PLAT[tg.plat];renderFrame(f);}lastPreviewFrame=f;onProgress(f.p);};
   engine.running=true;engine.stop=false;
   try{
-    await seek(rs[0].a);snapVideo();paint({kind:'hook',t:0,p:0});
+    await seek(rs[0].a);snapVideo();camUpdate(stillV,stillV.width,stillV.height,true);paint({kind:'hook',t:0,p:0,camX:cam.x});
     if(onReady)await onReady();
     sfx('boom');
     let t0=performance.now();
-    while(!engine.stop){const t=(performance.now()-t0)/1000;if(t>=HOOK_DUR)break;paint({kind:'hook',t,p:(base+t)/total});await nextFrame();}
+    while(!engine.stop){const t=(performance.now()-t0)/1000;if(t>=HOOK_DUR)break;paint({kind:'hook',t,p:(base+t)/total,camX:cam.x});await nextFrame();}
     base+=HOOK_DUR;
     for(let i=0;i<rs.length&&!engine.stop;i++){const r=rs[i];
-      await seek(r.a);sfx('whoosh');await src.play();const segT0=performance.now();let lastCap=null,capT0=0;
+      await seek(r.a);camUpdate(src,src.videoWidth,src.videoHeight,true);sfx('whoosh');await src.play();const segT0=performance.now();let lastCap=null,capT0=0;
       await new Promise(res=>{const tick=()=>{const now=performance.now(),cap=capAt(src.currentTime,r);
           if(cap!==lastCap){lastCap=cap;capT0=now;if(cap&&hasHl(cap))sfx('pop');}
-          paint({kind:'main',segIdx:i,segAge:(now-segT0)/1000,segP:(src.currentTime-r.a)/(r.b-r.a),cap,capAge:(now-capT0)/1000,p:(base+src.currentTime-r.a)/total});
+          const camX=$('mode').value==='crop'?null:camUpdate(src,src.videoWidth,src.videoHeight,false);
+          paint({kind:'main',camX,segIdx:i,segAge:(now-segT0)/1000,segP:(src.currentTime-r.a)/(r.b-r.a),cap,capAge:(now-capT0)/1000,p:(base+src.currentTime-r.a)/total});
           if(engine.stop||src.ended||src.currentTime>=r.b){res();return;}
           src.requestVideoFrameCallback?src.requestVideoFrameCallback(tick):requestAnimationFrame(tick);};tick();});
       src.pause();base+=r.b-r.a;}
     snapVideo();sfx('whoosh');setTimeout(()=>sfx('ding'),250);
     t0=performance.now();
-    while(!engine.stop){const t=(performance.now()-t0)/1000;if(t>=oDur)break;paint({kind:'outro',t,p:(base+t)/total});await nextFrame();}
+    while(!engine.stop){const t=(performance.now()-t0)/1000;if(t>=oDur)break;paint({kind:'outro',t,p:(base+t)/total,camX:cam.x});await nextFrame();}
   }finally{engine.running=false;src.pause();}
 }
 async function previewSeg(r){if(engine.running)return;engine.running=true;engine.stop=false;lastPreviewFrame=null;
-  try{await seek(r.a);await src.play();await new Promise(res=>{const tick=()=>{cx=out.getContext('2d');P=PLAT[pvPlat];renderFrame({kind:'main',segIdx:0,segAge:9,segP:0,cap:capAt(src.currentTime,r),capAge:9,p:null});drawSafe();if(engine.stop||src.currentTime>=r.b||src.ended){res();return;}requestAnimationFrame(tick);};tick();});}
+  try{await seek(r.a);await src.play();await new Promise(res=>{const tick=()=>{cx=out.getContext('2d');P=PLAT[pvPlat];renderFrame({kind:'main',camX:camUpdate(src,src.videoWidth,src.videoHeight,false),segIdx:0,segAge:9,segP:0,cap:capAt(src.currentTime,r),capAge:9,p:null});drawSafe();if(engine.stop||src.currentTime>=r.b||src.ended){res();return;}requestAnimationFrame(tick);};tick();});}
   finally{src.pause();engine.running=false;}}
 $('previewAll').onclick=async()=>{if(engine.running||!src.videoWidth)return;ensureAudio();await audioCtx.resume();$('stopBtn').disabled=false;
   try{await runSequence([{ctx:out.getContext('2d'),plat:pvPlat}],p=>$('prog').style.width=(p*100).toFixed(1)+'%');}catch(err){$('exportMsg').innerHTML=`<span class="warn">${err.message}</span>`;}
