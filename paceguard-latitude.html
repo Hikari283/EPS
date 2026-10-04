@@ -31,6 +31,7 @@
   #cropHint{font-size:12px;color:var(--accent);margin-top:6px}
   .verdict{margin-top:12px;border-radius:12px;padding:14px 16px;border:1px solid var(--line)}
   .verdict.ok{background:rgba(52,211,153,.10);border-color:#1f6b52}
+  .verdict.warn{background:rgba(251,191,36,.10);border-color:#7a5f1f}
   .verdict.bad{background:rgba(248,113,113,.10);border-color:#7a2e2e}
   .verdict.info{background:rgba(56,189,248,.08)}
   .verdict h2{margin:0 0 4px;font-size:18px}
@@ -129,10 +130,11 @@ function qrsWidth(t){const a=Array.from(t).map(Math.abs),mx=Math.max(...a),th=mx
 function traceRegion(ctx,r){
   const d=ctx.getImageData(r.x,r.y,Math.max(1,r.w),Math.max(1,r.h));const {width:W,height:H,data:D}=d;
   const sig=new Float32Array(W).fill(NaN);
-  for(let x=0;x<W;x++){
-    let by=-1,bs=18; // 緑らしさの閾値
-    for(let y=0;y<H;y++){const i=(y*W+x)*4;const R=D[i],G=D[i+1],B=D[i+2];const green=G-Math.max(R,B);if(green>bs){bs=green;by=y;}}
-    if(by>=0) sig[x]=H/2-by;
+  const valid=new Uint8Array(W);
+  for(let x=0;x<W;x++){ // 各列の「緑の線」の重心（線の太さに左右されない）
+    let sw=0,sy=0;
+    for(let y=0;y<H;y++){const i=(y*W+x)*4;const green=D[i+1]-Math.max(D[i],D[i+2]);if(green>18){const w=green-18;sw+=w;sy+=w*y;}}
+    if(sw>0){sig[x]=H/2-sy/sw;valid[x]=1;}
   }
   // 緑が無い列（コマの隙間・枠）は線形補間
   let first=-1;for(let x=0;x<W;x++)if(!isNaN(sig[x])){first=x;break;}
@@ -147,7 +149,7 @@ function traceRegion(ctx,r){
   for(let x=last+1;x<W;x++)sig[x]=sig[last];
   // 平滑化
   const sm=new Float32Array(W);for(let x=0;x<W;x++){let s=0,n=0;for(let k=-1;k<=1;k++){const j=x+k;if(j>=0&&j<W){s+=sig[j];n++;}}sm[x]=s/n;}
-  sm.raw=sig; // ノイズ検出用に平滑化前も保持
+  sm.raw=sig;sm.valid=valid; // ノイズ検出・心電図計測用に平滑化前と「線があった列」も保持
   return sm;
 }
 // ノイズ検出：細かい上下の折り返し（ギザギザ）が局所的に多い区間を探す。前回データ不要（同じ列の中で比較）。
@@ -163,7 +165,7 @@ function noiseScan(sig){
 
 // ===== PDF 読み込み・描画・抽出 =====
 let pageCanvas=$('page'), pctx=pageCanvas.getContext('2d');
-let renderScale=1.6, curSig=null, curSig2=null, meta={};
+let renderScale=1.6, curSig=null, curSig2=null, curFeat=[null,null], meta={};
 // ---- PDFのテキストをpdf.jsに頼らず自前抽出（FlateDecodeを展開しTj/TJ文字列を回収）----
 // LATITUDEはpdf.jsのgetTextContentが空を返すため、圧縮ストリームを直接展開して数字（ID・日付）を得る。
 // DecompressionStreamは圧縮データ後ろの余分なバイト（streamとendstreamの間の改行）でエラーになるため、
@@ -270,6 +272,8 @@ async function loadPDF(file){
     pageCanvas.width=vp.width; pageCanvas.height=vp.height;
     await page.render({canvasContext:pctx,viewport:vp}).promise;
     savePageBackup(); pdfLoaded=true;
+    // 計測用に高解像度でも描く（1px≒3.5ms）
+    try{const vh=page.getViewport({scale:HI});hiCanvas.width=vh.width;hiCanvas.height=vh.height;await page.render({canvasContext:hctx,viewport:vh}).promise;hiReady=true;}catch(_){hiReady=false;}
     const tc=await page.getTextContent();
     // 患者情報は FreeText 注釈に入っていることがある（通常描画・テキスト抽出では出ない）→ 注釈からも取得
     let annotStrs=[];
@@ -317,8 +321,10 @@ function extractFields(items, annotStrs, rawPdfText){
 function autoTrace(){
   if(!crop)return;
   // 枠を描く前に両段をトレース（枠線を波形として拾わないように）
-  curSig=traceRegion(pctx,toPx(crop));
-  curSig2=crop2?traceRegion(pctx,toPx(crop2)):null;
+  const toHi=c=>({x:Math.round(c.x*hiCanvas.width),y:Math.round(c.y*hiCanvas.height),w:Math.round(c.w*hiCanvas.width),h:Math.round(c.h*hiCanvas.height)});
+  const tr=c=>hiReady?traceRegion(hctx,toHi(c)):traceRegion(pctx,toPx(c));
+  curSig=tr(crop);curSig2=crop2?tr(crop2):null;
+  curFeat=[curSig,curSig2].map(sg=>sg&&hiReady?analyzeRow(sg):null);
   drawCropBox(toPx(crop)); if(crop2) drawCropBox(toPx(crop2));
   showSigPreview();
 }
@@ -329,18 +335,20 @@ let pageBackup=document.createElement('canvas'), pdfLoaded=false;
 function savePageBackup(){ pageBackup.width=pageCanvas.width;pageBackup.height=pageCanvas.height;pageBackup.getContext('2d').drawImage(pageCanvas,0,0); }
 function restorePage(){ if(pageBackup.width){pctx.drawImage(pageBackup,0,0);} }
 // 切り出した波形のプレビュー（認識できたか一目で分かる）
-function drawSigPreview(cv,sig){
+function drawSigPreview(cv,sig,feat){
   if(!sig||!sig.length){cv.style.display='none';return;}
   cv.style.display='block';const W=cv.clientWidth||520;cv.width=W;cv.height=70;const c=cv.getContext('2d');
   c.fillStyle='#050a12';c.fillRect(0,0,W,70);
   const nz=noiseScan(sig);c.fillStyle='rgba(248,113,113,.28)';for(const b of nz.bad)c.fillRect(b.st*(W-1)/(sig.length-1),0,nz.W*(W-1)/(sig.length-1),70);
   const n=normalize(Array.from(sig));const mx=Math.max(1,...n.map(Math.abs));
   c.strokeStyle='#34d399';c.lineWidth=1.4;c.beginPath();for(let i=0;i<n.length;i++){const x=i*(W-1)/(n.length-1),y=35-n[i]/mx*30;i?c.lineTo(x,y):c.moveTo(x,y);}c.stroke();
+  if(feat&&feat.peaks){c.fillStyle='#fbbf24';for(const p of feat.peaks){const x=p*(W-1)/(sig.length-1);c.beginPath();c.moveTo(x-4,1);c.lineTo(x+4,1);c.lineTo(x,8);c.closePath();c.fill();}} // 見つけたR波の位置
 }
 function showSigPreview(){
-  drawSigPreview($('sigPreview'),curSig); drawSigPreview($('sigPreview2'),curSig2);
+  drawSigPreview($('sigPreview'),curSig,curFeat[0]); drawSigPreview($('sigPreview2'),curSig2,curFeat[1]);
   if(!curSig||!curSig.length){$('traceMsg').textContent='';return;}
-  $('traceMsg').innerHTML='<span class="ok-t">✅ 波形を認識しました（'+(curSig2?'上段・下段':'上段のみ')+'）。「🔍 前回と比較して評価」へ。</span>';
+  const sum=curFeat.map((f,k)=>!f?'':f.error?`<br><span class="warn-t">${['上段','下段'][k]}：${f.error}</span>`:`<br>${['上段','下段'][k]}：R波 ${f.nBeats}拍・心拍 ${f.hr??'—'}bpm・波高 ${f.amp.toFixed(2)}mV・QRS幅 ${f.width}ms`).join('');
+  $('traceMsg').innerHTML='<span class="ok-t">✅ 波形を認識しました（'+(curSig2?'上段・下段':'上段のみ')+'）。「🔍 前回と比較して評価」へ。</span>'+sum+(sum?'<br><span class="hint">▼＝見つけたR波。心拍数がレポートの値と大きく違う場合は教えてください（換算の確認用）。</span>':'');
 }
 
 // クロップのドラッグ
@@ -413,6 +421,75 @@ async function readBaseline(id){ if(!dirHandle)return null; try{const fh=await d
 async function writeBaseline(id,obj){ if(!dirHandle)return; try{const fh=await dirHandle.getFileHandle(id+'.json',{create:true});const w=await fh.createWritable();await w.write(JSON.stringify(obj));await w.close();}catch(e){} }
 
 // ===== 評価 =====
+// ===== 心電図として測る（記録条件 25mm/秒・2.5mm/mV を使って ms と mV に換算）=====
+const HI=4;                                   // 解析用にPDFを高解像度で描く倍率（1pt=4px）
+const PX_PER_MM=72/25.4*HI;                   // 1mm あたりのピクセル
+const MS_PER_PX=1000/(25*PX_PER_MM);          // 25mm/秒 → 1px あたりの ms（約3.5ms）
+const PX_PER_MV=2.5*PX_PER_MM;                // 2.5mm/mV → 1mV あたりのピクセル
+const DT=2,PRE=100,POST=150;                  // 代表拍：R波の前100ms〜後150msを2ms刻みで保存
+const QRS_A=-80,QRS_B=120;                    // QRSを比べる範囲（R波基準のms）
+const hiCanvas=document.createElement('canvas'),hctx=hiCanvas.getContext('2d',{willReadFrequently:true});let hiReady=false;
+const pct=(arr,p)=>{const s=Float32Array.from(arr).sort();return s.length?s[Math.min(s.length-1,Math.max(0,Math.floor(p*(s.length-1))))]:0;};
+const median2=arr=>pct(arr,0.5);
+function movingMedian(x,win){const n=x.length,out=new Float32Array(n),h=win>>1,step=Math.max(1,win>>3);
+  // 計算量を抑えるため間引いて中央値を取り、間を線形補間
+  const pts=[];for(let i=0;i<n;i+=step){const a=Math.max(0,i-h),b=Math.min(n,i+h+1);pts.push([i,median2(x.subarray(a,b))]);}
+  pts.push([n-1,pts[pts.length-1][1]]);
+  for(let k=0;k<pts.length-1;k++){const [i0,v0]=pts[k],[i1,v1]=pts[k+1];for(let i=i0;i<=i1&&i<n;i++)out[i]=v0+(v1-v0)*(i-i0)/Math.max(1,i1-i0);}
+  return out;}
+function sampleAt(y,pos){const i=Math.floor(pos),f=pos-i;if(i<0||i+1>=y.length)return NaN;return y[i]*(1-f)+y[i+1]*f;}
+function pearson(a,b){let n=0,sa=0,sb=0;for(let i=0;i<a.length;i++){if(isNaN(a[i])||isNaN(b[i]))continue;sa+=a[i];sb+=b[i];n++;}if(n<5)return 0;const ma=sa/n,mb=sb/n;let num=0,da=0,db=0;
+  for(let i=0;i<a.length;i++){if(isNaN(a[i])||isNaN(b[i]))continue;const x=a[i]-ma,y=b[i]-mb;num+=x*y;da+=x*x;db+=y*y;}return da&&db?num/Math.sqrt(da*db):0;}
+const idxOf=ms=>Math.round((ms+PRE)/DT);       // 代表拍の配列位置
+function shiftCorr(a,b,from,to,maxLag){let best=-2,bl=0;for(let L=-maxLag;L<=maxLag;L++){const A=[],B=[];for(let i=from;i<=to;i++){const j=i+L;if(j<0||j>=b.length)continue;A.push(a[i]);B.push(b[j]);}const c=pearson(A,B);if(c>best){best=c;bl=L;}}return {corr:best,lag:bl};}
+// 1段分の波形 → R波検出 → 時間固定で切り出し → 中央値の代表拍 → 波高・QRS幅・向き・心拍数
+function analyzeRow(sig){
+  if(!sig||sig.length<200)return null;
+  const n=sig.length,valid=sig.valid||new Uint8Array(n).fill(1);
+  const x=Float32Array.from(sig.raw||sig,v=>v/PX_PER_MV);                       // mV
+  const base=movingMedian(x,Math.round(400/MS_PER_PX));const y=x.map((v,i)=>v-base[i]); // 基線（呼吸のゆれ）を除く
+  const sl=new Float32Array(n);for(let i=1;i<n-1;i++)sl[i]=valid[i-1]&&valid[i+1]?Math.abs(y[i+1]-y[i-1]):0;
+  const thr=0.45*pct(sl,0.995),refr=Math.round(260/MS_PER_PX),w60=Math.round(60/MS_PER_PX),peaks=[];
+  for(let i=1;i<n-1;i++){if(sl[i]<thr)continue;let r=i,rv=0;for(let k=Math.max(0,i-w60);k<=Math.min(n-1,i+w60);k++)if(Math.abs(y[k])>rv){rv=Math.abs(y[k]);r=k;}
+    if(!peaks.length||r-peaks[peaks.length-1]>refr)peaks.push(r);i+=refr;}
+  const pre=PRE/MS_PER_PX,post=POST/MS_PER_PX,L=Math.round((PRE+POST)/DT)+1;
+  let beats=[];
+  for(const r of peaks){if(r-pre<0||r+post>=n)continue;let ok=0,tot=0;for(let k=Math.floor(r-pre);k<=r+post;k++){tot++;ok+=valid[k];}if(ok/tot<0.9)continue;
+    const b=new Float32Array(L);for(let j=0;j<L;j++)b[j]=sampleAt(y,r+(j*DT-PRE)/MS_PER_PX);const bl=median2(b.subarray(0,idxOf(-60)));beats.push({r,b:b.map(v=>v-bl)});}
+  if(beats.length<2)return {peaks,nBeats:beats.length,error:'R波を2拍以上見つけられませんでした（枠の位置を確認してください）'};
+  const tplOf=bs=>{const t=new Float32Array(L);for(let j=0;j<L;j++)t[j]=median2(bs.map(q=>q.b[j]).filter(v=>!isNaN(v)));return t;};
+  let tpl=tplOf(beats);
+  const qa=idxOf(QRS_A),qb=idxOf(QRS_B);
+  // 各拍を代表拍に±10ms合わせ直してから、もう一度中央値を取る
+  beats=beats.map(q=>{const {lag}=shiftCorr(tpl,q.b,qa,qb,5);if(!lag)return q;const s=new Float32Array(L).fill(NaN);for(let j=0;j<L;j++){const k=j+lag;if(k>=0&&k<L)s[j]=q.b[k];}return {...q,b:s};});
+  tpl=tplOf(beats);
+  const amps=beats.map(q=>{let mx=-1e9,mn=1e9;for(let j=idxOf(-60);j<=idxOf(80);j++){const v=q.b[j];if(isNaN(v))continue;if(v>mx)mx=v;if(v<mn)mn=v;}return mx-mn;});
+  const amp=median2(amps),ampVar=amp?(pct(amps,0.9)-pct(amps,0.1))/2/amp:0;
+  const beatCorr=median2(beats.map(q=>pearson(Array.from(tpl.slice(qa,qb+1)),Array.from(q.b.slice(qa,qb+1)))));
+  // QRS幅：代表拍の傾きが最大傾きの12%を超えている範囲（R波の前後で探す）
+  const ts=new Float32Array(L);for(let j=1;j<L-1;j++)ts[j]=Math.abs(tpl[j+1]-tpl[j-1]);let smax=0;for(let j=qa;j<=qb;j++)smax=Math.max(smax,ts[j]);
+  const st=smax*0.12;let on=idxOf(0),off=idxOf(0);while(on>qa&&(ts[on]>st||ts[on-1]>st||ts[on-2]>st))on--;while(off<qb&&(ts[off]>st||ts[off+1]>st||ts[off+2]>st))off++;
+  const width=(off-on)*DT;
+  let pk=idxOf(0);for(let j=qa;j<=qb;j++)if(Math.abs(tpl[j])>Math.abs(tpl[pk]))pk=j;const pol=tpl[pk]>=0?1:-1;
+  const rrs=[];for(let k=1;k<peaks.length;k++){let gap=false;for(let i=peaks[k-1];i<peaks[k];i++)if(!valid[i]){gap=true;break;}const ms=(peaks[k]-peaks[k-1])*MS_PER_PX;if(!gap&&ms>280&&ms<2400)rrs.push(ms);}
+  const hr=rrs.length?60000/median2(rrs):null;
+  return {tpl:Array.from(tpl,v=>+v.toFixed(4)),amp:+amp.toFixed(3),ampVar:+ampVar.toFixed(3),width,on:(on*DT-PRE),off:(off*DT-PRE),pol,hr:hr&&Math.round(hr),nBeats:beats.length,beatCorr:+beatCorr.toFixed(3),peaks};
+}
+// 前回と今回の比較 → 3段階の判定と理由
+function compareFeat(b,c){
+  const qa=idxOf(QRS_A),qb=idxOf(QRS_B);
+  const {corr,lag}=shiftCorr(b.tpl,c.tpl,qa,qb,10);
+  const ampRatio=c.amp/(b.amp||1),tol=Math.max(0.30,2*Math.hypot(b.ampVar||0,c.ampVar||0));
+  const dW=c.width-b.width,polFlip=b.pol!==c.pol;
+  const red=[],yel=[];
+  if(polFlip)red.push('QRSの主な向きが逆転（上向き⇄下向き）');
+  if(corr<0.80)red.push(`QRSの形が大きく変化（相関 ${corr.toFixed(2)}）`);else if(corr<0.90)yel.push(`QRSの形がやや変化（相関 ${corr.toFixed(2)}）`);
+  if(dW>=30||(c.width>=120&&dW>=20))red.push(`QRS幅の延長 ${b.width}→${c.width}ms（+${dW}ms）＝脚ブロック等を確認`);else if(dW>=20)yel.push(`QRS幅がやや延長 ${b.width}→${c.width}ms（+${dW}ms）`);
+  const hiT=1+tol*1.6,hiY=1+tol;
+  if(ampRatio>hiT||ampRatio<1/hiT)red.push(`波高が大きく変化 ${b.amp.toFixed(2)}→${c.amp.toFixed(2)}mV（${Math.round(ampRatio*100)}%、呼吸のゆれの範囲 ±${Math.round(tol*100)}%を大きく超える）`);
+  else if(ampRatio>hiY||ampRatio<1/hiY)yel.push(`波高の変化 ${b.amp.toFixed(2)}→${c.amp.toFixed(2)}mV（${Math.round(ampRatio*100)}%、呼吸のゆれの範囲 ±${Math.round(tol*100)}%を超える）`);
+  return {corr,lag,ampRatio,tol,dW,polFlip,level:red.length?2:yel.length?1:0,red,yel};
+}
 const THR=0.94;
 function compareRow(base,cur){
   const a=Float32Array.from(base), b=Float32Array.from(cur);
@@ -432,48 +509,65 @@ $('evalBtn').onclick=async()=>{
   if(!pdfLoaded){ $('result').innerHTML=`<div class="verdict info"><h2>PDFを読み込んでください</h2>${dirHandle?'フォルダは接続済みです。':''}LATITUDEのPDFをドロップしてから、もう一度押してください。</div>`;return; }
   if(!curSig){ $('result').innerHTML='<div class="verdict bad"><h2>波形が未取得</h2>S-ECGの枠を指定してください。</div>';return; }
   if(!id){ $('result').innerHTML='<div class="verdict bad"><h2>患者IDがありません</h2>IDを入力してください。</div>';return; }
-  const tpls=[curSig,curSig2].map(sg=>sg?Array.from(foldTemplate(resample(sg,1000))):null);
-  const base=await readBaseline(id);
-  // 旧形式（templateのみ＝上段）にも対応
-  const baseTpls=base?(base.templates||[base.template||null,null]):[null,null];
-  const now={id,name:$('fName').value,date:$('fDate').value,device:$('fDev').value,ts:Date.now()};
-  now.templates=tpls.map((t,k)=>t||baseTpls[k]||null); now.template=now.templates[0];
   const rowName=['上段','下段'];
-  now.crops=[crop,crop2];
+  const feats=curFeat.map(f=>f&&!f.error?f:null);
+  const errs=curFeat.map((f,k)=>f&&f.error?`${rowName[k]}：${f.error}`:null).filter(Boolean);
+  const base=await readBaseline(id);
+  const bf=base&&base.feat?base.feat:[null,null];
+  const now={id,name:$('fName').value,date:$('fDate').value,device:$('fDev').value,ts:Date.now(),crops:[crop,crop2],
+    feat:feats.map((f,k)=>f?{tpl:f.tpl,amp:f.amp,ampVar:f.ampVar,width:f.width,on:f.on,off:f.off,pol:f.pol,hr:f.hr,nBeats:f.nBeats}:bf[k]||null)};
   // ノイズ（前回不要・今回の波形だけで判定）
   const noise=[curSig,curSig2].map(sg=>sg?noiseScan(sg):null);
-  const noiseFlags=noise.map((z,k)=>z&&z.bad.length?`${rowName[k]}：ノイズ疑い（ギザギザ区間 ${z.bad.length}か所・最大 ${z.max}／閾値 ${z.thr}）＝オーバーセンシング・リード/接触不良などを要確認。プレビューの赤い帯の位置です。`:null).filter(Boolean);
+  const noiseFlags=noise.map((z,k)=>z&&z.bad.length?`${rowName[k]}：ノイズ疑い（ギザギザ区間 ${z.bad.length}か所・最大 ${z.max}／閾値 ${z.thr}）。プレビューの赤い帯の位置です。`:null).filter(Boolean);
   const noiseHtml=noiseFlags.length?`<div class="verdict bad" style="margin-top:10px"><b>⚠️ ノイズ</b><br>${noiseFlags.join('<br>')}</div>`:'';
-  // 枠が前回と違うと同じ波形でも一致しない → 警告＋基準の取り直しボタン
-  const cropMoved=base&&base.crops&&[0,1].some(k=>{const p=base.crops[k],q=now.crops[k];if(!p||!q)return false;return ['x','y','w','h'].some(f=>Math.abs(p[f]-q[f])>0.01);});
-  // 基準は毎回「今回」に更新されるので、枠を変えた回の比較だけが参考値になる
-  const reRegHtml=cropMoved?'<div class="hint" style="margin-top:8px"><span class="warn-t">⚠️ 切り出し枠が前回と違うため、今回の比較は参考値です（同じ波形でも一致しにくい）。今回の枠で基準を更新したので、次回から正しく比較されます。</span></div>':'';
-  const rows=[0,1].filter(k=>tpls[k]&&baseTpls[k]).map(k=>({k,...compareRow(baseTpls[k],tpls[k])}));
+  const errHtml=errs.length?`<div class="verdict bad" style="margin-top:10px">${errs.join('<br>')}</div>`:'';
+  const measure=(f)=>`拍 ${f.nBeats}・心拍 ${f.hr??'—'}bpm・波高 ${f.amp.toFixed(2)}mV（呼吸のゆれ ±${Math.round(f.ampVar*100)}%）・QRS幅 ${f.width}ms・向き ${f.pol>0?'上':'下'}`;
+  const rows=[0,1].filter(k=>feats[k]&&bf[k]&&bf[k].tpl).map(k=>({k,b:bf[k],c:feats[k],...compareFeat(bf[k],feats[k])}));
   if(!rows.length){
-    await writeBaseline(id,{...now,history:[...(base&&base.history||[]),{date:now.date,note:'初回登録'}]});
-    $('result').innerHTML=`<div class="verdict info"><h2>初回登録しました</h2>この患者（ID:${id}）の基準波形（${tpls[1]?'上段・下段':'上段'}）として保存しました。次回レポートから自動比較されます。${dirHandle?'':'<br><b>※フォルダ未選択のため保存できていません。</b>'}</div>${noiseHtml}`;
+    await writeBaseline(id,{...now,history:[...(base&&base.history||[]),{date:now.date,note:base?'新方式で基準登録':'初回登録'}]});
+    $('result').innerHTML=`<div class="verdict info"><h2>${base?'新しい計測方式で基準を登録しました':'初回登録しました'}</h2>この患者（ID:${id}）の基準として保存しました。次回レポートから自動比較されます。${dirHandle?'':'<br><b>※フォルダ未選択のため保存できていません。</b>'}
+      ${feats.map((f,k)=>f?`<div class="hint" style="margin-top:6px">${rowName[k]}：${measure(f)}</div>`:'').join('')}</div>${errHtml}${noiseHtml}`;
     $('overlayCard').hidden=true; return;
   }
-  const newRows=[0,1].filter(k=>tpls[k]&&!baseTpls[k]).map(k=>rowName[k]);
-  const changed=rows.some(r=>r.flags.length)||noiseFlags.length>0;
+  const level=Math.max(...rows.map(r=>r.level),noiseFlags.length?1:0);
+  const cls=['ok','warn','bad'][level],title=['✅ 変化なし（前回と同等）','🟡 注意 — 変化の兆候','⚠️ 要確認 — 明らかな変化'][level];
   const m=(k,v,u,f,g)=>`<div class="m ${f?'flag':(g?'good':'')}"><div class="k">${k}</div><div class="v">${v}<small>${u||''}</small></div></div>`;
-  const rowHtml=r=>`<div style="margin-top:10px"><b>${rowName[r.k]}</b>：${r.flags.length?r.flags.map(f=>'<br>・'+f).join(''):'有意な形態変化なし'}</div>
-    <div class="metrics">${m(rowName[r.k]+' 波形相関',r.corr.toFixed(3),'',r.corr<THR,r.corr>=THR)}${m(rowName[r.k]+' 振幅比',(r.ampRatio*100).toFixed(0),'%',r.ampRatio<0.7||r.ampRatio>1.4,r.ampRatio>=0.85&&r.ampRatio<=1.18)}${m(rowName[r.k]+' 幅比',r.widthRatio.toFixed(2),'倍',r.widthRatio>1.4,r.widthRatio<=1.15)}${noise[r.k]?m(rowName[r.k]+' ノイズ',noise[r.k].max,'/'+noise[r.k].thr,noise[r.k].bad.length>0,noise[r.k].bad.length===0):''}</div>`;
-  $('result').innerHTML=`<div class="verdict ${changed?'bad':'ok'}"><h2>${changed?'⚠️ 変化あり — 要確認':'✅ 変化なし（前回と同等）'}</h2>
+  const rowHtml=r=>`<div style="margin-top:10px"><b>${rowName[r.k]}</b>：${r.red.concat(r.yel).length?r.red.map(t=>'<br><span class="bad-t">●</span> '+t).join('')+r.yel.map(t=>'<br><span class="warn-t">●</span> '+t).join(''):'有意な変化なし'}</div>
+    <div class="metrics">
+      ${m('QRSの形の相関',r.corr.toFixed(3),'',r.corr<0.9,r.corr>=0.9)}
+      ${m('波高 前回→今回',`${r.b.amp.toFixed(2)}→${r.c.amp.toFixed(2)}`,'mV',Math.abs(Math.log(r.ampRatio))>Math.log(1+r.tol),true)}
+      ${m('QRS幅 前回→今回',`${r.b.width}→${r.c.width}`,'ms',r.dW>=20,r.dW<20)}
+      ${m('向き',`${r.b.pol>0?'上':'下'}→${r.c.pol>0?'上':'下'}`,'',r.polFlip,!r.polFlip)}
+      ${m('心拍数',`${r.b.hr??'—'}→${r.c.hr??'—'}`,'bpm',false,false)}
+      ${noise[r.k]?m('ノイズ',noise[r.k].max,'/'+noise[r.k].thr,noise[r.k].bad.length>0,noise[r.k].bad.length===0):''}
+    </div><div class="hint">波高の許容範囲は、前回と今回の拍ごとのゆれ（呼吸など）から自動で決めています（今回 ±${Math.round(r.tol*100)}%）。</div>`;
+  const newRows=[0,1].filter(k=>feats[k]&&!(bf[k]&&bf[k].tpl)).map(k=>rowName[k]);
+  $('result').innerHTML=`<div class="verdict ${cls}"><h2>${title}</h2>
     <div>前回：${base.date||'?'} → 今回：${now.date||'?'}</div>
     ${rows.map(rowHtml).join('')}
-    ${newRows.length?`<div class="hint" style="margin-top:8px">${newRows.join('・')}は前回データが無いため、今回を基準として登録しました（次回から比較）。</div>`:''}
-    ${reRegHtml}</div>${noiseHtml}`;
-  // 履歴更新＋baselineは最新に更新（運用に応じて固定も可）。corr/ampは上段（旧形式互換）。
-  const r0=rows.find(r=>r.k===0)||rows[0];
-  const history=(base.history||[]).concat([{date:now.date,corr:+r0.corr.toFixed(3),amp:+r0.ampRatio.toFixed(2),changed,
-    rows:rows.map(r=>({row:rowName[r.k],corr:+r.corr.toFixed(3),amp:+r.ampRatio.toFixed(2),width:+r.widthRatio.toFixed(2),noise:noise[r.k]?noise[r.k].max:null,changed:r.flags.length>0||!!(noise[r.k]&&noise[r.k].bad.length)}))}]);
+    ${newRows.length?`<div class="hint" style="margin-top:8px">${newRows.join('・')}は前回データが無いため、今回を基準として登録しました（次回から比較）。</div>`:''}</div>${errHtml}${noiseHtml}`;
+  const history=(base.history||[]).concat([{date:now.date,level,rows:rows.map(r=>({row:rowName[r.k],corr:+r.corr.toFixed(3),amp:r.c.amp,ampRatio:+r.ampRatio.toFixed(2),width:r.c.width,dW:r.dW,pol:r.c.pol,hr:r.c.hr,level:r.level}))}]);
   await writeBaseline(id,{...now,history});
   const r1=rows.find(r=>r.k===0), r2=rows.find(r=>r.k===1);
   $('row2Wrap').hidden=!r2; $('overlayCard').hidden=false; // 先に表示してから描く（幅を正しく取るため）
-  if(r1) drawOverlay(r1.a,r1.b,r1.lag); else { $('overlay').getContext('2d').clearRect(0,0,$('overlay').width,$('overlay').height); $('diff').getContext('2d').clearRect(0,0,$('diff').width,$('diff').height); }
-  if(r2) drawOverlay(r2.a,r2.b,r2.lag,'overlay2','diff2');
+  if(r1) drawBeat(r1); else { $('overlay').getContext('2d').clearRect(0,0,$('overlay').width,$('overlay').height); $('diff').getContext('2d').clearRect(0,0,$('diff').width,$('diff').height); }
+  if(r2) drawBeat(r2,'overlay2','diff2');
 };
+// 代表拍の重ね描き（実寸：横 ms・縦 mV。青＝前回、橙＝今回。QRSの始まりと終わりに縦線）
+function drawBeat(r,ovId='overlay',diffId='diff'){
+  const cv=$(ovId),W=cv.parentElement.clientWidth||900,Hh=200;cv.width=W;cv.height=Hh;const c=cv.getContext('2d');c.clearRect(0,0,W,Hh);
+  const A=r.b.tpl,B=r.c.tpl,L=A.length,mx=Math.max(0.3,...A.map(Math.abs),...B.map(Math.abs))*1.1,X=j=>j*(W-1)/(L-1),Y=v=>Hh/2-v/mx*(Hh/2-14);
+  c.strokeStyle='#1a2740';c.lineWidth=1;for(let ms=-100;ms<=150;ms+=50){const x=X(idxOf(ms));c.beginPath();c.moveTo(x,0);c.lineTo(x,Hh);c.stroke();}
+  c.beginPath();c.moveTo(0,Hh/2);c.lineTo(W,Hh/2);c.stroke();
+  c.fillStyle='#7c8aa0';c.font='11px sans-serif';for(let ms=-100;ms<=150;ms+=50)c.fillText(ms+'ms',X(idxOf(ms))+3,Hh-4);c.fillText(`±${mx.toFixed(2)}mV`,4,12);
+  const mark=(f,col)=>{c.strokeStyle=col;c.setLineDash([4,4]);for(const ms of [f.on,f.off]){if(ms==null)continue;const x=X(idxOf(ms));c.beginPath();c.moveTo(x,10);c.lineTo(x,Hh-16);c.stroke();}c.setLineDash([]);};
+  mark(r.b,'rgba(56,189,248,.6)');mark(r.c,'rgba(251,191,36,.6)');
+  const pl=(arr,col,off)=>{c.strokeStyle=col;c.lineWidth=2;c.beginPath();let st=false;for(let j=0;j<L;j++){const v=arr[j+off];if(v==null||isNaN(v))continue;const x=X(j),y=Y(v);st?c.lineTo(x,y):c.moveTo(x,y);st=true;}c.stroke();};
+  pl(A,'#38bdf8',0);pl(B,'#fbbf24',r.lag);
+  const d=$(diffId);d.width=W;d.height=70;const dc=d.getContext('2d');dc.clearRect(0,0,W,70);dc.strokeStyle='#f87171';dc.lineWidth=1.4;dc.beginPath();
+  for(let j=0;j<L;j++){const v=(A[j]-(B[j+r.lag]??A[j])),x=X(j),y=35-v/mx*30;j?dc.lineTo(x,y):dc.moveTo(x,y);}dc.stroke();
+  dc.fillStyle='#7c8aa0';dc.font='11px sans-serif';dc.fillText('差分（前回−今回）',8,14);
+}
 function drawOverlay(a,b,lag,ovId='overlay',diffId='diff'){const cv=$(ovId);const W=cv.parentElement.clientWidth||900;cv.width=W;cv.height=180;const c=cv.getContext('2d');c.clearRect(0,0,W,180);
   const A=normalize(Array.from(a)),B=normalize(Array.from(b));const mx=Math.max(1,...A.map(Math.abs),...B.map(Math.abs));
   const pl=(arr,col,off)=>{c.strokeStyle=col;c.lineWidth=1.8;c.beginPath();for(let i=0;i<arr.length;i++){const x=i*(W-1)/(arr.length-1),y=90-(arr[i+off]||arr[i])/mx*72;i?c.lineTo(x,y):c.moveTo(x,y);}c.stroke();};
