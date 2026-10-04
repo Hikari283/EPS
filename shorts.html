@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>本編送客ショートメーカー</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@700;900&family=M+PLUS+Rounded+1c:wght@800&family=Dela+Gothic+One&display=swap">
 <style>
   :root{ --bg:#101214; --card:#1a1d21; --line:#2c3138; --tx:#eceff3; --sub:#9aa3ad; --accent:#ff3d57; --ok:#3ecf8e; --hl:#ffd23f; --ig:#d6249f; }
   *{box-sizing:border-box}
@@ -118,6 +120,23 @@
   </div>
 
   <div class="card">
+    <h2><span class="n">✦</span>デザイン（テロップ）</h2>
+    <div class="pills" id="telop">
+      <button data-v="variety" class="on">バラエティ（二重フチ）</button><button data-v="pop">ポップ（丸文字）</button><button data-v="news">解説ボックス</button><button data-v="impact">インパクト（極太）</button>
+    </div>
+    <div class="row">
+      <span class="lbl">テーマ色</span><input type="color" id="accent" value="#ff3d57">
+      <span class="pills" id="accentPre"><button data-c="#ff3d57">赤</button><button data-c="#ff7a00">橙</button><button data-c="#1e88ff">青</button><button data-c="#16a36b">緑</button><button data-c="#e5338f">ピンク</button><button data-c="#7a4cff">紫</button></span>
+    </div>
+    <div class="row">
+      <label class="row"><input type="checkbox" id="autoHl" checked> 数字・金額・大事な言葉を自動で強調</label>
+      <label class="row"><input type="checkbox" id="chunk" checked> 長い字幕は短く区切る（1画面15文字前後）</label>
+      <label class="row"><input type="checkbox" id="progOn" checked> 進捗バー</label>
+    </div>
+    <div class="row"><span class="lbl">チャンネル名（右上に小さく）</span><input type="text" id="chName" placeholder="例：@ie_zukuri_ch" style="flex:1"></div>
+  </div>
+
+  <div class="card">
     <h2><span class="n">4</span>エフェクト（自動）</h2>
     <div class="pills" id="fxLevel">
       <button data-v="0">なし</button><button data-v="0.6">ひかえめ</button><button data-v="1" class="on">ふつう</button><button data-v="1.5">派手</button>
@@ -125,6 +144,7 @@
     <div class="row">
       <label class="row"><input type="checkbox" id="fxColor" checked> 色を鮮やかに＋周辺を暗く</label>
       <label class="row"><input type="checkbox" id="fxSound" checked> 効果音</label>
+      <label class="row"><input type="checkbox" id="voiceBoost" checked> 声を聞きやすく（音圧アップ）</label>
       <span class="lbl">効果音の音量</span><input id="sfxVol" type="range" min="0" max="100" value="55" style="max-width:140px">
     </div>
     <div class="hint">切り替わりでズーム＋フラッシュ＋「シュッ」、字幕は出るたびにポンと弾む（強調語があると揺れ＋「ポン」）、映像はゆっくりズームし続けます。冒頭は「ドン」、最後は「キラン」。</div>
@@ -304,42 +324,109 @@ function parseSubs(t){const out=[];const re=/(\d+:)?(\d{1,2}):(\d{2})[.,](\d{3})
   const ts=(h,mi,s,ms)=>(h?parseInt(h):0)*3600+(+mi)*60+(+s)+(+ms)/1000;
   while((m=re.exec(t.replace(/\r/g,'')))){const text=m[9].replace(/<[^>]+>/g,'').trim();if(text)out.push({a:ts(m[1],m[2],m[3],m[4]),b:ts(m[5],m[6],m[7],m[8]),text});}return out;}
 function capAt(t,seg){return capInfo(t,seg).text;}
+// 長い字幕を1画面15文字前後に区切る（文字数で時間を割り振る）。句読点は表示しない（テロップの作法）
+function chunkText(text,a,b){
+  const chars=toChars(text,false)[0]||[];const toks=tokensOf(chars);const parts=[];let cur=[];
+  const n=x=>x.reduce((s,t)=>s+t.length,0);
+  for(const t of toks){const isPunc=/^[、。，．！？!?]$/.test(t.map(c=>c.ch).join(''));
+    if(n(cur)+t.length>15&&n(cur)>=6){parts.push(cur);cur=[];}
+    cur.push(t);if(isPunc&&n(cur)>=7){parts.push(cur);cur=[];}}
+  if(cur.length){if(parts.length&&n(cur)<4)parts[parts.length-1].push(...cur);else parts.push(cur);}
+  const ser=p=>{let o='',h=false;for(const c of p.flat()){if(/[。，．]/.test(c.ch))continue;const ch=c.ch==='、'?'　':c.ch;if(c.hl!==h){o+='*';h=c.hl;}o+=ch;}if(h)o+='*';return o.trim();};
+  const total=parts.reduce((s,p)=>s+n(p),0)||1;let t=a;
+  return parts.map(p=>{const d=(b-a)*n(p)/total,o={a:t,b:t+d,text:ser(p)};t+=d;return o;}).filter(o=>o.text.replace(/\*/g,''));
+}
+let dcues=[],dcSrc=null,dcOn=null;
+function displayCues(){if(dcSrc!==cues||dcOn!==$('chunk').checked){dcSrc=cues;dcOn=$('chunk').checked;dcues=dcOn?cues.flatMap(c=>chunkText(c.text,c.a,c.b)):cues;}return dcues;}
 function capInfo(t,seg){ // 字幕の文字と「その字幕の中でどこまで話したか」(0..1)
-  if(seg&&seg.cap&&seg.cap.trim())return {text:seg.cap,p:Math.min(1,Math.max(0,(t-seg.a)/Math.max(.5,seg.b-seg.a)))};
-  const c=cues.find(c=>t>=c.a&&t<c.b);if(!c)return {text:'',p:0};
+  if(seg&&seg.cap&&seg.cap.trim()){const parts=$('chunk').checked?chunkText(seg.cap,seg.a,seg.b):[{a:seg.a,b:seg.b,text:seg.cap}];const c=parts.find(c=>t>=c.a&&t<c.b)||parts[parts.length-1];
+    return {text:c.text,p:Math.min(1,Math.max(0,(t-c.a)/Math.max(.3,c.b-c.a)))};}
+  const c=displayCues().find(c=>t>=c.a&&t<c.b);if(!c)return {text:'',p:0};
   return {text:c.text,p:Math.min(1,Math.max(0,(t-c.a+0.12)/Math.max(.3,(c.b-c.a)*0.92)))};
 }
 const FILLER=/^[\s、。・…ー〜]*(え[ーっぇ]*|ええ[ーっ]*|あ[ーっ]*|あの[ーうぉ]*|えっと[ーぉ]*|えーと|まあ[ー]*|うーん|んー|その[ー]+|なんか[ー]*)[\s、。・…ー〜]*$/;
 
 // ---------- 文字 ----------
-function richLines(text,maxW){
-  const lines=[];
-  for(const para of String(text).split('\n')){let line=[],w=0,hl=false;
-    for(const ch of para){if(ch==='*'){hl=!hl;continue;}const cw=cx.measureText(ch).width;
-      if(w+cw>maxW&&line.length){lines.push(line);line=[];w=0;}line.push({ch,hl});w+=cw;}
-    lines.push(line);}
-  for(const l of lines){let inB=false;for(const c of l){if(c.ch==='【')inB=true;if(inB)c.hl=true;if(c.ch==='】')inB=false;}}
-  return lines;
+// ================= テロップ描画エンジン =================
+const FB=',"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic UI","Meiryo",sans-serif';
+const TELOP={
+  variety:{font:'"Noto Sans JP"'+FB,w:900,fill:'#fff',hl:'#ffe23d',strokes:[['accent',.34],['#000',.17]],shadow:[0,8,16,'rgba(0,0,0,.45)']},
+  pop:    {font:'"M PLUS Rounded 1c"'+FB,w:800,fill:'#fff',hl:'#ffe23d',strokes:[['#000',.24]],shadow:[0,9,0,'rgba(0,0,0,.6)']},
+  news:   {font:'"Noto Sans JP"'+FB,w:900,fill:'#fff',hl:'#ffe23d',strokes:[],box:true},
+  impact: {font:'"Dela Gothic One"'+FB,w:400,fill:'#fff',hl:'#ffe23d',strokes:[['accent',.30],['#000',.15]],shadow:[0,7,14,'rgba(0,0,0,.5)']},
+};
+const telopKey=()=>(document.querySelector('#telop .on')||{dataset:{v:'variety'}}).dataset.v;
+const accent=()=>$('accent').value;
+const col=c=>c==='accent'?accent():c;
+function roleStyle(role){ // 役割ごとの見た目（テロップの型＋役割）
+  const T=TELOP[telopKey()];
+  if(role==='head')return {font:'"Noto Sans JP"'+FB,w:900,fill:'#fff',hl:'#fff',strokes:[],headBox:true};
+  if(role==='pill')return {font:'"Noto Sans JP"'+FB,w:900,fill:'#fff',hl:'#ffe23d',strokes:[],box:true};
+  if(role==='plain')return {font:'"Noto Sans JP"'+FB,w:700,fill:'#9aa3ad',hl:'#9aa3ad',strokes:[]};
+  if(role==='hook')return {...T,box:false,strokes:T.strokes.length?T.strokes:[['#000',.2]],shadow:T.shadow||[0,8,16,'rgba(0,0,0,.45)'],marker:true,hl:'#fff'};
+  return T;
 }
-const hasHl=s=>/\*[^*]+\*|【[^】]+】/.test(s||'');
-function drawRich(text,cxX,y,size,{maxW=W-120,color='#fff',hl='#ffd23f',stroke=0.18,anchor='top',box=false,prog=null,style='line'}={}){
+const fontOf=(st,size)=>`${st.w} ${size}px ${st.font}`;
+const AUTO_HL=/[0-9０-９]+(?:[,，.．][0-9０-９]+)*\s*(?:万円|億円|千円|万|億|円|坪|畳|帖|%|％|年|ヶ月|か月|カ月|日|時間|分|秒|社|件|個|台|㎡|m²|cm|mm|kW|度|倍|人)?|後悔|失敗|最悪|絶対|正解|大事|注意|本音|まさか|激安|高すぎ|無料|一番|最高|NG/g;
+function toChars(text,auto){ // 「*強調*」「【】」と自動強調を1文字ずつのフラグに
+  const paras=[];
+  for(const para of String(text).split('\n')){
+    const chars=[];let hl=false,br=false;
+    for(const ch of para){if(ch==='*'){hl=!hl;continue;}if(ch==='【')br=true;chars.push({ch,hl:hl||br});if(ch==='】')br=false;}
+    if(auto){const plain=chars.map(c=>c.ch).join('');
+      for(const m of plain.matchAll(AUTO_HL)){if(!m[0].trim())continue;const st=[...plain.slice(0,m.index)].length,len=[...m[0]].length;for(let k=st;k<st+len&&k<chars.length;k++)chars[k].hl=true;}}
+    paras.push(chars);}
+  return paras;
+}
+const SEG=typeof Intl!=='undefined'&&Intl.Segmenter?new Intl.Segmenter('ja',{granularity:'word'}):null;
+const NO_START=/^[、。，．・：；？！?!ー〜」』）】ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ…]/;
+function tokensOf(chars){ // 単語のかたまりに分ける（単語の途中で改行しないため）
+  if(!SEG)return chars.map(c=>[c]);const str=chars.map(c=>c.ch).join('');
+  const out=[];let i=0;for(const sg of SEG.segment(str)){const n=[...sg.segment].length;out.push(chars.slice(i,i+n));i+=n;}return out;
+}
+function wrapPara(chars,maxW){
+  const w=c=>cx.measureText(c.ch).width,lines=[];let line=[],lw=0;
+  for(const tok of tokensOf(chars)){const tw=tok.reduce((a,c)=>a+w(c),0);
+    if(lw+tw>maxW&&line.length){lines.push(line);line=[];lw=0;}
+    if(tw>maxW){for(const c of tok){if(lw+w(c)>maxW&&line.length){lines.push(line);line=[];lw=0;}line.push(c);lw+=w(c);}}
+    else{line.push(...tok);lw+=tw;}}
+  lines.push(line);
+  for(let i=1;i<lines.length;i++)while(lines[i].length&&NO_START.test(lines[i][0].ch))lines[i-1].push(lines[i].shift()); // 行頭禁則
+  return lines.filter((l,i)=>l.length||i===0);
+}
+function layoutText(text,size,maxW,st,auto){
+  cx.font=fontOf(st,size);const out=[];
+  for(const para of toChars(text,auto)){let ls=wrapPara(para,maxW);
+    if(ls.length>1){const tot=para.reduce((a,c)=>a+cx.measureText(c.ch).width,0);const ls2=wrapPara(para,Math.min(maxW,tot/ls.length*1.06+size*0.6));if(ls2.length===ls.length)ls=ls2;} // 行の長さをそろえる
+    out.push(...ls);}
+  return out;
+}
+const hasHl=s=>/\*[^*]+\*|【[^】]+】/.test(s||'')||($('autoHl').checked&&new RegExp(AUTO_HL.source).test(String(s||'').replace(/\*/g,'')));
+function drawRich(text,cxX,y,size,{maxW=W-120,anchor='top',prog=null,style='line',role='cap',auto=null}={}){
   if(!String(text).trim())return 0;
-  cx.font=`900 ${size}px ${FONT}`;cx.textBaseline='middle';cx.lineJoin='round';
-  let lines=richLines(text,maxW);
-  if(lines.length>1&&!String(text).includes('\n')){const tw=lines.flat().reduce((a,c)=>a+cx.measureText(c.ch).width,0);lines=richLines(text,Math.min(maxW,tw/lines.length+size*0.9));}
-  const lh=size*1.28;let yy=anchor==='bottom'?y-lh*(lines.length-1):anchor==='center'?y-lh*(lines.length-1)/2:y;
-  const N=lines.reduce((a,l)=>a+l.length,0),spoken=prog==null?N:prog*N;let idx=0;
-  for(const l of lines){
-    const lw=l.reduce((s,c)=>s+cx.measureText(c.ch).width,0);let x=cxX-lw/2;
-    if(box){cx.fillStyle='rgba(0,0,0,.55)';const p=size*.22;cx.beginPath();cx.roundRect(x-p,yy-lh/2,lw+p*2,lh,size*.2);cx.fill();}
-    for(const c of l){const cw=cx.measureText(c.ch).width;cx.textAlign='left';const said=idx<spoken;idx++;
-      if(style==='type'&&!said){x+=cw;continue;} // 1文字ずつ出す：まだの文字は描かない（位置は固定）
-      if(stroke){cx.lineWidth=size*stroke;cx.strokeStyle='rgba(0,0,0,.92)';cx.strokeText(c.ch,x,yy);}
-      cx.fillStyle=(style==='kara'&&!said)?(c.hl?'rgba(255,210,63,.5)':'rgba(255,255,255,.5)'):(c.hl?hl:color);cx.fillText(c.ch,x,yy);x+=cw;}
-    yy+=lh;}
+  const st=roleStyle(role);auto=auto??(role==='cap'&&$('autoHl').checked);
+  const lines=layoutText(text,size,maxW,st,auto);cx.font=fontOf(st,size);cx.textBaseline='middle';cx.lineJoin='round';cx.textAlign='left';
+  const lh=size*(st.box||st.headBox?1.42:1.3);let yy=anchor==='bottom'?y-lh*(lines.length-1):anchor==='center'?y-lh*(lines.length-1)/2:y;
+  const N=lines.reduce((a,l)=>a+l.length,0),spoken=prog==null?N:prog*N;
+  // 文字の位置を先に決める（フチを全部描いてから中身を描く＝隣の文字を潰さない）
+  const glyphs=[],rows=[];let idx=0;
+  for(const l of lines){const lw=l.reduce((a,c)=>a+cx.measureText(c.ch).width,0);let x=cxX-lw/2;rows.push({x,y:yy,w:lw});
+    for(const c of l){const cw=cx.measureText(c.ch).width;glyphs.push({...c,x,y:yy,w:cw,said:idx<spoken});x+=cw;idx++;}yy+=lh;}
+  const vis=glyphs.filter(g=>!(style==='type'&&!g.said));
+  if(st.headBox){for(const r of rows){const px=size*.42,py=size*.2;cx.save();cx.shadowColor='rgba(0,0,0,.35)';cx.shadowBlur=18;cx.shadowOffsetY=6;cx.fillStyle=accent();cx.beginPath();cx.roundRect(r.x-px,r.y-size/2-py,r.w+px*2,size+py*2,size*.28);cx.fill();cx.restore();}}
+  if(st.box){for(const r of rows){if(!r.w)continue;const px=size*.36,py=size*.18;cx.fillStyle='rgba(10,14,22,.82)';cx.beginPath();cx.roundRect(r.x-px,r.y-size/2-py,r.w+px*2,size+py*2,size*.16);cx.fill();
+    cx.fillStyle=accent();cx.fillRect(r.x-px,r.y-size/2-py+size*.12,size*.13,size+py*2-size*.24);}}
+  st.strokes.forEach(([c,wd],li)=>{cx.save();if(li===0&&st.shadow){const[sx,sy,b,sc]=st.shadow;cx.shadowOffsetX=sx;cx.shadowOffsetY=sy;cx.shadowBlur=b;cx.shadowColor=sc;}
+    cx.lineWidth=size*wd;cx.strokeStyle=col(c);for(const g of vis)cx.strokeText(g.ch,g.x,g.y);cx.restore();});
+  if(st.marker){cx.fillStyle=accent();for(const g of vis)if(g.hl)cx.fillRect(g.x-2,g.y+size*.04,g.w+4,size*.5);} // 蛍光ペン（フチの上・文字の下）
+  cx.save();if(!st.strokes.length&&st.shadow){const[sx,sy,b,sc]=st.shadow;cx.shadowOffsetX=sx;cx.shadowOffsetY=sy;cx.shadowBlur=b;cx.shadowColor=sc;}
+  for(const g of vis){cx.globalAlpha=(style==='kara'&&!g.said)?.55:1;cx.fillStyle=g.hl?st.hl:st.fill;cx.fillText(g.ch,g.x,g.y);}
+  cx.restore();cx.globalAlpha=1;
   return lines.length*lh;
 }
-function fitSize(txt,maxW,start,min){let s=start;for(;s>min;s-=4){cx.font=`900 ${s}px ${FONT}`;if(Math.max(...String(txt).replace(/\*/g,'').split('\n').map(l=>cx.measureText(l).width))<=maxW)break;}return s;}
+function fitSize(txt,maxW,start,min,role='cap'){const st=roleStyle(role);let s=start;for(;s>min;s-=4){cx.font=fontOf(st,s);if(Math.max(...String(txt).replace(/\*/g,'').split('\n').map(l=>cx.measureText(l).width))<=maxW)break;}return s;}
+// フォントの読み込みを待ってから描き直す
+if(document.fonts){Promise.all(['900 80px "Noto Sans JP"','700 80px "Noto Sans JP"','800 80px "M PLUS Rounded 1c"','400 80px "Dela Gothic One"'].map(f=>document.fonts.load(f,'家づくり後悔3500万円').catch(()=>{}))).then(()=>{try{lastPreviewFrame=null;draw();}catch(_){}});}
 
 // ---------- 映像 ----------
 const fxLvl=()=>+(document.querySelector('#fxLevel .on')||{dataset:{v:1}}).dataset.v;
@@ -374,69 +461,78 @@ function coverDraw(img,iw,ih,zoom,camX){ // 9:16全面に、camXを中心にし�
 function drawFrame(img,iw,ih,extraZoom=1,camX=.5){
   const mode=$('mode').value;LY={band:false};
   cx.fillStyle='#000';cx.fillRect(0,0,W,H);if(!iw||!ih)return;
-  const zoom=$('zoom').value/100*extraZoom,color=$('fxColor').checked&&fxLvl()>0,grade='contrast(1.07) saturate(1.18)';
+  const zoom=$('zoom').value/100*extraZoom,color=$('fxColor').checked&&fxLvl()>0,grade=((color?'contrast(1.07) saturate(1.18)':'')+(XBLUR>0.3?` blur(${XBLUR.toFixed(1)}px)`:''))||'none';
   if(mode==='crop')camX=$('pos').value/100;
-  if(mode==='auto'||mode==='crop'){if(color)cx.filter=grade;coverDraw(img,iw,ih,zoom,camX);cx.filter='none';}
+  if(mode==='auto'||mode==='crop'){cx.filter=grade;coverDraw(img,iw,ih,zoom,camX);cx.filter='none';}
   else if(mode==='band'){
     cx.fillStyle=$('bandColor').value;cx.fillRect(0,0,W,H);
     const s=(W/iw)*zoom,dw=iw*s,dh=ih*s,vy=Math.round(H*0.44-dh/2);let dx=W/2-camX*dw;dx=Math.min(0,Math.max(W-dw,dx));
-    cx.save();cx.beginPath();cx.rect(0,vy,W,dh);cx.clip();if(color)cx.filter=grade;cx.drawImage(img,dx,vy,dw,dh);cx.filter='none';cx.restore();
+    cx.save();cx.beginPath();cx.rect(0,vy,W,dh);cx.clip();cx.filter=grade;cx.drawImage(img,dx,vy,dw,dh);cx.filter='none';cx.restore();
     LY={band:true,top:vy,bottom:vy+dh};
   }else{ // ぼかし背景：小さいキャンバスで本物のぼかしをかけてから拡大（モザイクにならない）
     const sb=Math.max(384/ih,216/iw);bctx.filter='blur(7px)';bctx.drawImage(img,(216-iw*sb)/2,(384-ih*sb)/2,iw*sb,ih*sb);bctx.filter='none';
     cx.imageSmoothingEnabled=true;cx.imageSmoothingQuality='high';cx.drawImage(blurC,-30,-30,W+60,H+60);cx.fillStyle='rgba(0,0,0,.35)';cx.fillRect(0,0,W,H);
-    if(color)cx.filter=grade;const s=(W/iw)*zoom,dw=iw*s,dh=ih*s;let dx=W/2-camX*dw;dx=Math.min(0,Math.max(W-dw,dx));cx.drawImage(img,dx,(H-dh)/2,dw,dh);cx.filter='none';
+    cx.filter=grade;const s=(W/iw)*zoom,dw=iw*s,dh=ih*s;let dx=W/2-camX*dw;dx=Math.min(0,Math.max(W-dw,dx));cx.drawImage(img,dx,(H-dh)/2,dw,dh);cx.filter='none';
   }
   if(color&&!LY.band){const g=cx.createRadialGradient(W/2,H/2,H*0.3,W/2,H/2,H*0.75);g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,'rgba(0,0,0,.35)');cx.fillStyle=g;cx.fillRect(0,0,W,H);}
 }
-function drawProgress(p){cx.fillStyle='rgba(255,255,255,.25)';cx.fillRect(0,0,W,14);cx.fillStyle=P.key==='ig'?'#d6249f':'#ff3d57';cx.fillRect(0,0,W*Math.min(1,p),14);}
+function drawProgress(p){if(!$('progOn').checked)return;cx.fillStyle='rgba(255,255,255,.22)';cx.fillRect(0,0,W,9);cx.fillStyle=accent();cx.fillRect(0,0,W*Math.min(1,p),9);}
+// ぼかし背景（フック・誘導カード用）：小さく描いて本物のぼかし→拡大
+const blurBg=document.createElement('canvas');blurBg.width=270;blurBg.height=480;
+function makeBlurBg(){const b=blurBg.getContext('2d'),iw=stillV.width,ih=stillV.height;if(!iw)return;const sc=Math.max(480/ih,270/iw)*1.05,cxp=(cam.x||.5);
+  b.filter='blur(6px) brightness(.8) saturate(1.15)';let dx=135-cxp*iw*sc;dx=Math.min(0,Math.max(270-iw*sc,dx));b.drawImage(stillV,dx,(480-ih*sc)/2,iw*sc,ih*sc);b.filter='none';}
+function drawBlurBg(z=1){cx.fillStyle='#000';cx.fillRect(0,0,W,H);cx.imageSmoothingEnabled=true;cx.imageSmoothingQuality='high';const w=W*z,h=H*z;cx.drawImage(blurBg,(W-w)/2,(H-h)/2,w,h);}
+let XBLUR=0;
 const stillV=document.createElement('canvas');
-function snapVideo(){stillV.width=src.videoWidth||W;stillV.height=src.videoHeight||H;stillV.getContext('2d').drawImage(src,0,0);}
+function snapVideo(){stillV.width=src.videoWidth||W;stillV.height=src.videoHeight||H;stillV.getContext('2d').drawImage(src,0,0);makeBlurBg();}
 const ease=t=>1-Math.pow(1-Math.min(1,Math.max(0,t)),3);
 const back=t=>{t=Math.min(1,Math.max(0,t));const c=1.9;return 1+(c+1)*Math.pow(t-1,3)+c*Math.pow(t-1,2);}; // 少し行き過ぎて戻る
 
 // 1フレームの状態（全プラットフォーム共通）→ 各キャンバスに描く
 const LYmode=()=>$('mode').value;
 function renderFrame(f){
-  const s=fxLvl();
+  const s=fxLvl();XBLUR=0;
   if(f.kind==='hook'){
-    const shake=s?Math.max(0,1-f.t/0.35)*18*s:0;
-    cx.save();cx.translate((Math.random()-.5)*shake,(Math.random()-.5)*shake);
-    drawFrame(stillV,stillV.width,stillV.height,1+0.04*s*f.t,f.camX??cam.x);cx.restore();
-    cx.fillStyle='rgba(0,0,0,.55)';cx.fillRect(0,0,W,H);
-    if(s&&f.t<0.08){cx.fillStyle=`rgba(255,255,255,${0.6*(1-f.t/0.08)})`;cx.fillRect(0,0,W,H);}
-    const txt=$('hook').value||'…',size=fitSize(txt,P.txtW+60,130,64),k=s?0.75+0.25*back(f.t/0.25):1; // 最初から読める大きさで出して弾ませる
-    cx.save();cx.translate(P.txtCX,P.hookY);cx.scale(k,k);drawRich(txt,0,0,size,{anchor:'center',maxW:P.txtW+60});cx.restore();
+    const shake=s?Math.max(0,1-f.t/0.3)*14*s:0;
+    cx.save();cx.translate((Math.random()-.5)*shake,(Math.random()-.5)*shake);drawBlurBg(1.04+0.03*f.t);cx.restore();
+    const g=cx.createLinearGradient(0,0,0,H);g.addColorStop(0,'rgba(0,0,0,.25)');g.addColorStop(.5,'rgba(0,0,0,.5)');g.addColorStop(1,'rgba(0,0,0,.25)');cx.fillStyle=g;cx.fillRect(0,0,W,H);
+    const txt=$('hook').value||'…',size=fitSize(txt,P.txtW+60,132,64,'hook');
+    const lines=String(txt).split('\n'),lh=size*1.3,y0=P.hookY-lh*(lines.length-1)/2; // 行ごとに少しずつ下から出す
+    lines.forEach((ln,i)=>{const tt=s?ease((f.t-i*0.12)/0.28):1,k=s?0.85+0.15*back((f.t-i*0.12)/0.3):1;if(tt<=0)return;
+      cx.save();cx.globalAlpha=tt;cx.translate(P.txtCX,y0+i*lh+(1-tt)*40);cx.scale(k,k);drawRich(ln,0,0,size,{anchor:'center',maxW:P.txtW+60,role:'hook'});cx.restore();});
   }else if(f.kind==='main'){
-    const age=f.segAge,punch=s?0.12*s*(1-ease(age/0.28)):0,kb=1+0.05*s*Math.min(1,f.segP);
+    const age=f.segAge,punch=s?0.14*s*(1-ease(age/0.3)):0,kb=1+0.05*s*Math.min(1,f.segP);
+    XBLUR=s&&age<0.2?12*s*(1-age/0.2):0; // 切り替わり：ブラーしながら寄る
     drawFrame(src,src.videoWidth,src.videoHeight,LYmode()==='band'?1+(kb-1)*0.5:(kb+punch)*(f.jumpZ||1),f.camX??cam.x);
-    if(s&&age<0.14&&f.segIdx>0){cx.fillStyle=`rgba(255,255,255,${0.75*(1-age/0.14)})`;cx.fillRect(0,0,W,H);}
     if(LY.band){ // 上の帯に大きな見出し、下の帯に字幕
-      const hy=Math.max(P.headY+40,LY.top/2+50),hs=fitSize($('head').value,P.txtW+40,92,52);drawRich($('head').value,P.txtCX,hy,hs,{anchor:'center',maxW:P.txtW+40,stroke:.16});
-    }else drawRich($('head').value,P.txtCX,P.headY,fitSize($('head').value,P.txtW,62,40),{box:true,stroke:0,maxW:P.txtW+40});
-    if(f.cap){const pop=s?back(f.capAge/0.2):1,hl=hasHl(f.cap),sh=(s&&hl&&f.capAge<0.35)?Math.sin(f.capAge*70)*10*s*(1-f.capAge/0.35):0;
+      const hy=Math.max(P.headY+40,LY.top/2+50),hs=fitSize($('head').value,P.txtW+40,92,52,'cap');drawRich($('head').value,P.txtCX,hy,hs,{anchor:'center',maxW:P.txtW+40,role:'cap',auto:false});
+    }else drawRich($('head').value,P.txtCX,P.headY,fitSize($('head').value,P.txtW-40,58,38,'head'),{anchor:'center',maxW:P.txtW,role:'head'});
+    if($('chName').value.trim()){cx.save();cx.font=`700 34px "Noto Sans JP"${FB}`;cx.textAlign='right';cx.textBaseline='middle';cx.shadowColor='rgba(0,0,0,.6)';cx.shadowBlur=8;cx.fillStyle='rgba(255,255,255,.85)';cx.fillText($('chName').value.trim(),W-170,P.headY+(LY.band?-60:78));cx.restore();}
+    if(f.cap){const pop=s?0.72+0.28*back(f.capAge/0.18):1,hl=hasHl(f.cap),sh=(s&&hl&&f.capAge<0.35)?Math.sin(f.capAge*70)*10*s*(1-f.capAge/0.35):0;
       const sz=+$('fs').value*(hl&&s?1.08:1);
-      if(LY.band){cx.save();cx.translate(P.txtCX+sh,Math.min(LY.bottom+70,P.capY-sz*1.3));cx.scale(pop,pop);drawRich(f.cap,0,0,sz,{anchor:'top',maxW:P.txtW,prog:f.capP,style:$('capStyle').value});cx.restore();}
-      else{cx.save();cx.translate(P.txtCX+sh,P.capY);cx.scale(pop,pop);drawRich(f.cap,0,0,sz,{anchor:'bottom',maxW:P.txtW,prog:f.capP,style:$('capStyle').value});cx.restore();}}
+      if(LY.band){cx.save();cx.translate(P.txtCX+sh,Math.min(LY.bottom+70,P.capY-sz*1.3));cx.scale(pop,pop);drawRich(f.cap,0,0,sz,{anchor:'top',maxW:P.txtW,prog:f.capP,style:$('capStyle').value,role:'cap'});cx.restore();}
+      else{cx.save();cx.translate(P.txtCX+sh,P.capY);cx.scale(pop,pop);drawRich(f.cap,0,0,sz,{anchor:'bottom',maxW:P.txtW,prog:f.capP,style:$('capStyle').value,role:'cap'});cx.restore();}}
   }else if(f.kind==='outro'){
-    drawFrame(stillV,stillV.width,stillV.height,1.06,f.camX??cam.x);cx.fillStyle='rgba(0,0,0,.62)';cx.fillRect(0,0,W,H);
-    const k=s?back(f.t/0.35):1;cx.save();cx.translate(P.txtCX,P.key==='ig'?420:440);cx.scale(k,k);drawRich($('outroBig').value,0,0,fitSize($('outroBig').value,P.txtW+80,112,60),{anchor:'center',maxW:P.txtW+80});cx.restore();
+    drawBlurBg(1.06+0.02*f.t);cx.fillStyle='rgba(0,0,0,.45)';cx.fillRect(0,0,W,H);
+    const k=s?back(f.t/0.35):1;cx.save();cx.translate(P.txtCX,P.key==='ig'?420:440);cx.scale(k,k);drawRich($('outroBig').value,0,0,fitSize($('outroBig').value,P.txtW+80,112,60,'hook'),{anchor:'center',maxW:P.txtW+80,role:'hook'});cx.restore();
     const a=ease(f.t/0.4),tw=780,th=439,tx=P.txtCX-tw/2,ty=(P.key==='ig'?600:620)+(1-a)*80;cx.globalAlpha=a;
+    cx.save();cx.translate(P.txtCX,ty+th/2);cx.rotate(-0.025*a);cx.translate(-P.txtCX,-(ty+th/2)); // 少し傾けて置く
+    cx.save();cx.shadowColor='rgba(0,0,0,.55)';cx.shadowBlur=40;cx.shadowOffsetY=18;cx.fillStyle=accent();cx.beginPath();cx.roundRect(tx-10,ty-10,tw+20,th+20,34);cx.fill();cx.restore();
     cx.save();cx.beginPath();cx.roundRect(tx,ty,tw,th,28);cx.clip();
     if(thumbImg){const sc=Math.max(tw/thumbImg.width,th/thumbImg.height);cx.drawImage(thumbImg,tx+(tw-thumbImg.width*sc)/2,ty+(th-thumbImg.height*sc)/2,thumbImg.width*sc,thumbImg.height*sc);}
     else if(stillV.width){const sc=Math.max(tw/stillV.width,th/stillV.height);cx.drawImage(stillV,tx+(tw-stillV.width*sc)/2,ty+(th-stillV.height*sc)/2,stillV.width*sc,stillV.height*sc);}
-    cx.restore();cx.lineWidth=8;cx.strokeStyle='#fff';cx.beginPath();cx.roundRect(tx,ty,tw,th,28);cx.stroke();
+    cx.restore();cx.restore();
     const pulse=1+0.06*Math.sin(f.t*7)*(s?1:0);cx.save();cx.translate(P.txtCX,ty+th/2);cx.scale(pulse,pulse);
     cx.fillStyle='rgba(255,0,0,.92)';cx.beginPath();cx.roundRect(-84,-58,168,116,32);cx.fill();
     cx.fillStyle='#fff';cx.beginPath();cx.moveTo(-26,-34);cx.lineTo(42,0);cx.lineTo(-26,34);cx.closePath();cx.fill();cx.restore();
-    drawRich($('mainTitle').value||'本編はこちら',P.txtCX,ty+th+80,52,{stroke:.14,maxW:P.txtW});
+    drawRich($('mainTitle').value||'本編はこちら',P.txtCX,ty+th+90,50,{maxW:P.txtW,role:'cap',auto:false});
     const bob=s?Math.sin(f.t*6)*14:0;
     if(P.key==='yt'){
-      drawRich('画面下の「関連動画」をタップ',P.txtCX,H-560,54,{box:true,stroke:0,maxW:P.txtW+80});
-      cx.fillStyle='#ffd23f';cx.beginPath();const ax=200,ay=H-470+bob;cx.moveTo(ax-46,ay);cx.lineTo(ax+46,ay);cx.lineTo(ax,ay+74);cx.closePath();cx.fill();
+      drawRich('画面下の「関連動画」をタップ',P.txtCX,H-560,50,{maxW:P.txtW+80,role:'pill'});
+      cx.fillStyle=accent();cx.beginPath();const ax=200,ay=H-470+bob;cx.moveTo(ax-46,ay);cx.lineTo(ax+46,ay);cx.lineTo(ax,ay+74);cx.closePath();cx.fill();
     }else{
-      drawRich('▶ 本編はYouTubeで\nプロフィールのリンクから',P.txtCX,H-650,52,{box:true,stroke:0,maxW:P.txtW+80});
-      drawRich('🔖 保存して見返してね',P.txtCX,H-470+bob,50,{stroke:.14,maxW:P.txtW});
+      drawRich('▶ 本編はYouTubeで\nプロフィールのリンクから',P.txtCX,H-650,48,{maxW:P.txtW+80,role:'pill'});
+      drawRich('🔖 保存して見返してね',P.txtCX,H-470+bob,50,{maxW:P.txtW,role:'cap',auto:false});
     }
     cx.globalAlpha=1;
   }
@@ -455,13 +551,15 @@ function draw(){
   if(lastPreviewFrame){renderFrame(lastPreviewFrame);drawSafe();return;}
   const r=segRanges()[cur]||segRanges()[0];
   if(src.videoWidth)renderFrame({kind:'main',camX:camUpdate(src,src.videoWidth,src.videoHeight,true),segAge:9,segP:0,segIdx:0,cap:capAt(src.currentTime,r),capAge:9,p:null});
-  else{cx.fillStyle='#000';cx.fillRect(0,0,W,H);drawRich($('head').value,P.txtCX,P.headY,62,{box:true,stroke:0,maxW:P.txtW});drawRich('本編の動画を読み込むと\nここに表示されます',W/2,H/2,64,{anchor:'center',stroke:0,color:'#9aa3ad'});}
+  else{cx.fillStyle='#000';cx.fillRect(0,0,W,H);drawRich($('head').value,P.txtCX,P.headY,54,{anchor:'center',maxW:P.txtW,role:'head'});drawRich('本編の動画を読み込むと\nここに表示されます',W/2,H/2,60,{anchor:'center',role:'plain'});}
   drawSafe();
 }
 function syncModeUI(){const m=$('mode').value;$('posRow').hidden=m!=='crop';$('bandRow').hidden=m!=='band';}
 $('mode').addEventListener('input',syncModeUI);syncModeUI();
 $('bandPre').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;$('bandColor').value=b.dataset.c;lastPreviewFrame=null;draw();});
-['capStyle','bandColor','mode','pos','zoom','fs','head','hook','outroBig','mainTitle','fxColor','safe'].forEach(id=>$(id).addEventListener('input',()=>{lastPreviewFrame=null;draw();updatePost();}));
+$('voiceBoost').addEventListener('input',setVoice);
+for(const id of ['telop','accentPre'])$(id).addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;if(id==='telop')for(const x of $('telop').children)x.classList.toggle('on',x===b);else $('accent').value=b.dataset.c;lastPreviewFrame=null;draw();});
+['accent','autoHl','chunk','progOn','chName','capStyle','bandColor','mode','pos','zoom','fs','head','hook','outroBig','mainTitle','fxColor','safe'].forEach(id=>$(id).addEventListener('input',()=>{lastPreviewFrame=null;draw();updatePost();}));
 $('fxLevel').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;for(const x of $('fxLevel').children)x.classList.toggle('on',x===b);draw();});
 $('pvPlat').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;for(const x of $('pvPlat').children)x.classList.toggle('on',x===b);pvPlat=b.dataset.p;draw();});
 src.addEventListener('seeked',()=>{lastPreviewFrame=null;draw();});
@@ -513,10 +611,14 @@ function bgmFadeOut(sec){if(!bgmGain||!bgmEl.src)return;const t=audioCtx.current
 function bgmStop(){bgmEl.pause();}
 
 // ---------- 効果音（WebAudioで合成）----------
-let audioCtx=null,audioDest=null,sfxBus=null;
+let audioCtx=null,audioDest=null,sfxBus=null,voiceWet=null,voiceDry=null;
+function setVoice(){if(!voiceWet)return;const on=$('voiceBoost').checked;voiceWet.gain.value=on?1:0;voiceDry.gain.value=on?0:1;}
 function ensureAudio(){if(audioCtx)return;audioCtx=new AudioContext();const n=audioCtx.createMediaElementSource(src);audioDest=audioCtx.createMediaStreamDestination();
   voiceAn=audioCtx.createAnalyser();voiceAn.fftSize=1024;vbuf=new Float32Array(1024);n.connect(voiceAn);
-  n.connect(audioDest);n.connect(audioCtx.destination);sfxBus=audioCtx.createGain();sfxBus.connect(audioDest);sfxBus.connect(audioCtx.destination);}
+  const comp=audioCtx.createDynamicsCompressor();comp.threshold.value=-26;comp.knee.value=8;comp.ratio.value=4;comp.attack.value=0.004;comp.release.value=0.22;
+  voiceWet=audioCtx.createGain();voiceDry=audioCtx.createGain();const makeup=audioCtx.createGain();makeup.gain.value=1.7;const vout=audioCtx.createGain();
+  n.connect(comp);comp.connect(makeup);makeup.connect(voiceWet);voiceWet.connect(vout);n.connect(voiceDry);voiceDry.connect(vout);vout.connect(audioDest);vout.connect(audioCtx.destination);
+  setVoice();sfxBus=audioCtx.createGain();sfxBus.connect(audioDest);sfxBus.connect(audioCtx.destination);}
 function noiseBuf(d){const b=audioCtx.createBuffer(1,audioCtx.sampleRate*d,audioCtx.sampleRate),x=b.getChannelData(0);for(let i=0;i<x.length;i++)x[i]=Math.random()*2-1;return b;}
 const SFX={
   whoosh(){const t=audioCtx.currentTime,n=audioCtx.createBufferSource();n.buffer=noiseBuf(.4);const f=audioCtx.createBiquadFilter();f.type='bandpass';f.Q.value=1.2;
