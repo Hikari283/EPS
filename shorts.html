@@ -3,205 +3,376 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ショート切り出し</title>
+<title>本編送客ショートメーカー</title>
 <style>
-  :root{ --bg:#101214; --card:#1a1d21; --line:#2c3138; --tx:#eceff3; --sub:#9aa3ad; --accent:#ff3d57; --ok:#3ecf8e; }
+  :root{ --bg:#101214; --card:#1a1d21; --line:#2c3138; --tx:#eceff3; --sub:#9aa3ad; --accent:#ff3d57; --ok:#3ecf8e; --hl:#ffd23f; }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--tx);font-family:-apple-system,"Hiragino Kaku Gothic ProN","Yu Gothic UI","Meiryo",sans-serif;font-size:14px;line-height:1.6}
   header{padding:14px 20px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}
   header h1{font-size:18px;margin:0}
   header span{color:var(--sub);font-size:12px}
-  .wrap{max-width:1180px;margin:0 auto;padding:16px;display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:16px}
-  @media(max-width:900px){.wrap{grid-template-columns:minmax(0,1fr)}}
+  .wrap{max-width:1240px;margin:0 auto;padding:16px;display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px;align-items:start}
+  @media(max-width:960px){.wrap{grid-template-columns:minmax(0,1fr)}}
+  .colL{display:grid;gap:16px;min-width:0}
   .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;display:grid;gap:10px;align-content:start;min-width:0}
-  .card h2{font-size:13px;margin:0;color:var(--sub);letter-spacing:.05em}
-  .drop{border:2px dashed var(--line);border-radius:10px;padding:18px;text-align:center;color:var(--sub);cursor:pointer}
+  .card h2{font-size:14px;margin:0;display:flex;gap:8px;align-items:center}
+  .card h2 .n{background:var(--accent);color:#fff;border-radius:50%;width:22px;height:22px;display:grid;place-items:center;font-size:12px}
+  .drop{border:2px dashed var(--line);border-radius:10px;padding:16px;text-align:center;color:var(--sub);cursor:pointer}
   .drop.over{border-color:var(--accent)}
   video{width:100%;border-radius:8px;background:#000;display:block}
   .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-  .row label{color:var(--sub);font-size:12px;min-width:64px}
-  input[type=text],input[type=number],select,textarea{background:#0e1013;color:var(--tx);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font:inherit}
-  textarea{width:100%;resize:vertical;min-height:44px}
-  input[type=range]{flex:1;min-width:120px}
-  .time{width:92px;font-variant-numeric:tabular-nums}
-  button{background:#23282e;color:var(--tx);border:1px solid var(--line);border-radius:8px;padding:7px 12px;font:inherit;font-size:13px;cursor:pointer}
+  .lbl{color:var(--sub);font-size:12px}
+  input[type=text],input[type=number],select,textarea{background:#0e1013;color:var(--tx);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font:inherit;min-width:0}
+  textarea{width:100%;resize:vertical;min-height:40px}
+  input[type=range]{flex:1;min-width:100px}
+  .time{width:84px;font-variant-numeric:tabular-nums}
+  button{background:#23282e;color:var(--tx);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font:inherit;font-size:13px;cursor:pointer}
   button:hover{border-color:var(--accent)}
   button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
   button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+  button.sm{padding:2px 8px;font-size:12px}
   button:disabled{opacity:.45;cursor:not-allowed}
-  .stage{display:flex;justify-content:center}
-  #out{width:100%;max-width:340px;aspect-ratio:9/16;height:auto;border-radius:12px;background:#000;border:1px solid var(--line)}
+  .seg{display:grid;grid-template-columns:auto auto auto auto minmax(0,1fr) auto;gap:6px;align-items:center;background:#14171a;border:1px solid var(--line);border-radius:8px;padding:8px}
+  @media(max-width:640px){.seg{grid-template-columns:auto auto auto auto}.seg input.cap{grid-column:1/-1}}
+  .seg b{color:var(--accent);font-variant-numeric:tabular-nums}
+  .stage{position:sticky;top:12px;display:grid;gap:10px}
+  #out{width:100%;max-width:330px;aspect-ratio:9/16;height:auto;border-radius:14px;background:#000;border:1px solid var(--line);justify-self:center}
   .hint{color:var(--sub);font-size:12px}
   .bar{height:8px;background:#0e1013;border-radius:99px;overflow:hidden}
   .bar i{display:block;height:100%;width:0;background:var(--accent)}
-  .warn{color:#ffb547}
-  .ok{color:var(--ok)}
+  .warn{color:#ffb547} .ok{color:var(--ok)}
   a.dl{color:var(--ok);font-weight:700}
+  .tpl{display:flex;gap:6px;flex-wrap:wrap}
+  .tpl button{border-radius:99px;font-size:12px}
+  .check{display:grid;gap:4px;margin:0;padding-left:1.2em}
+  .copybox{display:grid;gap:4px}
+  .copybox textarea{min-height:56px;font-size:12px}
+  mark{background:none;color:var(--hl);font-weight:700}
 </style>
 </head>
 <body>
 <header>
-  <h1>ショート切り出し</h1>
-  <span>長い動画から縦型（9:16・1080×1920）のショートを作ります。処理はすべてこのPCの中だけで行います。</span>
+  <h1>本編送客ショートメーカー</h1>
+  <span>フック → 見どころ → 答えの手前で止めて本編へ。縦型1080×1920で書き出し。処理はすべてこのPCの中だけ。</span>
 </header>
 
 <div class="wrap">
+<div class="colL">
+
   <div class="card">
-    <h2>① 元の動画</h2>
-    <div class="drop" id="drop">動画ファイル（mp4 など）をドロップ／クリックで選択</div>
+    <h2><span class="n">1</span>本編の動画と字幕</h2>
+    <div class="drop" id="drop">本編の動画ファイル（mp4 など）をドロップ／クリックで選択</div>
     <video id="src" controls playsinline hidden></video>
     <div class="row">
-      <label>開始</label><input id="tStart" class="time" type="text" value="0:00">
-      <button id="setStart">今の位置を開始に</button>
-      <label>終了</label><input id="tEnd" class="time" type="text" value="0:30">
-      <button id="setEnd">今の位置を終了に</button>
+      <button id="srtBtn">字幕ファイル（.srt / .vtt）を読み込む</button>
+      <span class="hint" id="srtMsg">任意。YouTube Studio →「字幕」→ 本編の字幕 →「︙」→「ダウンロード」で .srt が取れます。</span>
     </div>
-    <div class="hint" id="lenMsg">長さ：30秒</div>
-    <div class="row"><button id="previewClip">▶ 区間をプレビュー</button></div>
   </div>
 
   <div class="card">
-    <h2>② 縦型の見た目</h2>
-    <div class="stage"><canvas id="out" width="1080" height="1920"></canvas></div>
+    <h2><span class="n">2</span>型を選ぶ（施主系テンプレート）</h2>
+    <div class="tpl" id="tpl"></div>
+    <div class="row"><span class="lbl">冒頭のフック（最初の1.5秒）</span></div>
+    <textarea id="hook" placeholder="例：家を建てて一番後悔したのは…"></textarea>
+    <div class="row"><span class="lbl">ずっと上に出す見出し</span></div>
+    <input type="text" id="head" placeholder="例：【施主の本音】後悔ポイント" style="width:100%">
+    <div class="hint">文字の中で <mark>【】</mark> で囲んだ部分や *アスタリスク* で囲んだ部分は黄色で強調されます（例：*3000万円* かかった）。</div>
+  </div>
+
+  <div class="card">
+    <h2><span class="n">3</span>見どころを選んでつなぐ（2〜3か所がおすすめ）</h2>
+    <div class="hint">本編を再生して「今の位置」ボタンで区間を作ります。最後の区間は<b>答えを言う直前で止める</b>のがコツです。</div>
+    <div id="segs" style="display:grid;gap:8px"></div>
     <div class="row">
-      <label>レイアウト</label>
-      <select id="mode">
-        <option value="blur">全体を表示（上下はぼかし背景）</option>
-        <option value="crop">画面いっぱいに切り抜き</option>
-      </select>
-    </div>
-    <div class="row"><label>左右の位置</label><input id="pos" type="range" min="0" max="100" value="50"></div>
-    <div class="row"><label>拡大</label><input id="zoom" type="range" min="100" max="250" value="100"></div>
-    <div class="row"><label>上の文字</label></div>
-    <textarea id="title" placeholder="例：心電図のここを見る！"></textarea>
-    <div class="row"><label>下の文字</label></div>
-    <textarea id="sub" placeholder="例：続きは本編で"></textarea>
-    <div class="row">
-      <label>文字の大きさ</label><input id="fs" type="range" min="50" max="140" value="88">
-      <label style="min-width:auto">色</label><input id="fc" type="color" value="#ffffff">
+      <button id="addSeg">＋ 区間を追加</button>
+      <span class="hint" id="lenMsg"></span>
     </div>
   </div>
 
-  <div class="card" style="grid-column:1/-1">
-    <h2>③ 書き出し</h2>
+  <div class="card">
+    <h2><span class="n">4</span>最後の誘導カード</h2>
+    <div class="row"><span class="lbl">大きい文字</span></div>
+    <input type="text" id="outroBig" value="答えは本編で👇" style="width:100%">
+    <div class="row"><span class="lbl">本編のタイトル</span></div>
+    <input type="text" id="mainTitle" placeholder="例：【総額公開】注文住宅3500万円の内訳と後悔ポイント" style="width:100%">
     <div class="row">
+      <button id="thumbBtn">本編のサムネ画像を選ぶ</button>
+      <span class="hint" id="thumbMsg">選ばない場合は最後の場面を使います</span>
+      <span class="lbl" style="margin-left:auto">表示秒数</span><input id="outroDur" type="number" min="2" max="6" step="0.5" value="3" style="width:64px">
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="n">5</span>書き出し</h2>
+    <div class="row">
+      <button id="previewAll">▶ 全体をプレビュー</button>
       <button class="primary" id="exportBtn" disabled>⏺ ショートを書き出す</button>
-      <button id="stopBtn" disabled>■ 中止</button>
+      <button id="stopBtn" disabled>■ 止める</button>
       <span class="hint" id="fmtMsg"></span>
     </div>
     <div class="bar"><i id="prog"></i></div>
-    <div id="exportMsg" class="hint">動画を読み込むと書き出せます。書き出しは区間の長さと同じだけ時間がかかります（30秒の区間なら約30秒）。その間はこのタブを前面に出したままにしてください。</div>
+    <div id="exportMsg" class="hint">書き出しは完成動画の長さと同じだけ時間がかかります。その間はこのタブを前面に出したままにしてください。</div>
   </div>
+
+  <div class="card">
+    <h2><span class="n">6</span>投稿のしかた（ここが送客のキモ）</h2>
+    <ol class="check">
+      <li>YouTubeアプリでショートを投稿するとき、「<b>関連動画</b>」に本編を設定する（画面下に本編へのリンクが常に出ます）。</li>
+      <li>本編の説明欄・固定コメントにも、このショートへのリンクを入れて相互につなぐ。</li>
+      <li>ショートのタイトルは「答え」を書かない。続きが気になる形にする。</li>
+      <li>本編を公開した日〜翌日にショートを出すと、本編の初速が上がりやすい。</li>
+    </ol>
+    <div class="row"><span class="lbl">本編のURL</span><input type="text" id="mainUrl" placeholder="https://youtu.be/..." style="flex:1"></div>
+    <div class="copybox"><span class="lbl">ショートのタイトル案</span><textarea id="outTitle" readonly></textarea><button class="sm" data-copy="outTitle">コピー</button></div>
+    <div class="copybox"><span class="lbl">説明欄・固定コメント案</span><textarea id="outDesc" readonly></textarea><button class="sm" data-copy="outDesc">コピー</button></div>
+  </div>
+
+</div>
+
+<div class="stage card">
+  <canvas id="out" width="1080" height="1920"></canvas>
+  <div class="row">
+    <span class="lbl">レイアウト</span>
+    <select id="mode"><option value="blur">全体を表示（上下ぼかし）</option><option value="crop">画面いっぱいに切り抜き</option></select>
+  </div>
+  <div class="row"><span class="lbl">左右</span><input id="pos" type="range" min="0" max="100" value="50"></div>
+  <div class="row"><span class="lbl">拡大</span><input id="zoom" type="range" min="100" max="250" value="100"></div>
+  <div class="row"><span class="lbl">字幕の大きさ</span><input id="fs" type="range" min="50" max="120" value="74"></div>
+  <div class="hint">プレビューは選択中の区間の場面です。</div>
+</div>
 </div>
 
 <script>
 const $=id=>document.getElementById(id);
-const src=$('src'), out=$('out'), cx=out.getContext('2d');
-const W=1080,H=1920;
+const src=$('src'),out=$('out'),cx=out.getContext('2d');
+const W=1080,H=1920,FONT='"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic UI","Meiryo",sans-serif';
+const HOOK_DUR=1.6;
 
-// ---- 時間の入出力（m:ss / h:mm:ss / 秒）----
-function parseT(s){s=String(s).trim();if(!s)return 0;const p=s.split(':').map(Number);if(p.some(isNaN))return NaN;return p.reduce((a,v)=>a*60+v,0);}
-function fmtT(t){t=Math.max(0,t);const h=Math.floor(t/3600),m=Math.floor(t%3600/60),s=(t%60);const ss=s.toFixed(1).replace(/\.0$/,'').padStart(2,'0');return (h?h+':'+String(m).padStart(2,'0'):m)+':'+(s<10?'0':'')+s.toFixed(1).replace(/\.0$/,'');}
-function range(){const a=parseT($('tStart').value),b=parseT($('tEnd').value);return {a,b,ok:!isNaN(a)&&!isNaN(b)&&b>a};}
-function updateLen(){const r=range();const el=$('lenMsg');
-  if(!r.ok){el.innerHTML='<span class="warn">開始・終了の時間を確認してください（例 1:23 や 0:05.5）</span>';return;}
-  const L=r.b-r.a;el.innerHTML=`長さ：${L.toFixed(1)}秒`+(L>180?' <span class="warn">— ショートは最大3分（180秒）です</span>':(L>60?' <span class="hint">（60秒を超えるショートも投稿できます）</span>':''));}
-['tStart','tEnd'].forEach(id=>$(id).addEventListener('input',updateLen));
-$('setStart').onclick=()=>{$('tStart').value=fmtT(src.currentTime);updateLen();};
-$('setEnd').onclick=()=>{$('tEnd').value=fmtT(src.currentTime);updateLen();};
+// ---------- テンプレート ----------
+const TPL={
+  '後悔ポイント':{hook:'家を建てて\n*一番後悔*したのは…',head:'【施主の本音】後悔ポイント',outro:'答えは本編で👇',tags:'#家づくり #注文住宅 #後悔 #shorts'},
+  '総額いくら？':{hook:'この家、\n総額*いくら*だと思う？',head:'【総額公開】注文住宅のリアル',outro:'内訳は本編で全部公開👇',tags:'#家づくり #注文住宅 #住宅ローン #shorts'},
+  'ルームツアー':{hook:'この家で\n*一番いい場所*はココ',head:'【ルームツアー】',outro:'全部見たい人は本編へ👇',tags:'#ルームツアー #注文住宅 #マイホーム #shorts'},
+  'メーカー比較':{hook:'ハウスメーカー選び\n*決め手*になったのは…',head:'【比較】ハウスメーカー選び',outro:'比較の全容は本編で👇',tags:'#ハウスメーカー #家づくり #注文住宅 #shorts'},
+  'やってよかった':{hook:'これは*絶対やるべき*\nだった設備',head:'【施主おすすめ】やってよかった',outro:'残りは本編で紹介👇',tags:'#家づくり #新築 #マイホーム #shorts'},
+};
+$('tpl').innerHTML=Object.keys(TPL).map(k=>`<button data-t="${k}">${k}</button>`).join('');
+$('tpl').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const t=TPL[b.dataset.t];
+  $('hook').value=t.hook;$('head').value=t.head;$('outroBig').value=t.outro;tags=t.tags;draw();updatePost();});
+let tags='#家づくり #注文住宅 #shorts';
 
-// ---- 読み込み ----
-let fileName='short';
+// ---------- 時間 ----------
+function parseT(s){s=String(s).trim();if(!s)return NaN;const p=s.split(':').map(Number);if(p.some(isNaN))return NaN;return p.reduce((a,v)=>a*60+v,0);}
+function fmtT(t){t=Math.max(0,t);const h=Math.floor(t/3600),m=Math.floor(t%3600/60),s=t%60;const ss=(s<10?'0':'')+s.toFixed(1).replace(/\.0$/,'');return (h?h+':'+String(m).padStart(2,'0'):m)+':'+ss;}
+
+// ---------- 区間 ----------
+let segs=[{a:'0:00',b:'0:08',cap:''}],cur=0;
+function renderSegs(){
+  $('segs').innerHTML=segs.map((s,i)=>`<div class="seg" data-i="${i}" style="${i===cur?'border-color:var(--accent)':''}">
+    <b>#${i+1}</b>
+    <input class="time" data-k="a" value="${s.a}"><button class="sm" data-set="a">今の位置</button>
+    <input class="time" data-k="b" value="${s.b}"><button class="sm" data-set="b">今の位置</button>
+    <input class="cap" data-k="cap" type="text" placeholder="この区間の字幕（SRTを読み込んだら空でOK）" value="${s.cap.replace(/"/g,'&quot;')}" style="grid-column:1/-2">
+    <div class="row"><button class="sm" data-play>▶</button><button class="sm" data-up>↑</button><button class="sm" data-del>×</button></div>
+  </div>`).join('');
+  updateLen();
+}
+function segRanges(){return segs.map(s=>({a:parseT(s.a),b:parseT(s.b),cap:s.cap})).filter(r=>!isNaN(r.a)&&!isNaN(r.b)&&r.b>r.a);}
+function totalLen(){return HOOK_DUR+segRanges().reduce((t,r)=>t+r.b-r.a,0)+(+$('outroDur').value||3);}
+function updateLen(){const n=segRanges().length,L=totalLen();
+  $('lenMsg').innerHTML=`有効な区間 ${n}／${segs.length}　完成の長さ 約${L.toFixed(1)}秒`+(L>60?' <span class="warn">（60秒以内が見られやすい。最大180秒）</span>':'');}
+$('segs').addEventListener('input',e=>{const box=e.target.closest('.seg');if(!box)return;const k=e.target.dataset.k;if(k){segs[+box.dataset.i][k]=e.target.value;updateLen();}});
+$('segs').addEventListener('click',e=>{const box=e.target.closest('.seg');if(!box)return;const i=+box.dataset.i;
+  if(cur!==i){cur=i;}
+  const b=e.target;
+  if(b.dataset.set){segs[i][b.dataset.set]=fmtT(src.currentTime);renderSegs();return;}
+  if('del' in b.dataset){segs.splice(i,1);if(!segs.length)segs.push({a:'0:00',b:'0:05',cap:''});cur=Math.min(cur,segs.length-1);renderSegs();return;}
+  if('up' in b.dataset&&i>0){[segs[i-1],segs[i]]=[segs[i],segs[i-1]];cur=i-1;renderSegs();return;}
+  if('play' in b.dataset){const r=segRanges()[i];if(r){previewSeg(r);}return;}
+  for(const x of $('segs').children)x.style.borderColor=+x.dataset.i===cur?'var(--accent)':'';
+});
+$('addSeg').onclick=()=>{const t=src.duration?fmtT(src.currentTime):'0:00';segs.push({a:t,b:src.duration?fmtT(Math.min(src.duration,src.currentTime+6)):'0:06',cap:''});cur=segs.length-1;renderSegs();};
+$('outroDur').addEventListener('input',updateLen);
+renderSegs();
+
+// ---------- 読み込み ----------
+let fileName='short',thumbImg=null,cues=[];
 function load(f){if(!f)return;fileName=f.name.replace(/\.[^.]+$/,'');src.src=URL.createObjectURL(f);src.hidden=false;}
 const drop=$('drop');
-drop.onclick=()=>{const i=document.createElement('input');i.type='file';i.accept='video/*';i.onchange=e=>load(e.target.files[0]);i.click();};
+drop.onclick=()=>pick('video/*',load);
 drop.addEventListener('dragover',e=>{e.preventDefault();drop.classList.add('over');});
 drop.addEventListener('dragleave',()=>drop.classList.remove('over'));
 drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('over');load(e.dataTransfer.files[0]);});
-src.addEventListener('loadedmetadata',()=>{
-  $('tEnd').value=fmtT(Math.min(src.duration,30));updateLen();$('exportBtn').disabled=false;
-  $('exportMsg').textContent=`読み込みました（${src.videoWidth}×${src.videoHeight}、${fmtT(src.duration)}）。区間と見た目を決めて書き出してください。`;
-  draw();
-});
+function pick(accept,cb){const i=document.createElement('input');i.type='file';i.accept=accept;i.onchange=e=>e.target.files[0]&&cb(e.target.files[0]);i.click();}
+src.addEventListener('loadedmetadata',()=>{$('exportBtn').disabled=false;$('exportMsg').textContent=`読み込みました（${src.videoWidth}×${src.videoHeight}、${fmtT(src.duration)}）。`;draw();});
 src.addEventListener('error',()=>{$('exportMsg').innerHTML='<span class="warn">この動画はブラウザで再生できませんでした。ChromeかEdgeで開くか、mp4（H.264）に変換してください。</span>';});
+$('thumbBtn').onclick=()=>pick('image/*',f=>{const im=new Image();im.onload=()=>{thumbImg=im;$('thumbMsg').textContent='✅ '+f.name;};im.src=URL.createObjectURL(f);});
+$('srtBtn').onclick=()=>pick('.srt,.vtt,text/vtt,application/x-subrip',async f=>{cues=parseSubs(await f.text());$('srtMsg').innerHTML=cues.length?`<span class="ok">✅ 字幕 ${cues.length} 行を読み込みました</span>（区間の字幕欄が空なら自動で使います）`:'<span class="warn">字幕を読み取れませんでした</span>';draw();});
+function parseSubs(t){const out=[];const re=/(\d+:)?(\d{1,2}):(\d{2})[.,](\d{3})\s*-->\s*(\d+:)?(\d{1,2}):(\d{2})[.,](\d{3})[^\n]*\n([\s\S]*?)(?=\n\s*\n|$)/g;let m;
+  const ts=(h,mi,s,ms)=>(h?parseInt(h):0)*3600+(+mi)*60+(+s)+(+ms)/1000;
+  while((m=re.exec(t.replace(/\r/g,'')))){const text=m[9].replace(/<[^>]+>/g,'').trim();if(text)out.push({a:ts(m[1],m[2],m[3],m[4]),b:ts(m[5],m[6],m[7],m[8]),text});}return out;}
+function capAt(t,seg){if(seg&&seg.cap&&seg.cap.trim())return seg.cap;const c=cues.find(c=>t>=c.a&&t<c.b);return c?c.text:'';}
 
-// ---- 描画 ----
-function wrapLines(text,maxW){const lines=[];for(const para of text.split('\n')){let cur='';for(const ch of para){if(cx.measureText(cur+ch).width>maxW&&cur){lines.push(cur);cur=ch;}else cur+=ch;}lines.push(cur);}return lines.filter((l,i,a)=>l||a.length===1);}
-function drawText(text,yTop,anchorBottom){
-  text=text.trim();if(!text)return;
-  const fs=+$('fs').value;cx.font=`900 ${fs}px "Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic UI","Meiryo",sans-serif`;
-  const lines=wrapLines(text,W-120),lh=fs*1.25;let y=anchorBottom?yTop-lh*(lines.length-1):yTop;
-  cx.textAlign='center';cx.textBaseline='middle';cx.lineJoin='round';
-  for(const l of lines){cx.lineWidth=fs*0.18;cx.strokeStyle='rgba(0,0,0,.92)';cx.strokeText(l,W/2,y);cx.fillStyle=$('fc').value;cx.fillText(l,W/2,y);y+=lh;}
-}
-function draw(){
-  cx.fillStyle='#000';cx.fillRect(0,0,W,H);
-  const vw=src.videoWidth,vh=src.videoHeight;
-  if(vw&&vh){
-    const pos=$('pos').value/100,zoom=$('zoom').value/100;
-    if($('mode').value==='crop'){
-      const s=Math.max(H/vh,W/vw)*zoom,dw=vw*s,dh=vh*s;
-      cx.drawImage(src,(W-dw)*pos,(H-dh)/2,dw,dh);
-    }else{
-      const sb=Math.max(H/vh,W/vw),bw=vw*sb,bh=vh*sb;
-      cx.save();cx.filter='blur(40px) brightness(.55)';cx.drawImage(src,(W-bw)/2-60,(H-bh)/2-60,bw+120,bh+120);cx.restore();
-      const s=(W/vw)*zoom,dw=vw*s,dh=vh*s;
-      cx.drawImage(src,(W-dw)*pos,(H-dh)/2,dw,dh);
+// ---------- 描画 ----------
+function richLines(text,maxW){ // *強調* と 【】 を黄色に。改行と自動折り返し。
+  const lines=[];
+  for(const para of String(text).split('\n')){
+    let line=[],w=0,hl=false;
+    for(const ch of para){
+      if(ch==='*'){hl=!hl;continue;}
+      const isHl=hl||ch==='【'||ch==='】';const cw=cx.measureText(ch).width;
+      if(w+cw>maxW&&line.length){lines.push(line);line=[];w=0;}
+      line.push({ch,hl:isHl});w+=cw;
     }
+    lines.push(line);
   }
-  drawText($('title').value,300,false);
-  drawText($('sub').value,H-300,true);
+  // 【…】の中身も強調
+  for(const l of lines){let inB=false;for(const c of l){if(c.ch==='【')inB=true;if(inB)c.hl=true;if(c.ch==='】')inB=false;}}
+  return lines;
 }
-['mode','pos','zoom','title','sub','fs','fc'].forEach(id=>$(id).addEventListener('input',draw));
-src.addEventListener('seeked',draw);
-let previewing=false;
-function loop(){draw();if(!src.paused&&!src.ended)requestAnimationFrame(loop);}
-src.addEventListener('play',()=>requestAnimationFrame(loop));
-src.addEventListener('timeupdate',()=>{if(previewing){const r=range();if(r.ok&&src.currentTime>=r.b){src.pause();previewing=false;}}});
-$('previewClip').onclick=()=>{const r=range();if(!r.ok||!src.src)return;src.currentTime=r.a;previewing=true;src.play();};
-draw();
+function drawRich(text,cxX,y,size,{maxW=W-120,color='#fff',hl='#ffd23f',stroke=0.18,anchor='top',box=false}={}){
+  if(!String(text).trim())return 0;
+  cx.font=`900 ${size}px ${FONT}`;cx.textBaseline='middle';cx.lineJoin='round';
+  let lines=richLines(text,maxW);
+  // 1文字だけ次の行に落ちるのを防ぐ：行の長さをそろえて折り返し直す
+  if(lines.length>1&&!String(text).includes('\n')){const tw=lines.flat().reduce((a,c)=>a+cx.measureText(c.ch).width,0);lines=richLines(text,Math.min(maxW,tw/lines.length+size*0.9));}
+  const lh=size*1.28;let yy=anchor==='bottom'?y-lh*(lines.length-1):anchor==='center'?y-lh*(lines.length-1)/2:y;
+  for(const l of lines){
+    const lw=l.reduce((s,c)=>s+cx.measureText(c.ch).width,0);let x=cxX-lw/2;
+    if(box){cx.fillStyle='rgba(0,0,0,.55)';const p=size*.22;cx.beginPath();cx.roundRect(x-p,yy-lh/2,lw+p*2,lh,size*.2);cx.fill();}
+    for(const c of l){const cw=cx.measureText(c.ch).width;cx.textAlign='left';
+      if(stroke){cx.lineWidth=size*stroke;cx.strokeStyle='rgba(0,0,0,.92)';cx.strokeText(c.ch,x,yy);}
+      cx.fillStyle=c.hl?hl:color;cx.fillText(c.ch,x,yy);x+=cw;}
+    yy+=lh;}
+  return lines.length*lh;
+}
+function drawFrame(img,iw,ih,{dim=0}={}){
+  cx.fillStyle='#000';cx.fillRect(0,0,W,H);if(!iw||!ih)return;
+  const pos=$('pos').value/100,zoom=$('zoom').value/100;
+  if($('mode').value==='crop'){const s=Math.max(H/ih,W/iw)*zoom,dw=iw*s,dh=ih*s;cx.drawImage(img,(W-dw)*pos,(H-dh)/2,dw,dh);}
+  else{const sb=Math.max(H/ih,W/iw),bw=iw*sb,bh=ih*sb;cx.save();cx.filter='blur(40px) brightness(.5)';cx.drawImage(img,(W-bw)/2-60,(H-bh)/2-60,bw+120,bh+120);cx.restore();
+    const s=(W/iw)*zoom,dw=iw*s,dh=ih*s;cx.drawImage(img,(W-dw)*pos,(H-dh)/2,dw,dh);}
+  if(dim){cx.fillStyle=`rgba(0,0,0,${dim})`;cx.fillRect(0,0,W,H);}
+}
+function drawProgress(p){cx.fillStyle='rgba(255,255,255,.25)';cx.fillRect(0,0,W,14);cx.fillStyle='#ff3d57';cx.fillRect(0,0,W*Math.min(1,p),14);}
+const still=document.createElement('canvas');still.width=W;still.height=H;
+function snapStill(){still.getContext('2d').drawImage(out,0,0);}
+const ease=t=>1-Math.pow(1-Math.min(1,Math.max(0,t)),3);
 
-// ---- 書き出し（Canvas + 元動画の音声 → MediaRecorder）----
-function pickType(){
-  const c=['video/mp4;codecs=avc1.640028,mp4a.40.2','video/mp4;codecs=avc1,mp4a','video/mp4','video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];
-  return c.find(t=>window.MediaRecorder&&MediaRecorder.isTypeSupported(t))||'';
+function drawMain(seg,p){ // 本編区間
+  drawFrame(src,src.videoWidth,src.videoHeight);
+  drawRich($('head').value,W/2,150,64,{box:true,stroke:0});
+  drawRich(capAt(src.currentTime,seg),W/2,H-330,+$('fs').value,{anchor:'bottom'});
+  if(p!=null)drawProgress(p);
 }
-let audioCtx=null,audioDest=null,rec=null,stopReq=false;
-function ensureAudio(){
-  if(audioCtx)return;
-  audioCtx=new AudioContext();const node=audioCtx.createMediaElementSource(src);
-  audioDest=audioCtx.createMediaStreamDestination();node.connect(audioDest);node.connect(audioCtx.destination);
+function drawHook(t,p){ // t:0..HOOK_DUR
+  cx.drawImage(still,0,0);cx.fillStyle='rgba(0,0,0,.55)';cx.fillRect(0,0,W,H);
+  const k=ease(t/0.3),txt=$('hook').value||'…';
+  // 最長の行が画面に収まる大きさまで自動で縮める（各行は手入力の改行を優先）
+  let size=130;for(;size>64;size-=4){cx.font=`900 ${size}px ${FONT}`;if(Math.max(...txt.replace(/\*/g,'').split('\n').map(l=>cx.measureText(l).width))<=W-110)break;}cx.save();cx.translate(W/2,H/2);cx.scale(0.6+0.4*k,0.6+0.4*k);cx.globalAlpha=k;
+  drawRich(txt,0,0,size,{anchor:'center',maxW:W-100});cx.restore();
+  if(p!=null)drawProgress(p);
 }
-$('stopBtn').onclick=()=>{stopReq=true;};
+function drawOutro(t,p){
+  cx.drawImage(still,0,0);cx.save();cx.filter='blur(24px)';cx.drawImage(still,0,0);cx.restore();cx.fillStyle='rgba(0,0,0,.6)';cx.fillRect(0,0,W,H);
+  const k=ease(t/0.35);cx.globalAlpha=k;
+  drawRich($('outroBig').value,W/2,430,118,{anchor:'center'});
+  // 本編サムネ
+  const tw=860,th=484,tx=(W-tw)/2,ty=640;
+  cx.save();cx.beginPath();cx.roundRect(tx,ty,tw,th,28);cx.clip();
+  if(thumbImg){const s=Math.max(tw/thumbImg.width,th/thumbImg.height);cx.drawImage(thumbImg,tx+(tw-thumbImg.width*s)/2,ty+(th-thumbImg.height*s)/2,thumbImg.width*s,thumbImg.height*s);}
+  else{cx.drawImage(still,0,(H-W*th/tw)/2,W,W*th/tw,tx,ty,tw,th);}
+  cx.restore();cx.lineWidth=8;cx.strokeStyle='#fff';cx.beginPath();cx.roundRect(tx,ty,tw,th,28);cx.stroke();
+  // 再生ボタン
+  cx.fillStyle='rgba(255,0,0,.92)';cx.beginPath();cx.roundRect(W/2-90,ty+th/2-62,180,124,34);cx.fill();
+  cx.fillStyle='#fff';cx.beginPath();cx.moveTo(W/2-28,ty+th/2-36);cx.lineTo(W/2+44,ty+th/2);cx.lineTo(W/2-28,ty+th/2+36);cx.closePath();cx.fill();
+  drawRich($('mainTitle').value||'本編はこちら',W/2,ty+th+90,58,{stroke:.14});
+  // 関連動画リンクへの矢印（ショート画面の左下）
+  const bob=Math.sin(t*6)*14;
+  drawRich('画面下の「関連動画」をタップ',W/2,H-420+bob*0,58,{box:true,stroke:0,color:'#fff'});
+  cx.fillStyle='#ffd23f';cx.beginPath();const ax=230,ay=H-300+bob;cx.moveTo(ax-50,ay);cx.lineTo(ax+50,ay);cx.lineTo(ax,ay+80);cx.closePath();cx.fill();
+  cx.globalAlpha=1;
+  if(p!=null)drawProgress(p);
+}
+function draw(){ // 静止プレビュー
+  if(engine.running)return;
+  const r=segRanges()[cur]||segRanges()[0];
+  if(src.videoWidth)drawMain(r,null);else{cx.fillStyle='#000';cx.fillRect(0,0,W,H);drawRich($('head').value,W/2,150,64,{box:true,stroke:0});drawRich('本編の動画を読み込むと\nここに表示されます',W/2,H/2,64,{anchor:'center',stroke:0,color:'#9aa3ad'});}
+}
+['mode','pos','zoom','fs','head','hook','outroBig','mainTitle'].forEach(id=>$(id).addEventListener('input',()=>{draw();updatePost();}));
+src.addEventListener('seeked',draw);
+src.addEventListener('timeupdate',()=>{if(!engine.running&&src.paused)draw();});
+
+// ---------- 再生エンジン（プレビューと書き出しで共通）----------
+const engine={running:false,stop:false};
+const seek=t=>new Promise(res=>{if(Math.abs(src.currentTime-t)<0.01){res();return;}src.addEventListener('seeked',res,{once:true});src.currentTime=t;});
+const nextFrame=()=>new Promise(res=>requestAnimationFrame(res));
+async function runSequence(onProgress){
+  const rs=segRanges();if(!rs.length)throw new Error('有効な区間がありません');
+  const oDur=+$('outroDur').value||3,total=totalLen();let base=0;
+  engine.running=true;engine.stop=false;
+  try{
+    // フック：最初の区間の頭の場面を背景に
+    await seek(rs[0].a);drawFrame(src,src.videoWidth,src.videoHeight);snapStill();
+    let t0=performance.now();
+    while(!engine.stop){const t=(performance.now()-t0)/1000;if(t>=HOOK_DUR)break;drawHook(t,(base+t)/total);onProgress((base+t)/total);await nextFrame();}
+    base+=HOOK_DUR;
+    for(const r of rs){if(engine.stop)break;
+      await seek(r.a);await src.play();
+      await new Promise(res=>{const tick=()=>{const p=(base+src.currentTime-r.a)/total;drawMain(r,p);onProgress(p);
+        if(engine.stop||src.ended||src.currentTime>=r.b){res();return;}
+        src.requestVideoFrameCallback?src.requestVideoFrameCallback(tick):requestAnimationFrame(tick);};tick();});
+      src.pause();base+=r.b-r.a;}
+    drawFrame(src,src.videoWidth,src.videoHeight);snapStill(); // 最後の場面（字幕なし）を誘導カードの背景に
+    t0=performance.now();
+    while(!engine.stop){const t=(performance.now()-t0)/1000;if(t>=oDur)break;drawOutro(t,(base+t)/total);onProgress((base+t)/total);await nextFrame();}
+  }finally{engine.running=false;src.pause();}
+}
+async function previewSeg(r){if(engine.running)return;engine.running=true;engine.stop=false;
+  try{await seek(r.a);await src.play();await new Promise(res=>{const tick=()=>{drawMain(r,null);if(engine.stop||src.currentTime>=r.b||src.ended){res();return;}requestAnimationFrame(tick);};tick();});}
+  finally{src.pause();engine.running=false;}}
+$('previewAll').onclick=async()=>{if(engine.running||!src.videoWidth)return;$('stopBtn').disabled=false;
+  try{await runSequence(p=>$('prog').style.width=(p*100).toFixed(1)+'%');}catch(err){$('exportMsg').innerHTML=`<span class="warn">${err.message}</span>`;}
+  $('stopBtn').disabled=true;};
+$('stopBtn').onclick=()=>{engine.stop=true;};
+
+// ---------- 書き出し ----------
+function pickType(){const c=['video/mp4;codecs=avc1.640028,mp4a.40.2','video/mp4;codecs=avc1,mp4a','video/mp4','video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];
+  return c.find(t=>window.MediaRecorder&&MediaRecorder.isTypeSupported(t))||'';}
+let audioCtx=null,audioDest=null;
+function ensureAudio(){if(audioCtx)return;audioCtx=new AudioContext();const n=audioCtx.createMediaElementSource(src);audioDest=audioCtx.createMediaStreamDestination();n.connect(audioDest);n.connect(audioCtx.destination);}
 $('exportBtn').onclick=async()=>{
-  const r=range();if(!r.ok){updateLen();return;}
+  if(engine.running)return;
   const type=pickType();if(!type){$('exportMsg').innerHTML='<span class="warn">このブラウザは動画の書き出しに対応していません。ChromeかEdgeで開いてください。</span>';return;}
-  const ext=type.startsWith('video/mp4')?'mp4':'webm';
-  $('fmtMsg').textContent=`形式：${ext.toUpperCase()}`;
+  if(!segRanges().length){$('exportMsg').innerHTML='<span class="warn">有効な区間がありません（開始＜終了になっているか確認）</span>';return;}
+  const ext=type.startsWith('video/mp4')?'mp4':'webm';$('fmtMsg').textContent='形式：'+ext.toUpperCase();
   ensureAudio();await audioCtx.resume();
-  const stream=out.captureStream(30);
-  for(const t of audioDest.stream.getAudioTracks())stream.addTrack(t);
-  const chunks=[];rec=new MediaRecorder(stream,{mimeType:type,videoBitsPerSecond:10_000_000,audioBitsPerSecond:192_000});
-  rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data);};
-  const done=new Promise(res=>rec.onstop=res);
-  stopReq=false;previewing=false;$('exportBtn').disabled=true;$('stopBtn').disabled=false;
-  src.pause();src.currentTime=r.a;await new Promise(res=>src.addEventListener('seeked',res,{once:true}));
-  draw();rec.start(1000);await src.play();
-  $('exportMsg').textContent='書き出し中…（このタブを前面のままにしてください）';
-  await new Promise(res=>{
-    const tick=()=>{draw();const p=Math.min(1,(src.currentTime-r.a)/(r.b-r.a));$('prog').style.width=(p*100).toFixed(1)+'%';
-      if(stopReq||src.ended||src.currentTime>=r.b){res();return;}
-      if(src.requestVideoFrameCallback)src.requestVideoFrameCallback(tick);else requestAnimationFrame(tick);};
-    tick();
-  });
-  src.pause();rec.stop();await done;
-  $('exportBtn').disabled=false;$('stopBtn').disabled=true;
-  if(stopReq){$('exportMsg').textContent='中止しました。';$('prog').style.width='0';return;}
-  const blob=new Blob(chunks,{type:type.split(';')[0]});
-  const url=URL.createObjectURL(blob),name=`${fileName}_short_${fmtT(r.a).replace(/[:.]/g,'-')}.${ext}`;
+  const stream=out.captureStream(30);for(const t of audioDest.stream.getAudioTracks())stream.addTrack(t);
+  const chunks=[],rec=new MediaRecorder(stream,{mimeType:type,videoBitsPerSecond:10_000_000,audioBitsPerSecond:192_000});
+  rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data);};const done=new Promise(r=>rec.onstop=r);
+  $('exportBtn').disabled=true;$('stopBtn').disabled=false;$('exportMsg').textContent='書き出し中…（このタブを前面のままにしてください）';
+  rec.start(1000);
+  try{await runSequence(p=>$('prog').style.width=(p*100).toFixed(1)+'%');}catch(err){$('exportMsg').innerHTML=`<span class="warn">${err.message}</span>`;}
+  const stopped=engine.stop;rec.stop();await done;$('exportBtn').disabled=false;$('stopBtn').disabled=true;
+  if(stopped){$('exportMsg').textContent='止めました。';$('prog').style.width='0';return;}
+  const blob=new Blob(chunks,{type:type.split(';')[0]}),url=URL.createObjectURL(blob),name=`${fileName}_short.${ext}`;
   const a=document.createElement('a');a.href=url;a.download=name;a.click();
-  $('exportMsg').innerHTML=`<span class="ok">✅ 書き出しました（${(blob.size/1048576).toFixed(1)}MB）。</span> 保存されない場合は <a class="dl" href="${url}" download="${name}">ここをクリック</a>。YouTubeアプリやYouTube Studioから、そのままショートとしてアップロードできます。`;
+  $('exportMsg').innerHTML=`<span class="ok">✅ 書き出しました（${(blob.size/1048576).toFixed(1)}MB）。</span> 保存されない場合は <a class="dl" href="${url}" download="${name}">ここをクリック</a>。投稿時に「関連動画」へ本編を設定するのを忘れずに（⑥参照）。`;
 };
+
+// ---------- 投稿文 ----------
+const plain=s=>String(s).replace(/\*/g,'').replace(/\n/g,'');
+function updatePost(){
+  const hook=plain($('hook').value)||'（フック）',url=$('mainUrl').value.trim()||'（本編のURL）',mt=$('mainTitle').value.trim();
+  $('outTitle').value=`${hook}${/[…？?！!]$/.test(hook)?'':'…'} ${tags}`.slice(0,100);
+  $('outDesc').value=`続き・答えは本編で👇\n${mt?mt+'\n':''}${url}\n\n${tags}`;
+}
+$('mainUrl').addEventListener('input',updatePost);
+document.addEventListener('click',async e=>{const b=e.target.closest('[data-copy]');if(!b)return;const ta=$(b.dataset.copy);
+  try{await navigator.clipboard.writeText(ta.value);b.textContent='コピーしました';}catch(_){ta.select();b.textContent='選択しました（Ctrl+C）';}
+  setTimeout(()=>b.textContent='コピー',1500);});
+$('tpl').firstElementChild.click();
+draw();
 </script>
 </body>
 </html>
