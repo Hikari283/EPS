@@ -82,9 +82,9 @@
 
   <div class="card" id="autoCard">
     <h2><span class="n">★</span>全自動で下書きを作る</h2>
-    <div class="hint">本編の<b>字幕（.srt）</b>を読み込むと、話している内容から「フック・見出し・見どころの区間（答えの直前で止める）・最後の文字・投稿タイトル」をまとめて作ります。気に入った案を選ぶと下の②〜⑤に全部入ります。</div>
+    <div class="hint">本編の<b>字幕（.srt）</b>を読み込むと、話している内容から「フック・見出し・見どころの区間（答えの直前で止める）・最後の文字・投稿タイトル」をまとめて作ります。気に入った案を選ぶと下の②〜⑤に全部入ります。<br>🎬 AI編集チームは「ディレクター（企画）→ コピーライター（フック・タイトル）→ 編集（区間の微調整・テロップの型・色・テンポ）→ チェック役（採点して修正）」の4人が順番に仕上げます（1回 1〜2分）。</div>
     <div class="row">
-      <button class="primary" id="aiBtn">🤖 AIで3案つくる（Claude）</button>
+      <button class="primary" id="aiBtn">🎬 AI編集チームで3案つくる（Claude）</button>
       <button id="quickBtn">⚡ かんたん自動（無料・ネット不要）</button>
       <span class="hint" id="autoMsg"></span>
     </div>
@@ -740,6 +740,9 @@ function showPlans(list,source){
     <div class="hint">見出し：${markHl(p.headline)}　最後：${escH(p.outro)}</div>
     <ul>${p.segments.map(s=>`<li>${fmtT(s.start)}〜${fmtT(s.end)}　${escH(s.note||'')}</li>`).join('')}</ul>
     ${p.why?`<div class="hint">ねらい：${escH(p.why)}</div>`:''}
+    ${p.score!=null?`<div class="hint">🔍 チェック <b style="color:var(--tx)">${p.score}点</b>　${escH(p.good||'')}${p.fixed&&p.fixed!=='なし'?'　／直した点：'+escH(p.fixed):''}</div>`:''}
+    ${p.hook_alt?`<div class="hint">別案フック：${markHl(p.hook_alt)} <button class="sm" data-alt="${i}">こちらを使う</button></div>`:''}
+    ${p.design&&p.design.telop?`<div class="hint">✂️ 編集の設定：${escH({variety:'バラエティ',pop:'ポップ',news:'解説ボックス',impact:'インパクト'}[p.design.telop]||'')}・${escH({auto:'全画面追従',band:'上下に帯',blur:'ぼかし背景',crop:'固定'}[p.design.layout]||'')}・<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${escH(p.design.accent||'#ff3d57')}"></span>　${escH(p.design.note||'')}</div>`:''}
     <div class="row"><button class="primary sm" data-use="${i}">この案を使う</button><button class="sm" data-try="${i}">使って全体をプレビュー</button></div>
   </div>`).join('');
 }
@@ -750,8 +753,16 @@ function applyPlan(p){
   segs=p.segments.map(s=>({a:fmtT(s.start),b:fmtT(s.end),cap:''}));cur=0;renderSegs();
   lastPreviewFrame=null;draw();updatePost();
   if(p.short_title)$('ytTitle').value=`${p.short_title} ${tags.slice(0,3).join(' ')} #shorts`.slice(0,100);
+  const d=p.design;if(d){ // 編集担当が決めた仕上げ設定を反映
+    const pickPill=(id,v)=>{for(const x of $(id).children)x.classList.toggle('on',x.dataset.v===String(v));};
+    if(d.telop)pickPill('telop',d.telop);if(d.fx)pickPill('fxLevel',d.fx);
+    if(d.layout){$('mode').value=d.layout;syncModeUI();}
+    if(/^#[0-9a-f]{6}$/i.test(d.accent||''))$('accent').value=d.accent;
+    if(d.cap_style)$('capStyle').value=d.cap_style;if(d.cut)$('cutLevel').value=d.cut;
+    lastPreviewFrame=null;draw();}
 }
-$('plans').addEventListener('click',e=>{const b=e.target.closest('[data-use],[data-try]');if(!b)return;const p=plans[+(b.dataset.use??b.dataset.try)];applyPlan(p);
+$('plans').addEventListener('click',e=>{const al=e.target.closest('[data-alt]');if(al){const p=plans[+al.dataset.alt];[p.hook,p.hook_alt]=[p.hook_alt,p.hook];showPlans(plans,'AIチーム');return;}
+  const b=e.target.closest('[data-use],[data-try]');if(!b)return;const p=plans[+(b.dataset.use??b.dataset.try)];applyPlan(p);
   $('autoMsg').innerHTML='<span class="ok">✅ 案を反映しました。②〜⑤で細かく直せます。</span>';
   if('try' in b.dataset)$('previewAll').click();else $('segs').scrollIntoView({behavior:'smooth',block:'center'});});
 
@@ -761,48 +772,90 @@ function transcriptText(){
   for(const c of cues){if(curRow&&c.a-curRow.a<6&&curRow.text.length<60){curRow.text+=' '+c.text;curRow.b=c.b;}else{curRow={a:c.a,b:c.b,text:c.text};rows.push(curRow);}}
   return rows.map(r=>`[${r.a.toFixed(1)}-${r.b.toFixed(1)}] ${r.text.replace(/\s+/g,' ')}`).join('\n');
 }
-const PLAN_SCHEMA={type:'object',additionalProperties:false,required:['plans'],properties:{plans:{type:'array',items:{type:'object',additionalProperties:false,
-  required:['template','hook','headline','outro','short_title','main_title','why','segments'],
-  properties:{template:{type:'string',enum:Object.keys(TPL)},hook:{type:'string'},headline:{type:'string'},outro:{type:'string'},short_title:{type:'string'},main_title:{type:'string'},why:{type:'string'},
-    segments:{type:'array',items:{type:'object',additionalProperties:false,required:['start','end','note'],properties:{start:{type:'number'},end:{type:'number'},note:{type:'string'}}}}}}}}};
-const AI_SYSTEM=`あなたは「施主（注文住宅を建てた人・建てている人）」のYouTubeチャンネル専属のショート動画編集者です。
-目的は、ショートを見た人を長編の本編に送ること。ショートの中で答えや結論を言い切らず、「続きが気になる」状態で終わらせます。
-
-本編の字幕（[開始秒-終了秒] テキスト）を読んで、ショートの構成案を3つ作ってください。3案は切り口（後悔・お金・間取りや設備・比較など）を変えること。
-
-各案のルール：
-- template：次から一番合う型を選ぶ → ${Object.keys(TPL).join(' / ')}
-- hook：冒頭1.6秒で出す問いかけ。1行12文字前後×最大2行（改行は\\n）。答えは書かない。一番刺さる語を1か所だけ *アスタリスク* で囲む。
-- headline：画面上部にずっと出す見出し。【】で始まる16文字以内。
-- segments：本編から使う区間を2〜3個。start/endは字幕の秒をそのまま使い、各4〜18秒、合計20〜45秒。時系列順。最後の区間は、答え・結論・金額などを言う「直前」で終わらせる。noteにその区間の内容を短く。
-- outro：最後の誘導カードの大きい文字。14文字以内で👇で終える（例：答えは本編で👇）。
-- short_title：ショートのタイトル。答えを書かず、40文字以内。
-- main_title：本編のタイトル案（字幕から推測、40文字以内）。
-- why：この案が本編に人を送れる理由を1文で。
-字幕にない事実（金額・メーカー名など）を作らないこと。`;
+// ================= AI動画編集チーム（4人が順番に仕事をする） =================
+const segSchema={type:'array',items:{type:'object',additionalProperties:false,required:['start','end','note'],properties:{start:{type:'number'},end:{type:'number'},note:{type:'string'}}}};
+const obj=(props)=>({type:'object',additionalProperties:false,required:Object.keys(props),properties:props});
+const arrOf=(o)=>obj({items:{type:'array',items:o}});
+const S_DIRECTOR=arrOf(obj({angle:{type:'string'},target:{type:'string'},template:{type:'string',enum:Object.keys(TPL)},reveal_at:{type:'number'},reveal:{type:'string'},segments:segSchema,why:{type:'string'}}));
+const S_COPY=arrOf(obj({hook:{type:'string'},hook_alt:{type:'string'},headline:{type:'string'},outro:{type:'string'},short_title:{type:'string'},main_title:{type:'string'}}));
+const S_EDITOR=arrOf(obj({segments:segSchema,telop:{type:'string',enum:Object.keys(TELOP)},layout:{type:'string',enum:['auto','band','blur','crop']},accent:{type:'string'},cap_style:{type:'string',enum:['kara','type','line']},cut:{type:'string',enum:['0.6','0.35','0.2']},fx:{type:'string',enum:['0.6','1','1.5']},note:{type:'string'}}));
+const S_REVIEW=arrOf(obj({score:{type:'integer'},good:{type:'string'},fixed:{type:'string'},hook:{type:'string'},headline:{type:'string'},outro:{type:'string'},short_title:{type:'string'},segments:segSchema}));
+const TEAM_BASE=`あなたたちは「施主（注文住宅を建てた人・建てている人）」のYouTubeチャンネル専属のショート動画制作チームです。
+ショートの目的は、見た人を長編の本編に送ること。答えや結論はショートの中で言い切らず、続きが気になる所で終える。
+字幕（[開始秒-終了秒] テキスト）にない事実（金額・メーカー名・数字）は作らない。`;
+const ROLE={
+ director:TEAM_BASE+`
+あなたはディレクターです。字幕を読んで、切り口がはっきり違う企画を3つ立ててください（例：後悔／お金／設備や間取り／メーカー比較／やってよかった）。
+- target：誰に刺さるか（例：これから建てる30代夫婦）
+- template：${Object.keys(TPL).join(' / ')} から選ぶ
+- reveal_at：答え・結論・金額などを言い始める秒。reveal：その答えの内容（ショートには入れない）
+- segments：使う区間2〜3個。字幕の秒をそのまま使い、各4〜18秒、合計20〜45秒、時系列順。最後の区間は reveal_at の直前で終える。前の区間は前振り・意外性・共感の場面を選ぶ。
+- why：本編に人を送れる理由を1文で。`,
+ copy:TEAM_BASE+`
+あなたはショート専門のコピーライターです。ディレクターの企画ごとに文字を書いてください。
+- hook：冒頭1.6秒の問いかけ。1行10〜12文字×2行（改行は\\n）。答えは書かない。一番刺さる語を1か所だけ *アスタリスク* で囲む。数字があれば入れる。「〇〇な人は見ないで」「9割が知らない」などの型も可。
+- hook_alt：別の言い回しのフック（同じルール）。
+- headline：画面上部の見出し。【】で始まる14文字以内。
+- outro：最後の誘導カードの大きい文字。12文字以内で👇で終える。
+- short_title：ショートのタイトル。答えを書かない。32文字以内。
+- main_title：本編のタイトル案。40文字以内。`,
+ editor:TEAM_BASE+`
+あなたはプロの動画編集者です。企画と文字を受け取り、仕上げの設定を決めてください。
+- segments：区間の始まりと終わりを字幕の区切り（文の頭・文の終わり）に合わせて直す。言いかけで切らない。最後の区間は答えの直前で止める。合計20〜45秒。
+- telop：テロップの型（variety=バラエティ二重フチ / pop=丸文字 / news=解説ボックス / impact=極太）。内容とトーンに合わせる。
+- layout：auto=全画面で人物に追従（人が話している動画向き） / band=上下に帯（説明・資料・画面録画向き） / blur=全体表示＋ぼかし / crop=固定
+- accent：テーマ色の16進カラー（例 #ff3d57）。内容のトーンに合う色。
+- cap_style：kara=話した所から光る / type=1文字ずつ / line=1行ずつ
+- cut：無音カットの強さ（0.6=ゆるめ / 0.35=ふつう / 0.2=きつめ）。話のテンポに合わせる。
+- fx：エフェクトの強さ（0.6=ひかえめ / 1=ふつう / 1.5=派手）
+- note：判断の理由を1文で。`,
+ review:TEAM_BASE+`
+あなたはチェック役（プロのショート編集の責任者）です。次の基準で各案を100点満点で採点し、問題があれば直した最終版を返してください。
+基準：①最初の1.6秒で手が止まるか（フックが具体的・数字や意外性・2行以内）②答えがショート内で漏れていないか（フック・見出し・タイトル・区間すべて）③区間が答えの直前で終わっているか（reveal_atより前）④合計20〜45秒か ⑤字幕にない事実を作っていないか ⑥見出し14字以内・最後の文字12字以内か。
+- score：直した後の点数
+- good：良い点を1文
+- fixed：直した点を1文（直していなければ「なし」）
+- hook/headline/outro/short_title/segments：直した最終版（直す必要がなければそのまま）`,
+};
+async function callJSON(client,system,user,schema){
+  const res=await client.beta.messages.create({model:'claude-opus-5-5',max_tokens:16000,
+    output_config:{effort:'medium',format:{type:'json_schema',schema}},betas:['server-side-fallback-2026-07-01'],fallbacks:'default',
+    system,messages:[{role:'user',content:user}]});
+  if(res.stop_reason==='refusal')throw new Error('AIがこの内容の処理を断りました（'+((res.stop_details&&res.stop_details.category)||'理由不明')+'）');
+  if(res.stop_reason==='max_tokens')throw new Error('出力が長すぎて途中で切れました。もう一度試してください');
+  return JSON.parse(res.content.filter(b=>b.type==='text').map(b=>b.text).join('')).items||[];
+}
+const segText=segs=>segs.map(s=>`[${(+s.start).toFixed(1)}-${(+s.end).toFixed(1)}] `+cues.filter(c=>c.b>s.start&&c.a<s.end).map(c=>c.text).join(' ')).join('\n');
+function teamLog(steps,cur){$('autoMsg').innerHTML=steps.map((t,i)=>`<span style="margin-right:10px;${i<cur?'color:var(--ok)':i===cur?'color:var(--tx);font-weight:700':'opacity:.5'}">${i<cur?'✅':i===cur?'⏳':'・'} ${t}</span>`).join('');}
 $('aiBtn').onclick=async()=>{
   if(!needCues())return;
   const key=$('aiKey').value.trim();if(!key){$('aiSet').open=true;$('autoMsg').innerHTML='<span class="warn">AIの設定にAPIキーを入れてください（かんたん自動ならキー不要）</span>';return;}
   try{localStorage.setItem(AI_KEY,key);}catch(_){}
-  $('aiBtn').disabled=true;$('autoMsg').textContent='🤖 字幕を読んで構成を考えています…（30秒〜1分ほど）';
+  const steps=['🎬 ディレクター：企画','✍️ コピーライター：文字','✂️ 編集：仕上げ設定','🔍 チェック：採点と修正'];
+  $('aiBtn').disabled=true;
   try{
     const {default:Anthropic}=await import('https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk/+esm');
     const client=new Anthropic({apiKey:key,dangerouslyAllowBrowser:true}); // ブラウザから直接（キーはこのPCだけ）
-    const res=await client.beta.messages.create({
-      model:'claude-opus-5-5',max_tokens:16000,
-      output_config:{effort:'medium',format:{type:'json_schema',schema:PLAN_SCHEMA}},
-      betas:['server-side-fallback-2026-07-01'],fallbacks:'default',
-      system:AI_SYSTEM,
-      messages:[{role:'user',content:`本編の長さ：約${Math.round(src.duration||cues[cues.length-1].b)}秒\n\n<transcript>\n${transcriptText()}\n</transcript>`}],
-    });
-    if(res.stop_reason==='refusal')throw new Error('AIがこの内容の処理を断りました（'+((res.stop_details&&res.stop_details.category)||'理由不明')+'）');
-    if(res.stop_reason==='max_tokens')throw new Error('出力が長すぎて途中で切れました。もう一度試してください');
-    const txt=res.content.filter(b=>b.type==='text').map(b=>b.text).join('');
-    const data=JSON.parse(txt);
+    const dur=Math.round(src.duration||cues[cues.length-1].b),tr=transcriptText();
+    teamLog(steps,0);
+    const dir=(await callJSON(client,ROLE.director,`本編の長さ：約${dur}秒\n\n<transcript>\n${tr}\n</transcript>`,S_DIRECTOR)).slice(0,3);
+    if(!dir.length)throw new Error('ディレクターが企画を出せませんでした。もう一度試してください');
+    teamLog(steps,1);
+    const brief=dir.map((d,i)=>`## 企画${i+1}：${d.angle}\n対象：${d.target}\n型：${d.template}\n答え（${d.reveal_at}秒〜、ショートには入れない）：${d.reveal}\nねらい：${d.why}\n使う区間の字幕：\n${segText(d.segments)}`).join('\n\n');
+    const copy=await callJSON(client,ROLE.copy,`企画は${dir.length}つ。同じ順番で返してください。\n\n${brief}`,S_COPY);
+    teamLog(steps,2);
+    const brief2=dir.map((d,i)=>{const c=copy[i]||{};return `## 企画${i+1}：${d.angle}\n答えの開始：${d.reveal_at}秒\n区間：${JSON.stringify(d.segments)}\nフック：${c.hook}\n見出し：${c.headline}`;}).join('\n\n');
+    const ed=await callJSON(client,ROLE.editor,`企画は${dir.length}つ。同じ順番で返してください。\n\n${brief2}\n\n<transcript>\n${tr}\n</transcript>`,S_EDITOR);
+    teamLog(steps,3);
+    const draft=dir.map((d,i)=>{const c=copy[i]||{},e=ed[i]||{};return {template:d.template,reveal_at:d.reveal_at,reveal:d.reveal,hook:c.hook,hook_alt:c.hook_alt,headline:c.headline,outro:c.outro,short_title:c.short_title,main_title:c.main_title,segments:e.segments&&e.segments.length?e.segments:d.segments,design:e,why:d.why};});
+    const brief3=draft.map((p,i)=>`## 案${i+1}\n答え（${p.reveal_at}秒〜）：${p.reveal}\nフック：${p.hook}\n見出し：${p.headline}\n最後：${p.outro}\nタイトル：${p.short_title}\n区間と字幕：\n${segText(p.segments)}`).join('\n\n');
+    const rv=await callJSON(client,ROLE.review,`案は${draft.length}つ。同じ順番で返してください。\n\n${brief3}`,S_REVIEW);
     const maxT=src.duration||Infinity;
-    const list=(data.plans||[]).map(p=>({...p,segments:p.segments.map(s=>({start:Math.max(0,+s.start),end:Math.min(maxT,+s.end),note:s.note})).filter(s=>s.end>s.start)})).filter(p=>p.segments.length);
+    const list=draft.map((p,i)=>{const r=rv[i]||{};const segsF=(r.segments&&r.segments.length?r.segments:p.segments).map(s=>({start:Math.max(0,+s.start),end:Math.min(maxT,+s.end),note:s.note})).filter(s=>s.end>s.start);
+      return {...p,hook:r.hook||p.hook,headline:r.headline||p.headline,outro:r.outro||p.outro,short_title:r.short_title||p.short_title,segments:segsF,score:r.score,good:r.good,fixed:r.fixed};})
+      .filter(p=>p.segments.length).sort((a,b)=>(b.score||0)-(a.score||0));
     if(!list.length)throw new Error('使える案が返ってきませんでした。もう一度試してください');
-    showPlans(list,'AI');$('autoMsg').innerHTML=`<span class="ok">✅ ${list.length}案できました。使いたい案を選んでください。</span>`;
+    showPlans(list,'AIチーム');$('autoMsg').innerHTML=`<span class="ok">✅ チームが${list.length}案を仕上げました（点数の高い順）。使いたい案を選んでください。</span>`;
   }catch(err){
     const m=String(err&&err.message||err);
     $('autoMsg').innerHTML='<span class="warn">'+escH(/401|authentication|api.key/i.test(m)?'APIキーが正しくありません':/429|rate/i.test(m)?'混み合っています。少し待ってから試してください':/credit|billing|402/i.test(m)?'APIのクレジット残高が足りません（Anthropic Consoleで確認）':/Failed to fetch|import|module/i.test(m)?'AIの部品を読み込めませんでした。インターネット接続を確認してください':m)+'</span>';
