@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>施主系YouTubeリサーチ</title>
+<style>
+  /* レイアウト：上=期間と操作、中央=ベンチマーク/競合の2列（スマホは1列）、設定とチャンネル探しはタブ */
+  :root{
+    --bg:#f2f4f3; --card:#ffffff; --ink:#1e2a2a; --sub:#6a7674; --line:#dde3e1;
+    --accent:#1f6f5c; --accent-soft:#e1efea; --bench:#b8642f; --bench-soft:#f6e9df; --comp:#3d5a9e; --comp-soft:#e4e9f5;
+    --hot:#d1452f;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic UI","Meiryo",sans-serif;font-size:14px;line-height:1.6}
+  header{background:var(--card);border-bottom:1px solid var(--line);padding:12px 20px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;position:sticky;top:0;z-index:5}
+  header h1{font-size:17px;margin:0;letter-spacing:.02em}
+  nav{display:flex;gap:4px;margin-left:auto}
+  nav button{background:none;border:1px solid transparent;border-radius:8px;padding:6px 12px;font:inherit;cursor:pointer;color:var(--sub)}
+  nav button.on{background:var(--accent-soft);color:var(--accent);font-weight:700}
+  main{max-width:1240px;margin:0 auto;padding:16px 20px 60px;display:grid;gap:16px}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;display:grid;gap:12px;align-content:start;min-width:0}
+  h2{font-size:15px;margin:0}
+  .muted{color:var(--sub);font-size:12px}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  button{font:inherit;cursor:pointer}
+  .btn{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:7px 12px;color:var(--ink)}
+  .btn:hover{border-color:var(--accent)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+  .btn.sm{padding:3px 9px;font-size:12px}
+  button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+  input[type=text],input[type=password],select{border:1px solid var(--line);border-radius:8px;padding:7px 10px;font:inherit;background:#fff;color:var(--ink);min-width:0}
+  .seg{display:inline-flex;background:var(--bg);border-radius:10px;padding:3px;gap:3px}
+  .seg button{border:0;background:none;border-radius:8px;padding:6px 14px;font-weight:700;color:var(--sub)}
+  .seg button.on{background:var(--accent);color:#fff}
+  .cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+  @media(max-width:860px){.cols{grid-template-columns:minmax(0,1fr)}}
+  .colhead{display:flex;align-items:center;gap:8px;font-weight:700}
+  .tag{font-size:12px;font-weight:700;padding:2px 10px;border-radius:99px}
+  .tag.b{background:var(--bench-soft);color:var(--bench)} .tag.c{background:var(--comp-soft);color:var(--comp)}
+  .vlist{display:grid;gap:10px}
+  .v{display:grid;grid-template-columns:150px minmax(0,1fr) auto;gap:12px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:8px;background:#fff;color:inherit;text-decoration:none}
+  .v:hover{border-color:var(--accent)}
+  @media(max-width:480px){.v{grid-template-columns:110px minmax(0,1fr) auto}}
+  .thumb{position:relative;aspect-ratio:16/9;border-radius:6px;overflow:hidden;background:var(--bg)}
+  .thumb img{width:100%;height:100%;object-fit:cover;display:block}
+  .thumb .dur{position:absolute;right:4px;bottom:4px;background:rgba(0,0,0,.75);color:#fff;font-size:11px;padding:0 5px;border-radius:4px;font-variant-numeric:tabular-nums}
+  .thumb .short{position:absolute;left:4px;top:4px;background:var(--hot);color:#fff;font-size:10px;font-weight:700;padding:0 5px;border-radius:4px}
+  .vt{font-weight:700;font-size:13px;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .vm{font-size:12px;color:var(--sub);font-variant-numeric:tabular-nums}
+  .score{display:grid;justify-items:center;gap:2px;min-width:52px}
+  .up{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:900;background:var(--line)}
+  .up.l1{background:var(--accent)} .up.l2{background:var(--hot)}
+  .score small{font-size:11px;color:var(--sub);font-variant-numeric:tabular-nums}
+  .chips{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:99px;padding:3px 6px 3px 3px;background:#fff;font-size:12px}
+  .chip img{width:22px;height:22px;border-radius:50%}
+  .chip button{border:0;background:none;color:var(--sub);padding:0 4px}
+  .status{font-size:12px;color:var(--sub)}
+  .err{color:var(--hot)}
+  .empty{border:1px dashed var(--line);border-radius:10px;padding:20px;text-align:center;color:var(--sub)}
+  ol.steps{margin:0;padding-left:1.3em;display:grid;gap:4px}
+  code{background:var(--bg);padding:1px 5px;border-radius:4px}
+  .found{display:grid;grid-template-columns:120px minmax(0,1fr) auto;gap:10px;align-items:center;border-bottom:1px solid var(--line);padding:8px 0}
+  .found img{width:100%;border-radius:6px}
+  .kw{border:1px solid var(--line);background:#fff;border-radius:99px;padding:3px 10px;font-size:12px}
+  .kw:hover{border-color:var(--accent)}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <h1>施主系YouTubeリサーチ</h1>
+  <nav>
+    <button data-tab="research" class="on">リサーチ</button>
+    <button data-tab="find">チャンネルを探す</button>
+    <button data-tab="setup">設定</button>
+  </nav>
+</header>
+
+<main>
+  <!-- ===== リサーチ ===== -->
+  <section id="tab-research" class="panel">
+    <div class="row">
+      <span class="muted">期間</span>
+      <div class="seg" id="period">
+        <button data-m="1" class="on">1ヶ月</button><button data-m="3">3ヶ月</button><button data-m="6">6ヶ月</button>
+      </div>
+      <span class="muted" style="margin-left:8px">種類</span>
+      <select id="kind"><option value="all">すべて</option><option value="long">長尺のみ</option><option value="short">ショートのみ（3分以下）</option></select>
+      <span class="muted">並び</span>
+      <select id="sort"><option value="score">伸び率（いつもの何倍）</option><option value="views">再生数</option><option value="ratio">再生数÷登録者数</option><option value="new">新しい順</option></select>
+      <button class="btn primary" id="runBtn">更新</button>
+      <button class="btn" id="csvBtn">CSV保存</button>
+    </div>
+    <div class="status" id="status">「設定」でAPIキーを入れ、「チャンネルを探す」でベンチマークと競合を登録すると、ここに一覧が出ます。</div>
+    <div class="cols">
+      <div class="panel" style="padding:12px">
+        <div class="colhead"><span class="tag b">ベンチマーク</span><span class="muted" id="bCount"></span></div>
+        <div class="chips" id="bChips"></div>
+        <div class="vlist" id="bList"></div>
+      </div>
+      <div class="panel" style="padding:12px">
+        <div class="colhead"><span class="tag c">競合</span><span class="muted" id="cCount"></span></div>
+        <div class="chips" id="cChips"></div>
+        <div class="vlist" id="cList"></div>
+      </div>
+    </div>
+    <div class="muted">↑＝そのチャンネルの普段の再生数（直近動画の中央値）の2倍以上、赤は5倍以上。ショートと長尺は別々に普段の値を出しています。</div>
+  </section>
+
+  <!-- ===== チャンネルを探す ===== -->
+  <section id="tab-find" class="panel" hidden>
+    <h2>チャンネルを探して登録</h2>
+    <div class="row">
+      <input type="text" id="addInput" placeholder="@ハンドル、チャンネルURL、またはチャンネル名" style="flex:1;min-width:220px">
+      <button class="btn" id="addBench">ベンチマークに追加</button>
+      <button class="btn" id="addComp">競合に追加</button>
+    </div>
+    <div class="muted">@ハンドルやURL（youtube.com/@○○、/channel/UC○○）で入れるとAPIの消費が少なく済みます。名前だけの場合は検索で一番近いチャンネルを登録します。</div>
+    <hr style="border:0;border-top:1px solid var(--line);width:100%">
+    <h2>キーワードで伸びている動画から探す</h2>
+    <div class="row">
+      <input type="text" id="kwInput" placeholder="例：注文住宅 後悔" style="flex:1;min-width:220px">
+      <select id="kwPeriod"><option value="1">1ヶ月</option><option value="3" selected>3ヶ月</option><option value="6">6ヶ月</option><option value="12">1年</option></select>
+      <button class="btn primary" id="kwBtn">検索</button>
+    </div>
+    <div class="row" id="kwPresets"></div>
+    <div class="muted">検索は1回でAPIの無料枠を多めに使います（1日およそ100回まで）。見つけたチャンネルは右のボタンで登録できます。</div>
+    <div id="kwResults"></div>
+  </section>
+
+  <!-- ===== 設定 ===== -->
+  <section id="tab-setup" class="panel" hidden>
+    <h2>YouTube Data API キー</h2>
+    <div class="row">
+      <input type="password" id="keyInput" placeholder="AIza..." style="flex:1;min-width:260px" autocomplete="off">
+      <button class="btn primary" id="saveKey">保存</button>
+      <button class="btn" id="testKey">接続テスト</button>
+    </div>
+    <div class="status" id="keyMsg"></div>
+    <div class="muted">キーはこのPCのブラウザにだけ保存されます。</div>
+    <h2>キーの作り方（無料・5分）</h2>
+    <ol class="steps">
+      <li><a href="https://console.cloud.google.com/" target="_blank" rel="noopener">Google Cloud Console</a> にGoogleアカウントでログインし、上部のプロジェクト選択から「新しいプロジェクト」を作る（名前は自由）。</li>
+      <li>左メニュー「APIとサービス」→「ライブラリ」で <b>YouTube Data API v3</b> を検索して「有効にする」。</li>
+      <li>「APIとサービス」→「認証情報」→「認証情報を作成」→「APIキー」。表示されたキー（AIza…）をコピーして上に貼り付け。</li>
+      <li>（推奨）作ったキーの「キーを制限」で、API の制限を「YouTube Data API v3」だけにする。</li>
+    </ol>
+    <div class="muted">無料枠は1日10,000ユニット。リサーチ画面の更新は登録チャンネル数×数ユニット程度、キーワード検索は1回100ユニットです。</div>
+    <h2>データ</h2>
+    <div class="row"><button class="btn" id="clearCache">キャッシュを消す</button><button class="btn" id="resetAll">登録チャンネルをすべて消す</button></div>
+    <div class="muted">取得した動画データは6時間キャッシュして、APIの使いすぎを防いでいます。</div>
+  </section>
+</main>
+
+<script>
+const $=id=>document.getElementById(id);
+const API='https://www.googleapis.com/youtube/v3/';
+const LS='ytr_v1', CACHE='ytr_cache_v1', CACHE_MS=6*3600*1000;
+const PRESETS=['注文住宅 後悔','家づくり 失敗','ハウスメーカー 比較','ルームツアー 注文住宅','平屋 ルームツアー','一条工務店','積水ハウス','住宅ローン','土地探し','間取り','施主 ブログ','新築 内覧会'];
+
+// ---------- 保存 ----------
+function loadState(){try{return Object.assign({key:'',bench:[],comp:[],period:1},JSON.parse(localStorage.getItem(LS)||'{}'));}catch(_){return {key:'',bench:[],comp:[],period:1};}}
+let S=loadState();
+function save(){try{localStorage.setItem(LS,JSON.stringify(S));}catch(_){}}
+function cacheGet(k){try{const c=JSON.parse(localStorage.getItem(CACHE)||'{}');const e=c[k];return e&&Date.now()-e.t<CACHE_MS?e.v:null;}catch(_){return null;}}
+function cacheSet(k,v){try{const c=JSON.parse(localStorage.getItem(CACHE)||'{}');for(const kk in c)if(Date.now()-c[kk].t>CACHE_MS)delete c[kk];c[k]={t:Date.now(),v};localStorage.setItem(CACHE,JSON.stringify(c));}catch(_){}}
+
+// ---------- API ----------
+async function api(path,params){
+  if(!S.key)throw new Error('APIキーが未設定です（「設定」タブで入力してください）');
+  const u=new URL(API+path);for(const[k,v]of Object.entries(params))if(v!==undefined&&v!=='')u.searchParams.set(k,v);u.searchParams.set('key',S.key);
+  const r=await fetch(u);const j=await r.json().catch(()=>({}));
+  if(!r.ok||j.error){const reason=(j.error&&j.error.errors&&j.error.errors[0]&&j.error.errors[0].reason)||'';
+    const msg={quotaExceeded:'今日のAPI無料枠を使い切りました（日本時間17時ごろにリセット）',keyInvalid:'APIキーが正しくありません',accessNotConfigured:'このキーでYouTube Data API v3が有効になっていません',forbidden:'アクセスが拒否されました'}[reason]||(j.error&&j.error.message)||('HTTP '+r.status);
+    throw new Error(msg);}
+  return j;
+}
+const chunk=(a,n)=>{const o=[];for(let i=0;i<a.length;i+=n)o.push(a.slice(i,i+n));return o;};
+function isoDur(s){const m=/P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/.exec(s||'')||[];return (+m[1]||0)*86400+(+m[2]||0)*3600+(+m[3]||0)*60+(+m[4]||0);}
+const fmtDur=t=>{const h=Math.floor(t/3600),m=Math.floor(t%3600/60),s=t%60;return (h?h+':'+String(m).padStart(2,'0'):m)+':'+String(s).padStart(2,'0');};
+const fmtN=n=>n>=1e8?(n/1e8).toFixed(1)+'億':n>=1e4?(n/1e4).toFixed(n>=1e5?0:1)+'万':String(n);
+const median=a=>{if(!a.length)return 0;const s=[...a].sort((x,y)=>x-y),m=s.length>>1;return s.length%2?s[m]:(s[m-1]+s[m])/2;};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function chFromItem(it){return {id:it.id,title:it.snippet.title,thumb:(it.snippet.thumbnails.default||{}).url||'',subs:+(it.statistics&&it.statistics.subscriberCount||0),hidden:!!(it.statistics&&it.statistics.hiddenSubscriberCount),uploads:it.contentDetails&&it.contentDetails.relatedPlaylists.uploads};}
+async function resolveChannel(text){
+  text=text.trim();if(!text)throw new Error('チャンネルを入力してください');
+  let m;const part='snippet,statistics,contentDetails';
+  if((m=/channel\/(UC[\w-]{22})/.exec(text))||(m=/^(UC[\w-]{22})$/.exec(text))){const j=await api('channels',{part,id:m[1]});if(j.items&&j.items[0])return chFromItem(j.items[0]);}
+  else if((m=/@([\w.\-぀-ヿ一-鿿]+)/.exec(text))){const j=await api('channels',{part,forHandle:'@'+decodeURIComponent(m[1])});if(j.items&&j.items[0])return chFromItem(j.items[0]);}
+  else{const s=await api('search',{part:'snippet',type:'channel',q:text,maxResults:1,regionCode:'JP',relevanceLanguage:'ja'});const id=s.items&&s.items[0]&&s.items[0].snippet.channelId;
+    if(id){const j=await api('channels',{part,id});if(j.items&&j.items[0])return chFromItem(j.items[0]);}}
+  throw new Error('チャンネルが見つかりませんでした：'+text);
+}
+async function addChannel(group,ch){
+  if(S.bench.concat(S.comp).some(c=>c.id===ch.id))return false;
+  S[group].push(ch);save();renderChips();return true;
+}
+
+// ---------- チャンネルの動画を取得（アップロード一覧→動画詳細。検索より大幅に安い）----------
+async function channelVideos(ch,sinceMs){
+  const ck='v:'+ch.id+':'+sinceMs.toString().slice(0,-7); // 期間の粒度でキャッシュ
+  const hit=cacheGet(ck);if(hit)return hit;
+  if(!ch.uploads){const j=await api('channels',{part:'snippet,statistics,contentDetails',id:ch.id});if(j.items&&j.items[0])Object.assign(ch,chFromItem(j.items[0]));save();}
+  const ids=[];let token='',pages=0;
+  // 期間内を全部＋普段の再生数を出すため最低30本は取る（最大4ページ=200本）
+  while(pages<4){const j=await api('playlistItems',{part:'contentDetails',playlistId:ch.uploads,maxResults:50,pageToken:token});pages++;
+    let older=false;for(const it of j.items||[]){ids.push(it.contentDetails.videoId);if(new Date(it.contentDetails.videoPublishedAt).getTime()<sinceMs)older=true;}
+    token=j.nextPageToken;if(!token||(older&&ids.length>=30))break;}
+  const vids=[];
+  for(const c of chunk(ids,50)){const j=await api('videos',{part:'snippet,statistics,contentDetails',id:c.join(',')});
+    for(const v of j.items||[]){const dur=isoDur(v.contentDetails.duration);if(v.snippet.liveBroadcastContent==='upcoming'||v.snippet.liveBroadcastContent==='live')continue;
+      vids.push({id:v.id,title:v.snippet.title,pub:v.snippet.publishedAt,thumb:(v.snippet.thumbnails.medium||v.snippet.thumbnails.default||{}).url||'',
+        views:+(v.statistics.viewCount||0),likes:+(v.statistics.likeCount||0),comments:+(v.statistics.commentCount||0),dur,short:dur>0&&dur<=180,ch:ch.id,chTitle:ch.title,subs:ch.subs});}}
+  // 普段の再生数：公開3日以内を除いた直近30本の中央値（ショート/長尺別）
+  const now=Date.now(),settled=vids.filter(v=>now-new Date(v.pub).getTime()>3*86400e3);
+  const base={short:median(settled.filter(v=>v.short).slice(0,30).map(v=>v.views)),long:median(settled.filter(v=>!v.short).slice(0,30).map(v=>v.views)),all:median(settled.slice(0,30).map(v=>v.views))};
+  for(const v of vids){const b=(v.short?base.short:base.long)||base.all;v.base=b;v.score=b?v.views/b:0;}
+  cacheSet(ck,vids);return vids;
+}
+
+// ---------- リサーチ画面 ----------
+let lastRows={bench:[],comp:[]};
+function sinceFor(m){const d=new Date();d.setMonth(d.getMonth()-m);d.setHours(0,0,0,0);return d.getTime();}
+function filterSort(rows){
+  const kind=$('kind').value,sort=$('sort').value;
+  let r=rows.filter(v=>kind==='all'||(kind==='short'?v.short:!v.short));
+  const key={score:v=>v.score,views:v=>v.views,ratio:v=>v.subs?v.views/v.subs:0,new:v=>new Date(v.pub).getTime()}[sort];
+  return r.sort((a,b)=>key(b)-key(a));
+}
+function card(v){
+  const lvl=v.score>=5?'l2':v.score>=2?'l1':'';const ratio=v.subs?v.views/v.subs:0;
+  const days=Math.max(0,Math.round((Date.now()-new Date(v.pub).getTime())/86400e3));
+  return `<a class="v" href="https://www.youtube.com/${v.short?'shorts/':'watch?v='}${v.id}" target="_blank" rel="noopener">
+    <div class="thumb"><img src="${esc(v.thumb)}" alt="" loading="lazy">${v.short?'<span class="short">ショート</span>':''}<span class="dur">${fmtDur(v.dur)}</span></div>
+    <div style="min-width:0"><div class="vt">${esc(v.title)}</div>
+      <div class="vm">${esc(v.chTitle)}・${days}日前</div>
+      <div class="vm">▶ ${fmtN(v.views)}回　👍 ${fmtN(v.likes)}　💬 ${fmtN(v.comments)}　登録者比 ${(ratio*100).toFixed(ratio<0.1?1:0)}%</div></div>
+    <div class="score"><div class="up ${lvl}" title="普段の再生数（${fmtN(Math.round(v.base||0))}回）の何倍か">${lvl?'↑':'–'}</div><small>×${v.score?v.score.toFixed(1):'–'}</small></div></a>`;
+}
+function renderLists(){
+  for(const [g,el,cnt] of [['bench','bList','bCount'],['comp','cList','cCount']]){
+    const rows=filterSort(lastRows[g]);
+    $(cnt).textContent=rows.length?`${rows.length}本`:'';
+    $(el).innerHTML=rows.length?rows.slice(0,40).map(card).join('')+(rows.length>40?`<div class="muted">ほか ${rows.length-40} 本（CSVに全部入ります）</div>`:'')
+      :`<div class="empty">${S[g].length?'この期間・種類の動画はありません':'「チャンネルを探す」で'+(g==='bench'?'ベンチマーク':'競合')+'を登録してください'}</div>`;
+  }
+}
+function renderChips(){
+  for(const [g,el] of [['bench','bChips'],['comp','cChips']]){
+    $(el).innerHTML=S[g].map((c,i)=>`<span class="chip"><img src="${esc(c.thumb)}" alt="">${esc(c.title)}<span class="muted">${c.hidden?'非公開':fmtN(c.subs)+'人'}</span><button data-g="${g}" data-i="${i}" title="登録を外す">×</button></span>`).join('');
+  }
+}
+document.addEventListener('click',e=>{const b=e.target.closest('.chip button');if(!b)return;S[b.dataset.g].splice(+b.dataset.i,1);save();renderChips();lastRows[b.dataset.g]=lastRows[b.dataset.g].filter(v=>S[b.dataset.g].some(c=>c.id===v.ch));renderLists();});
+
+async function run(){
+  const m=S.period||1,since=sinceFor(m);const all=S.bench.concat(S.comp);
+  if(!all.length){renderLists();return;}
+  $('status').textContent='取得中…';$('runBtn').disabled=true;
+  try{
+    // 登録者数などを最新化（50件ずつ1ユニット）
+    for(const c of chunk(all.map(c=>c.id),50)){const j=await api('channels',{part:'snippet,statistics,contentDetails',id:c.join(',')});
+      for(const it of j.items||[]){const n=chFromItem(it);for(const g of ['bench','comp'])for(const ch of S[g])if(ch.id===n.id)Object.assign(ch,n);}}
+    save();renderChips();
+    const out={bench:[],comp:[]};let done=0;
+    for(const g of ['bench','comp'])for(const ch of S[g]){
+      const vids=await channelVideos(ch,since);out[g].push(...vids.filter(v=>new Date(v.pub).getTime()>=since).map(v=>({...v,subs:ch.subs})));
+      $('status').textContent=`取得中… ${++done}/${all.length}`;}
+    lastRows=out;renderLists();
+    $('status').textContent=`${new Date().toLocaleString('ja-JP')} 更新（直近${m}ヶ月）`;
+  }catch(err){$('status').innerHTML=`<span class="err">${esc(err.message)}</span>`;}
+  finally{$('runBtn').disabled=false;}
+}
+$('runBtn').onclick=run;
+$('period').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;S.period=+b.dataset.m;save();
+  for(const x of $('period').children)x.classList.toggle('on',x===b);run();});
+['kind','sort'].forEach(id=>$(id).addEventListener('change',renderLists));
+$('csvBtn').onclick=()=>{
+  const rows=[['区分','チャンネル','登録者数','タイトル','URL','公開日','長さ(秒)','ショート','再生数','高評価','コメント','普段の再生数','伸び率(倍)','再生数/登録者']];
+  for(const [g,name] of [['bench','ベンチマーク'],['comp','競合']])for(const v of filterSort(lastRows[g]))
+    rows.push([name,v.chTitle,v.subs,v.title,'https://www.youtube.com/watch?v='+v.id,v.pub.slice(0,10),v.dur,v.short?'はい':'いいえ',v.views,v.likes,v.comments,Math.round(v.base||0),v.score.toFixed(2),v.subs?(v.views/v.subs).toFixed(3):'']);
+  const csv='﻿'+rows.map(r=>r.map(x=>'"'+String(x).replace(/"/g,'""')+'"').join(',')).join('\r\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download=`youtube_research_${new Date().toISOString().slice(0,10)}.csv`;a.click();
+};
+
+// ---------- チャンネルを探す ----------
+for(const [btn,g] of [['addBench','bench'],['addComp','comp']])$(btn).onclick=async()=>{
+  const t=$('addInput').value;$('kwResults').innerHTML='<div class="status">確認中…</div>';
+  try{const ch=await resolveChannel(t);const ok=await addChannel(g,ch);
+    $('kwResults').innerHTML=`<div class="status">${ok?'✅ '+esc(ch.title)+' を'+(g==='bench'?'ベンチマーク':'競合')+'に登録しました':'すでに登録済みです：'+esc(ch.title)}</div>`;$('addInput').value='';}
+  catch(err){$('kwResults').innerHTML=`<div class="status err">${esc(err.message)}</div>`;}
+};
+$('kwPresets').innerHTML=PRESETS.map(k=>`<button class="kw">${esc(k)}</button>`).join('');
+$('kwPresets').addEventListener('click',e=>{const b=e.target.closest('.kw');if(!b)return;$('kwInput').value=b.textContent;kwSearch();});
+$('kwBtn').onclick=kwSearch;$('kwInput').addEventListener('keydown',e=>{if(e.key==='Enter')kwSearch();});
+let found=[];
+async function kwSearch(){
+  const q=$('kwInput').value.trim();if(!q)return;$('kwResults').innerHTML='<div class="status">検索中…</div>';
+  try{
+    const after=new Date(sinceFor(+$('kwPeriod').value)).toISOString();
+    const s=await api('search',{part:'snippet',type:'video',q,order:'viewCount',publishedAfter:after,regionCode:'JP',relevanceLanguage:'ja',maxResults:25});
+    const vids=(s.items||[]).map(i=>i.id.videoId).filter(Boolean);if(!vids.length){$('kwResults').innerHTML='<div class="empty">見つかりませんでした</div>';return;}
+    const vj=await api('videos',{part:'snippet,statistics,contentDetails',id:vids.join(',')});
+    const chIds=[...new Set(vj.items.map(v=>v.snippet.channelId))];const chs={};
+    for(const c of chunk(chIds,50)){const j=await api('channels',{part:'snippet,statistics,contentDetails',id:c.join(',')});for(const it of j.items||[])chs[it.id]=chFromItem(it);}
+    found=vj.items.map(v=>({v,ch:chs[v.snippet.channelId]})).filter(x=>x.ch).map(x=>({...x,views:+(x.v.statistics.viewCount||0)})).sort((a,b)=>b.views-a.views);
+    $('kwResults').innerHTML=found.map((x,i)=>{const ratio=x.ch.subs?x.views/x.ch.subs:0,dur=isoDur(x.v.contentDetails.duration);
+      return `<div class="found"><img src="${esc((x.v.snippet.thumbnails.medium||x.v.snippet.thumbnails.default).url)}" alt="">
+      <div style="min-width:0"><div class="vt">${esc(x.v.snippet.title)}</div>
+      <div class="vm">${esc(x.ch.title)}（登録者 ${x.ch.hidden?'非公開':fmtN(x.ch.subs)}）・${dur<=180?'ショート':'長尺 '+fmtDur(dur)}</div>
+      <div class="vm">▶ ${fmtN(x.views)}回　登録者比 ${(ratio*100).toFixed(0)}%${ratio>=1?' <b style="color:var(--hot)">登録者以上に再生</b>':''}</div></div>
+      <div class="row" style="flex-direction:column;align-items:stretch"><button class="btn sm" data-add="bench" data-i="${i}">ベンチマーク</button><button class="btn sm" data-add="comp" data-i="${i}">競合</button></div></div>`;}).join('');
+  }catch(err){$('kwResults').innerHTML=`<div class="status err">${esc(err.message)}</div>`;}
+}
+$('kwResults').addEventListener('click',async e=>{const b=e.target.closest('[data-add]');if(!b)return;const x=found[+b.dataset.i];
+  const ok=await addChannel(b.dataset.add,x.ch);b.parentElement.innerHTML=`<span class="muted">${ok?'登録しました':'登録済み'}</span>`;});
+
+// ---------- 設定 ----------
+$('keyInput').value=S.key;
+$('saveKey').onclick=()=>{S.key=$('keyInput').value.trim();save();$('keyMsg').textContent='保存しました。';};
+$('testKey').onclick=async()=>{S.key=$('keyInput').value.trim();save();$('keyMsg').textContent='確認中…';
+  try{await api('videos',{part:'id',chart:'mostPopular',regionCode:'JP',maxResults:1});$('keyMsg').innerHTML='<span style="color:var(--accent)">✅ 接続できました</span>';}
+  catch(err){$('keyMsg').innerHTML=`<span class="err">${esc(err.message)}</span>`;}};
+$('clearCache').onclick=()=>{try{localStorage.removeItem(CACHE);}catch(_){}$('keyMsg').textContent='キャッシュを消しました。';};
+$('resetAll').onclick=()=>{S.bench=[];S.comp=[];save();renderChips();lastRows={bench:[],comp:[]};renderLists();$('keyMsg').textContent='登録チャンネルを消しました。';};
+
+// ---------- タブ ----------
+document.querySelector('nav').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+  for(const x of document.querySelectorAll('nav button'))x.classList.toggle('on',x===b);
+  for(const t of ['research','find','setup'])$('tab-'+t).hidden=t!==b.dataset.tab;
+  if(b.dataset.tab==='research')run();});
+
+// 初期表示
+for(const x of $('period').children)x.classList.toggle('on',+x.dataset.m===(S.period||1));
+renderChips();renderLists();
+if(!S.key){for(const x of document.querySelectorAll('nav button'))x.classList.toggle('on',x.dataset.tab==='setup');for(const t of ['research','find','setup'])$('tab-'+t).hidden=t!=='setup';}
+else if(S.bench.length||S.comp.length)run();
+</script>
+</body>
+</html>
