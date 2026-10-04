@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>本編送客ショートメーカー</title>
 <style>
-  :root{ --bg:#101214; --card:#1a1d21; --line:#2c3138; --tx:#eceff3; --sub:#9aa3ad; --accent:#ff3d57; --ok:#3ecf8e; --hl:#ffd23f; }
+  :root{ --bg:#101214; --card:#1a1d21; --line:#2c3138; --tx:#eceff3; --sub:#9aa3ad; --accent:#ff3d57; --ok:#3ecf8e; --hl:#ffd23f; --ig:#d6249f; }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--tx);font-family:-apple-system,"Hiragino Kaku Gothic ProN","Yu Gothic UI","Meiryo",sans-serif;font-size:14px;line-height:1.6}
   header{padding:14px 20px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}
@@ -42,18 +42,24 @@
   .bar i{display:block;height:100%;width:0;background:var(--accent)}
   .warn{color:#ffb547} .ok{color:var(--ok)}
   a.dl{color:var(--ok);font-weight:700}
-  .tpl{display:flex;gap:6px;flex-wrap:wrap}
-  .tpl button{border-radius:99px;font-size:12px}
+  .pills{display:flex;gap:6px;flex-wrap:wrap}
+  .pills button{border-radius:99px;font-size:12px}
+  .pills button.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+  .plat{display:flex;gap:8px;flex-wrap:wrap}
+  .plat label{display:flex;gap:6px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:6px 12px;cursor:pointer}
+  .plat label.yt{border-color:#ff0000aa} .plat label.ig{border-color:var(--ig)}
   .check{display:grid;gap:4px;margin:0;padding-left:1.2em}
   .copybox{display:grid;gap:4px}
-  .copybox textarea{min-height:56px;font-size:12px}
+  .copybox textarea{min-height:64px;font-size:12px}
+  .tabs{display:flex;gap:4px}
+  .tabs button.on{background:#2d333a;border-color:var(--sub);font-weight:700}
   mark{background:none;color:var(--hl);font-weight:700}
 </style>
 </head>
 <body>
 <header>
   <h1>本編送客ショートメーカー</h1>
-  <span>フック → 見どころ → 答えの手前で止めて本編へ。縦型1080×1920で書き出し。処理はすべてこのPCの中だけ。</span>
+  <span>フック → 見どころ → 答えの手前で止めて本編へ。YouTubeショートとInstagramリールを同時に書き出し。処理はすべてこのPCの中だけ。</span>
 </header>
 
 <div class="wrap">
@@ -71,12 +77,12 @@
 
   <div class="card">
     <h2><span class="n">2</span>型を選ぶ（施主系テンプレート）</h2>
-    <div class="tpl" id="tpl"></div>
-    <div class="row"><span class="lbl">冒頭のフック（最初の1.5秒）</span></div>
+    <div class="pills" id="tpl"></div>
+    <div class="row"><span class="lbl">冒頭のフック（最初の1.6秒）</span></div>
     <textarea id="hook" placeholder="例：家を建てて一番後悔したのは…"></textarea>
     <div class="row"><span class="lbl">ずっと上に出す見出し</span></div>
     <input type="text" id="head" placeholder="例：【施主の本音】後悔ポイント" style="width:100%">
-    <div class="hint">文字の中で <mark>【】</mark> で囲んだ部分や *アスタリスク* で囲んだ部分は黄色で強調されます（例：*3000万円* かかった）。</div>
+    <div class="hint">文字の中で <mark>【】</mark> で囲んだ部分や *アスタリスク* で囲んだ部分は黄色で強調されます（例：*3000万円* かかった）。強調のある字幕にはエフェクトが強めに入ります。</div>
   </div>
 
   <div class="card">
@@ -90,7 +96,20 @@
   </div>
 
   <div class="card">
-    <h2><span class="n">4</span>最後の誘導カード</h2>
+    <h2><span class="n">4</span>エフェクト（自動）</h2>
+    <div class="pills" id="fxLevel">
+      <button data-v="0">なし</button><button data-v="0.6">ひかえめ</button><button data-v="1" class="on">ふつう</button><button data-v="1.5">派手</button>
+    </div>
+    <div class="row">
+      <label class="row"><input type="checkbox" id="fxColor" checked> 色を鮮やかに＋周辺を暗く</label>
+      <label class="row"><input type="checkbox" id="fxSound" checked> 効果音</label>
+      <span class="lbl">効果音の音量</span><input id="sfxVol" type="range" min="0" max="100" value="55" style="max-width:140px">
+    </div>
+    <div class="hint">切り替わりでズーム＋フラッシュ＋「シュッ」、字幕は出るたびにポンと弾む（強調語があると揺れ＋「ポン」）、映像はゆっくりズームし続けます。冒頭は「ドン」、最後は「キラン」。</div>
+  </div>
+
+  <div class="card">
+    <h2><span class="n">5</span>最後の誘導カード</h2>
     <div class="row"><span class="lbl">大きい文字</span></div>
     <input type="text" id="outroBig" value="答えは本編で👇" style="width:100%">
     <div class="row"><span class="lbl">本編のタイトル</span></div>
@@ -100,66 +119,95 @@
       <span class="hint" id="thumbMsg">選ばない場合は最後の場面を使います</span>
       <span class="lbl" style="margin-left:auto">表示秒数</span><input id="outroDur" type="number" min="2" max="6" step="0.5" value="3" style="width:64px">
     </div>
+    <div class="hint">YouTube用は「画面下の関連動画をタップ」、Instagram用は「プロフィールのリンクからYouTubeへ」「保存してね」に自動で切り替わります。</div>
   </div>
 
   <div class="card">
-    <h2><span class="n">5</span>書き出し</h2>
+    <h2><span class="n">6</span>書き出し</h2>
+    <div class="plat">
+      <label class="yt"><input type="checkbox" id="outYT" checked> YouTubeショート用</label>
+      <label class="ig"><input type="checkbox" id="outIG" checked> Instagramリール用</label>
+    </div>
     <div class="row">
       <button id="previewAll">▶ 全体をプレビュー</button>
-      <button class="primary" id="exportBtn" disabled>⏺ ショートを書き出す</button>
+      <button class="primary" id="exportBtn" disabled>⏺ 書き出す</button>
       <button id="stopBtn" disabled>■ 止める</button>
       <span class="hint" id="fmtMsg"></span>
     </div>
     <div class="bar"><i id="prog"></i></div>
-    <div id="exportMsg" class="hint">書き出しは完成動画の長さと同じだけ時間がかかります。その間はこのタブを前面に出したままにしてください。</div>
+    <div id="exportMsg" class="hint">両方選ぶと1回の再生で2本同時に書き出します。かかる時間は完成動画の長さと同じです。その間はこのタブを前面に出したままにしてください。</div>
   </div>
 
   <div class="card">
-    <h2><span class="n">6</span>投稿のしかた（ここが送客のキモ）</h2>
-    <ol class="check">
-      <li>YouTubeアプリでショートを投稿するとき、「<b>関連動画</b>」に本編を設定する（画面下に本編へのリンクが常に出ます）。</li>
-      <li>本編の説明欄・固定コメントにも、このショートへのリンクを入れて相互につなぐ。</li>
-      <li>ショートのタイトルは「答え」を書かない。続きが気になる形にする。</li>
-      <li>本編を公開した日〜翌日にショートを出すと、本編の初速が上がりやすい。</li>
-    </ol>
+    <h2><span class="n">7</span>投稿のしかた（ここが送客のキモ）</h2>
     <div class="row"><span class="lbl">本編のURL</span><input type="text" id="mainUrl" placeholder="https://youtu.be/..." style="flex:1"></div>
-    <div class="copybox"><span class="lbl">ショートのタイトル案</span><textarea id="outTitle" readonly></textarea><button class="sm" data-copy="outTitle">コピー</button></div>
-    <div class="copybox"><span class="lbl">説明欄・固定コメント案</span><textarea id="outDesc" readonly></textarea><button class="sm" data-copy="outDesc">コピー</button></div>
+    <div class="tabs"><button class="on" data-pt="yt">YouTubeショート</button><button data-pt="ig">Instagramリール</button></div>
+    <div id="post-yt">
+      <ol class="check">
+        <li>アプリで投稿するとき「<b>関連動画</b>」に本編を設定（画面下に本編へのリンクが常に出ます）。</li>
+        <li>本編の説明欄・固定コメントにも、このショートへのリンクを入れて相互につなぐ。</li>
+        <li>タイトルに「答え」を書かない。続きが気になる形に。</li>
+        <li>本編の公開当日〜翌日に出すと本編の初速が上がりやすい。</li>
+      </ol>
+      <div class="copybox"><span class="lbl">タイトル案</span><textarea id="ytTitle" readonly></textarea><button class="sm" data-copy="ytTitle">コピー</button></div>
+      <div class="copybox"><span class="lbl">説明欄・固定コメント案</span><textarea id="ytDesc" readonly></textarea><button class="sm" data-copy="ytDesc">コピー</button></div>
+    </div>
+    <div id="post-ig" hidden>
+      <ol class="check">
+        <li>プロフィールのリンクにYouTube本編（またはチャンネル）のURLを入れておく。</li>
+        <li>カバー画像は3:4で切られるので、フックの文字が中央に入っている場面を選ぶ。</li>
+        <li>「保存」されると伸びやすい。キャプション最後に保存を促す一言を。</li>
+        <li>ストーリーズでもリールをシェアし、リンクスタンプで本編へ。</li>
+      </ol>
+      <div class="copybox"><span class="lbl">キャプション案</span><textarea id="igCap" readonly style="min-height:120px"></textarea><button class="sm" data-copy="igCap">コピー</button></div>
+    </div>
   </div>
 
 </div>
 
 <div class="stage card">
+  <div class="tabs" id="pvPlat"><button class="on" data-p="yt">YouTube用を表示</button><button data-p="ig">Instagram用を表示</button></div>
   <canvas id="out" width="1080" height="1920"></canvas>
+  <label class="row hint"><input type="checkbox" id="safe" checked> 文字を置かない範囲（各アプリのボタン等）を表示（書き出しには入りません）</label>
   <div class="row">
     <span class="lbl">レイアウト</span>
     <select id="mode"><option value="blur">全体を表示（上下ぼかし）</option><option value="crop">画面いっぱいに切り抜き</option></select>
   </div>
   <div class="row"><span class="lbl">左右</span><input id="pos" type="range" min="0" max="100" value="50"></div>
   <div class="row"><span class="lbl">拡大</span><input id="zoom" type="range" min="100" max="250" value="100"></div>
-  <div class="row"><span class="lbl">字幕の大きさ</span><input id="fs" type="range" min="50" max="120" value="74"></div>
-  <div class="hint">プレビューは選択中の区間の場面です。</div>
+  <div class="row"><span class="lbl">字幕の大きさ</span><input id="fs" type="range" min="50" max="110" value="72"></div>
 </div>
 </div>
 
 <script>
 const $=id=>document.getElementById(id);
-const src=$('src'),out=$('out'),cx=out.getContext('2d');
+const src=$('src'),out=$('out');
 const W=1080,H=1920,FONT='"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic UI","Meiryo",sans-serif';
 const HOOK_DUR=1.6;
+let cx=out.getContext('2d'); // 描画先（書き出し時はプラットフォームごとに切り替える）
+
+// ---------- プラットフォーム別レイアウト（各アプリのボタン・説明文と重ならない位置）----------
+const PLAT={
+  yt:{key:'yt',name:'YouTubeショート',headY:240,capY:H-600,hookY:H/2-80,txtCX:W/2-40,txtW:W-300,
+      safe:[[0,0,W,150],[W-150,700,150,900],[0,H-420,W,420]]},
+  ig:{key:'ig',name:'Instagramリール',headY:300,capY:H-620,hookY:H/2-60,txtCX:W/2-40,txtW:W-300,
+      safe:[[0,0,W,220],[W-150,820,150,800],[0,H-380,W,380]],grid34:true},
+};
+let P=PLAT.yt,pvPlat='yt';
 
 // ---------- テンプレート ----------
 const TPL={
-  '後悔ポイント':{hook:'家を建てて\n*一番後悔*したのは…',head:'【施主の本音】後悔ポイント',outro:'答えは本編で👇',tags:'#家づくり #注文住宅 #後悔 #shorts'},
-  '総額いくら？':{hook:'この家、\n総額*いくら*だと思う？',head:'【総額公開】注文住宅のリアル',outro:'内訳は本編で全部公開👇',tags:'#家づくり #注文住宅 #住宅ローン #shorts'},
-  'ルームツアー':{hook:'この家で\n*一番いい場所*はココ',head:'【ルームツアー】',outro:'全部見たい人は本編へ👇',tags:'#ルームツアー #注文住宅 #マイホーム #shorts'},
-  'メーカー比較':{hook:'ハウスメーカー選び\n*決め手*になったのは…',head:'【比較】ハウスメーカー選び',outro:'比較の全容は本編で👇',tags:'#ハウスメーカー #家づくり #注文住宅 #shorts'},
-  'やってよかった':{hook:'これは*絶対やるべき*\nだった設備',head:'【施主おすすめ】やってよかった',outro:'残りは本編で紹介👇',tags:'#家づくり #新築 #マイホーム #shorts'},
+  '後悔ポイント':{hook:'家を建てて\n*一番後悔*したのは…',head:'【施主の本音】後悔ポイント',outro:'答えは本編で👇',tags:['#家づくり','#注文住宅','#後悔','#マイホーム','#施主']},
+  '総額いくら？':{hook:'この家、\n総額*いくら*だと思う？',head:'【総額公開】注文住宅のリアル',outro:'内訳は本編で全部公開👇',tags:['#家づくり','#注文住宅','#住宅ローン','#マイホーム','#お金']},
+  'ルームツアー':{hook:'この家で\n*一番いい場所*はココ',head:'【ルームツアー】',outro:'全部見たい人は本編へ👇',tags:['#ルームツアー','#注文住宅','#マイホーム','#新築','#インテリア']},
+  'メーカー比較':{hook:'ハウスメーカー選び\n*決め手*になったのは…',head:'【比較】ハウスメーカー選び',outro:'比較の全容は本編で👇',tags:['#ハウスメーカー','#家づくり','#注文住宅','#マイホーム','#住宅展示場']},
+  'やってよかった':{hook:'これは*絶対やるべき*\nだった設備',head:'【施主おすすめ】やってよかった',outro:'残りは本編で紹介👇',tags:['#家づくり','#新築','#マイホーム','#注文住宅','#暮らし']},
 };
+let tags=TPL['後悔ポイント'].tags;
 $('tpl').innerHTML=Object.keys(TPL).map(k=>`<button data-t="${k}">${k}</button>`).join('');
 $('tpl').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const t=TPL[b.dataset.t];
+  for(const x of $('tpl').children)x.classList.toggle('on',x===b);
   $('hook').value=t.hook;$('head').value=t.head;$('outroBig').value=t.outro;tags=t.tags;draw();updatePost();});
-let tags='#家づくり #注文住宅 #shorts';
 
 // ---------- 時間 ----------
 function parseT(s){s=String(s).trim();if(!s)return NaN;const p=s.split(':').map(Number);if(p.some(isNaN))return NaN;return p.reduce((a,v)=>a*60+v,0);}
@@ -182,13 +230,11 @@ function totalLen(){return HOOK_DUR+segRanges().reduce((t,r)=>t+r.b-r.a,0)+(+$('
 function updateLen(){const n=segRanges().length,L=totalLen();
   $('lenMsg').innerHTML=`有効な区間 ${n}／${segs.length}　完成の長さ 約${L.toFixed(1)}秒`+(L>60?' <span class="warn">（60秒以内が見られやすい。最大180秒）</span>':'');}
 $('segs').addEventListener('input',e=>{const box=e.target.closest('.seg');if(!box)return;const k=e.target.dataset.k;if(k){segs[+box.dataset.i][k]=e.target.value;updateLen();}});
-$('segs').addEventListener('click',e=>{const box=e.target.closest('.seg');if(!box)return;const i=+box.dataset.i;
-  if(cur!==i){cur=i;}
-  const b=e.target;
+$('segs').addEventListener('click',e=>{const box=e.target.closest('.seg');if(!box)return;const i=+box.dataset.i;cur=i;const b=e.target;
   if(b.dataset.set){segs[i][b.dataset.set]=fmtT(src.currentTime);renderSegs();return;}
   if('del' in b.dataset){segs.splice(i,1);if(!segs.length)segs.push({a:'0:00',b:'0:05',cap:''});cur=Math.min(cur,segs.length-1);renderSegs();return;}
   if('up' in b.dataset&&i>0){[segs[i-1],segs[i]]=[segs[i],segs[i-1]];cur=i-1;renderSegs();return;}
-  if('play' in b.dataset){const r=segRanges()[i];if(r){previewSeg(r);}return;}
+  if('play' in b.dataset){const r=segRanges()[i];if(r)previewSeg(r);return;}
   for(const x of $('segs').children)x.style.borderColor=+x.dataset.i===cur?'var(--accent)':'';
 });
 $('addSeg').onclick=()=>{const t=src.duration?fmtT(src.currentTime):'0:00';segs.push({a:t,b:src.duration?fmtT(Math.min(src.duration,src.currentTime+6)):'0:06',cap:''});cur=segs.length-1;renderSegs();};
@@ -213,28 +259,21 @@ function parseSubs(t){const out=[];const re=/(\d+:)?(\d{1,2}):(\d{2})[.,](\d{3})
   while((m=re.exec(t.replace(/\r/g,'')))){const text=m[9].replace(/<[^>]+>/g,'').trim();if(text)out.push({a:ts(m[1],m[2],m[3],m[4]),b:ts(m[5],m[6],m[7],m[8]),text});}return out;}
 function capAt(t,seg){if(seg&&seg.cap&&seg.cap.trim())return seg.cap;const c=cues.find(c=>t>=c.a&&t<c.b);return c?c.text:'';}
 
-// ---------- 描画 ----------
-function richLines(text,maxW){ // *強調* と 【】 を黄色に。改行と自動折り返し。
+// ---------- 文字 ----------
+function richLines(text,maxW){
   const lines=[];
-  for(const para of String(text).split('\n')){
-    let line=[],w=0,hl=false;
-    for(const ch of para){
-      if(ch==='*'){hl=!hl;continue;}
-      const isHl=hl||ch==='【'||ch==='】';const cw=cx.measureText(ch).width;
-      if(w+cw>maxW&&line.length){lines.push(line);line=[];w=0;}
-      line.push({ch,hl:isHl});w+=cw;
-    }
-    lines.push(line);
-  }
-  // 【…】の中身も強調
+  for(const para of String(text).split('\n')){let line=[],w=0,hl=false;
+    for(const ch of para){if(ch==='*'){hl=!hl;continue;}const cw=cx.measureText(ch).width;
+      if(w+cw>maxW&&line.length){lines.push(line);line=[];w=0;}line.push({ch,hl});w+=cw;}
+    lines.push(line);}
   for(const l of lines){let inB=false;for(const c of l){if(c.ch==='【')inB=true;if(inB)c.hl=true;if(c.ch==='】')inB=false;}}
   return lines;
 }
+const hasHl=s=>/\*[^*]+\*|【[^】]+】/.test(s||'');
 function drawRich(text,cxX,y,size,{maxW=W-120,color='#fff',hl='#ffd23f',stroke=0.18,anchor='top',box=false}={}){
   if(!String(text).trim())return 0;
   cx.font=`900 ${size}px ${FONT}`;cx.textBaseline='middle';cx.lineJoin='round';
   let lines=richLines(text,maxW);
-  // 1文字だけ次の行に落ちるのを防ぐ：行の長さをそろえて折り返し直す
   if(lines.length>1&&!String(text).includes('\n')){const tw=lines.flat().reduce((a,c)=>a+cx.measureText(c.ch).width,0);lines=richLines(text,Math.min(maxW,tw/lines.length+size*0.9));}
   const lh=size*1.28;let yy=anchor==='bottom'?y-lh*(lines.length-1):anchor==='center'?y-lh*(lines.length-1)/2:y;
   for(const l of lines){
@@ -246,128 +285,192 @@ function drawRich(text,cxX,y,size,{maxW=W-120,color='#fff',hl='#ffd23f',stroke=0
     yy+=lh;}
   return lines.length*lh;
 }
-function drawFrame(img,iw,ih,{dim=0}={}){
-  cx.fillStyle='#000';cx.fillRect(0,0,W,H);if(!iw||!ih)return;
-  const pos=$('pos').value/100,zoom=$('zoom').value/100;
-  if($('mode').value==='crop'){const s=Math.max(H/ih,W/iw)*zoom,dw=iw*s,dh=ih*s;cx.drawImage(img,(W-dw)*pos,(H-dh)/2,dw,dh);}
-  else{const sb=Math.max(H/ih,W/iw),bw=iw*sb,bh=ih*sb;cx.save();cx.filter='blur(40px) brightness(.5)';cx.drawImage(img,(W-bw)/2-60,(H-bh)/2-60,bw+120,bh+120);cx.restore();
-    const s=(W/iw)*zoom,dw=iw*s,dh=ih*s;cx.drawImage(img,(W-dw)*pos,(H-dh)/2,dw,dh);}
-  if(dim){cx.fillStyle=`rgba(0,0,0,${dim})`;cx.fillRect(0,0,W,H);}
-}
-function drawProgress(p){cx.fillStyle='rgba(255,255,255,.25)';cx.fillRect(0,0,W,14);cx.fillStyle='#ff3d57';cx.fillRect(0,0,W*Math.min(1,p),14);}
-const still=document.createElement('canvas');still.width=W;still.height=H;
-function snapStill(){still.getContext('2d').drawImage(out,0,0);}
-const ease=t=>1-Math.pow(1-Math.min(1,Math.max(0,t)),3);
+function fitSize(txt,maxW,start,min){let s=start;for(;s>min;s-=4){cx.font=`900 ${s}px ${FONT}`;if(Math.max(...String(txt).replace(/\*/g,'').split('\n').map(l=>cx.measureText(l).width))<=maxW)break;}return s;}
 
-function drawMain(seg,p){ // 本編区間
-  drawFrame(src,src.videoWidth,src.videoHeight);
-  drawRich($('head').value,W/2,150,64,{box:true,stroke:0});
-  drawRich(capAt(src.currentTime,seg),W/2,H-330,+$('fs').value,{anchor:'bottom'});
-  if(p!=null)drawProgress(p);
+// ---------- 映像 ----------
+const fxLvl=()=>+(document.querySelector('#fxLevel .on')||{dataset:{v:1}}).dataset.v;
+const small=document.createElement('canvas');small.width=54;small.height=96;const sctx=small.getContext('2d');
+function drawFrame(img,iw,ih,extraZoom=1){
+  cx.fillStyle='#000';cx.fillRect(0,0,W,H);if(!iw||!ih)return;
+  const pos=$('pos').value/100,zoom=$('zoom').value/100*extraZoom,color=$('fxColor').checked&&fxLvl()>0;
+  if(color)cx.filter='contrast(1.07) saturate(1.18)';
+  if($('mode').value==='crop'){const s=Math.max(H/ih,W/iw)*zoom,dw=iw*s,dh=ih*s;cx.drawImage(img,(W-dw)*pos,(H-dh)/2,dw,dh);}
+  else{ // ぼかし背景は小さく描いて拡大（軽い）
+    const sb=Math.max(96/ih,54/iw);sctx.drawImage(img,(54-iw*sb)/2,(96-ih*sb)/2,iw*sb,ih*sb);
+    cx.imageSmoothingQuality='high';cx.drawImage(small,-20,-20,W+40,H+40);cx.filter='none';cx.fillStyle='rgba(0,0,0,.45)';cx.fillRect(0,0,W,H);
+    if(color)cx.filter='contrast(1.07) saturate(1.18)';
+    const s=(W/iw)*zoom,dw=iw*s,dh=ih*s;cx.drawImage(img,(W-dw)*pos,(H-dh)/2,dw,dh);}
+  cx.filter='none';
+  if(color){const g=cx.createRadialGradient(W/2,H/2,H*0.3,W/2,H/2,H*0.75);g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,'rgba(0,0,0,.35)');cx.fillStyle=g;cx.fillRect(0,0,W,H);}
 }
-function drawHook(t,p){ // t:0..HOOK_DUR
-  cx.drawImage(still,0,0);cx.fillStyle='rgba(0,0,0,.55)';cx.fillRect(0,0,W,H);
-  const k=ease(t/0.3),txt=$('hook').value||'…';
-  // 最長の行が画面に収まる大きさまで自動で縮める（各行は手入力の改行を優先）
-  let size=130;for(;size>64;size-=4){cx.font=`900 ${size}px ${FONT}`;if(Math.max(...txt.replace(/\*/g,'').split('\n').map(l=>cx.measureText(l).width))<=W-110)break;}cx.save();cx.translate(W/2,H/2);cx.scale(0.6+0.4*k,0.6+0.4*k);cx.globalAlpha=k;
-  drawRich(txt,0,0,size,{anchor:'center',maxW:W-100});cx.restore();
-  if(p!=null)drawProgress(p);
+function drawProgress(p){cx.fillStyle='rgba(255,255,255,.25)';cx.fillRect(0,0,W,14);cx.fillStyle=P.key==='ig'?'#d6249f':'#ff3d57';cx.fillRect(0,0,W*Math.min(1,p),14);}
+const stillV=document.createElement('canvas');
+function snapVideo(){stillV.width=src.videoWidth||W;stillV.height=src.videoHeight||H;stillV.getContext('2d').drawImage(src,0,0);}
+const ease=t=>1-Math.pow(1-Math.min(1,Math.max(0,t)),3);
+const back=t=>{t=Math.min(1,Math.max(0,t));const c=1.9;return 1+(c+1)*Math.pow(t-1,3)+c*Math.pow(t-1,2);}; // 少し行き過ぎて戻る
+
+// 1フレームの状態（全プラットフォーム共通）→ 各キャンバスに描く
+function renderFrame(f){
+  const s=fxLvl();
+  if(f.kind==='hook'){
+    const shake=s?Math.max(0,1-f.t/0.35)*18*s:0;
+    cx.save();cx.translate((Math.random()-.5)*shake,(Math.random()-.5)*shake);
+    drawFrame(stillV,stillV.width,stillV.height,1+0.04*s*f.t);cx.restore();
+    cx.fillStyle='rgba(0,0,0,.55)';cx.fillRect(0,0,W,H);
+    if(s&&f.t<0.08){cx.fillStyle=`rgba(255,255,255,${0.6*(1-f.t/0.08)})`;cx.fillRect(0,0,W,H);}
+    const txt=$('hook').value||'…',size=fitSize(txt,P.txtW+60,130,64),k=s?0.75+0.25*back(f.t/0.25):1; // 最初から読める大きさで出して弾ませる
+    cx.save();cx.translate(P.txtCX,P.hookY);cx.scale(k,k);drawRich(txt,0,0,size,{anchor:'center',maxW:P.txtW+60});cx.restore();
+  }else if(f.kind==='main'){
+    const age=f.segAge,punch=s?0.12*s*(1-ease(age/0.28)):0,kb=1+0.05*s*Math.min(1,f.segP);
+    drawFrame(src,src.videoWidth,src.videoHeight,kb+punch);
+    if(s&&age<0.14&&f.segIdx>0){cx.fillStyle=`rgba(255,255,255,${0.75*(1-age/0.14)})`;cx.fillRect(0,0,W,H);}
+    drawRich($('head').value,P.txtCX,P.headY,fitSize($('head').value,P.txtW,62,40),{box:true,stroke:0,maxW:P.txtW+40});
+    if(f.cap){const pop=s?back(f.capAge/0.2):1,hl=hasHl(f.cap),sh=(s&&hl&&f.capAge<0.35)?Math.sin(f.capAge*70)*10*s*(1-f.capAge/0.35):0;
+      const sz=+$('fs').value*(hl&&s?1.08:1);
+      cx.save();cx.translate(P.txtCX+sh,P.capY);cx.scale(pop,pop);drawRich(f.cap,0,0,sz,{anchor:'bottom',maxW:P.txtW});cx.restore();}
+  }else if(f.kind==='outro'){
+    drawFrame(stillV,stillV.width,stillV.height,1.06);cx.fillStyle='rgba(0,0,0,.62)';cx.fillRect(0,0,W,H);
+    const k=s?back(f.t/0.35):1;cx.save();cx.translate(P.txtCX,P.key==='ig'?420:440);cx.scale(k,k);drawRich($('outroBig').value,0,0,fitSize($('outroBig').value,P.txtW+80,112,60),{anchor:'center',maxW:P.txtW+80});cx.restore();
+    const a=ease(f.t/0.4),tw=780,th=439,tx=P.txtCX-tw/2,ty=(P.key==='ig'?600:620)+(1-a)*80;cx.globalAlpha=a;
+    cx.save();cx.beginPath();cx.roundRect(tx,ty,tw,th,28);cx.clip();
+    if(thumbImg){const sc=Math.max(tw/thumbImg.width,th/thumbImg.height);cx.drawImage(thumbImg,tx+(tw-thumbImg.width*sc)/2,ty+(th-thumbImg.height*sc)/2,thumbImg.width*sc,thumbImg.height*sc);}
+    else if(stillV.width){const sc=Math.max(tw/stillV.width,th/stillV.height);cx.drawImage(stillV,tx+(tw-stillV.width*sc)/2,ty+(th-stillV.height*sc)/2,stillV.width*sc,stillV.height*sc);}
+    cx.restore();cx.lineWidth=8;cx.strokeStyle='#fff';cx.beginPath();cx.roundRect(tx,ty,tw,th,28);cx.stroke();
+    const pulse=1+0.06*Math.sin(f.t*7)*(s?1:0);cx.save();cx.translate(P.txtCX,ty+th/2);cx.scale(pulse,pulse);
+    cx.fillStyle='rgba(255,0,0,.92)';cx.beginPath();cx.roundRect(-84,-58,168,116,32);cx.fill();
+    cx.fillStyle='#fff';cx.beginPath();cx.moveTo(-26,-34);cx.lineTo(42,0);cx.lineTo(-26,34);cx.closePath();cx.fill();cx.restore();
+    drawRich($('mainTitle').value||'本編はこちら',P.txtCX,ty+th+80,52,{stroke:.14,maxW:P.txtW});
+    const bob=s?Math.sin(f.t*6)*14:0;
+    if(P.key==='yt'){
+      drawRich('画面下の「関連動画」をタップ',P.txtCX,H-560,54,{box:true,stroke:0,maxW:P.txtW+80});
+      cx.fillStyle='#ffd23f';cx.beginPath();const ax=200,ay=H-470+bob;cx.moveTo(ax-46,ay);cx.lineTo(ax+46,ay);cx.lineTo(ax,ay+74);cx.closePath();cx.fill();
+    }else{
+      drawRich('▶ 本編はYouTubeで\nプロフィールのリンクから',P.txtCX,H-650,52,{box:true,stroke:0,maxW:P.txtW+80});
+      drawRich('🔖 保存して見返してね',P.txtCX,H-470+bob,50,{stroke:.14,maxW:P.txtW});
+    }
+    cx.globalAlpha=1;
+  }
+  if(f.p!=null)drawProgress(f.p);
 }
-function drawOutro(t,p){
-  cx.drawImage(still,0,0);cx.save();cx.filter='blur(24px)';cx.drawImage(still,0,0);cx.restore();cx.fillStyle='rgba(0,0,0,.6)';cx.fillRect(0,0,W,H);
-  const k=ease(t/0.35);cx.globalAlpha=k;
-  drawRich($('outroBig').value,W/2,430,118,{anchor:'center'});
-  // 本編サムネ
-  const tw=860,th=484,tx=(W-tw)/2,ty=640;
-  cx.save();cx.beginPath();cx.roundRect(tx,ty,tw,th,28);cx.clip();
-  if(thumbImg){const s=Math.max(tw/thumbImg.width,th/thumbImg.height);cx.drawImage(thumbImg,tx+(tw-thumbImg.width*s)/2,ty+(th-thumbImg.height*s)/2,thumbImg.width*s,thumbImg.height*s);}
-  else{cx.drawImage(still,0,(H-W*th/tw)/2,W,W*th/tw,tx,ty,tw,th);}
-  cx.restore();cx.lineWidth=8;cx.strokeStyle='#fff';cx.beginPath();cx.roundRect(tx,ty,tw,th,28);cx.stroke();
-  // 再生ボタン
-  cx.fillStyle='rgba(255,0,0,.92)';cx.beginPath();cx.roundRect(W/2-90,ty+th/2-62,180,124,34);cx.fill();
-  cx.fillStyle='#fff';cx.beginPath();cx.moveTo(W/2-28,ty+th/2-36);cx.lineTo(W/2+44,ty+th/2);cx.lineTo(W/2-28,ty+th/2+36);cx.closePath();cx.fill();
-  drawRich($('mainTitle').value||'本編はこちら',W/2,ty+th+90,58,{stroke:.14});
-  // 関連動画リンクへの矢印（ショート画面の左下）
-  const bob=Math.sin(t*6)*14;
-  drawRich('画面下の「関連動画」をタップ',W/2,H-420+bob*0,58,{box:true,stroke:0,color:'#fff'});
-  cx.fillStyle='#ffd23f';cx.beginPath();const ax=230,ay=H-300+bob;cx.moveTo(ax-50,ay);cx.lineTo(ax+50,ay);cx.lineTo(ax,ay+80);cx.closePath();cx.fill();
-  cx.globalAlpha=1;
-  if(p!=null)drawProgress(p);
+function drawSafe(){ // プレビューのみ
+  if(!$('safe').checked)return;cx.save();cx.fillStyle='rgba(255,61,87,.18)';cx.strokeStyle='rgba(255,61,87,.7)';cx.lineWidth=3;cx.setLineDash([12,10]);
+  for(const [x,y,w,h] of P.safe){cx.fillRect(x,y,w,h);cx.strokeRect(x,y,w,h);}
+  if(P.grid34){cx.strokeStyle='rgba(214,36,159,.9)';cx.strokeRect(0,(H-1440)/2,W,1440);cx.fillStyle='rgba(214,36,159,.9)';cx.font=`700 30px ${FONT}`;cx.textAlign='left';cx.fillText('プロフィール一覧で見える範囲（3:4）',20,(H+1440)/2-20);}
+  cx.restore();
 }
-function draw(){ // 静止プレビュー
+let lastPreviewFrame=null;
+function draw(){
   if(engine.running)return;
+  cx=out.getContext('2d');P=PLAT[pvPlat];
+  if(lastPreviewFrame){renderFrame(lastPreviewFrame);drawSafe();return;}
   const r=segRanges()[cur]||segRanges()[0];
-  if(src.videoWidth)drawMain(r,null);else{cx.fillStyle='#000';cx.fillRect(0,0,W,H);drawRich($('head').value,W/2,150,64,{box:true,stroke:0});drawRich('本編の動画を読み込むと\nここに表示されます',W/2,H/2,64,{anchor:'center',stroke:0,color:'#9aa3ad'});}
+  if(src.videoWidth)renderFrame({kind:'main',segAge:9,segP:0,segIdx:0,cap:capAt(src.currentTime,r),capAge:9,p:null});
+  else{cx.fillStyle='#000';cx.fillRect(0,0,W,H);drawRich($('head').value,P.txtCX,P.headY,62,{box:true,stroke:0,maxW:P.txtW});drawRich('本編の動画を読み込むと\nここに表示されます',W/2,H/2,64,{anchor:'center',stroke:0,color:'#9aa3ad'});}
+  drawSafe();
 }
-['mode','pos','zoom','fs','head','hook','outroBig','mainTitle'].forEach(id=>$(id).addEventListener('input',()=>{draw();updatePost();}));
-src.addEventListener('seeked',draw);
-src.addEventListener('timeupdate',()=>{if(!engine.running&&src.paused)draw();});
+['mode','pos','zoom','fs','head','hook','outroBig','mainTitle','fxColor','safe'].forEach(id=>$(id).addEventListener('input',()=>{lastPreviewFrame=null;draw();updatePost();}));
+$('fxLevel').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;for(const x of $('fxLevel').children)x.classList.toggle('on',x===b);draw();});
+$('pvPlat').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;for(const x of $('pvPlat').children)x.classList.toggle('on',x===b);pvPlat=b.dataset.p;draw();});
+src.addEventListener('seeked',()=>{lastPreviewFrame=null;draw();});
+src.addEventListener('timeupdate',()=>{if(!engine.running&&src.paused){lastPreviewFrame=null;draw();}});
+
+// ---------- 効果音（WebAudioで合成）----------
+let audioCtx=null,audioDest=null,sfxBus=null;
+function ensureAudio(){if(audioCtx)return;audioCtx=new AudioContext();const n=audioCtx.createMediaElementSource(src);audioDest=audioCtx.createMediaStreamDestination();
+  n.connect(audioDest);n.connect(audioCtx.destination);sfxBus=audioCtx.createGain();sfxBus.connect(audioDest);sfxBus.connect(audioCtx.destination);}
+function noiseBuf(d){const b=audioCtx.createBuffer(1,audioCtx.sampleRate*d,audioCtx.sampleRate),x=b.getChannelData(0);for(let i=0;i<x.length;i++)x[i]=Math.random()*2-1;return b;}
+const SFX={
+  whoosh(){const t=audioCtx.currentTime,n=audioCtx.createBufferSource();n.buffer=noiseBuf(.4);const f=audioCtx.createBiquadFilter();f.type='bandpass';f.Q.value=1.2;
+    f.frequency.setValueAtTime(400,t);f.frequency.exponentialRampToValueAtTime(5000,t+.28);const g=audioCtx.createGain();g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.8,t+.08);g.gain.exponentialRampToValueAtTime(.001,t+.35);
+    n.connect(f).connect(g).connect(sfxBus);n.start(t);n.stop(t+.4);},
+  pop(){const t=audioCtx.currentTime,o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='sine';o.frequency.setValueAtTime(900,t);o.frequency.exponentialRampToValueAtTime(260,t+.09);
+    g.gain.setValueAtTime(.9,t);g.gain.exponentialRampToValueAtTime(.001,t+.12);o.connect(g).connect(sfxBus);o.start(t);o.stop(t+.13);},
+  boom(){const t=audioCtx.currentTime,o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='sine';o.frequency.setValueAtTime(140,t);o.frequency.exponentialRampToValueAtTime(40,t+.35);
+    g.gain.setValueAtTime(1,t);g.gain.exponentialRampToValueAtTime(.001,t+.45);o.connect(g).connect(sfxBus);o.start(t);o.stop(t+.5);
+    const n=audioCtx.createBufferSource();n.buffer=noiseBuf(.15);const ng=audioCtx.createGain();ng.gain.setValueAtTime(.5,t);ng.gain.exponentialRampToValueAtTime(.001,t+.12);n.connect(ng).connect(sfxBus);n.start(t);},
+  ding(){const t=audioCtx.currentTime;for(const [fr,v] of [[1320,.5],[1980,.25],[2640,.15]]){const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type='sine';o.frequency.value=fr;
+    g.gain.setValueAtTime(v,t);g.gain.exponentialRampToValueAtTime(.001,t+.9);o.connect(g).connect(sfxBus);o.start(t);o.stop(t+1);}},
+};
+function sfx(name){if(!audioCtx||!$('fxSound').checked||!fxLvl())return;sfxBus.gain.value=$('sfxVol').value/100*Math.min(1.2,fxLvl());SFX[name]();}
 
 // ---------- 再生エンジン（プレビューと書き出しで共通）----------
 const engine={running:false,stop:false};
 const seek=t=>new Promise(res=>{if(Math.abs(src.currentTime-t)<0.01){res();return;}src.addEventListener('seeked',res,{once:true});src.currentTime=t;});
 const nextFrame=()=>new Promise(res=>requestAnimationFrame(res));
-async function runSequence(onProgress){
+async function runSequence(targets,onProgress,onReady){
   const rs=segRanges();if(!rs.length)throw new Error('有効な区間がありません');
   const oDur=+$('outroDur').value||3,total=totalLen();let base=0;
+  const paint=f=>{for(const tg of targets){cx=tg.ctx;P=PLAT[tg.plat];renderFrame(f);}lastPreviewFrame=f;onProgress(f.p);};
   engine.running=true;engine.stop=false;
   try{
-    // フック：最初の区間の頭の場面を背景に
-    await seek(rs[0].a);drawFrame(src,src.videoWidth,src.videoHeight);snapStill();
+    await seek(rs[0].a);snapVideo();paint({kind:'hook',t:0,p:0});
+    if(onReady)await onReady();
+    sfx('boom');
     let t0=performance.now();
-    while(!engine.stop){const t=(performance.now()-t0)/1000;if(t>=HOOK_DUR)break;drawHook(t,(base+t)/total);onProgress((base+t)/total);await nextFrame();}
+    while(!engine.stop){const t=(performance.now()-t0)/1000;if(t>=HOOK_DUR)break;paint({kind:'hook',t,p:(base+t)/total});await nextFrame();}
     base+=HOOK_DUR;
-    for(const r of rs){if(engine.stop)break;
-      await seek(r.a);await src.play();
-      await new Promise(res=>{const tick=()=>{const p=(base+src.currentTime-r.a)/total;drawMain(r,p);onProgress(p);
-        if(engine.stop||src.ended||src.currentTime>=r.b){res();return;}
-        src.requestVideoFrameCallback?src.requestVideoFrameCallback(tick):requestAnimationFrame(tick);};tick();});
+    for(let i=0;i<rs.length&&!engine.stop;i++){const r=rs[i];
+      await seek(r.a);sfx('whoosh');await src.play();const segT0=performance.now();let lastCap=null,capT0=0;
+      await new Promise(res=>{const tick=()=>{const now=performance.now(),cap=capAt(src.currentTime,r);
+          if(cap!==lastCap){lastCap=cap;capT0=now;if(cap&&hasHl(cap))sfx('pop');}
+          paint({kind:'main',segIdx:i,segAge:(now-segT0)/1000,segP:(src.currentTime-r.a)/(r.b-r.a),cap,capAge:(now-capT0)/1000,p:(base+src.currentTime-r.a)/total});
+          if(engine.stop||src.ended||src.currentTime>=r.b){res();return;}
+          src.requestVideoFrameCallback?src.requestVideoFrameCallback(tick):requestAnimationFrame(tick);};tick();});
       src.pause();base+=r.b-r.a;}
-    drawFrame(src,src.videoWidth,src.videoHeight);snapStill(); // 最後の場面（字幕なし）を誘導カードの背景に
+    snapVideo();sfx('whoosh');setTimeout(()=>sfx('ding'),250);
     t0=performance.now();
-    while(!engine.stop){const t=(performance.now()-t0)/1000;if(t>=oDur)break;drawOutro(t,(base+t)/total);onProgress((base+t)/total);await nextFrame();}
+    while(!engine.stop){const t=(performance.now()-t0)/1000;if(t>=oDur)break;paint({kind:'outro',t,p:(base+t)/total});await nextFrame();}
   }finally{engine.running=false;src.pause();}
 }
-async function previewSeg(r){if(engine.running)return;engine.running=true;engine.stop=false;
-  try{await seek(r.a);await src.play();await new Promise(res=>{const tick=()=>{drawMain(r,null);if(engine.stop||src.currentTime>=r.b||src.ended){res();return;}requestAnimationFrame(tick);};tick();});}
+async function previewSeg(r){if(engine.running)return;engine.running=true;engine.stop=false;lastPreviewFrame=null;
+  try{await seek(r.a);await src.play();await new Promise(res=>{const tick=()=>{cx=out.getContext('2d');P=PLAT[pvPlat];renderFrame({kind:'main',segIdx:0,segAge:9,segP:0,cap:capAt(src.currentTime,r),capAge:9,p:null});drawSafe();if(engine.stop||src.currentTime>=r.b||src.ended){res();return;}requestAnimationFrame(tick);};tick();});}
   finally{src.pause();engine.running=false;}}
-$('previewAll').onclick=async()=>{if(engine.running||!src.videoWidth)return;$('stopBtn').disabled=false;
-  try{await runSequence(p=>$('prog').style.width=(p*100).toFixed(1)+'%');}catch(err){$('exportMsg').innerHTML=`<span class="warn">${err.message}</span>`;}
-  $('stopBtn').disabled=true;};
+$('previewAll').onclick=async()=>{if(engine.running||!src.videoWidth)return;ensureAudio();await audioCtx.resume();$('stopBtn').disabled=false;
+  try{await runSequence([{ctx:out.getContext('2d'),plat:pvPlat}],p=>$('prog').style.width=(p*100).toFixed(1)+'%');}catch(err){$('exportMsg').innerHTML=`<span class="warn">${err.message}</span>`;}
+  $('stopBtn').disabled=true;draw();};
 $('stopBtn').onclick=()=>{engine.stop=true;};
 
-// ---------- 書き出し ----------
+// ---------- 書き出し（選んだプラットフォーム分を同時に録画）----------
 function pickType(){const c=['video/mp4;codecs=avc1.640028,mp4a.40.2','video/mp4;codecs=avc1,mp4a','video/mp4','video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];
   return c.find(t=>window.MediaRecorder&&MediaRecorder.isTypeSupported(t))||'';}
-let audioCtx=null,audioDest=null;
-function ensureAudio(){if(audioCtx)return;audioCtx=new AudioContext();const n=audioCtx.createMediaElementSource(src);audioDest=audioCtx.createMediaStreamDestination();n.connect(audioDest);n.connect(audioCtx.destination);}
 $('exportBtn').onclick=async()=>{
   if(engine.running)return;
+  const plats=[$('outYT').checked&&'yt',$('outIG').checked&&'ig'].filter(Boolean);
+  if(!plats.length){$('exportMsg').innerHTML='<span class="warn">YouTube用かInstagram用のどちらかにチェックを入れてください</span>';return;}
   const type=pickType();if(!type){$('exportMsg').innerHTML='<span class="warn">このブラウザは動画の書き出しに対応していません。ChromeかEdgeで開いてください。</span>';return;}
   if(!segRanges().length){$('exportMsg').innerHTML='<span class="warn">有効な区間がありません（開始＜終了になっているか確認）</span>';return;}
-  const ext=type.startsWith('video/mp4')?'mp4':'webm';$('fmtMsg').textContent='形式：'+ext.toUpperCase();
+  const ext=type.startsWith('video/mp4')?'mp4':'webm';
+  $('fmtMsg').innerHTML='形式：'+ext.toUpperCase()+(ext==='webm'&&plats.includes('ig')?' <span class="warn">（InstagramはWebMを受け付けないことがあります。最新のChromeかEdgeならMP4で書き出せます）</span>':'');
   ensureAudio();await audioCtx.resume();
-  const stream=out.captureStream(30);for(const t of audioDest.stream.getAudioTracks())stream.addTrack(t);
-  const chunks=[],rec=new MediaRecorder(stream,{mimeType:type,videoBitsPerSecond:10_000_000,audioBitsPerSecond:192_000});
-  rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data);};const done=new Promise(r=>rec.onstop=r);
-  $('exportBtn').disabled=true;$('stopBtn').disabled=false;$('exportMsg').textContent='書き出し中…（このタブを前面のままにしてください）';
-  rec.start(1000);
-  try{await runSequence(p=>$('prog').style.width=(p*100).toFixed(1)+'%');}catch(err){$('exportMsg').innerHTML=`<span class="warn">${err.message}</span>`;}
-  const stopped=engine.stop;rec.stop();await done;$('exportBtn').disabled=false;$('stopBtn').disabled=true;
+  const targets=plats.map(plat=>{const cv=plat===pvPlat?out:Object.assign(document.createElement('canvas'),{width:W,height:H});
+    const stream=cv.captureStream(30);for(const t of audioDest.stream.getAudioTracks())stream.addTrack(t.clone());
+    const rec=new MediaRecorder(stream,{mimeType:type,videoBitsPerSecond:10_000_000,audioBitsPerSecond:192_000}),chunks=[];
+    rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data);};const done=new Promise(r=>rec.onstop=r);
+    return {plat,cv,ctx:cv.getContext('2d'),rec,chunks,done};});
+  $('exportBtn').disabled=true;$('stopBtn').disabled=false;$('exportMsg').textContent=`書き出し中…（${plats.map(p=>PLAT[p].name).join('・')}、このタブを前面のままにしてください）`;
+  try{await runSequence(targets,p=>$('prog').style.width=(p*100).toFixed(1)+'%',async()=>{for(const t of targets)t.rec.start(1000);await nextFrame();});}catch(err){$('exportMsg').innerHTML=`<span class="warn">${err.message}</span>`;}
+  const stopped=engine.stop;for(const t of targets)t.rec.stop();await Promise.all(targets.map(t=>t.done));
+  $('exportBtn').disabled=false;$('stopBtn').disabled=true;
   if(stopped){$('exportMsg').textContent='止めました。';$('prog').style.width='0';return;}
-  const blob=new Blob(chunks,{type:type.split(';')[0]}),url=URL.createObjectURL(blob),name=`${fileName}_short.${ext}`;
-  const a=document.createElement('a');a.href=url;a.download=name;a.click();
-  $('exportMsg').innerHTML=`<span class="ok">✅ 書き出しました（${(blob.size/1048576).toFixed(1)}MB）。</span> 保存されない場合は <a class="dl" href="${url}" download="${name}">ここをクリック</a>。投稿時に「関連動画」へ本編を設定するのを忘れずに（⑥参照）。`;
+  const links=[];
+  for(const t of targets){const blob=new Blob(t.chunks,{type:type.split(';')[0]}),url=URL.createObjectURL(blob),name=`${fileName}_${t.plat==='yt'?'youtube_short':'instagram_reel'}.${ext}`;
+    const a=document.createElement('a');a.href=url;a.download=name;a.click();links.push(`<a class="dl" href="${url}" download="${name}">${PLAT[t.plat].name}（${(blob.size/1048576).toFixed(1)}MB）</a>`);
+    await new Promise(r=>setTimeout(r,400));}
+  $('exportMsg').innerHTML=`<span class="ok">✅ 書き出しました。</span> 保存されない場合はクリック：${links.join('　')}<br>投稿時の設定は⑦を確認してください。`;
 };
 
 // ---------- 投稿文 ----------
 const plain=s=>String(s).replace(/\*/g,'').replace(/\n/g,'');
 function updatePost(){
   const hook=plain($('hook').value)||'（フック）',url=$('mainUrl').value.trim()||'（本編のURL）',mt=$('mainTitle').value.trim();
-  $('outTitle').value=`${hook}${/[…？?！!]$/.test(hook)?'':'…'} ${tags}`.slice(0,100);
-  $('outDesc').value=`続き・答えは本編で👇\n${mt?mt+'\n':''}${url}\n\n${tags}`;
+  const end=/[…？?！!]$/.test(hook)?'':'…';
+  $('ytTitle').value=`${hook}${end} ${tags.slice(0,3).join(' ')} #shorts`.slice(0,100);
+  $('ytDesc').value=`続き・答えは本編で👇\n${mt?mt+'\n':''}${url}\n\n${tags.slice(0,3).join(' ')} #shorts`;
+  $('igCap').value=`${hook}${end}\n\n続き・答えはYouTubeの本編で公開中！\n▶ プロフィールのリンクから見られます${mt?'\n「'+mt+'」':''}\n\n家づくり中の人は🔖保存して見返してね\n質問はコメントでどうぞ\n\n${tags.join(' ')}`;
 }
 $('mainUrl').addEventListener('input',updatePost);
+document.querySelector('.card .tabs').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;for(const x of b.parentElement.children)x.classList.toggle('on',x===b);
+  $('post-yt').hidden=b.dataset.pt!=='yt';$('post-ig').hidden=b.dataset.pt!=='ig';});
 document.addEventListener('click',async e=>{const b=e.target.closest('[data-copy]');if(!b)return;const ta=$(b.dataset.copy);
   try{await navigator.clipboard.writeText(ta.value);b.textContent='コピーしました';}catch(_){ta.select();b.textContent='選択しました（Ctrl+C）';}
   setTimeout(()=>b.textContent='コピー',1500);});
