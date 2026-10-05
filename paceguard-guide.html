@@ -1,0 +1,281 @@
+<title>PaceGuard LATITUDE 図説</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: 心電図記録紙のグリッドを地紋に、縦一列の手順書。図はSVGで記録紙の目盛りに合わせる */
+:root{
+  --bg:#fbf8f8; --paper:#ffffff; --grid:#f3d9dc; --grid-strong:#e9b9bf;
+  --fg:#1d2327; --muted:#5d6870; --line:#dfe3e6;
+  --trace:#14853d; --accent:#c8323f;
+  --ok:#1f8a4c; --ok-bg:#e5f4ea; --warn:#a86a00; --warn-bg:#fdf1d8; --bad:#c22f3c; --bad-bg:#fbe3e5;
+  --display:"Noto Sans JP","Hiragino Sans","Yu Gothic UI","Meiryo",sans-serif;
+  --body:"Noto Sans JP","Hiragino Sans","Yu Gothic UI","Meiryo",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"Consolas",monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141719; --paper:#1b1f22; --grid:#2a2226; --grid-strong:#3d2b31;
+  --fg:#e8ecee; --muted:#9aa5ad; --line:#2f363b;
+  --trace:#4fd17d; --accent:#ff6b77;
+  --ok:#5fd18d; --ok-bg:#16301f; --warn:#f0b54a; --warn-bg:#352a12; --bad:#ff7a85; --bad-bg:#3a1a1e; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141719; --paper:#1b1f22; --grid:#2a2226; --grid-strong:#3d2b31;
+  --fg:#e8ecee; --muted:#9aa5ad; --line:#2f363b;
+  --trace:#4fd17d; --accent:#ff6b77;
+  --ok:#5fd18d; --ok-bg:#16301f; --warn:#f0b54a; --warn-bg:#352a12; --bad:#ff7a85; --bad-bg:#3a1a1e; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.75;padding:32px 16px 64px}
+.wrap{max-width:860px;margin:0 auto;display:grid;gap:44px}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0;line-height:1.35}
+h1{font-size:clamp(26px,5vw,38px);font-weight:900;letter-spacing:.01em}
+h2{font-size:22px;font-weight:900;display:flex;gap:10px;align-items:baseline}
+h2 .n{font-family:var(--mono);font-size:13px;color:var(--accent);font-weight:600;letter-spacing:.08em}
+h3{font-size:16px;font-weight:700}
+p{margin:0}
+.muted{color:var(--muted)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+section{display:grid;gap:16px}
+.paper{background-color:var(--paper);
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px),
+  linear-gradient(var(--grid-strong) 1px,transparent 1px),linear-gradient(90deg,var(--grid-strong) 1px,transparent 1px);
+  background-size:8px 8px,8px 8px,40px 40px,40px 40px;border:1px solid var(--line);border-radius:10px}
+.hero{padding:28px 24px 20px;display:grid;gap:10px}
+.hero .tag{font-family:var(--mono);font-size:12px;letter-spacing:.12em;color:var(--accent);text-transform:uppercase}
+.hero svg{width:100%;height:auto;display:block}
+.scroll{overflow-x:auto}
+svg text{font-family:var(--body);fill:var(--fg)}
+svg .m{font-family:var(--mono)}
+/* steps */
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.step{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:grid;gap:6px;align-content:start;min-width:0}
+.step b{font-family:var(--mono);color:var(--accent);font-size:13px}
+.kbd{font-family:var(--mono);font-size:13px;background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:1px 6px;white-space:nowrap}
+/* table */
+table{border-collapse:collapse;width:100%;min-width:560px;background:var(--paper)}
+th,td{border-bottom:1px solid var(--line);padding:10px 12px;text-align:left;vertical-align:top}
+th{font-size:12px;letter-spacing:.06em;color:var(--muted);font-weight:700}
+.tbl{border:1px solid var(--line);border-radius:10px;overflow-x:auto}
+.pill{display:inline-block;font-size:12px;font-weight:700;border-radius:999px;padding:1px 10px;white-space:nowrap}
+.ok{color:var(--ok);background:var(--ok-bg)} .warn{color:var(--warn);background:var(--warn-bg)} .bad{color:var(--bad);background:var(--bad-bg)}
+/* result mock */
+.mock{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:16px;display:grid;gap:12px}
+.mock .head{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.callout{display:grid;grid-template-columns:28px 1fr;gap:10px;align-items:start}
+.callout .dot{width:24px;height:24px;border-radius:50%;background:var(--accent);color:var(--paper);font:700 13px var(--mono);display:grid;place-items:center}
+.notes{display:grid;gap:8px;padding:16px 18px;border:1px solid var(--line);border-radius:10px;background:var(--paper)}
+.notes li{margin-left:-6px}
+ul{margin:0;padding-left:20px}
+</style>
+
+<div class="wrap">
+
+<header class="paper hero">
+  <div class="tag">S-ICD · LATITUDE report</div>
+  <h1>PaceGuard LATITUDE 図説</h1>
+  <p class="muted">S-ICDレポートPDFの波形を、前回や基準と自動で比べる院内検証ツール。処理はすべてこのPCの中で行います。</p>
+  <svg viewBox="0 0 800 120" role="img" aria-label="S-ECG波形の例">
+    <path fill="none" stroke="var(--trace)" stroke-width="2.4" stroke-linejoin="round"
+      d="M0 70 H40 q8 -8 16 0 H90 l6 6 l10 -62 l12 84 l8 -28 H160 q18 -16 36 0 H260 q8 -8 16 0 H310 l6 6 l10 -62 l12 84 l8 -28 H380 q18 -16 36 0 H480 q8 -8 16 0 H530 l6 6 l10 -62 l12 84 l8 -28 H600 q18 -16 36 0 H700 q8 -8 16 0 H750 l6 6 l10 -62 l12 84 l8 -28 H800"/>
+    <text x="796" y="114" text-anchor="end" class="m" font-size="12" style="fill:var(--muted)">25 mm/s · 2.5 mm/mV</text>
+  </svg>
+</header>
+
+<section>
+  <h2><span class="n">STEP 0</span>最初に1回だけ</h2>
+  <div class="steps">
+    <div class="step"><b>①</b><h3>HTMLを開く</h3><p>Chromeか Edgeで <span class="kbd">paceguard-latitude.html</span> を開きます。</p></div>
+    <div class="step"><b>②</b><h3>データフォルダを選ぶ</h3><p>保存先を選ぶと記憶されます。次回からは「接続」を押すだけです。</p></div>
+    <div class="step"><b>③</b><h3>必要なら設定</h3><p>⚙設定で基準フォルダ名（既定は <span class="kbd">基準</span>）とファイル名の型（<span class="kbd">{ID}.json</span> など）を変えられます。</p></div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">STEP 1</span>ふだんの使い方</h2>
+  <div class="scroll">
+  <svg viewBox="0 0 800 250" style="min-width:620px;width:100%" role="img" aria-label="使い方の流れ">
+    <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--muted)"/></marker></defs>
+    <g font-size="14">
+      <rect x="10" y="20" width="200" height="70" rx="10" fill="var(--paper)" stroke="var(--line)"/>
+      <text x="110" y="48" text-anchor="middle" font-weight="700">A. PDFを開く</text>
+      <text x="110" y="70" text-anchor="middle" font-size="12" style="fill:var(--muted)">ドラッグ or ファイル選択</text>
+      <rect x="10" y="150" width="200" height="70" rx="10" fill="var(--paper)" stroke="var(--line)"/>
+      <text x="110" y="178" text-anchor="middle" font-weight="700">B. 👀 ダウンロード監視</text>
+      <text x="110" y="200" text-anchor="middle" font-size="12" style="fill:var(--muted)">LATITUDEから保存するだけ</text>
+      <path d="M210 55 H270 V110 H300" fill="none" stroke="var(--muted)" stroke-width="1.6" marker-end="url(#ar)"/>
+      <path d="M210 185 H270 V130 H300" fill="none" stroke="var(--muted)" stroke-width="1.6" marker-end="url(#ar)"/>
+      <rect x="302" y="85" width="200" height="70" rx="10" fill="var(--paper)" stroke="var(--trace)" stroke-width="1.6"/>
+      <text x="402" y="113" text-anchor="middle" font-weight="700">自動で認識</text>
+      <text x="402" y="135" text-anchor="middle" font-size="12" style="fill:var(--muted)">ID・日付・波形の段</text>
+      <path d="M502 120 H560" fill="none" stroke="var(--muted)" stroke-width="1.6" marker-end="url(#ar)"/>
+      <rect x="562" y="85" width="228" height="70" rx="10" fill="var(--paper)" stroke="var(--accent)" stroke-width="1.6"/>
+      <text x="676" y="113" text-anchor="middle" font-weight="700">自動で評価・保存</text>
+      <text x="676" y="135" text-anchor="middle" font-size="12" style="fill:var(--muted)">結果は 基準/〈ID〉.json へ</text>
+    </g>
+  </svg>
+  </div>
+  <p class="muted">B は3秒ごとにダウンロードフォルダを見て、新しいPDFを見つけたら A と同じ処理をして通知します。</p>
+</section>
+
+<section>
+  <h2><span class="n">STEP 2</span>何と比べるか</h2>
+  <div class="scroll">
+  <svg viewBox="0 0 800 170" style="min-width:620px;width:100%" role="img" aria-label="比較相手のタイムライン">
+    <line x1="30" y1="90" x2="770" y2="90" stroke="var(--line)" stroke-width="3"/>
+    <g font-size="13">
+      <circle cx="90" cy="90" r="11" fill="var(--accent)"/>
+      <text x="90" y="60" text-anchor="middle" font-weight="700" style="fill:var(--accent)">基準（固定）</text>
+      <text x="90" y="125" text-anchor="middle" class="m" font-size="12" style="fill:var(--muted)">2025-04</text>
+      <circle cx="300" cy="90" r="8" fill="var(--muted)"/>
+      <text x="300" y="125" text-anchor="middle" class="m" font-size="12" style="fill:var(--muted)">2025-10</text>
+      <circle cx="510" cy="90" r="11" fill="var(--trace)"/>
+      <text x="510" y="60" text-anchor="middle" font-weight="700" style="fill:var(--trace)">前回</text>
+      <text x="510" y="125" text-anchor="middle" class="m" font-size="12" style="fill:var(--muted)">2026-04</text>
+      <circle cx="720" cy="90" r="13" fill="var(--paper)" stroke="var(--fg)" stroke-width="3"/>
+      <text x="720" y="60" text-anchor="middle" font-weight="900">今回</text>
+      <text x="720" y="125" text-anchor="middle" class="m" font-size="12" style="fill:var(--muted)">2026-10</text>
+      <path d="M705 150 Q615 168 525 150" fill="none" stroke="var(--trace)" stroke-width="1.6" stroke-dasharray="5 4"/>
+      <text x="615" y="160" text-anchor="middle" font-size="12" style="fill:var(--trace)">前回と比較</text>
+      <path d="M705 30 Q400 -5 100 30" fill="none" stroke="var(--accent)" stroke-width="1.6" stroke-dasharray="5 4"/>
+      <text x="400" y="22" text-anchor="middle" font-size="12" style="fill:var(--accent)">初期値と比較</text>
+    </g>
+  </svg>
+  </div>
+  <div class="steps">
+    <div class="step"><h3>自動評価</h3><p>前回があれば前回と比較。なければ基準と比較します。</p></div>
+    <div class="step"><h3>基準の決め方</h3><p>結果の下の「この波形を基準にする」を押すと固定されます。未設定なら一番古いレポートが基準です。</p></div>
+    <div class="step"><h3>同じ日付でも</h3><p>「前回と比較」「初期値と比較」ボタンで何度でも確認できます。結果は日付ごとに保存され、上書きで変わりません。</p></div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">STEP 3</span>波形認識のしくみ</h2>
+  <div class="scroll">
+  <svg viewBox="0 0 820 420" style="min-width:680px;width:100%" role="img" aria-label="波形認識の6段階">
+    <g font-size="13">
+      <!-- 1 -->
+      <rect x="10" y="10" width="250" height="180" rx="10" fill="var(--paper)" stroke="var(--line)"/>
+      <text x="26" y="36" font-weight="700"><tspan class="m" style="fill:var(--accent)">1 </tspan>PDFの文字 → ID・日付</text>
+      <rect x="30" y="54" width="210" height="116" rx="4" fill="var(--bg)" stroke="var(--line)"/>
+      <text x="44" y="80" class="m" font-size="12" style="fill:var(--muted)">患者ID</text>
+      <rect x="40" y="88" width="190" height="24" rx="4" fill="none" stroke="var(--accent)" stroke-width="1.6"/>
+      <text x="50" y="105" class="m" font-size="12">12345678 (0012345)</text>
+      <text x="44" y="138" class="m" font-size="12" style="fill:var(--muted)">本文・注釈・フォーム欄</text>
+      <text x="44" y="156" class="m" font-size="12" style="fill:var(--muted)">すべてから候補を探す</text>
+      <!-- 2 -->
+      <rect x="285" y="10" width="250" height="180" rx="10" fill="var(--paper)" stroke="var(--line)"/>
+      <text x="301" y="36" font-weight="700"><tspan class="m" style="fill:var(--accent)">2 </tspan>緑の線の段を検出</text>
+      <g fill="none" stroke="var(--trace)" stroke-width="1.6">
+        <path d="M305 72 H345 l4 -20 l5 30 l3 -10 H410 l4 -20 l5 30 l3 -10 H470 l4 -20 l5 30 l3 -10 H515"/>
+        <path d="M305 112 H350 l4 -20 l5 30 l3 -10 H420 l4 -20 l5 30 l3 -10 H490 l4 -20 l5 30 l3 -10 H515"/>
+        <path d="M305 152 H340 l4 -20 l5 30 l3 -10 H385 l4 -20 l5 30 l3 -10 H430 l4 -20 l5 30 l3 -10 H475 l4 -20 l5 30 l3 -10 H515"/>
+      </g>
+      <g font-size="11" class="m" style="fill:var(--muted)"><text x="520" y="76">1</text><text x="520" y="116">2</text><text x="520" y="156">3</text></g>
+      <text x="301" y="180" font-size="12" style="fill:var(--muted)">2〜5段を自動で切り分け</text>
+      <!-- 3 -->
+      <rect x="560" y="10" width="250" height="180" rx="10" fill="var(--paper)" stroke="var(--line)"/>
+      <text x="576" y="36" font-weight="700"><tspan class="m" style="fill:var(--accent)">3 </tspan>4倍解像度で線をなぞる</text>
+      <g stroke="var(--grid-strong)">
+        <path d="M580 60 V170 M600 60 V170 M620 60 V170 M640 60 V170 M660 60 V170 M680 60 V170 M700 60 V170 M720 60 V170 M740 60 V170 M760 60 V170 M780 60 V170"/>
+      </g>
+      <path d="M580 130 L600 128 L620 126 L640 70 L660 160 L680 120 L700 118 L720 112 L740 118 L760 122 L780 124" fill="none" stroke="var(--trace)" stroke-width="5" stroke-opacity=".25"/>
+      <path d="M580 130 L600 128 L620 126 L640 70 L660 160 L680 120 L700 118 L720 112 L740 118 L760 122 L780 124" fill="none" stroke="var(--trace)" stroke-width="1.4"/>
+      <g fill="var(--accent)"><circle cx="600" cy="128" r="2.6"/><circle cx="620" cy="126" r="2.6"/><circle cx="640" cy="70" r="2.6"/><circle cx="660" cy="160" r="2.6"/><circle cx="680" cy="120" r="2.6"/><circle cx="700" cy="118" r="2.6"/><circle cx="720" cy="112" r="2.6"/></g>
+      <text x="576" y="184" font-size="12" style="fill:var(--muted)">列ごとに線の中心 → 1px ≈ <tspan class="m">3.5 ms</tspan></text>
+      <!-- 4 -->
+      <rect x="10" y="220" width="250" height="190" rx="10" fill="var(--paper)" stroke="var(--line)"/>
+      <text x="26" y="246" font-weight="700"><tspan class="m" style="fill:var(--accent)">4 </tspan>基線をそろえ R波を検出</text>
+      <path d="M30 300 Q80 280 130 300 T230 300" fill="none" stroke="var(--muted)" stroke-dasharray="4 3"/>
+      <path d="M30 320 H60 l5 -45 l6 60 l4 -15 H130 l5 -45 l6 60 l4 -15 H200 l5 -45 l6 60 l4 -15 H240" fill="none" stroke="var(--trace)" stroke-width="1.6"/>
+      <g fill="var(--accent)"><path d="M65 268 l-5 -9 h10z"/><path d="M135 268 l-5 -9 h10z"/><path d="M205 268 l-5 -9 h10z"/></g>
+      <text x="26" y="370" font-size="12" style="fill:var(--muted)">ゆれる基線（点線）を除去</text>
+      <text x="26" y="390" font-size="12" style="fill:var(--muted)">傾きの急な所を R波 ▼ とする</text>
+      <!-- 5 -->
+      <rect x="285" y="220" width="250" height="190" rx="10" fill="var(--paper)" stroke="var(--line)"/>
+      <text x="301" y="246" font-weight="700"><tspan class="m" style="fill:var(--accent)">5 </tspan>1拍ずつ切り出し重ねる</text>
+      <g fill="none" stroke="var(--trace)" stroke-width="1" stroke-opacity=".45">
+        <path d="M310 320 H380 l6 -50 l8 66 l5 -16 H510"/><path d="M310 323 H380 l6 -44 l8 62 l5 -18 H510"/><path d="M310 318 H380 l6 -55 l8 70 l5 -15 H510"/>
+      </g>
+      <path d="M310 320 H380 l6 -50 l8 66 l5 -16 H510" fill="none" stroke="var(--fg)" stroke-width="2"/>
+      <line x1="386" y1="260" x2="386" y2="345" stroke="var(--accent)" stroke-dasharray="3 3"/>
+      <text x="320" y="362" class="m" font-size="11" style="fill:var(--muted)">−100 ms</text><text x="372" y="362" class="m" font-size="11" style="fill:var(--accent)">R</text><text x="470" y="362" class="m" font-size="11" style="fill:var(--muted)">+150 ms</text>
+      <text x="301" y="390" font-size="12" style="fill:var(--muted)">中央値で代表の1拍（太線）を作る</text>
+      <!-- 6 -->
+      <rect x="560" y="220" width="250" height="190" rx="10" fill="var(--paper)" stroke="var(--line)"/>
+      <text x="576" y="246" font-weight="700"><tspan class="m" style="fill:var(--accent)">6 </tspan>使えない段を除外し計測</text>
+      <g font-size="12">
+        <text x="580" y="276">段1  <tspan class="m">72 bpm</tspan></text><text x="760" y="276" text-anchor="end" style="fill:var(--ok)">使用</text>
+        <text x="580" y="300">段2  <tspan class="m">74 bpm</tspan></text><text x="760" y="300" text-anchor="end" style="fill:var(--ok)">使用</text>
+        <text x="580" y="324">段3  <tspan class="m">181 bpm</tspan></text><text x="760" y="324" text-anchor="end" style="fill:var(--bad)">頻拍で除外</text>
+        <text x="580" y="348">段4  ノイズ</text><text x="760" y="348" text-anchor="end" style="fill:var(--bad)">除外</text>
+      </g>
+      <text x="576" y="376" font-size="12" style="fill:var(--muted)">残りから 振幅mV・QRS幅ms・</text>
+      <text x="576" y="394" font-size="12" style="fill:var(--muted)">極性・心拍数 を測る</text>
+    </g>
+  </svg>
+  </div>
+  <p class="muted">除外の条件：150 bpm超の頻拍、他の段の心拍数の1.35倍超、ノイズが多い、他の段と形が違う（相関0.85未満）。</p>
+</section>
+
+<section>
+  <h2><span class="n">STEP 4</span>判定の基準</h2>
+  <div class="scroll">
+  <svg viewBox="0 0 800 200" style="min-width:600px;width:100%" role="img" aria-label="前回と今回の代表1拍の重ね合わせ">
+    <rect x="0" y="0" width="800" height="200" rx="10" fill="var(--paper)" stroke="var(--line)"/>
+    <path d="M300 150 L318 40 L330 150 L345 150 L362 70 L385 150 Z" fill="var(--bad)" fill-opacity=".14"/>
+    <path d="M60 140 H300 l12 -100 l14 140 l10 -40 H560 q30 -24 60 0 H760" fill="none" stroke="var(--muted)" stroke-width="2" stroke-dasharray="6 4"/>
+    <path d="M60 140 H300 l18 -70 l22 120 l20 -30 l25 -20 H560 q30 -24 60 0 H760" fill="none" stroke="var(--trace)" stroke-width="2.4"/>
+    <g font-size="13">
+      <text x="70" y="30" style="fill:var(--muted)">- - 前回</text><text x="150" y="30" style="fill:var(--trace)">― 今回</text>
+      <text x="400" y="60" style="fill:var(--bad)">赤い部分 ＝ 形が違う所</text>
+      <text x="400" y="82" class="m" font-size="12" style="fill:var(--muted)">QRS幅 94 → 160 ms ／ 相関 0.71</text>
+    </g>
+  </svg>
+  </div>
+  <div class="tbl">
+  <table>
+    <thead><tr><th>項目</th><th>見ているもの</th><th><span class="pill warn">注意</span></th><th><span class="pill bad">要確認</span></th></tr></thead>
+    <tbody>
+      <tr><td><b>QRSの形</b></td><td>代表1拍のQRS（−80〜+120 ms）の相関。少しずらして一番合う位置で比べる</td><td class="mono">&lt; 0.90</td><td class="mono">&lt; 0.80</td></tr>
+      <tr><td><b>QRS幅</b></td><td>脚ブロックなどで広がっていないか</td><td class="mono">+20 ms</td><td class="mono">+30 ms<br><span class="muted">120 ms以上なら +20 ms</span></td></tr>
+      <tr><td><b>波高（振幅）</b></td><td>呼吸のゆれの幅を各記録から計算し、その範囲を超えたか（最低 ±30%）</td><td>範囲外</td><td class="mono">×1.6 以上の差</td></tr>
+      <tr><td><b>極性</b></td><td>R波の向きが反転していないか</td><td>—</td><td>反転</td></tr>
+      <tr><td><b>記録内の所見</b></td><td>頻拍の段やノイズの段があったか</td><td>あり</td><td>—</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="muted">呼吸で波高が少し変わるだけでは反応しにくく、ブロックや明らかな波高のずれで反応するように作っています。</p>
+</section>
+
+<section>
+  <h2><span class="n">STEP 5</span>結果画面の見方</h2>
+  <div class="mock">
+    <div class="head"><span class="pill bad">要確認</span><b>原因：QRS幅 94→160 ms（+66 ms）、QRS相関 0.71</b></div>
+    <div class="tbl">
+    <table>
+      <thead><tr><th>指標</th><th>前回</th><th>今回</th><th>判定</th></tr></thead>
+      <tbody class="mono">
+        <tr><td>QRS相関</td><td>—</td><td>0.71</td><td><span class="pill bad">要確認</span></td></tr>
+        <tr><td>QRS幅</td><td>94 ms</td><td>160 ms</td><td><span class="pill bad">要確認</span></td></tr>
+        <tr><td>振幅</td><td>1.42 mV</td><td>1.30 mV</td><td><span class="pill ok">範囲内</span></td></tr>
+        <tr><td>心拍数</td><td>68 bpm</td><td>72 bpm</td><td>—</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+  <div class="steps">
+    <div class="callout"><span class="dot">1</span><p><b>判定と原因</b>：一番上の1行で、何が理由かがわかります。</p></div>
+    <div class="callout"><span class="dot">2</span><p><b>基準の表</b>：各項目の数値としきい値。</p></div>
+    <div class="callout"><span class="dot">3</span><p><b>段ごとの表</b>：どの段を使い、どれを除外したか。</p></div>
+    <div class="callout"><span class="dot">4</span><p><b>重ね描き</b>：違う所が赤く塗られます。</p></div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">NOTE</span>使うときの注意</h2>
+  <ul class="notes">
+    <li>研究・院内検証用です。最終判断は必ず医師が行ってください。</li>
+    <li>PDFや患者情報はPCの外に出ません（完全ローカル処理）。</li>
+    <li>しきい値は合成データで決めた仮の値です。実際のPDFで調整していきます。</li>
+    <li>フォルダ名やファイル名を変えても、⚙設定で合わせれば読み込めます。ファイルは中のIDで探します。</li>
+  </ul>
+</section>
+
+</div>
