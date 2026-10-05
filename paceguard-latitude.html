@@ -65,6 +65,17 @@
     <button id="teachId">🔢 IDの位置を教える</button>
     <button id="demoBtn">▶ 動作デモ</button>
   </div>
+  <details class="bar" id="settings" style="display:block">
+    <summary style="cursor:pointer">⚙ 設定（保存先）</summary>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
+      <span class="status">基準フォルダの名前</span>
+      <input id="baseDirName" style="background:#0a1320;color:var(--tx);border:1px solid var(--line);border-radius:8px;padding:5px 8px;width:180px">
+      <button id="baseDirSave">保存</button>
+      <span class="status" id="baseDirMsg"></span>
+    </div>
+    <div class="hint" style="margin-top:6px">データフォルダの中で、患者ごとのデータ（患者ID.json）を入れるフォルダの名前です。フォルダの名前を手で変えたときは、ここも同じ名前に変えてください。無い名前を入れると新しく作ります。</div>
+    <div id="baseDirCands" class="hint" style="margin-top:4px"></div>
+  </details>
 
   <div class="grid">
     <div class="card">
@@ -438,7 +449,8 @@ let dirHandle=null, savedHandle=null;
 // 選んだフォルダをIndexedDBに記憶し、次回から選び直さずに使う（ブラウザが再許可を求めることがある）
 function idb(mode,fn){return new Promise((res,rej)=>{const o=indexedDB.open('pg_lat',1);o.onupgradeneeded=()=>o.result.createObjectStore('kv');
   o.onerror=()=>rej(o.error);o.onsuccess=()=>{let tx,r;try{tx=o.result.transaction('kv',mode);r=fn(tx.objectStore('kv'));}catch(e){rej(e);return;}tx.oncomplete=()=>res(r&&r.result);tx.onerror=()=>rej(tx.error);};});}
-const setFolderStatus=(html)=>{$('folderStatus').innerHTML=html;};
+const setFolderStatus=(html)=>{$('folderStatus').innerHTML=html;if(dirHandle)showBaseDirStatus();};
+$('settings').addEventListener('toggle',()=>{if($('settings').open)showBaseDirStatus();});
 $('pickFolder').onclick=async()=>{
   if(!dirHandle&&savedHandle&&await ensureDir())return; // 記憶済みフォルダは許可だけで再接続
   try{ dirHandle=await window.showDirectoryPicker({mode:'readwrite'}); savedHandle=dirHandle;
@@ -463,7 +475,21 @@ async function ensureDir(){
   else setFolderStatus('<span class="ok-t">前回のフォルダ：'+savedHandle.name+'</span>（評価時に自動で接続。許可を聞かれたら「許可」）');
 })();
 // 患者ごとのデータ（基準・レポート）は、データフォルダの中の「基準」フォルダに <患者ID>.json で保存する
-const BASE_DIR='基準';
+let BASE_DIR='基準';
+try{const v=localStorage.getItem('pg_lat_basedir');if(v)BASE_DIR=v;}catch(_){}
+$('baseDirName').value=BASE_DIR;
+// 今の基準フォルダの状態を表示。見つからなければ、.json が入っているフォルダを候補として出す
+async function showBaseDirStatus(){
+  if(!dirHandle){$('baseDirMsg').textContent='データフォルダに接続すると状態を表示します';$('baseDirCands').innerHTML='';return;}
+  let n=null;try{const d=await dirHandle.getDirectoryHandle(BASE_DIR);n=0;for await(const [name,h] of d.entries())if(h.kind==='file'&&name.endsWith('.json'))n++;}catch(_){}
+  $('baseDirMsg').innerHTML=n==null?`<span class="warn-t">「${BASE_DIR}」フォルダはまだありません（最初の保存で作ります）</span>`:`<span class="ok-t">「${BASE_DIR}」フォルダを使用中（患者 ${n}人分）</span>`;
+  const cands=[];try{for await(const [name,h] of dirHandle.entries()){if(h.kind!=='directory'||name===BASE_DIR)continue;let c=0;for await(const [fn,fh] of h.entries())if(fh.kind==='file'&&fn.endsWith('.json'))c++;if(c)cands.push([name,c]);}}catch(_){}
+  $('baseDirCands').innerHTML=cands.length?'患者データが入っている別のフォルダ：'+cands.map(([nm,c])=>`<button class="bdc" data-n="${nm.replace(/"/g,'&quot;')}" style="padding:1px 8px;margin:2px">${nm}（${c}人分）</button>`).join('')+'（押すとそのフォルダを使います）':'';
+}
+function setBaseDir(name){name=String(name||'').trim().replace(/[\\/:*?"<>|]/g,'');if(!name){$('baseDirMsg').innerHTML='<span class="warn-t">名前を入れてください</span>';return;}
+  BASE_DIR=name;$('baseDirName').value=name;try{localStorage.setItem('pg_lat_basedir',name);}catch(_){}showBaseDirStatus();}
+$('baseDirSave').onclick=()=>setBaseDir($('baseDirName').value);
+document.addEventListener('click',e=>{const b=e.target.closest('.bdc');if(b)setBaseDir(b.dataset.n);});
 async function baseDir(create){ if(!dirHandle)return null; try{return await dirHandle.getDirectoryHandle(BASE_DIR,{create});}catch(e){return null;} }
 async function readJson(dir,name){ try{const fh=await dir.getFileHandle(name);const f=await fh.getFile();return JSON.parse(await f.text());}catch(e){return null;} }
 async function readBaseline(id){
