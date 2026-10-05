@@ -92,7 +92,8 @@
       <label class="hint" style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="watchPick"> 別のフォルダを選ぶ</label>
       <label class="hint" style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="watchExisting"> フォルダに今あるPDFも処理する</label>
     </div>
-    <div class="status" id="watchStatus" style="margin-top:6px">止まっています。「👀 見張りを始める」でダウンロードフォルダを選んでください。</div>
+    <div class="status" id="watchStatus" style="margin-top:6px">止まっています。「👀 見張りを始める」で、LATITUDEのPDFを保存するフォルダを選んでください。</div>
+    <div class="hint" style="margin-top:4px;color:var(--warn)">⚠ 「ダウンロード」フォルダそのものはChromeの制限で選べません（「システム ファイルが含まれている」と出ます）。ダウンロードの中に <b>LATITUDE</b> などのフォルダを作り、Chromeの設定 → ダウンロード → 保存先 をそのフォルダにするか、「ダウンロード前に各ファイルの保存場所を確認する」をオンにしてそこへ保存してください。</div>
     <div class="hint">LATITUDEからPDFをダウンロードすると、数秒で自動的に読み込み→患者ID・段の認識→前回/基準と比較→保存し、通知と下の一覧に結果を出します。このタブは開いたままにしてください（裏に回っても動きますが、確認の間隔が長くなることがあります）。</div>
     <div id="watchLog" style="margin-top:8px"></div>
   </div>
