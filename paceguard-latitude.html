@@ -81,6 +81,13 @@
       <button id="filePatSave">保存</button>
       <span class="status" id="filePatMsg"></span>
     </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px">
+      <span class="status">PDFを整理するフォルダ</span>
+      <input id="pdfDirName" style="background:#0a1320;color:var(--tx);border:1px solid var(--line);border-radius:8px;padding:5px 8px;width:180px">
+      <button id="pdfDirSave">保存</button>
+      <span class="status" id="pdfDirMsg"></span>
+    </div>
+    <div class="hint" style="margin-top:6px">評価したPDFを「データフォルダ／このフォルダ／患者ごとのフォルダ／日付.pdf」に保存します。患者ごとのフォルダ名は下の「患者ファイルの名前」と同じ形（.jsonを除いたもの）です。</div>
     <div class="hint" style="margin-top:6px">新しい患者のファイルを作るときの名前です。使える項目：<code>{ID}</code>（患者ID）・<code>{氏名}</code>・<code>{機種}</code>　例：<code>{ID}.json</code>、<code>{ID}_{氏名}.json</code>。<br>既にあるファイルは今の名前のまま使います。ファイル名を手で変えても、ファイルの中に書かれた患者IDで自動的に見つけます。</div>
   </details>
 
@@ -91,6 +98,7 @@
       <button id="watchStop" disabled>■ 止める</button>
       <label class="hint" style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="watchPick"> 別のフォルダを選ぶ</label>
       <label class="hint" style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="watchExisting"> フォルダに今あるPDFも処理する</label>
+      <label class="hint" style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="watchMove" checked> 処理したPDFを患者ごとのフォルダへ移動する</label>
     </div>
     <div class="status" id="watchStatus" style="margin-top:6px">止まっています。「👀 見張りを始める」で、LATITUDEのPDFを保存するフォルダを選んでください。</div>
     <div class="hint" style="margin-top:4px;color:var(--warn)">⚠ 「ダウンロード」フォルダそのものはChromeの制限で選べません（「システム ファイルが含まれている」と出ます）。ダウンロードの中に <b>LATITUDE</b> などのフォルダを作り、Chromeの設定 → ダウンロード → 保存先 をそのフォルダにするか、「ダウンロード前に各ファイルの保存場所を確認する」をオンにしてそこへ保存してください。</div>
@@ -337,7 +345,7 @@ $('teachId').onclick=()=>{ if(!pageBackup.width){alert('先にPDFを読み込ん
 async function loadPDF(file,{forceEval=false}={}){
   try{
     const lib=await ensurePdfjs();
-    const buf=await file.arrayBuffer();
+    const buf=await file.arrayBuffer();lastPdfFile=file;
     // ★pdf.jsはdataのArrayBufferを転送（detach）して空にするため、先にコピーから自前抽出しておく
     let rawPdfText=''; try{ rawPdfText=await extractRawPdfText(buf.slice(0)); }catch(_){}
     const pdf=await lib.getDocument({data:new Uint8Array(buf)}).promise;
@@ -527,6 +535,26 @@ const safeName=x=>String(x||'').replace(/[\\/:*?"<>|\r\n]/g,'').trim();
 function fileNameFor(id,obj){let n=FILE_PAT.replace(/\{ID\}/g,id).replace(/\{氏名\}/g,safeName(obj&&obj.name)||'').replace(/\{機種\}/g,safeName(obj&&obj.device)||'');n=safeName(n).replace(/_+\.json$/,'.json').replace(/^_+/,'');if(!/\.json$/i.test(n))n+='.json';return n||id+'.json';}
 $('filePatSave').onclick=()=>{const v=$('filePat').value.trim();if(!/\{ID\}/.test(v)){$('filePatMsg').innerHTML='<span class="warn-t">{ID} を必ず入れてください（例：{ID}.json）</span>';return;}
   FILE_PAT=v;try{localStorage.setItem('pg_lat_filepat',v);}catch(_){}$('filePatMsg').innerHTML=`<span class="ok-t">保存しました。例：${fileNameFor('01652389',{name:'山田太郎',device:'A219'})}</span>`;};
+// ===== PDFを患者ごとのフォルダに整理 =====
+let PDF_DIR='患者PDF';try{const v=localStorage.getItem('pg_lat_pdfdir');if(v)PDF_DIR=v;}catch(_){}
+$('pdfDirName').value=PDF_DIR;
+$('pdfDirSave').onclick=()=>{const v=safeName($('pdfDirName').value);if(!v){$('pdfDirMsg').innerHTML='<span class="warn-t">名前を入れてください</span>';return;}PDF_DIR=v;$('pdfDirName').value=v;try{localStorage.setItem('pg_lat_pdfdir',v);}catch(_){}$('pdfDirMsg').innerHTML='<span class="ok-t">保存しました</span>';};
+try{const v=localStorage.getItem('pg_lat_watchmove');if(v)$('watchMove').checked=v==='1';}catch(_){}
+$('watchMove').addEventListener('change',()=>{try{localStorage.setItem('pg_lat_watchmove',$('watchMove').checked?'1':'0');}catch(_){}});
+let lastPdfFile=null,lastArchive=null; // 読み込んだPDF／最後に整理したPDF
+async function archivePdf(id,obj){
+  if(!dirHandle||!lastPdfFile||!id)return null;
+  try{
+    const top=await dirHandle.getDirectoryHandle(PDF_DIR,{create:true});
+    const folder=fileNameFor(id,obj).replace(/\.json$/i,'')||id;
+    const pd=await top.getDirectoryHandle(folder,{create:true});
+    const m=String(obj.date||'').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})(?:\D+(\d{1,2}):(\d{2}))?/);
+    const name=m?`${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}${m[4]?'_'+m[4].padStart(2,'0')+m[5]:''}.pdf`:safeName(lastPdfFile.name);
+    if(lastArchive&&lastArchive.file===lastPdfFile&&lastArchive.path.endsWith(folder+'/'+name))return lastArchive.path;
+    const fh=await pd.getFileHandle(name,{create:true});const w=await fh.createWritable();await w.write(await lastPdfFile.arrayBuffer());await w.close();
+    lastArchive={file:lastPdfFile,path:`${PDF_DIR}/${folder}/${name}`};return lastArchive.path;
+  }catch(e){return null;}
+}
 // 患者ID → ファイル名 の対応表（フォルダ内の .json を読んで中の id で作る）
 let idIndex=null,idIndexDir=null;
 async function buildIndex(d){idIndex=new Map();idIndexDir=BASE_DIR;
@@ -794,6 +822,7 @@ async function runEval(mode){
     const rs=reports.filter(r=>!(curKey&&r.key===curKey));rs.push({date:now.date,key:curKey,feat:poolSave,ts:now.ts});rs.sort((a,b)=>a.key<b.key?-1:1);
     const hist=((store&&store.history)||[]).filter(h=>!(curKey&&dateKey(h.date)===curKey));if(histEntry)hist.push(histEntry);
     await writeBaseline(id,{...now,reports:rs,history:hist,baseline:baseRep||{date:now.date,key:curKey,feat:poolSave,ts:now.ts}});
+    await archivePdf(id,now);
   };
   // 段ごとの一覧（使った段・除外した段と理由）
   const ic=l=>l===2?'⚠️':l===1?'🟡':'✅';
@@ -897,7 +926,7 @@ const wkey=f=>f.name+'|'+f.size+'|'+f.lastModified;
 function saveSeen(){try{localStorage.setItem(WSEEN,JSON.stringify([...watchSeen].slice(-500)));}catch(_){}}
 function setWatchStatus(h){$('watchStatus').innerHTML=h;}
 function renderWatchLog(){
-  $('watchLog').innerHTML=watchLog.length?`<table class="crit"><tr><th>時刻</th><th>ファイル</th><th>患者ID</th><th>照会日</th><th>判定</th><th>主な原因</th></tr>${watchLog.map(r=>`<tr class="lv${r.lv>0?r.lv:0}"><td>${r.t}</td><td>${escH(r.file)}</td><td>${escH(r.id||'—')}</td><td>${escH(r.date||'—')}</td><td>${escH(r.verdict)}</td><td class="hint">${escH(r.cause||'')}</td></tr>`).join('')}</table>`:'<div class="hint">まだ処理したPDFはありません。</div>';}
+  $('watchLog').innerHTML=watchLog.length?`<table class="crit"><tr><th>時刻</th><th>ファイル</th><th>患者ID</th><th>照会日</th><th>判定</th><th>主な原因</th></tr>${watchLog.map(r=>`<tr class="lv${r.lv>0?r.lv:0}"><td>${r.t}</td><td>${escH(r.file)}${r.moved?`<div class="hint">${escH(r.moved)}</div>`:''}</td><td>${escH(r.id||'—')}</td><td>${escH(r.date||'—')}</td><td>${escH(r.verdict)}</td><td class="hint">${escH(r.cause||'')}</td></tr>`).join('')}</table>`:'<div class="hint">まだ処理したPDFはありません。</div>';}
 const escH=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 async function startWatch(dir,{processExisting=false}={}){
   watchDir=dir;
@@ -929,7 +958,9 @@ async function pollWatch(){
       const h2=document.querySelector('#result h2'),cause=document.querySelector('#result .cause');
       const verdict=h2?h2.textContent.replace('（自動評価）','').trim():(curSigs.length?'評価なし':'S-ECGなし（スキップ）');
       const lv=/要確認/.test(verdict)?2:/注意/.test(verdict)?1:0;
-      const row={t:new Date().toLocaleTimeString('ja-JP'),file:f.name,id:$('fId').value,date:$('fDate').value,verdict,cause:cause?cause.textContent.replace(/^主な原因：/,''):'',lv};
+      let moved='';
+      if(lastArchive&&lastArchive.file===f){moved=lastArchive.path;if($('watchMove').checked){try{await watchDir.removeEntry(f.name);moved='→ '+moved;}catch(_){moved='コピー：'+moved;}}else moved='コピー：'+moved;}
+      const row={t:new Date().toLocaleTimeString('ja-JP'),file:f.name,moved,id:$('fId').value,date:$('fDate').value,verdict,cause:cause?cause.textContent.replace(/^主な原因：/,''):'',lv};
       watchLog.unshift(row);renderWatchLog();
       try{if(window.Notification&&Notification.permission==='granted')new Notification('PaceGuard LATITUDE：'+verdict,{body:`ID ${row.id||'—'}　${row.date||''}\n${row.cause}`});}catch(_){}
       document.title=(lv===2?'⚠️ ':lv===1?'🟡 ':'✅ ')+'PaceGuard LATITUDE';
@@ -943,8 +974,8 @@ $('watchStart').onclick=async()=>{
   if(!dirHandle){setWatchStatus('<span class="warn-t">先に「📁 データフォルダを選択」で保存先を選んでください。</span>');return;}
   try{
     let dir=null;try{dir=await idb('readonly',st=>st.get('watch'));}catch(_){}
-    if(dir&&!$('watchPick').checked){if(await dir.requestPermission({mode:'read'})!=='granted')dir=null;}else dir=null;
-    if(!dir){dir=await window.showDirectoryPicker({mode:'read',startIn:'downloads'});try{await idb('readwrite',st=>st.put(dir,'watch'));}catch(_){}}
+    if(dir&&!$('watchPick').checked){if(await dir.requestPermission({mode:'readwrite'})!=='granted')dir=null;}else dir=null;
+    if(!dir){dir=await window.showDirectoryPicker({mode:'readwrite',startIn:'downloads'});try{await idb('readwrite',st=>st.put(dir,'watch'));}catch(_){}}
     $('watchPick').checked=false;
     await startWatch(dir,{processExisting:$('watchExisting').checked});
   }catch(e){setWatchStatus(`<span class="warn-t">開始できませんでした（${escH(e.message||e)}）</span>`);}
