@@ -194,7 +194,7 @@ let rawDiag={streams:0,inflated:0};
 async function extractRawPdfText(ab){
   const bytes=new Uint8Array(ab);
   let bin='';const CH=8192;for(let o=0;o<bytes.length;o+=CH)bin+=String.fromCharCode.apply(null,bytes.subarray(o,o+CH));
-  let text='',i=0,streams=0,inflated=0;
+  let text='',extra='',i=0,streams=0,inflated=0;
   while((i=bin.indexOf('stream',i))!==-1){
     if(bin.substr(i-3,3)==='end'){i+=6;continue;}
     streams++;
@@ -202,14 +202,41 @@ async function extractRawPdfText(ab){
     const end=bin.indexOf('endstream',start);if(end===-1){i=start+6;continue;}
     const dict=bin.slice(Math.max(0,bin.lastIndexOf('obj',i)),i);const lm=dict.match(/\/Length\s+(\d+)(?!\d)(?!\s+\d+\s+R)/);
     const dec=await inflateMaybe(bytes.subarray(start,end),lm?+lm[1]:0);i=end+9;
-    if(!dec)continue; inflated++;
-    let s='';for(let o=0;o<dec.length;o+=CH)s+=String.fromCharCode.apply(null,dec.subarray(o,o+CH));
-    for(const m of s.matchAll(/\(((?:[^()\\]|\\.)*)\)\s*Tj/g))text+=m[1]+' ';
-    for(const m of s.matchAll(/\[([^\]]*)\]\s*TJ/g)){for(const p of m[1].matchAll(/\(((?:[^()\\]|\\.)*)\)/g))text+=p[1];text+=' ';}
+    let s='';
+    if(dec){inflated++;for(let o=0;o<dec.length;o+=CH)s+=String.fromCharCode.apply(null,dec.subarray(o,o+CH));}
+    else if(!/\/Filter/.test(dict))s=bin.slice(start,end); // 圧縮されていないストリーム
+    if(!s)continue;
+    if(/\bBT\b/.test(s)){ // 画面に描く文字（Tj/TJ）。( )の文字列と < >の16進文字列の両方
+      for(const m of s.matchAll(/\(((?:[^()\\]|\\.)*)\)\s*Tj/g))text+=decodePdfStr(m[1])+' ';
+      for(const m of s.matchAll(/<([0-9A-Fa-f\s]+)>\s*Tj/g))text+=decodeHexStr(m[1])+' ';
+      for(const m of s.matchAll(/\[([^\]]*)\]\s*TJ/g)){for(const p of m[1].matchAll(/\(((?:[^()\\]|\\.)*)\)|<([0-9A-Fa-f\s]+)>/g))text+=p[1]!=null?decodePdfStr(p[1]):decodeHexStr(p[2]);text+=' ';}
+    }else{ // 注釈・フォーム欄など（/Contents (…) /V (…) など）に入った文字
+      for(const m of s.matchAll(/\(((?:[^()\\]|\\.){1,200})\)/g))extra+=decodePdfStr(m[1])+' ';
+    }
   }
+  // ストリームの外（圧縮されていない辞書）にある文字列も拾う
+  const outside=bin.replace(/stream[\s\S]*?endstream/g,' ');
+  for(const m of outside.matchAll(/\(((?:[^()\\]|\\.){1,200})\)/g))extra+=decodePdfStr(m[1])+' ';
   rawDiag={streams,inflated};
-  return text.replace(/\\([()\\])/g,'$1').replace(/[\x00-\x1f\x7f]/g,'').replace(/ +/g,'');
+  const clean=x=>x.replace(/[\x00-\x1f\x7f]/g,'').replace(/ +/g,'');
+  return clean(text)+' '+clean(extra);
 }
+// PDFの文字列をふつうの文字に（エスケープ・8進数・UTF-16・UTF-8に対応）
+function decodePdfStr(raw){
+  let o='';for(let i=0;i<raw.length;i++){const c=raw[i];if(c!=='\\'){o+=c;continue;}const n=raw[++i];
+    if(n==='n')o+='\n';else if(n==='r')o+='\r';else if(n==='t')o+='\t';else if(n==='b')o+='\b';else if(n==='f')o+='\f';
+    else if(/[0-7]/.test(n)){let d=n;while(d.length<3&&/[0-7]/.test(raw[i+1]))d+=raw[++i];o+=String.fromCharCode(parseInt(d,8));}
+    else if(n==='\r'||n==='\n'){}else o+=n;}
+  return bytesToText(o);
+}
+function decodeHexStr(h){h=h.replace(/\s/g,'');if(h.length%2)h+='0';let o='';for(let i=0;i<h.length;i+=2)o+=String.fromCharCode(parseInt(h.substr(i,2),16));return bytesToText(o);}
+function bytesToText(o){
+  const b=Uint8Array.from(o,ch=>ch.charCodeAt(0)&255);
+  if(b[0]===0xFE&&b[1]===0xFF){let r='';for(let i=2;i+1<b.length;i+=2)r+=String.fromCharCode(b[i]<<8|b[i+1]);return r;}
+  if(/[\x80-\xff]/.test(o)){try{return new TextDecoder('utf-8',{fatal:true}).decode(b);}catch(_){}}
+  return o;
+}
+document.addEventListener('click',e=>{const b=e.target.closest('.idopt');if(b){$('fId').value=b.dataset.id;meta.id=b.dataset.id;}});
 const cropKey='pg_lat_crop';
 let crop=JSON.parse(localStorage.getItem(cropKey)||'null'); // 上段 正規化 {x,y,w,h}（0-1）
 const crop2Key='pg_lat_crop2';
@@ -310,9 +337,11 @@ function extractFields(items, annotStrs, rawPdfText){
   const dev=(t.match(/[A-Z]\d{3}\/\d{4,8}/)||t.match(/[A-Z]{1,6}\d{2,4}\/\d{4,8}/)||raw.match(/EMBLEM[^\s|]*/)||[''])[0].trim();
   // 患者ID：LATITUDEは「氏名（ふりがな）（8桁ID）」形式 → 括弧内8桁を最優先
   const serial=(dev.match(/\/(\d+)/)||[])[1];
-  const idParen=(t.match(/[（(](\d{8})[）)]/)||[])[1];
+  const idParen=(t.match(/[（(](\d{8})[）)]/)||t.match(/[（(](\d{6,10})[）)]/)||[])[1];
   const nums=[...t.matchAll(/\d{8}/g)].map(m=>m[0]).filter(n=>n!==serial&&!/^(19|20)\d\d(0[1-9]|1[0-2])/.test(n));
   const idCand=idParen||nums[0]||'';
+  // IDが決まらない時のために、それらしい数字（6〜10桁）を候補として出す
+  const idOpts=[...new Set([...t.matchAll(/\d{6,10}/g)].map(m=>m[0]).filter(n=>n!==serial&&!/^(19|20)\d\d(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])/.test(n)))].slice(0,8);
   // 氏名：漢字/かな名の直後に（ふりがな）が続く形（田中太郎（たなか…））
   const nameParen=(t.match(/([一-鿿々]{1,10})[（(][ぁ-ゟ][ぁ-ゟ　\s]*[）)]/)||[])[1];
   const bad=/ふりがな|フリガナ|レポート|ページ|波形|ゲイン|センシング|プログラム|バージョン|Boston|LATITUDE|Scientific|reserved|©|MRI|S-ICD|S-ECG|センス|ペース|Noise|検出|充電|結果|イベント|病院|施設|患者管理/i;
@@ -322,6 +351,7 @@ function extractFields(items, annotStrs, rawPdfText){
   // デバッグ：文字項目数＋注釈数＋抽出テキスト先頭を表示
   const dbg=$('dbg');
   if(dbg) dbg.innerHTML = `文字項目：<b>${items.length}</b>／注釈：<b>${annotStrs.length}</b>／自前抽出：<b>${rawPdfText.length}</b>字（stream ${rawDiag.streams}／展開 ${rawDiag.inflated}）`
+    + (idCand?'':(idOpts.length?`<br><span class="warn-t">IDを自動で決められませんでした。候補：</span>${idOpts.map(n=>`<button class="idopt" data-id="${n}" style="padding:1px 8px;margin:2px">${n}</button>`).join('')}（押すと入ります）`:'<br><span class="warn-t">IDらしい数字が見つかりませんでした。手で入力するか「🔢 IDの位置を教える」を使ってください。</span>'))
     + `<br>ID:<b>${idCand||'—'}</b> 氏名:<b>${nameCand||'—'}</b> 照会:<b>${interro||'—'}</b> 機種:<b>${dev||'—'}</b>`;
   updateCropHint();
 }
