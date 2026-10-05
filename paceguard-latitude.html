@@ -32,6 +32,11 @@
   .verdict{margin-top:12px;border-radius:12px;padding:14px 16px;border:1px solid var(--line)}
   .verdict.ok{background:rgba(52,211,153,.10);border-color:#1f6b52}
   .verdict.warn{background:rgba(251,191,36,.10);border-color:#7a5f1f}
+  table.crit{width:100%;border-collapse:collapse;margin-top:6px;font-size:12.5px;font-variant-numeric:tabular-nums}
+  table.crit th,table.crit td{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertical-align:top}
+  table.crit th{color:var(--sub);font-weight:600;font-size:11px}
+  table.crit tr.lv2 td{background:rgba(248,113,113,.10)} table.crit tr.lv1 td{background:rgba(251,191,36,.08)}
+  .cause{margin-top:8px;padding:8px 10px;border-radius:8px;background:rgba(0,0,0,.25);font-weight:700}
   .verdict.bad{background:rgba(248,113,113,.10);border-color:#7a2e2e}
   .verdict.info{background:rgba(56,189,248,.08)}
   .verdict h2{margin:0 0 4px;font-size:18px}
@@ -546,19 +551,34 @@ $('evalBtn').onclick=async()=>{
   const level=Math.max(...rows.map(r=>r.level),noiseFlags.length?1:0);
   const cls=['ok','warn','bad'][level],title=['✅ 変化なし（前回と同等）','🟡 注意 — 変化の兆候','⚠️ 要確認 — 明らかな変化'][level];
   const m=(k,v,u,f,g)=>`<div class="m ${f?'flag':(g?'good':'')}"><div class="k">${k}</div><div class="v">${v}<small>${u||''}</small></div></div>`;
-  const rowHtml=r=>`<div style="margin-top:10px"><b>${rowName[r.k]}</b>：${r.red.concat(r.yel).length?r.red.map(t=>'<br><span class="bad-t">●</span> '+t).join('')+r.yel.map(t=>'<br><span class="warn-t">●</span> '+t).join(''):'有意な変化なし'}</div>
-    <div class="metrics">
-      ${m('QRSの形の相関',r.corr.toFixed(3),'',r.corr<0.9,r.corr>=0.9)}
-      ${m('波高 前回→今回',`${r.b.amp.toFixed(2)}→${r.c.amp.toFixed(2)}`,'mV',Math.abs(Math.log(r.ampRatio))>Math.log(1+r.tol),true)}
-      ${m('QRS幅 前回→今回',`${r.b.width}→${r.c.width}`,'ms',r.dW>=20,r.dW<20)}
-      ${m('向き',`${r.b.pol>0?'上':'下'}→${r.c.pol>0?'上':'下'}`,'',r.polFlip,!r.polFlip)}
-      ${m('心拍数',`${r.b.hr??'—'}→${r.c.hr??'—'}`,'bpm',false,false)}
-      ${noise[r.k]?m('ノイズ',noise[r.k].max,'/'+noise[r.k].thr,noise[r.k].bad.length>0,noise[r.k].bad.length===0):''}
-    </div><div class="hint">波高の許容範囲は、前回と今回の拍ごとのゆれ（呼吸など）から自動で決めています（今回 ±${Math.round(r.tol*100)}%）。</div>`;
+  const ic=l=>l===2?'⚠️':l===1?'🟡':'✅';
+  const critRows=r=>{
+    const lvCorr=r.corr<0.80?2:r.corr<0.90?1:0;
+    const ar=r.ampRatio,hiT=1+r.tol*1.6,hiY=1+r.tol,lvAmp=(ar>hiT||ar<1/hiT)?2:(ar>hiY||ar<1/hiY)?1:0;
+    const lvW=(r.dW>=30||(r.c.width>=120&&r.dW>=20))?2:r.dW>=20?1:0,lvP=r.polFlip?2:0;
+    const nz=noise[r.k],lvN=nz&&nz.bad.length?1:0;
+    const sign=v=>(v>0?'+':'')+v;
+    return [
+      {lv:lvCorr,name:'QRSの形',prev:'—',cur:'—',chg:`相関 ${r.corr.toFixed(3)}`,rule:'0.90未満で注意／0.80未満で要確認',why:'形が変わった（ブロック・リード位置など）'},
+      {lv:lvAmp,name:'波高',prev:`${r.b.amp.toFixed(2)} mV`,cur:`${r.c.amp.toFixed(2)} mV`,chg:`${Math.round(ar*100)}%`,rule:`±${Math.round(r.tol*100)}%を超えると注意／±${Math.round(r.tol*160)}%で要確認（呼吸のゆれから自動）`,why:ar<1?'波高が低下':'波高が増加'},
+      {lv:lvW,name:'QRS幅',prev:`${r.b.width} ms`,cur:`${r.c.width} ms`,chg:`${sign(r.dW)} ms`,rule:'+20msで注意／+30ms（120ms以上なら+20ms）で要確認',why:'QRSが広がった（脚ブロック等）'},
+      {lv:lvP,name:'向き',prev:r.b.pol>0?'上向き':'下向き',cur:r.c.pol>0?'上向き':'下向き',chg:r.polFlip?'逆転':'同じ',rule:'逆転で要確認',why:'主な振れの向きが逆転'},
+      {lv:0,name:'心拍数（参考）',prev:`${r.b.hr??'—'} bpm`,cur:`${r.c.hr??'—'} bpm`,chg:'',rule:'判定には使わない',why:''},
+      ...(nz?[{lv:lvN,name:'ノイズ',prev:'—',cur:`${nz.max}`,chg:`閾値 ${nz.thr}`,rule:'ギザギザが局所的に多いと注意',why:'ノイズ疑い'}]:[]),
+    ];
+  };
+  const rowHtml=r=>{const cr=critRows(r);return `<div style="margin-top:12px"><b>${rowName[r.k]}</b>　${ic(Math.max(...cr.map(x=>x.lv)))}</div>
+    <table class="crit"><tr><th>項目</th><th>前回</th><th>今回</th><th>変化</th><th>判定基準</th><th>判定</th></tr>
+    ${cr.map(x=>`<tr class="lv${x.lv}"><td>${x.name}</td><td>${x.prev}</td><td>${x.cur}</td><td>${x.chg}</td><td class="hint">${x.rule}</td><td>${x.name==='心拍数（参考）'?'—':ic(x.lv)}</td></tr>`).join('')}</table>`;};
+  // 主な原因（一番重い項目を、段の名前つきで1行に）
+  const causes=rows.flatMap(r=>critRows(r).filter(x=>x.lv>0).map(x=>({...x,row:rowName[r.k]}))).sort((a,b)=>b.lv-a.lv);
+  const causeHtml=causes.length?`<div class="cause">主な原因：${causes.slice(0,3).map(x=>`${ic(x.lv)} ${x.row}の${x.why}（${x.prev!=='—'?x.prev+'→'+x.cur:x.chg}）`).join('　')}</div>`:'<div class="cause">主な原因：なし（すべての項目が基準内）</div>';
   const newRows=[0,1].filter(k=>feats[k]&&!(bf[k]&&bf[k].tpl)).map(k=>rowName[k]);
   $('result').innerHTML=`<div class="verdict ${cls}"><h2>${title}</h2>
     <div>比較：${base.date||'?'}（前回のレポート） → ${now.date||'?'}（今回）</div>
+    ${causeHtml}
     ${rows.map(rowHtml).join('')}
+    <div class="hint" style="margin-top:6px">下の重ね描きで、形が違う部分を赤く塗っています（青＝前回、橙＝今回）。</div>
     ${newRows.length?`<div class="hint" style="margin-top:8px">${newRows.join('・')}は前回データが無いため、今回を基準として登録しました（次回から比較）。</div>`:''}</div>${errHtml}${noiseHtml}`;
   await saveStore({date:now.date,ref:ref.date,level,rows:rows.map(r=>({row:rowName[r.k],corr:+r.corr.toFixed(3),amp:r.c.amp,ampRatio:+r.ampRatio.toFixed(2),width:r.c.width,dW:r.dW,pol:r.c.pol,hr:r.c.hr,level:r.level}))});
   const r1=rows.find(r=>r.k===0), r2=rows.find(r=>r.k===1);
@@ -576,7 +596,16 @@ function drawBeat(r,ovId='overlay',diffId='diff'){
   const mark=(f,col)=>{c.strokeStyle=col;c.setLineDash([4,4]);for(const ms of [f.on,f.off]){if(ms==null)continue;const x=X(idxOf(ms));c.beginPath();c.moveTo(x,10);c.lineTo(x,Hh-16);c.stroke();}c.setLineDash([]);};
   mark(r.b,'rgba(56,189,248,.6)');mark(r.c,'rgba(251,191,36,.6)');
   const pl=(arr,col,off)=>{c.strokeStyle=col;c.lineWidth=2;c.beginPath();let st=false;for(let j=0;j<L;j++){const v=arr[j+off];if(v==null||isNaN(v))continue;const x=X(j),y=Y(v);st?c.lineTo(x,y):c.moveTo(x,y);st=true;}c.stroke();};
+  // 形が違う部分（差が波高の20%を超える所）を赤く塗る
+  const thrD=0.2*Math.max(r.b.amp,r.c.amp);c.fillStyle='rgba(248,113,113,.22)';
+  {let st=-1;for(let j=0;j<=L;j++){const v=j<L?B[j+r.lag]:null,on=j<L&&v!=null&&!isNaN(v)&&!isNaN(A[j])&&Math.abs(A[j]-v)>thrD;if(on&&st<0)st=j;if(!on&&st>=0){c.fillRect(X(st)-2,0,X(j-1)-X(st)+4,Hh-14);st=-1;}}}
   pl(A,'#38bdf8',0);pl(B,'#fbbf24',r.lag);
+  // 波高（QRSの山と谷の差）とQRS幅を図に書き込む
+  const ann=(arr,off,f,col,xLab,yRow)=>{let mx=-1e9,mn=1e9,jx=0,jn=0;for(let j=idxOf(-60);j<=idxOf(80);j++){const v=arr[j+off];if(v==null||isNaN(v))continue;if(v>mx){mx=v;jx=j;}if(v<mn){mn=v;jn=j;}}
+    c.strokeStyle=col;c.lineWidth=2;c.beginPath();c.moveTo(xLab,Y(mx));c.lineTo(xLab,Y(mn));c.stroke();c.beginPath();c.moveTo(xLab-5,Y(mx));c.lineTo(xLab+5,Y(mx));c.moveTo(xLab-5,Y(mn));c.lineTo(xLab+5,Y(mn));c.stroke();
+    c.fillStyle=col;c.font='bold 12px sans-serif';c.fillText(`${(mx-mn).toFixed(2)}mV`,xLab+8,Y((mx+mn)/2));
+    if(f.on!=null&&f.off!=null){const xa=X(idxOf(f.on)),xb=X(idxOf(f.off)),yy=yRow;c.beginPath();c.moveTo(xa,yy);c.lineTo(xb,yy);c.moveTo(xa,yy-4);c.lineTo(xa,yy+4);c.moveTo(xb,yy-4);c.lineTo(xb,yy+4);c.stroke();c.fillText(`QRS ${f.width}ms`,xb+6,yy+4);}};
+  ann(A,0,r.b,'#38bdf8',X(idxOf(-95)),18);ann(B,r.lag,r.c,'#fbbf24',X(idxOf(-80)),34);
   const d=$(diffId);d.width=W;d.height=70;const dc=d.getContext('2d');dc.clearRect(0,0,W,70);dc.strokeStyle='#f87171';dc.lineWidth=1.4;dc.beginPath();
   for(let j=0;j<L;j++){const v=(A[j]-(B[j+r.lag]??A[j])),x=X(j),y=35-v/mx*30;j?dc.lineTo(x,y):dc.moveTo(x,y);}dc.stroke();
   dc.fillStyle='#7c8aa0';dc.font='11px sans-serif';dc.fillText('差分（前回−今回）',8,14);
