@@ -276,14 +276,16 @@ async function loadPDF(file){
     const vp=page.getViewport({scale:renderScale});
     pageCanvas.width=vp.width; pageCanvas.height=vp.height;
     await page.render({canvasContext:pctx,viewport:vp}).promise;
-    savePageBackup(); pdfLoaded=true;
-    // 計測用に高解像度でも描く（1px≒3.5ms）
-    try{const vh=page.getViewport({scale:HI});hiCanvas.width=vh.width;hiCanvas.height=vh.height;await page.render({canvasContext:hctx,viewport:vh}).promise;hiReady=true;}catch(_){hiReady=false;}
+    savePageBackup(); pdfLoaded=true; hiReady=false;
     const tc=await page.getTextContent();
     // 患者情報は FreeText 注釈に入っていることがある（通常描画・テキスト抽出では出ない）→ 注釈からも取得
     let annotStrs=[];
     try{ const ans=await page.getAnnotations(); annotStrs=ans.map(a=>(a.contentsObj&&a.contentsObj.str)||a.contents||'').filter(s=>s&&s.trim()); }catch(_){}
-    extractFields(tc.items.map(it=>({s:it.str,x:it.transform[4],y:it.transform[5]})), annotStrs, rawPdfText);
+    extractFields(tc.items.map(it=>({s:it.str,x:it.transform[4],y:it.transform[5]})), annotStrs, rawPdfText); // ID・日付は先に読む
+    // 計測用に高解像度でも描く（1px≒3.5ms）。時間がかかっても他の処理を止めないよう、最大15秒で打ち切る
+    try{const vh=page.getViewport({scale:HI});hiCanvas.width=vh.width;hiCanvas.height=vh.height;
+      await Promise.race([page.render({canvasContext:hctx,viewport:vh}).promise,new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),15000))]);hiReady=true;}
+    catch(e){hiReady=false;$('traceMsg').innerHTML='<span class="warn-t">計測用の高解像度描画に失敗しました（'+String(e&&e.message||e)+'）。PDFを読み込み直してください。</span>';}
     if(crop) autoTrace();
     // 注釈/テキストでIDが取れていれば優先。取れない時だけOCRを試す（枠を教えてある場合）。
     if(idBox){ drawIdBox(); if(!$('fId').value) ocrId(); }
