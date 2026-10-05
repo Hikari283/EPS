@@ -110,6 +110,19 @@
     </div>
   </div>
 
+  <div class="card" style="margin-top:14px">
+    <h2>👀 自動見張り（ダウンロードしたPDFを自動で評価）</h2>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="primary" id="watchStart">👀 見張りを始める</button>
+      <button id="watchStop" disabled>■ 止める</button>
+      <label class="hint" style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="watchPick"> 別のフォルダを選ぶ</label>
+      <label class="hint" style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="watchExisting"> フォルダに今あるPDFも処理する</label>
+    </div>
+    <div class="status" id="watchStatus" style="margin-top:6px">止まっています。「👀 見張りを始める」でダウンロードフォルダを選んでください。</div>
+    <div class="hint">LATITUDEからPDFをダウンロードすると、数秒で自動的に読み込み→患者ID・段の認識→前回/基準と比較→保存し、通知と下の一覧に結果を出します。このタブは開いたままにしてください（裏に回っても動きますが、確認の間隔が長くなることがあります）。</div>
+    <div id="watchLog" style="margin-top:8px"></div>
+  </div>
+
   <div class="card" id="overlayCard" hidden style="margin-top:14px">
     <h2>重ね描き（青=前回 / 橙=今回）と差分</h2>
     <div class="hint">全段の代表拍どうし（横 ms・縦 mV の実寸）</div>
@@ -314,7 +327,7 @@ async function ocrId(){
 }
 $('teachId').onclick=()=>{ if(!pageBackup.width){alert('先にPDFを読み込んでください');return;} drawMode='id'; $('dbg').innerHTML='<b>IDの数字の上をドラッグして囲んでください</b>（8桁の数字だけを枠に入れる）。'; };
 
-async function loadPDF(file){
+async function loadPDF(file,{forceEval=false}={}){
   try{
     const lib=await ensurePdfjs();
     const buf=await file.arrayBuffer();
@@ -340,7 +353,7 @@ async function loadPDF(file){
     if(idBox){ drawIdBox(); if(!$('fId').value) await ocrId(); }
     // 自動評価：ID・照会日・段の認識が終わったらそのまま評価する
     try{const ae=localStorage.getItem('pg_lat_autoeval');if(ae!==null)$('autoEval').checked=ae==='1';}catch(_){}
-    if($('autoEval').checked) await runEval('auto');
+    if($('autoEval').checked||forceEval) await runEval('auto');
   }catch(e){ $('result').innerHTML=`<div class="verdict bad"><h2>PDF読み込みエラー</h2>${e}<br><span class="hint">pdf.jsの読み込みにインターネットが必要です（初回のみ）。院内でCDNが塞がれている場合はpdf.jsを同梱版に切り替えます。</span></div>`; }
 }
 function extractFields(items, annotStrs, rawPdfText){
@@ -773,6 +786,69 @@ $('demoBtn').onclick=()=>{
   $('result').innerHTML=`<div class="verdict bad"><h2>⚠️ 変化あり — 要確認（デモ）</h2><div>前回:2026年06月01日 → 今回:2026年09月28日</div><div>・S-ECG波形の相関が低下（${corr.toFixed(3)}）＝形態変化（新規伝導異常/リード移動などを要確認）</div><div class="metrics"><div class="m flag"><div class="k">波形相関</div><div class="v">${corr.toFixed(3)}</div></div><div class="m"><div class="k">振幅比</div><div class="v">${(ampRatio*100).toFixed(0)}%</div></div><div class="m"><div class="k">幅比</div><div class="v">${widthRatio.toFixed(2)}倍</div></div></div></div>`;
   $('row2Wrap').hidden=true;$('overlayCard').hidden=false;drawOverlay(a,b,lag);
 };
+// ===== ダウンロードフォルダの見張り：新しいPDFが来たら自動で読み込み→評価→通知 =====
+let watchDir=null,watchTimer=null,watchBusy=false,watchSeen=new Map(),watchLog=[];
+const WSEEN='pg_lat_watch_seen';
+try{for(const [k,v] of JSON.parse(localStorage.getItem(WSEEN)||'[]'))watchSeen.set(k,v);}catch(_){}
+const wkey=f=>f.name+'|'+f.size+'|'+f.lastModified;
+function saveSeen(){try{localStorage.setItem(WSEEN,JSON.stringify([...watchSeen].slice(-500)));}catch(_){}}
+function setWatchStatus(h){$('watchStatus').innerHTML=h;}
+function renderWatchLog(){
+  $('watchLog').innerHTML=watchLog.length?`<table class="crit"><tr><th>時刻</th><th>ファイル</th><th>患者ID</th><th>照会日</th><th>判定</th><th>主な原因</th></tr>${watchLog.map(r=>`<tr class="lv${r.lv>0?r.lv:0}"><td>${r.t}</td><td>${escH(r.file)}</td><td>${escH(r.id||'—')}</td><td>${escH(r.date||'—')}</td><td>${escH(r.verdict)}</td><td class="hint">${escH(r.cause||'')}</td></tr>`).join('')}</table>`:'<div class="hint">まだ処理したPDFはありません。</div>';}
+const escH=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function startWatch(dir,{processExisting=false}={}){
+  watchDir=dir;
+  if(!processExisting){for await(const [name,h] of dir.entries()){if(h.kind!=='file'||!/\.pdf$/i.test(name))continue;try{const f=await h.getFile();if(!watchSeen.has(wkey(f)))watchSeen.set(wkey(f),'existing');}catch(_){}}saveSeen();}
+  try{if(window.Notification&&Notification.permission==='default')await Notification.requestPermission();}catch(_){}
+  clearInterval(watchTimer);watchTimer=setInterval(pollWatch,3000);pollWatch();
+  setWatchStatus(`<span class="ok-t">👀 見張り中：${escH(dir.name)}</span>（新しいPDFをダウンロードすると自動で評価します。このタブは開いたままにしてください）`);
+  $('watchStop').disabled=false;
+}
+const sizeSeen=new Map();
+async function pollWatch(){
+  if(!watchDir||watchBusy)return;watchBusy=true;
+  try{
+    const todo=[];
+    for await(const [name,h] of watchDir.entries()){
+      if(h.kind!=='file'||!/\.pdf$/i.test(name))continue;
+      let f;try{f=await h.getFile();}catch(_){continue;}
+      const k=wkey(f);if(watchSeen.has(k))continue;
+      // ダウンロード中のファイルを避ける：サイズが2回続けて同じになってから処理
+      if(sizeSeen.get(name)!==f.size){sizeSeen.set(name,f.size);continue;}
+      todo.push(f);
+    }
+    todo.sort((a,b)=>a.lastModified-b.lastModified);
+    for(const f of todo){
+      watchSeen.set(wkey(f),'done');saveSeen();
+      setWatchStatus(`<span class="ok-t">⏳ 処理中：${escH(f.name)}</span>`);
+      $('result').innerHTML='';
+      await loadPDF(f,{forceEval:true});
+      const h2=document.querySelector('#result h2'),cause=document.querySelector('#result .cause');
+      const verdict=h2?h2.textContent.replace('（自動評価）','').trim():(curSigs.length?'評価なし':'S-ECGなし（スキップ）');
+      const lv=/要確認/.test(verdict)?2:/注意/.test(verdict)?1:0;
+      const row={t:new Date().toLocaleTimeString('ja-JP'),file:f.name,id:$('fId').value,date:$('fDate').value,verdict,cause:cause?cause.textContent.replace(/^主な原因：/,''):'',lv};
+      watchLog.unshift(row);renderWatchLog();
+      try{if(window.Notification&&Notification.permission==='granted')new Notification('PaceGuard LATITUDE：'+verdict,{body:`ID ${row.id||'—'}　${row.date||''}\n${row.cause}`});}catch(_){}
+      document.title=(lv===2?'⚠️ ':lv===1?'🟡 ':'✅ ')+'PaceGuard LATITUDE';
+    }
+    setWatchStatus(`<span class="ok-t">👀 見張り中：${escH(watchDir.name)}</span>（最終確認 ${new Date().toLocaleTimeString('ja-JP')}）`);
+  }catch(e){setWatchStatus(`<span class="warn-t">見張りでエラー：${escH(e.message||e)}。「👀 見張りを始める」を押し直してください。</span>`);clearInterval(watchTimer);watchDir=null;}
+  finally{watchBusy=false;}
+}
+$('watchStart').onclick=async()=>{
+  await ensureDir(); // 保存先（データフォルダ）にもここで接続しておく（許可はクリックの時しか出せない）
+  if(!dirHandle){setWatchStatus('<span class="warn-t">先に「📁 データフォルダを選択」で保存先を選んでください。</span>');return;}
+  try{
+    let dir=null;try{dir=await idb('readonly',st=>st.get('watch'));}catch(_){}
+    if(dir&&!$('watchPick').checked){if(await dir.requestPermission({mode:'read'})!=='granted')dir=null;}else dir=null;
+    if(!dir){dir=await window.showDirectoryPicker({mode:'read',startIn:'downloads'});try{await idb('readwrite',st=>st.put(dir,'watch'));}catch(_){}}
+    $('watchPick').checked=false;
+    await startWatch(dir,{processExisting:$('watchExisting').checked});
+  }catch(e){setWatchStatus(`<span class="warn-t">開始できませんでした（${escH(e.message||e)}）</span>`);}
+};
+$('watchStop').onclick=()=>{clearInterval(watchTimer);watchDir=null;$('watchStop').disabled=true;setWatchStatus('停止中');};
+(async()=>{let d=null;try{d=await idb('readonly',st=>st.get('watch'));}catch(_){}if(d){setWatchStatus(`前回の見張りフォルダ：${escH(d.name)}（「👀 見張りを始める」で再開）`);}})();
+renderWatchLog();
 </script>
 </body>
 </html>
