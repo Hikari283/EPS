@@ -102,7 +102,7 @@
 
   <footer>
     PaceGuard LATITUDE β — Boston LATITUDE の S-ECG を前回自動比較。pdf.jsをCDNから読み込みます（初回のみ要ネット）。<br>
-    フォルダ内に <code>&lt;患者ID&gt;.json</code> として基準波形を保存し、同IDの新規レポートを自動照合します。医療機器ではありません。
+    フォルダ内の「基準」フォルダに <code>&lt;患者ID&gt;.json</code> として基準波形を保存し、同IDの新規レポートを自動照合します。医療機器ではありません。
   </footer>
 </div>
 
@@ -462,8 +462,17 @@ async function ensureDir(){
   if(perm==='granted'){ dirHandle=savedHandle; setFolderStatus('<span class="ok-t">フォルダ接続済み：'+dirHandle.name+'（自動）</span>'); }
   else setFolderStatus('<span class="ok-t">前回のフォルダ：'+savedHandle.name+'</span>（評価時に自動で接続。許可を聞かれたら「許可」）');
 })();
-async function readBaseline(id){ if(!dirHandle)return null; try{const fh=await dirHandle.getFileHandle(id+'.json');const f=await fh.getFile();return JSON.parse(await f.text());}catch(e){return null;} }
-async function writeBaseline(id,obj){ if(!dirHandle)return; try{const fh=await dirHandle.getFileHandle(id+'.json',{create:true});const w=await fh.createWritable();await w.write(JSON.stringify(obj));await w.close();}catch(e){} }
+// 患者ごとのデータ（基準・レポート）は、データフォルダの中の「基準」フォルダに <患者ID>.json で保存する
+const BASE_DIR='基準';
+async function baseDir(create){ if(!dirHandle)return null; try{return await dirHandle.getDirectoryHandle(BASE_DIR,{create});}catch(e){return null;} }
+async function readJson(dir,name){ try{const fh=await dir.getFileHandle(name);const f=await fh.getFile();return JSON.parse(await f.text());}catch(e){return null;} }
+async function readBaseline(id){
+  if(!dirHandle)return null;
+  const d=await baseDir(false);const v=d?await readJson(d,id+'.json'):null;if(v)return v;
+  return await readJson(dirHandle,id+'.json'); // 以前の保存場所（データフォルダ直下）も読む。次の保存で「基準」フォルダへ移る
+}
+async function writeBaseline(id,obj){ const d=await baseDir(true);if(!d)return false;
+  try{const fh=await d.getFileHandle(id+'.json',{create:true});const w=await fh.createWritable();await w.write(JSON.stringify(obj));await w.close();return true;}catch(e){return false;} }
 
 // ===== 評価 =====
 // ===== 心電図として測る（記録条件 25mm/秒・2.5mm/mV を使って ms と mV に換算）=====
