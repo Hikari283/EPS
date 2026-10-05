@@ -84,6 +84,18 @@
     <div class="hint" style="margin-top:6px">新しい患者のファイルを作るときの名前です。使える項目：<code>{ID}</code>（患者ID）・<code>{氏名}</code>・<code>{機種}</code>　例：<code>{ID}.json</code>、<code>{ID}_{氏名}.json</code>。<br>既にあるファイルは今の名前のまま使います。ファイル名を手で変えても、ファイルの中に書かれた患者IDで自動的に見つけます。</div>
   </details>
 
+  <div class="card" style="margin-bottom:14px">
+    <h2>👀 自動見張り（ダウンロードしたPDFを自動で評価）</h2>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="primary" id="watchStart">👀 見張りを始める</button>
+      <button id="watchStop" disabled>■ 止める</button>
+      <label class="hint" style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="watchPick"> 別のフォルダを選ぶ</label>
+      <label class="hint" style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="watchExisting"> フォルダに今あるPDFも処理する</label>
+    </div>
+    <div class="status" id="watchStatus" style="margin-top:6px">止まっています。「👀 見張りを始める」でダウンロードフォルダを選んでください。</div>
+    <div class="hint">LATITUDEからPDFをダウンロードすると、数秒で自動的に読み込み→患者ID・段の認識→前回/基準と比較→保存し、通知と下の一覧に結果を出します。このタブは開いたままにしてください（裏に回っても動きますが、確認の間隔が長くなることがあります）。</div>
+    <div id="watchLog" style="margin-top:8px"></div>
+  </div>
   <div class="grid">
     <div class="card">
       <h2>① LATITUDE レポートPDF</h2>
@@ -116,18 +128,6 @@
     <div class="hint" style="margin:6px 0">段ごとに、①PDFの画像となぞった線 ②mVに換算した線と基線 ③基線を引いた線とR波 ④傾きとしきい値 を同じ横軸で並べています。横にスクロールできます（横1px＝約3.5ms）。</div>
     <div id="insideBody"></div>
   </details>
-  <div class="card" style="margin-top:14px">
-    <h2>👀 自動見張り（ダウンロードしたPDFを自動で評価）</h2>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <button class="primary" id="watchStart">👀 見張りを始める</button>
-      <button id="watchStop" disabled>■ 止める</button>
-      <label class="hint" style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="watchPick"> 別のフォルダを選ぶ</label>
-      <label class="hint" style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="watchExisting"> フォルダに今あるPDFも処理する</label>
-    </div>
-    <div class="status" id="watchStatus" style="margin-top:6px">止まっています。「👀 見張りを始める」でダウンロードフォルダを選んでください。</div>
-    <div class="hint">LATITUDEからPDFをダウンロードすると、数秒で自動的に読み込み→患者ID・段の認識→前回/基準と比較→保存し、通知と下の一覧に結果を出します。このタブは開いたままにしてください（裏に回っても動きますが、確認の間隔が長くなることがあります）。</div>
-    <div id="watchLog" style="margin-top:8px"></div>
-  </div>
 
   <div class="card" id="overlayCard" hidden style="margin-top:14px">
     <h2>重ね描き（青=前回 / 橙=今回）と差分</h2>
