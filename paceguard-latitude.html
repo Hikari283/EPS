@@ -75,6 +75,13 @@
     </div>
     <div class="hint" style="margin-top:6px">データフォルダの中で、患者ごとのデータ（患者ID.json）を入れるフォルダの名前です。フォルダの名前を手で変えたときは、ここも同じ名前に変えてください。無い名前を入れると新しく作ります。</div>
     <div id="baseDirCands" class="hint" style="margin-top:4px"></div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px">
+      <span class="status">患者ファイルの名前</span>
+      <input id="filePat" style="background:#0a1320;color:var(--tx);border:1px solid var(--line);border-radius:8px;padding:5px 8px;width:220px">
+      <button id="filePatSave">保存</button>
+      <span class="status" id="filePatMsg"></span>
+    </div>
+    <div class="hint" style="margin-top:6px">新しい患者のファイルを作るときの名前です。使える項目：<code>{ID}</code>（患者ID）・<code>{氏名}</code>・<code>{機種}</code>　例：<code>{ID}.json</code>、<code>{ID}_{氏名}.json</code>。<br>既にあるファイルは今の名前のまま使います。ファイル名を手で変えても、ファイルの中に書かれた患者IDで自動的に見つけます。</div>
   </details>
 
   <div class="grid">
@@ -487,18 +494,41 @@ async function showBaseDirStatus(){
   $('baseDirCands').innerHTML=cands.length?'患者データが入っている別のフォルダ：'+cands.map(([nm,c])=>`<button class="bdc" data-n="${nm.replace(/"/g,'&quot;')}" style="padding:1px 8px;margin:2px">${nm}（${c}人分）</button>`).join('')+'（押すとそのフォルダを使います）':'';
 }
 function setBaseDir(name){name=String(name||'').trim().replace(/[\\/:*?"<>|]/g,'');if(!name){$('baseDirMsg').innerHTML='<span class="warn-t">名前を入れてください</span>';return;}
-  BASE_DIR=name;$('baseDirName').value=name;try{localStorage.setItem('pg_lat_basedir',name);}catch(_){}showBaseDirStatus();}
+  BASE_DIR=name;idIndex=null;$('baseDirName').value=name;try{localStorage.setItem('pg_lat_basedir',name);}catch(_){}showBaseDirStatus();}
 $('baseDirSave').onclick=()=>setBaseDir($('baseDirName').value);
 document.addEventListener('click',e=>{const b=e.target.closest('.bdc');if(b)setBaseDir(b.dataset.n);});
 async function baseDir(create){ if(!dirHandle)return null; try{return await dirHandle.getDirectoryHandle(BASE_DIR,{create});}catch(e){return null;} }
 async function readJson(dir,name){ try{const fh=await dir.getFileHandle(name);const f=await fh.getFile();return JSON.parse(await f.text());}catch(e){return null;} }
+// 患者ファイルの名前の形式（新しく作る時だけ使う）。既存ファイルは中のIDで見つけるので、名前を変えても大丈夫
+let FILE_PAT='{ID}.json';
+try{const v=localStorage.getItem('pg_lat_filepat');if(v)FILE_PAT=v;}catch(_){}
+$('filePat').value=FILE_PAT;
+const safeName=x=>String(x||'').replace(/[\\/:*?"<>|\r\n]/g,'').trim();
+function fileNameFor(id,obj){let n=FILE_PAT.replace(/\{ID\}/g,id).replace(/\{氏名\}/g,safeName(obj&&obj.name)||'').replace(/\{機種\}/g,safeName(obj&&obj.device)||'');n=safeName(n).replace(/_+\.json$/,'.json').replace(/^_+/,'');if(!/\.json$/i.test(n))n+='.json';return n||id+'.json';}
+$('filePatSave').onclick=()=>{const v=$('filePat').value.trim();if(!/\{ID\}/.test(v)){$('filePatMsg').innerHTML='<span class="warn-t">{ID} を必ず入れてください（例：{ID}.json）</span>';return;}
+  FILE_PAT=v;try{localStorage.setItem('pg_lat_filepat',v);}catch(_){}$('filePatMsg').innerHTML=`<span class="ok-t">保存しました。例：${fileNameFor('01652389',{name:'山田太郎',device:'A219'})}</span>`;};
+// 患者ID → ファイル名 の対応表（フォルダ内の .json を読んで中の id で作る）
+let idIndex=null,idIndexDir=null;
+async function buildIndex(d){idIndex=new Map();idIndexDir=BASE_DIR;
+  try{for await(const [name,h] of d.entries()){if(h.kind!=='file'||!/\.json$/i.test(name))continue;try{const f=await h.getFile();const j=JSON.parse(await f.text());if(j&&j.id&&!idIndex.has(String(j.id)))idIndex.set(String(j.id),name);}catch(_){}}}catch(_){}}
 async function readBaseline(id){
   if(!dirHandle)return null;
-  const d=await baseDir(false);const v=d?await readJson(d,id+'.json'):null;if(v)return v;
+  const d=await baseDir(false);
+  if(d){
+    let v=await readJson(d,fileNameFor(id,{}));if(v&&(!v.id||String(v.id)===id)){if(idIndex&&idIndexDir===BASE_DIR)idIndex.set(id,fileNameFor(id,{}));return v;}
+    v=await readJson(d,id+'.json');if(v&&(!v.id||String(v.id)===id))return v;
+    if(!idIndex||idIndexDir!==BASE_DIR)await buildIndex(d);
+    let nm=idIndex.get(id);if(nm){v=await readJson(d,nm);if(v)return v;}
+    await buildIndex(d);nm=idIndex.get(id);if(nm){v=await readJson(d,nm);if(v)return v;} // 手で名前を変えた直後など：探し直す
+  }
   return await readJson(dirHandle,id+'.json'); // 以前の保存場所（データフォルダ直下）も読む。次の保存で「基準」フォルダへ移る
 }
 async function writeBaseline(id,obj){ const d=await baseDir(true);if(!d)return false;
-  try{const fh=await d.getFileHandle(id+'.json',{create:true});const w=await fh.createWritable();await w.write(JSON.stringify(obj));await w.close();return true;}catch(e){return false;} }
+  if(!idIndex||idIndexDir!==BASE_DIR)await buildIndex(d);
+  let name=idIndex.get(id);
+  if(name&&!(await readJson(d,name))){await buildIndex(d);name=idIndex.get(id);} // 名前が変わっていたら探し直す
+  if(!name){const exact=await readJson(d,id+'.json');name=exact?id+'.json':fileNameFor(id,obj);}
+  try{const fh=await d.getFileHandle(name,{create:true});const w=await fh.createWritable();await w.write(JSON.stringify(obj));await w.close();idIndex.set(id,name);return true;}catch(e){return false;} }
 
 // ===== 評価 =====
 // ===== 心電図として測る（記録条件 25mm/秒・2.5mm/mV を使って ms と mV に換算）=====
