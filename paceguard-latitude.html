@@ -86,6 +86,7 @@
       <div id="dbg" class="hint" style="margin-top:8px;padding:8px;background:#0a1320;border:1px solid var(--line);border-radius:8px;word-break:break-all">抽出テキスト：（PDFを読み込むと表示）</div>
       <div id="ocrDbg" class="hint" style="margin-top:6px"></div>
       <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="primary" id="evalBtn">🔍 前回と比較</button><button class="primary" id="evalBaseBtn" style="background:#a78bfa;border-color:#a78bfa">📌 基準と比較</button></div>
+      <label class="hint" style="display:flex;gap:6px;align-items:center;margin-top:6px"><input type="checkbox" id="autoEval" checked> PDFを開いたら自動で評価する（前回があれば前回、なければ基準と比較）</label>
       <div class="hint" id="baseInfo" style="margin-top:4px">前回＝今回より前の日付で一番新しいレポート／基準＝固定した基準レポート（同じ日付でも比べられます）</div>
       <div id="result"></div>
     </div>
@@ -318,7 +319,10 @@ async function loadPDF(file){
     catch(e){hiReady=false;$('traceMsg').innerHTML='<span class="warn-t">計測用の高解像度描画に失敗しました（'+String(e&&e.message||e)+'）。PDFを読み込み直してください。</span>';}
     autoTrace();
     // 注釈/テキストでIDが取れていれば優先。取れない時だけOCRを試す（枠を教えてある場合）。
-    if(idBox){ drawIdBox(); if(!$('fId').value) ocrId(); }
+    if(idBox){ drawIdBox(); if(!$('fId').value) await ocrId(); }
+    // 自動評価：ID・照会日・段の認識が終わったらそのまま評価する
+    try{const ae=localStorage.getItem('pg_lat_autoeval');if(ae!==null)$('autoEval').checked=ae==='1';}catch(_){}
+    if($('autoEval').checked) await runEval('auto');
   }catch(e){ $('result').innerHTML=`<div class="verdict bad"><h2>PDF読み込みエラー</h2>${e}<br><span class="hint">pdf.jsの読み込みにインターネットが必要です（初回のみ）。院内でCDNが塞がれている場合はpdf.jsを同梱版に切り替えます。</span></div>`; }
 }
 function extractFields(items, annotStrs, rawPdfText){
@@ -573,6 +577,7 @@ function compareRow(base,cur){
   return {a,b,corr,lag,ampRatio,widthRatio,flags};
 }
 $('evalBtn').onclick=()=>runEval('prev');
+$('autoEval').addEventListener('change',()=>{try{localStorage.setItem('pg_lat_autoeval',$('autoEval').checked?'1':'0');}catch(_){}});
 $('evalBaseBtn').onclick=()=>runEval('base');
 let lastEval=null; // 「この波形を基準にする」用
 document.addEventListener('click',async e=>{if(!e.target.closest('#setBaseBtn')||!lastEval)return;
@@ -580,7 +585,10 @@ document.addEventListener('click',async e=>{if(!e.target.closest('#setBaseBtn')|
   st.baseline={date:lastEval.date,key:lastEval.key,feat:lastEval.feat,ts:lastEval.ts};await writeBaseline(lastEval.id,st);
   $('setBaseMsg').innerHTML='<span class="ok-t">✅ '+(lastEval.date||'今回')+'の波形を基準にしました</span>';});
 async function runEval(mode){
+  const auto=mode==='auto';
   await ensureDir(); // 記憶したフォルダに接続（最初に呼ぶ：許可ダイアログはクリック直後のみ可）
+  if(auto&&!dirHandle){$('result').innerHTML='<div class="verdict info"><h2>自動評価できませんでした</h2>保存フォルダに接続されていません。「🔍 前回と比較」か「📌 基準と比較」を押してください（許可を聞かれたら「許可」）。</div>';return;}
+  if(auto&&!$('fId').value.trim()){$('result').innerHTML='<div class="verdict info"><h2>患者IDを決めてください</h2>IDを自動で読み取れませんでした。上の候補を押すかIDを入力してから、評価ボタンを押してください。</div>';return;}
   const id=$('fId').value.trim();
   if(!pdfLoaded){ $('result').innerHTML=`<div class="verdict info"><h2>PDFを読み込んでください</h2>${dirHandle?'フォルダは接続済みです。':''}LATITUDEのPDFをドロップしてから、もう一度押してください。</div>`;return; }
   if(!curSigs.length){ $('result').innerHTML='<div class="verdict bad"><h2>波形が見つかりません</h2>S-ECGの段を自動で見つけられませんでした。使いたい段をまとめてドラッグして範囲を指定してください。</div>';return; }
@@ -594,6 +602,7 @@ async function runEval(mode){
   const older=reports.filter(r=>curKey?(r.key&&r.key<curKey):true);
   const baseRep=store&&store.baseline?store.baseline:(reports.length?[...reports].sort((a,b)=>a.key<b.key?-1:1)[0]:null);
   const prevRep=[...older].sort((a,b)=>a.key<b.key?1:-1)[0]||null;
+  if(auto)mode=prevRep?'prev':'base'; // 自動：前の日付があれば前回、なければ基準（同じ日付でも比べられる）
   const ref=mode==='base'?baseRep:prevRep,refLabel=mode==='base'?'基準':'前回';
   const pooledOf=f=>!f?null:Array.isArray(f)?(f.find(Boolean)||null):f; // 以前の保存形式（上段・下段）にも対応
   const bp=ref?pooledOf(ref.feat):null;
@@ -639,7 +648,7 @@ async function runEval(mode){
     {lv:0,name:'心拍数（参考）',prev:`${r.b.hr??'—'} bpm`,cur:`${r.c.hr??'—'} bpm`,chg:'',rule:'判定には使わない',why:''},
   ];
   const level=Math.max(...crit.map(x=>x.lv),...rowNotes.map(x=>x.lv),0);
-  const cls=['ok','warn','bad'][level],title=[`✅ 変化なし（${refLabel}と同等）`,'🟡 注意 — 変化の兆候・記録内の所見','⚠️ 要確認 — 明らかな変化'][level];
+  const cls=['ok','warn','bad'][level],title=[`✅ 変化なし（${refLabel}と同等）`,'🟡 注意 — 変化の兆候・記録内の所見','⚠️ 要確認 — 明らかな変化'][level]+(auto?'<small style="font-size:12px;font-weight:400;opacity:.7">（自動評価）</small>':'');
   const causes=[...crit.filter(x=>x.lv>0).map(x=>({lv:x.lv,txt:`${x.why}（${x.prev!=='—'?x.prev+'→'+x.cur:x.chg}）`})),...rowNotes.map(x=>({lv:x.lv,txt:`${x.row}：${x.why}`}))].sort((a,b)=>b.lv-a.lv);
   const causeHtml=`<div class="cause">主な原因：${causes.length?causes.slice(0,4).map(x=>`${ic(x.lv)} ${x.txt}`).join('　'):'なし（すべての項目が基準内）'}</div>`;
   $('result').innerHTML=`<div class="verdict ${cls}"><h2>${title}</h2>
