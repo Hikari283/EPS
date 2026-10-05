@@ -1,0 +1,517 @@
+<title>PaceGuard 波形認識の全工程</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: 心電図記録紙を地紋にした工程書。各工程＝「何をするか／図／実際の数値」の3点セットを縦に並べる */
+:root{
+  --bg:#fbf8f8; --paper:#ffffff; --grid:#f3d9dc; --grid-strong:#e9b9bf;
+  --fg:#1d2327; --muted:#5d6870; --line:#dfe3e6; --soft:#f4f1f2;
+  --trace:#14853d; --accent:#c8323f; --blue:#2a62b8;
+  --ok:#1f8a4c; --ok-bg:#e5f4ea; --warn:#a86a00; --warn-bg:#fdf1d8; --bad:#c22f3c; --bad-bg:#fbe3e5;
+  --body:"Noto Sans JP","Hiragino Sans","Yu Gothic UI","Meiryo",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"Consolas",monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141719; --paper:#1b1f22; --grid:#2a2226; --grid-strong:#3d2b31;
+  --fg:#e8ecee; --muted:#9aa5ad; --line:#2f363b; --soft:#23282b;
+  --trace:#4fd17d; --accent:#ff6b77; --blue:#7fb0ff;
+  --ok:#5fd18d; --ok-bg:#16301f; --warn:#f0b54a; --warn-bg:#352a12; --bad:#ff7a85; --bad-bg:#3a1a1e; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141719; --paper:#1b1f22; --grid:#2a2226; --grid-strong:#3d2b31;
+  --fg:#e8ecee; --muted:#9aa5ad; --line:#2f363b; --soft:#23282b;
+  --trace:#4fd17d; --accent:#ff6b77; --blue:#7fb0ff;
+  --ok:#5fd18d; --ok-bg:#16301f; --warn:#f0b54a; --warn-bg:#352a12; --bad:#ff7a85; --bad-bg:#3a1a1e; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.8;padding:32px 16px 72px}
+.wrap{max-width:900px;margin:0 auto;display:grid;gap:52px}
+h1,h2,h3{text-wrap:balance;margin:0;line-height:1.35}
+h1{font-size:clamp(26px,5vw,38px);font-weight:900}
+h2{font-size:21px;font-weight:900;display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}
+h2 .n{font-family:var(--mono);font-size:13px;color:var(--accent);font-weight:600;letter-spacing:.08em}
+h3{font-size:15px;font-weight:700}
+p{margin:0;max-width:68ch}
+.muted{color:var(--muted)}
+.mono,code{font-family:var(--mono);font-variant-numeric:tabular-nums}
+code{font-size:.9em;background:var(--soft);border-radius:4px;padding:1px 5px}
+section{display:grid;gap:14px}
+.paper{background-color:var(--paper);
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px),
+  linear-gradient(var(--grid-strong) 1px,transparent 1px),linear-gradient(90deg,var(--grid-strong) 1px,transparent 1px);
+  background-size:8px 8px,8px 8px,40px 40px,40px 40px;border:1px solid var(--line);border-radius:10px}
+.hero{padding:28px 24px;display:grid;gap:10px}
+.tag{font-family:var(--mono);font-size:12px;letter-spacing:.12em;color:var(--accent);text-transform:uppercase}
+.fig{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:12px;overflow-x:auto}
+.fig svg{display:block;width:100%;min-width:620px;height:auto}
+.cap{font-size:13px;color:var(--muted)}
+svg text{font-family:var(--body);fill:var(--fg)}
+svg .m{font-family:var(--mono)}
+.t-mut{fill:var(--muted)} .t-acc{fill:var(--accent)} .t-tr{fill:var(--trace)} .t-blue{fill:var(--blue)} .t-bad{fill:var(--bad)}
+.s-tr{stroke:var(--trace)} .s-mut{stroke:var(--muted)} .s-acc{stroke:var(--accent)} .s-fg{stroke:var(--fg)} .s-blue{stroke:var(--blue)} .s-line{stroke:var(--line)}
+.f-acc{fill:var(--accent)} .f-bad{fill:var(--bad)} .f-tr{fill:var(--trace)} .f-blue{fill:var(--blue)} .f-soft{fill:var(--soft)}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+.fact{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:10px 12px;display:grid;gap:2px;min-width:0}
+.fact .k{font-size:12px;color:var(--muted)} .fact .v{font-family:var(--mono);font-size:17px;font-weight:600}
+.flow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:13px}
+.flow a{color:var(--fg);text-decoration:none;background:var(--paper);border:1px solid var(--line);border-radius:999px;padding:3px 11px}
+.flow a:hover,.flow a:focus-visible{border-color:var(--accent);outline:none}
+.flow span{color:var(--muted)}
+.tbl{border:1px solid var(--line);border-radius:10px;overflow-x:auto;background:var(--paper)}
+table{border-collapse:collapse;width:100%;min-width:560px}
+th,td{border-bottom:1px solid var(--line);padding:9px 12px;text-align:left;vertical-align:top}
+tr:last-child td{border-bottom:0}
+th{font-size:12px;letter-spacing:.06em;color:var(--muted);font-weight:700}
+.pill{display:inline-block;font-size:12px;font-weight:700;border-radius:999px;padding:1px 10px;white-space:nowrap}
+.ok{color:var(--ok);background:var(--ok-bg)} .warn{color:var(--warn);background:var(--warn-bg)} .bad{color:var(--bad);background:var(--bad-bg)}
+.why{border-left:3px solid var(--accent);padding:4px 0 4px 14px;font-size:14px}
+ul{margin:0;padding-left:20px}
+.sw{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.sw div{border:1px solid var(--line);border-radius:8px;padding:10px;background:var(--paper);display:grid;gap:4px;font-size:13px}
+.sw i{display:block;height:28px;border-radius:5px;border:1px solid var(--line)}
+</style>
+
+<div class="wrap">
+
+<header class="paper hero">
+  <div class="tag">PaceGuard LATITUDE · recognition pipeline</div>
+  <h1>波形認識の全工程</h1>
+  <p class="muted">PDFの「画像としての心電図」を、ms と mV の数値に戻して比べるまでの12工程。図の波形はサンプル信号を、ツールと同じ計算式で実際に処理した結果です。</p>
+  <nav class="flow" aria-label="工程">
+    <a href="#s1">1 文字</a><span>›</span><a href="#s2">2 高解像度</a><span>›</span><a href="#s3">3 緑判定</a><span>›</span><a href="#s4">4 段検出</a><span>›</span><a href="#s5">5 線をなぞる</a><span>›</span><a href="#s6">6 ノイズ</a><span>›</span><a href="#s7">7 基線除去</a><span>›</span><a href="#s8">8 R波</a><span>›</span><a href="#s9">9 切り出し</a><span>›</span><a href="#s10">10 代表拍と計測</a><span>›</span><a href="#s11">11 段の統合</a><span>›</span><a href="#s12">12 比較</a>
+  </nav>
+</header>
+
+<!-- 1 -->
+<section id="s1">
+  <h2><span class="n">01</span>PDFの文字から ID・日付・機種を読む</h2>
+  <p>LATITUDEのPDFは、普通の方法（pdf.js）では文字が取れないことがあります。そこでPDFの中身を直接開き、圧縮された部分を展開して文字を集めます。</p>
+  <div class="fig"><svg viewBox="0 0 860 230" role="img" aria-label="文字抽出の流れ">
+    <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="f-soft" style="fill:var(--muted)"/></marker></defs>
+    <g font-size="13">
+      <rect x="10" y="20" width="150" height="80" rx="8" class="s-line" fill="none" stroke-width="1.5"/>
+      <text x="85" y="52" text-anchor="middle" font-weight="700">PDFファイル</text><text x="85" y="74" text-anchor="middle" font-size="11" class="t-mut m">stream … endstream</text>
+      <path d="M160 60 H200" class="s-mut" stroke-width="1.5" marker-end="url(#ar)"/>
+      <rect x="202" y="20" width="180" height="80" rx="8" class="s-line" fill="none" stroke-width="1.5"/>
+      <text x="292" y="48" text-anchor="middle" font-weight="700">圧縮を展開</text><text x="292" y="68" text-anchor="middle" font-size="11" class="t-mut">FlateDecode（deflate）</text><text x="292" y="86" text-anchor="middle" font-size="11" class="t-mut">末尾の改行を削って再挑戦</text>
+      <path d="M382 60 H422" class="s-mut" stroke-width="1.5" marker-end="url(#ar)"/>
+      <rect x="424" y="20" width="200" height="80" rx="8" class="s-line" fill="none" stroke-width="1.5"/>
+      <text x="524" y="48" text-anchor="middle" font-weight="700">文字を集める</text><text x="524" y="68" text-anchor="middle" font-size="11" class="t-mut m">(…) Tj ／ [(…)] TJ ／ &lt;16進&gt;</text><text x="524" y="86" text-anchor="middle" font-size="11" class="t-mut">注釈・フォーム欄の文字も</text>
+      <path d="M624 60 H664" class="s-mut" stroke-width="1.5" marker-end="url(#ar)"/>
+      <rect x="666" y="20" width="184" height="80" rx="8" class="s-acc" fill="none" stroke-width="1.6"/>
+      <text x="758" y="48" text-anchor="middle" font-weight="700">文字に戻す</text><text x="758" y="68" text-anchor="middle" font-size="11" class="t-mut">8進エスケープ・UTF-16</text><text x="758" y="86" text-anchor="middle" font-size="11" class="t-mut">UTF-8 の日本語</text>
+      <text x="10" y="140" font-weight="700">患者IDの決め方（上から順に）</text>
+      <rect x="10" y="152" width="270" height="62" rx="8" class="f-soft"/><text x="22" y="176"><tspan class="t-acc m">①</tspan> 括弧の中の8桁</text><text x="22" y="200" class="m" font-size="12">氏名（ふりがな）<tspan class="t-acc">（12345678）</tspan></text>
+      <rect x="292" y="152" width="270" height="62" rx="8" class="f-soft"/><text x="304" y="176"><tspan class="t-acc m">②</tspan> 括弧の中の6〜10桁</text><text x="304" y="200" font-size="12" class="t-mut">なければ本文中の8桁の数字</text>
+      <rect x="574" y="152" width="276" height="62" rx="8" class="f-soft"/><text x="586" y="176"><tspan class="t-acc m">③</tspan> 候補ボタンを表示</text><text x="586" y="200" font-size="12" class="t-mut">シリアル番号と日付の数字は除く</text>
+    </g></svg></div>
+  <div class="facts">
+    <div class="fact"><span class="k">日付</span><span class="v" style="font-size:14px">YYYY年MM月DD日 HH:MM</span><span class="cap">取れなければ「… JST」の並びから</span></div>
+    <div class="fact"><span class="k">機種</span><span class="v" style="font-size:14px">A219/156652 形式</span><span class="cap">英字＋3桁／4〜8桁</span></div>
+    <div class="fact"><span class="k">氏名</span><span class="v" style="font-size:14px">漢字（ふりがな）</span><span class="cap">無くても動きます</span></div>
+  </div>
+</section>
+
+<!-- 2 -->
+<section id="s2">
+  <h2><span class="n">02</span>4倍の解像度で描き、目盛りを決める</h2>
+  <p>画面用とは別に、PDFを 1pt＝4px の細かさで描き直します。記録条件は <b>25 mm/秒・2.5 mm/mV</b> なので、画素の数がそのまま時間と電位に換算できます。</p>
+  <div class="facts">
+    <div class="fact"><span class="k">1 mm</span><span class="v">11.34 px</span><span class="cap">72÷25.4×4</span></div>
+    <div class="fact"><span class="k">横 1 px</span><span class="v">3.53 ms</span><span class="cap">1000÷(25×11.34)</span></div>
+    <div class="fact"><span class="k">縦 1 mV</span><span class="v">28.3 px</span><span class="cap">2.5×11.34</span></div>
+    <div class="fact"><span class="k">縦 1 px</span><span class="v">0.035 mV</span><span class="cap">分解能の目安</span></div>
+  </div>
+  <p class="why">画面の大きさで拡大率が変わると数値がずれるため、計測は必ずこの固定倍率の画像で行います。</p>
+</section>
+
+<!-- 3 -->
+<section id="s3">
+  <h2><span class="n">03</span>「緑の画素」だけを拾う</h2>
+  <p>S-ECGは白地にピンクの方眼、黒い文字、緑の線で描かれています。各画素で <code>緑らしさ ＝ G − max(R, B)</code> を計算し、<b>18 を超えたら線</b>とみなします。方眼や文字は自然に無視されます。</p>
+  <div class="sw">
+    <div><i style="background:rgb(40,160,70)"></i><b>波形の線</b><span class="mono">160−max(40,70)=<b style="color:var(--ok)">90</b></span><span class="pill ok" style="justify-self:start">線</span></div>
+    <div><i style="background:rgb(180,215,185)"></i><b>線のふち</b><span class="mono">215−185=<b style="color:var(--ok)">30</b></span><span class="pill ok" style="justify-self:start">線（重み12）</span></div>
+    <div><i style="background:rgb(240,200,205)"></i><b>方眼</b><span class="mono">200−240=<b style="color:var(--bad)">−40</b></span><span class="pill bad" style="justify-self:start">無視</span></div>
+    <div><i style="background:rgb(25,25,25)"></i><b>文字・枠</b><span class="mono">25−25=<b style="color:var(--bad)">0</b></span><span class="pill bad" style="justify-self:start">無視</span></div>
+    <div><i style="background:rgb(255,255,255)"></i><b>白地</b><span class="mono">255−255=<b style="color:var(--bad)">0</b></span><span class="pill bad" style="justify-self:start">無視</span></div>
+  </div>
+  <p class="cap">色の値は説明用の例です。</p>
+</section>
+
+<!-- 4 -->
+<section id="s4">
+  <h2><span class="n">04</span>波形の段を見つける</h2>
+  <p>ページ（または手で指定した範囲）の各行で、緑の画素の数を数えます。緑のある行がまとまっている所が1つの段です。2段でも5段でも同じ方法で見つかります。</p>
+  <div class="fig"><svg id="figStrips" viewBox="0 0 860 300" role="img" aria-label="行ごとの緑画素数から段を切り分ける図"></svg></div>
+  <div class="tbl"><table>
+    <thead><tr><th>ルール</th><th>値</th><th>理由</th></tr></thead>
+    <tbody>
+      <tr><td>段の区切り</td><td class="mono">緑ゼロの行が 6行以上 かつ ページ高の0.6%超 続く</td><td>線の切れ目程度では分けない</td></tr>
+      <tr><td>高さが足りない</td><td class="mono">10行未満は捨てる</td><td>文字の飾りなど</td></tr>
+      <tr><td>緑が少ない</td><td class="mono">最大の段の 25% 未満は捨てる</td><td>ロゴや凡例</td></tr>
+      <tr><td>横幅が短い</td><td class="mono">ページ幅の 25% 以下は捨てる</td><td>小さなアイコン</td></tr>
+      <tr><td>枠のゆとり</td><td class="mono">上下左右に 0.4%（4px以上）</td><td>波の先端を切らない</td></tr>
+    </tbody></table></div>
+</section>
+
+<!-- 5 -->
+<section id="s5">
+  <h2><span class="n">05</span>列ごとに線の「重心」をとる</h2>
+  <p>段の中を1列（＝3.53 ms）ずつ縦に見て、緑の画素の位置を <b>緑らしさ−18</b> で重み付けして平均します。線が太くても細くても、中心の高さが1つに決まります。</p>
+  <div class="fig"><svg id="figCentroid" viewBox="0 0 860 260" role="img" aria-label="1列の重心計算"></svg></div>
+  <ul>
+    <li>緑が無い列（コマのすき間・枠）は前後を直線でつなぎ、<b>「線が無かった列」として記録</b>します。この列はR波検出や切り出しで使いません。</li>
+    <li>計測用には補間前の生の値、表示用には前後1列ずつの平均（3点平滑）を使います。</li>
+  </ul>
+</section>
+
+<!-- 6 -->
+<section id="s6">
+  <h2><span class="n">06</span>ノイズの段を見つける</h2>
+  <p>線の上下の向きが1列ごとに入れ替わる「ギザギザ」を数えます。ノイズは細かく上下に振れるため、ギザギザが局所的に多くなります。前回のデータは使わず、同じ段の中だけで判断します。</p>
+  <div class="fig"><svg id="figNoise" viewBox="0 0 860 220" role="img" aria-label="ノイズ区間の検出"></svg></div>
+  <div class="facts">
+    <div class="fact"><span class="k">数える単位</span><span class="v" style="font-size:14px">段の幅÷24（最低16列）</span><span class="cap">半分ずつずらして全体を走査</span></div>
+    <div class="fact"><span class="k">ギザギザ1回</span><span class="v" style="font-size:14px">向きが反転、両側1px以上</span><span class="cap">1px未満の揺れは数えない</span></div>
+    <div class="fact"><span class="k">ノイズ判定</span><span class="v" style="font-size:14px">max(8, 3×(中央値+1))</span><span class="cap">以上の区間があれば除外</span></div>
+  </div>
+</section>
+
+<!-- 7 -->
+<section id="s7">
+  <h2><span class="n">07</span>mVに換算し、呼吸の基線ゆれを取り除く</h2>
+  <p>高さ（px）を 28.3 で割って mV にし、<b>400 ms 幅の移動中央値</b>を基線とみなして引き算します。中央値はQRSのとがりに引っぱられにくいので、波形の形を崩さずにゆっくりした揺れだけが取れます。</p>
+  <div class="fig"><svg id="figBase" viewBox="0 0 860 330" role="img" aria-label="基線除去の前後"></svg></div>
+</section>
+
+<!-- 8 -->
+<section id="s8">
+  <h2><span class="n">08</span>傾きでR波を見つける</h2>
+  <p>各点の傾き <code>|y[i+1] − y[i−1]|</code> を計算します。QRSは一番急なので、傾きが大きい所がR波の候補です。</p>
+  <div class="fig"><svg id="figR" viewBox="0 0 860 300" role="img" aria-label="傾きとしきい値によるR波検出"></svg></div>
+  <div class="tbl"><table>
+    <thead><tr><th>手順</th><th>値</th></tr></thead>
+    <tbody>
+      <tr><td>しきい値</td><td class="mono">傾きの上位0.5%の値 × 0.45</td></tr>
+      <tr><td>R波の位置</td><td class="mono">しきい値を超えた点の ±60 ms で |電位| が最大の点</td></tr>
+      <tr><td>不応期</td><td class="mono">見つけたら 260 ms 先まで飛ばす（T波を二重に数えない）</td></tr>
+      <tr><td>線が無い所</td><td class="mono">傾き＝0 として扱う</td></tr>
+    </tbody></table></div>
+</section>
+
+<!-- 9 -->
+<section id="s9">
+  <h2><span class="n">09</span>R波を基準に1拍ずつ切り出す</h2>
+  <p>R波の <b>100 ms 前から 150 ms 後</b>までを <b>2 ms 刻み（126点）</b>で取り出します。心拍数が違っても時間の物差しは同じなので、QRSの幅をそのまま比べられます。</p>
+  <div class="fig"><svg id="figCut" viewBox="0 0 860 240" role="img" aria-label="時間固定の切り出し窓"></svg></div>
+  <ul>
+    <li>窓の中で線が無かった列が10%を超える拍は使いません。</li>
+    <li>各拍の <b>−100〜−60 ms の中央値</b>を0 mVに合わせます（PQ部分を基線にする）。</li>
+  </ul>
+  <p class="why">拍の長さで伸び縮みさせる方法だと、心拍数が変わっただけで形が変わって見えます。以前の版で別の日の相関が下がったのはこれが原因で、今は時間を固定しています。</p>
+</section>
+
+<!-- 10 -->
+<section id="s10">
+  <h2><span class="n">10</span>代表の1拍を作り、測る</h2>
+  <p>全拍の各時点の<b>中央値</b>で代表拍を作ります。次に各拍を代表拍に <b>±10 ms</b> ずらして合わせ直し、もう一度中央値を取ります。1拍だけ形が違っても中央値なので影響を受けにくくなります。</p>
+  <div class="fig"><svg id="figTpl" viewBox="0 0 860 360" role="img" aria-label="重ねた拍と代表拍、計測位置"></svg></div>
+  <div class="facts" id="measFacts"></div>
+  <div class="tbl"><table>
+    <thead><tr><th>計測値</th><th>求め方</th></tr></thead>
+    <tbody>
+      <tr><td><b>波高</b></td><td>各拍の <span class="mono">−60〜+80 ms</span> の最大−最小（peak-to-peak）の中央値</td></tr>
+      <tr><td><b>呼吸のゆれ</b></td><td>各拍の波高の <span class="mono">(90パーセンタイル − 10パーセンタイル) ÷ 2 ÷ 波高</span></td></tr>
+      <tr><td><b>QRS幅</b></td><td>代表拍の傾きが、QRS内の最大傾きの <span class="mono">12%</span> を超えている範囲。R波から前後に、3点続けて下回るまで広げる</td></tr>
+      <tr><td><b>極性</b></td><td><span class="mono">−80〜+120 ms</span> で絶対値が最大の点が上向きか下向きか</td></tr>
+      <tr><td><b>心拍数</b></td><td>RR間隔（<span class="mono">250〜2400 ms</span>、途中に線の切れ目なし）の中央値から</td></tr>
+      <tr><td><b>拍のそろい具合</b></td><td>各拍と代表拍のQRS部分の相関の中央値</td></tr>
+    </tbody></table></div>
+</section>
+
+<!-- 11 -->
+<section id="s11">
+  <h2><span class="n">11</span>段をまとめる（使えない段を除く）</h2>
+  <p>イベント記録では段ごとに状態が違います。使える段の拍を全部集めて代表拍を作り直し、形が外れた段も除きます。</p>
+  <div class="fig"><svg viewBox="0 0 860 300" role="img" aria-label="段を除外する判定の順序">
+    <g font-size="13">
+      <g id="poolRows"></g>
+    </g></svg></div>
+  <div class="tbl"><table>
+    <thead><tr><th>順番</th><th>除外する条件</th><th>表示される理由</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">1</td><td>R波が2拍以上取れない</td><td>R波を検出できない</td></tr>
+      <tr><td class="mono">2</td><td>工程06でノイズ区間がある</td><td>ノイズ疑い</td></tr>
+      <tr><td class="mono">3</td><td>心拍数 <span class="mono">150 bpm</span> 超</td><td>頻拍の記録</td></tr>
+      <tr><td class="mono">4</td><td>他の段の心拍数の中央値の <span class="mono">1.35倍</span> 超</td><td>ノイズ・T波の二重カウント・頻拍の可能性</td></tr>
+      <tr><td class="mono">5</td><td>まとめた代表拍との相関 <span class="mono">0.85</span> 未満（使える段が2つ以上のとき）</td><td>この段だけ形が違う（イベント中の可能性）</td></tr>
+    </tbody></table></div>
+  <p class="cap">残った段の拍で代表拍を作り直します。心拍数は残った段の中央値です。除外した段は「記録内の所見」として結果に表示されます。</p>
+</section>
+
+<!-- 12 -->
+<section id="s12">
+  <h2><span class="n">12</span>前回（または基準）と比べる</h2>
+  <p>保存しておいた前回の代表拍と、今回の代表拍を比べます。下の図は、サンプルのQRSを脚ブロックのように広げたものと比べた実際の計算結果です。</p>
+  <div class="fig"><svg id="figCmp" viewBox="0 0 860 330" role="img" aria-label="前回と今回の代表拍の比較"></svg></div>
+  <div class="facts" id="cmpFacts"></div>
+  <div class="tbl"><table>
+    <thead><tr><th>項目</th><th>計算</th><th><span class="pill warn">注意</span></th><th><span class="pill bad">要確認</span></th></tr></thead>
+    <tbody>
+      <tr><td><b>QRSの形</b></td><td><span class="mono">−80〜+120 ms</span> のピアソン相関。<span class="mono">±20 ms</span> ずらして最大値を採用</td><td class="mono">&lt; 0.90</td><td class="mono">&lt; 0.80</td></tr>
+      <tr><td><b>QRS幅</b></td><td>今回 − 前回</td><td class="mono">+20 ms</td><td class="mono">+30 ms<br>（今回120 ms以上なら+20 ms）</td></tr>
+      <tr><td><b>波高</b></td><td>今回 ÷ 前回 を、許容幅 <span class="mono">tol</span> と比べる</td><td class="mono">1+tol を超える</td><td class="mono">1+1.6×tol を超える</td></tr>
+      <tr><td><b>極性</b></td><td>上向き⇄下向き</td><td>—</td><td>反転</td></tr>
+    </tbody></table></div>
+  <div class="fig"><svg id="figTol" viewBox="0 0 860 170" role="img" aria-label="波高の許容幅の例"></svg></div>
+  <p class="cap"><span class="mono">tol = max(0.30, 2 × √(前回のゆれ² + 今回のゆれ²))</span>。呼吸で波高が大きく揺れる人ほど許容幅が広がります。小さくなる側は逆数（例 1÷1.30＝0.77倍）で判定します。</p>
+</section>
+
+<section>
+  <h2><span class="n">NOTE</span>今の限界</h2>
+  <ul>
+    <li>しきい値は合成データで決めた仮の値で、実際のPDFでの調整はこれからです。</li>
+    <li>記録条件は 25 mm/秒・2.5 mm/mV を前提にしています。ゲイン設定が違うPDFでは波高の数値がずれます。</li>
+    <li>N・T などのマーカー文字、T波（R/T比）、使用ベクトルの違いはまだ見ていません。</li>
+    <li>判定は変化に気づくための目印です。診断は医師が行ってください。</li>
+  </ul>
+</section>
+
+</div>
+
+<script>
+(()=>{
+// ===== ツールと同じ定数 =====
+const HI=4,PX_PER_MM=72/25.4*HI,MS_PER_PX=1000/(25*PX_PER_MM),PX_PER_MV=2.5*PX_PER_MM;
+const DT=2,PRE=100,POST=150,QRS_A=-80,QRS_B=120,L=Math.round((PRE+POST)/DT)+1;
+const idxOf=ms=>Math.round((ms+PRE)/DT);
+const pct=(a,p)=>{const s=Float32Array.from(a).sort();return s.length?s[Math.min(s.length-1,Math.max(0,Math.floor(p*(s.length-1))))]:0;};
+const med=a=>pct(a,.5);
+function movingMedian(x,win){const n=x.length,o=new Float32Array(n),h=win>>1,step=Math.max(1,win>>3),pts=[];
+  for(let i=0;i<n;i+=step){pts.push([i,med(x.subarray(Math.max(0,i-h),Math.min(n,i+h+1)))]);}pts.push([n-1,pts[pts.length-1][1]]);
+  for(let k=0;k<pts.length-1;k++){const[i0,v0]=pts[k],[i1,v1]=pts[k+1];for(let i=i0;i<=i1&&i<n;i++)o[i]=v0+(v1-v0)*(i-i0)/Math.max(1,i1-i0);}return o;}
+function pearson(a,b){let n=0,sa=0,sb=0;for(let i=0;i<a.length;i++){if(isNaN(a[i])||isNaN(b[i]))continue;sa+=a[i];sb+=b[i];n++;}if(n<5)return 0;const ma=sa/n,mb=sb/n;let num=0,da=0,db=0;
+  for(let i=0;i<a.length;i++){if(isNaN(a[i])||isNaN(b[i]))continue;const x=a[i]-ma,y=b[i]-mb;num+=x*y;da+=x*x;db+=y*y;}return da&&db?num/Math.sqrt(da*db):0;}
+function shiftCorr(a,b,from,to,maxLag){let best=-2,bl=0;for(let Lg=-maxLag;Lg<=maxLag;Lg++){const A=[],B=[];for(let i=from;i<=to;i++){const j=i+Lg;if(j<0||j>=b.length)continue;A.push(a[i]);B.push(b[j]);}const c=pearson(A,B);if(c>best){best=c;bl=Lg;}}return{corr:best,lag:bl};}
+const sampleAt=(y,p)=>{const i=Math.floor(p),f=p-i;return(i<0||i+1>=y.length)?NaN:y[i]*(1-f)+y[i+1]*f;};
+
+// ===== サンプル信号（説明用の合成S-ECG）=====
+let seed=7;const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647;};
+const g=(t,m,s)=>Math.exp(-((t-m)**2)/(2*s*s));
+function beatShape(t,wide){ // t: R波からのms
+  if(wide)return .10*g(t,-160,25)-.10*g(t,-30,10)+1.0*g(t,0,13)-.30*g(t,30,14)+.55*g(t,62,20)-.25*g(t,240,50);
+  return .10*g(t,-160,25)-.12*g(t,-25,8)+1.2*g(t,0,9)-.38*g(t,22,8)+.30*g(t,260,45);}
+const N=1300,Rs=[];{let t=260;while(t<N*MS_PER_PX-200){Rs.push(t);t+=780+rnd()*90;}}
+const mv=new Float32Array(N);
+for(let i=0;i<N;i++){const t=i*MS_PER_PX;let v=.28*Math.sin(2*Math.PI*t/3900+.6)+.08*Math.sin(2*Math.PI*t/1700);
+  for(const r of Rs){if(Math.abs(t-r)<600)v+=beatShape(t-r)*(1+.10*Math.sin(2*Math.PI*r/3900));}
+  mv[i]=v+(rnd()-.5)*.03;}
+const raw=mv.map(v=>Math.round(v*PX_PER_MV)/PX_PER_MV); // 1pxに量子化
+const valid=new Uint8Array(N).fill(1);for(let i=640;i<652;i++)valid[i]=0; // コマのすき間の例
+
+// ===== 解析（ツールと同じ手順）=====
+const base=movingMedian(raw,Math.round(400/MS_PER_PX)),y=raw.map((v,i)=>v-base[i]);
+const sl=new Float32Array(N);for(let i=1;i<N-1;i++)sl[i]=valid[i-1]&&valid[i+1]?Math.abs(y[i+1]-y[i-1]):0;
+const thr=.45*pct(sl,.995),refr=Math.round(260/MS_PER_PX),w60=Math.round(60/MS_PER_PX),peaks=[];
+for(let i=1;i<N-1;i++){if(sl[i]<thr)continue;let r=i,rv=0;for(let k=Math.max(0,i-w60);k<=Math.min(N-1,i+w60);k++)if(Math.abs(y[k])>rv){rv=Math.abs(y[k]);r=k;}
+  if(!peaks.length||r-peaks[peaks.length-1]>refr)peaks.push(r);i+=refr;}
+const pre=PRE/MS_PER_PX,post=POST/MS_PER_PX;let beats=[];
+for(const r of peaks){if(r-pre<0||r+post>=N)continue;let ok=0,tot=0;for(let k=Math.floor(r-pre);k<=r+post;k++){tot++;ok+=valid[k];}if(ok/tot<.9)continue;
+  const b=new Float32Array(L);for(let j=0;j<L;j++)b[j]=sampleAt(y,r+(j*DT-PRE)/MS_PER_PX);const bl=med(b.subarray(0,idxOf(-60)));beats.push(b.map(v=>v-bl));}
+function summarize(bs){
+  const tplOf=bs=>{const t=new Float32Array(L);for(let j=0;j<L;j++)t[j]=med(bs.map(q=>q[j]).filter(v=>!isNaN(v)));return t;};
+  let tpl=tplOf(bs);const qa=idxOf(QRS_A),qb=idxOf(QRS_B);
+  bs=bs.map(q=>{const{lag}=shiftCorr(tpl,q,qa,qb,5);if(!lag)return q;const s=new Float32Array(L).fill(NaN);for(let j=0;j<L;j++){const k=j+lag;if(k>=0&&k<L)s[j]=q[k];}return s;});
+  tpl=tplOf(bs);
+  const amps=bs.map(q=>{let mx=-1e9,mn=1e9;for(let j=idxOf(-60);j<=idxOf(80);j++){const v=q[j];if(isNaN(v))continue;mx=Math.max(mx,v);mn=Math.min(mn,v);}return mx-mn;});
+  const amp=med(amps),ampVar=amp?(pct(amps,.9)-pct(amps,.1))/2/amp:0;
+  const ts=new Float32Array(L);for(let j=1;j<L-1;j++)ts[j]=Math.abs(tpl[j+1]-tpl[j-1]);let smax=0;for(let j=qa;j<=qb;j++)smax=Math.max(smax,ts[j]);
+  const st=smax*.12;let on=idxOf(0),off=idxOf(0);while(on>qa&&(ts[on]>st||ts[on-1]>st||ts[on-2]>st))on--;while(off<qb&&(ts[off]>st||ts[off+1]>st||ts[off+2]>st))off++;
+  let pk=idxOf(0);for(let j=qa;j<=qb;j++)if(Math.abs(tpl[j])>Math.abs(tpl[pk]))pk=j;
+  return{tpl,bs,amp,ampVar,width:(off-on)*DT,on:on*DT-PRE,off:off*DT-PRE,pol:tpl[pk]>=0?1:-1};}
+const S=summarize(beats);
+const rrs=[];for(let k=1;k<peaks.length;k++){const ms=(peaks[k]-peaks[k-1])*MS_PER_PX;let gap=false;for(let i=peaks[k-1];i<peaks[k];i++)if(!valid[i]){gap=true;break;}if(!gap&&ms>250&&ms<2400)rrs.push(ms);}
+const HR=Math.round(60000/med(rrs));
+
+// ===== SVG描画の道具 =====
+const NS='http://www.w3.org/2000/svg';
+function el(p,tag,a,txt){const e=document.createElementNS(NS,tag);for(const k in a)e.setAttribute(k,a[k]);if(txt!=null)e.textContent=txt;p.appendChild(e);return e;}
+function panel(svg,box,xr,yr){const{x,y,w,h}=box;return{X:v=>x+(v-xr[0])/(xr[1]-xr[0])*w,Y:v=>y+h-(v-yr[0])/(yr[1]-yr[0])*h,box,svg};}
+function path(P,xs,ys,a){let d='',pen=false;for(let i=0;i<xs.length;i++){const v=ys[i];if(v==null||isNaN(v)){pen=false;continue;}d+=(pen?'L':'M')+P.X(xs[i]).toFixed(1)+' '+P.Y(v).toFixed(1);pen=true;}return el(P.svg,'path',{d,fill:'none','stroke-linejoin':'round',...a});}
+function frame(P,label){const{x,y,w,h}=P.box;el(P.svg,'rect',{x,y,width:w,height:h,fill:'none',class:'s-line'});if(label)el(P.svg,'text',{x:x+6,y:y+15,'font-size':12,class:'t-mut'},label);}
+function xTicks(P,ticks,fmt,y0){const{y,h}=P.box;for(const t of ticks){el(P.svg,'line',{x1:P.X(t),x2:P.X(t),y1:y+h,y2:y+h+4,class:'s-mut'});el(P.svg,'text',{x:P.X(t),y:(y0||y+h+17),'font-size':11,'text-anchor':'middle',class:'t-mut m'},fmt(t));}}
+const tAxis=[...Array(N).keys()].map(i=>i*MS_PER_PX/1000);
+
+// --- 図4：段の検出 ---
+{const s=document.getElementById('figStrips');
+ el(s,'rect',{x:20,y:20,width:520,height:260,rx:6,class:'s-line',fill:'none'});
+ el(s,'text',{x:30,y:40,'font-size':12,class:'t-mut'},'PDFのページ（例：イベント記録 3段）');
+ const rows=[[70,110],[140,180],[210,250]];
+ rows.forEach(([a,b],k)=>{let d='';for(let x=40;x<=520;x+=2){const t=(x-40)*7;let v=0;for(let r=60;r<4000;r+=(k===1?330:560))v+=1.1*g(t,r,9)-.4*g(t,r+22,8)+.25*g(t,r+260,40);d+=(x===40?'M':'L')+x+' '+((a+b)/2+8-v*16).toFixed(1);}
+   el(s,'path',{d,fill:'none',class:'s-tr','stroke-width':1.6});
+   el(s,'rect',{x:34,y:a-6,width:492,height:b-a+12,fill:'none',class:'s-blue','stroke-dasharray':'5 4','stroke-width':1.4});
+   el(s,'text',{x:26,y:(a+b)/2+4,'font-size':12,class:'t-blue m','text-anchor':'end'},String(k+1));});
+ el(s,'text',{x:40,y:62,'font-size':10,class:'t-mut'},'患者名・日付などの文字（黒）は数えない');
+ // ヒストグラム
+ el(s,'text',{x:580,y:40,'font-size':12,class:'t-mut'},'行ごとの緑の画素数');
+ el(s,'line',{x1:580,x2:580,y1:20,y2:280,class:'s-mut'});
+ for(let yy=50;yy<275;yy+=3){let c=0;for(const[a,b]of rows)if(yy>=a-2&&yy<=b+2)c=(60+90*Math.exp(-((yy-(a+b)/2)**2)/120)+rnd()*25);
+   if(c)el(s,'rect',{x:580,y:yy,width:c*1.3,height:2.4,class:'f-tr','fill-opacity':.7});}
+ rows.forEach(([a,b])=>{el(s,'line',{x1:575,x2:850,y1:a-6,y2:a-6,class:'s-blue','stroke-dasharray':'3 3'});el(s,'line',{x1:575,x2:850,y1:b+6,y2:b+6,class:'s-blue','stroke-dasharray':'3 3'});});
+ el(s,'text',{x:790,y:(rows[0][1]+rows[1][0])/2+4,'font-size':11,class:'t-acc','text-anchor':'middle'},'すき間＝区切り');
+ el(s,'text',{x:790,y:(rows[1][1]+rows[2][0])/2+4,'font-size':11,class:'t-acc','text-anchor':'middle'},'すき間＝区切り');
+}
+
+// --- 図5：重心 ---
+{const s=document.getElementById('figCentroid');
+ const col=[0,0,0,4,30,72,90,85,40,8,0,0,0];
+ el(s,'text',{x:20,y:24,'font-size':12,class:'t-mut'},'1列分の画素（上から下へ）');
+ let sw=0,sy=0;col.forEach((c,i)=>{const yy=34+i*16;const w=Math.max(0,c-18);sw+=w;sy+=w*i;
+   el(s,'rect',{x:20,y:yy,width:40,height:15,class:c>18?'f-tr':'f-soft','fill-opacity':c>18?(.25+.75*Math.min(1,c/90)):1,stroke:'var(--line)'});
+   el(s,'text',{x:70,y:yy+12,'font-size':11,class:'m t-mut'},`y=${i}`);
+   el(s,'text',{x:120,y:yy+12,'font-size':11,class:'m'},`緑らしさ ${c}`);
+   el(s,'text',{x:235,y:yy+12,'font-size':11,class:'m '+(w?'t-tr':'t-mut')},`重み ${w}`);});
+ const cy=sy/sw;const Y=34+cy*16+7.5;
+ el(s,'line',{x1:14,x2:300,y1:Y,y2:Y,class:'s-acc','stroke-width':2});
+ el(s,'text',{x:310,y:Y+4,'font-size':12,class:'t-acc m'},`重心 y = ${cy.toFixed(2)}`);
+ el(s,'text',{x:310,y:Y+22,'font-size':11,class:'t-mut m'},`Σ(重み×y) ÷ Σ重み = ${sy} ÷ ${sw}`);
+ // 右：列を並べると線になる
+ el(s,'text',{x:520,y:24,'font-size':12,class:'t-mut'},'全列の重心をつなぐ → 1本の信号');
+ let d='';for(let i=0;i<70;i++){const t=i*12-250;const v=1.2*g(t,0,22)-.4*g(t,50,18)+.3*g(t,330,70);const x=520+i*4.6,yy=150-v*80;
+   el(s,'rect',{x:x-1.5,y:yy-6,width:3.2,height:12,class:'f-tr','fill-opacity':.25});d+=(i?'L':'M')+x.toFixed(1)+' '+yy.toFixed(1);}
+ el(s,'path',{d,fill:'none',class:'s-acc','stroke-width':1.6});
+ el(s,'text',{x:520,y:240,'font-size':11,class:'t-mut'},'薄い緑＝線の太さ、赤＝各列の重心');
+}
+
+// --- 図6：ノイズ ---
+{const s=document.getElementById('figNoise');const n=600,x=new Float32Array(n);
+ for(let i=0;i<n;i++){const t=i*MS_PER_PX;let v=0;for(let r=150;r<2200;r+=760)v+=1.2*g(t,r,9)-.38*g(t,r+22,8)+.3*g(t,r+260,45);x[i]=Math.round(v*PX_PER_MV*.7);
+   if(i>380&&i<470)x[i]+=Math.round((i%2?1:-1)*(2+rnd()*3));}
+ const W=Math.max(16,Math.round(n/24)),step=W>>1,d=[];for(let i=0;i<n-1;i++)d.push(x[i+1]-x[i]);
+ const wins=[];for(let st=0;st+W<=n-1;st+=step){let c=0;for(let i=st+1;i<st+W;i++)if(d[i]*d[i-1]<0&&Math.abs(d[i])>=1&&Math.abs(d[i-1])>=1)c++;wins.push({st,c});}
+ const cs=wins.map(w=>w.c).sort((a,b)=>a-b),m=cs[cs.length>>1],th=Math.max(8,3*(m+1));
+ const P=panel(s,{x:40,y:20,w:800,h:110},[0,n],[-25,45]);frame(P,'段の信号');
+ for(const w of wins)if(w.c>=th)el(s,'rect',{x:P.X(w.st),y:20,width:P.X(w.st+W)-P.X(w.st),height:110,class:'f-bad','fill-opacity':.15});
+ path(P,[...Array(n).keys()],Array.from(x),{class:'s-tr','stroke-width':1.3});
+ const Q=panel(s,{x:40,y:145,w:800,h:55},[0,n],[0,Math.max(th,...cs)+2]);frame(Q,'');
+ for(const w of wins)el(s,'rect',{x:Q.X(w.st)+1,y:Q.Y(w.c),width:Q.X(w.st+step)-Q.X(w.st)-2,height:Q.Y(0)-Q.Y(w.c),class:w.c>=th?'f-bad':'f-tr','fill-opacity':.7});
+ el(s,'line',{x1:40,x2:840,y1:Q.Y(th),y2:Q.Y(th),class:'s-acc','stroke-dasharray':'4 3'});
+ el(s,'text',{x:836,y:Q.Y(th)-4,'font-size':11,class:'t-acc m','text-anchor':'end'},`しきい値 ${th}（中央値 ${m}）`);
+ el(s,'text',{x:46,y:158,'font-size':11,class:'t-mut'},'区間ごとのギザギザ回数');
+}
+
+// --- 図7：基線除去 ---
+{const s=document.getElementById('figBase');const xs=tAxis;
+ const lo=Math.min(...raw)-.1,hi=Math.max(...raw)+.1;
+ const P=panel(s,{x:50,y:16,w:790,h:130},[0,xs[N-1]],[lo,hi]);frame(P,'① 線の高さ（mV）と、400 ms移動中央値の基線（点線）');
+ path(P,xs,Array.from(raw),{class:'s-tr','stroke-width':1.3});path(P,xs,Array.from(base),{class:'s-acc','stroke-width':2,'stroke-dasharray':'6 4'});
+ const lo2=Math.min(...y)-.1,hi2=Math.max(...y)+.1;
+ const Q=panel(s,{x:50,y:170,w:790,h:130},[0,xs[N-1]],[lo2,hi2]);frame(Q,'② 引き算した後：基線が0 mVにそろう');
+ el(s,'line',{x1:50,x2:840,y1:Q.Y(0),y2:Q.Y(0),class:'s-line'});
+ path(Q,xs,Array.from(y),{class:'s-tr','stroke-width':1.3});
+ xTicks(Q,[0,1,2,3,4],t=>t+' 秒');
+ for(const[P2,l,h] of [[P,lo,hi],[Q,lo2,hi2]]){for(const v of [0,1]){if(v<l||v>h)continue;el(s,'text',{x:44,y:P2.Y(v)+4,'font-size':10,class:'t-mut m','text-anchor':'end'},v+'mV');}}
+}
+
+// --- 図8：R波 ---
+{const s=document.getElementById('figR');const xs=tAxis;
+ const P=panel(s,{x:50,y:16,w:790,h:120},[0,xs[N-1]],[Math.min(...y)-.1,Math.max(...y)+.2]);frame(P,'基線除去後の信号と、見つけたR波 ▼');
+ for(let i=0;i<N;i++)if(!valid[i])el(s,'rect',{x:P.X(xs[i]),y:16,width:P.X(MS_PER_PX/1000)-P.X(0)+.5,height:120,class:'f-soft'});
+ path(P,xs,Array.from(y),{class:'s-tr','stroke-width':1.3});
+ for(const r of peaks){el(s,'path',{d:`M${P.X(xs[r])-5} ${P.Y(y[r])-14}h10l-5 8z`,class:'f-acc'});
+   el(s,'rect',{x:P.X(xs[r]),y:16,width:P.X(260/1000)-P.X(0),height:120,class:'f-blue','fill-opacity':.07});}
+ const smx=Math.max(...sl);const Q=panel(s,{x:50,y:156,w:790,h:110},[0,xs[N-1]],[0,smx*1.05]);frame(Q,'傾き |y[i+1] − y[i−1]|');
+ path(Q,xs,Array.from(sl),{class:'s-fg','stroke-width':1});
+ el(s,'line',{x1:50,x2:840,y1:Q.Y(thr),y2:Q.Y(thr),class:'s-acc','stroke-dasharray':'5 4','stroke-width':1.5});
+ el(s,'text',{x:836,y:Q.Y(thr)-5,'font-size':11,class:'t-acc m','text-anchor':'end'},`しきい値 ${thr.toFixed(3)}`);
+ xTicks(Q,[0,1,2,3,4],t=>t+' 秒');
+ el(s,'text',{x:840,y:296,'font-size':11,class:'t-mut','text-anchor':'end'},'青い帯＝不応期 260 ms ／ 灰色＝線が無い列（すき間の例）');
+}
+
+// --- 図9：切り出し窓 ---
+{const s=document.getElementById('figCut');const r=peaks[1]||peaks[0];const a=Math.max(0,r-180),b=Math.min(N-1,r+320);
+ const xs=[],ys=[];for(let i=a;i<=b;i++){xs.push((i-r)*MS_PER_PX);ys.push(y[i]);}
+ const P=panel(s,{x:50,y:20,w:790,h:170},[xs[0],xs[xs.length-1]],[Math.min(...ys)-.15,Math.max(...ys)+.15]);frame(P,'');
+ el(s,'rect',{x:P.X(-100),y:20,width:P.X(150)-P.X(-100),height:170,class:'f-blue','fill-opacity':.08});
+ el(s,'rect',{x:P.X(-100),y:20,width:P.X(-60)-P.X(-100),height:170,class:'f-soft','fill-opacity':.9});
+ path(P,xs,ys,{class:'s-tr','stroke-width':1.6});
+ for(let t=-100;t<=150;t+=10)el(s,'line',{x1:P.X(t),x2:P.X(t),y1:186,y2:190,class:'s-blue'});
+ el(s,'line',{x1:P.X(0),x2:P.X(0),y1:20,y2:190,class:'s-acc','stroke-dasharray':'4 3'});
+ el(s,'text',{x:P.X(0)+4,y:34,'font-size':12,class:'t-acc'},'R波');
+ el(s,'text',{x:P.X(-80),y:52,'font-size':11,class:'t-mut','text-anchor':'middle'},'基線');
+ el(s,'text',{x:P.X(25),y:180,'font-size':11,class:'t-blue','text-anchor':'middle'},'ここだけ使う：2 ms刻み 126点');
+ xTicks(P,[-100,-60,0,150].filter(t=>t>=xs[0]),t=>(t>0?'+':'')+t+' ms');
+ el(s,'text',{x:P.X(xs[xs.length-1])-4,y:34,'font-size':11,class:'t-mut','text-anchor':'end'},'T波は窓の外');
+}
+
+// --- 図10：代表拍 ---
+{const s=document.getElementById('figTpl');const xs=[...Array(L).keys()].map(j=>j*DT-PRE);
+ const all=S.bs.flatMap(b=>Array.from(b).filter(v=>!isNaN(v)));
+ const P=panel(s,{x:56,y:20,w:780,h:290},[-PRE,POST],[Math.min(...all)-.15,Math.max(...all)+.2]);frame(P,'');
+ el(s,'rect',{x:P.X(QRS_A),y:20,width:P.X(QRS_B)-P.X(QRS_A),height:290,class:'f-soft','fill-opacity':.6});
+ el(s,'rect',{x:P.X(S.on),y:20,width:P.X(S.off)-P.X(S.on),height:290,class:'f-acc','fill-opacity':.10});
+ el(s,'line',{x1:56,x2:836,y1:P.Y(0),y2:P.Y(0),class:'s-line'});
+ for(const b of S.bs)path(P,xs,Array.from(b),{class:'s-tr','stroke-width':1,'stroke-opacity':.45});
+ path(P,xs,Array.from(S.tpl),{class:'s-fg','stroke-width':2.6});
+ for(const t of [S.on,S.off])el(s,'line',{x1:P.X(t),x2:P.X(t),y1:20,y2:310,class:'s-acc','stroke-width':1.5});
+ let mx=-1e9,mn=1e9,jx=0,jn=0;for(let j=idxOf(-60);j<=idxOf(80);j++){if(S.tpl[j]>mx){mx=S.tpl[j];jx=j;}if(S.tpl[j]<mn){mn=S.tpl[j];jn=j;}}
+ const ax=P.X(95);el(s,'line',{x1:ax,x2:ax,y1:P.Y(mx),y2:P.Y(mn),class:'s-blue','stroke-width':2});
+ el(s,'line',{x1:P.X(xs[jx]),x2:ax+6,y1:P.Y(mx),y2:P.Y(mx),class:'s-blue','stroke-dasharray':'2 3'});
+ el(s,'line',{x1:P.X(xs[jn]),x2:ax+6,y1:P.Y(mn),y2:P.Y(mn),class:'s-blue','stroke-dasharray':'2 3'});
+ el(s,'text',{x:ax+8,y:(P.Y(mx)+P.Y(mn))/2,'font-size':12,class:'t-blue m'},`波高 ${S.amp.toFixed(2)} mV`);
+ el(s,'text',{x:(P.X(S.on)+P.X(S.off))/2,y:36,'font-size':12,class:'t-acc m','text-anchor':'middle'},`QRS幅 ${S.width} ms`);
+ el(s,'text',{x:P.X(QRS_A)+4,y:302,'font-size':11,class:'t-mut'},'灰色＝比較に使うQRS範囲 −80〜+120 ms');
+ el(s,'text',{x:836,y:302,'font-size':11,class:'t-mut','text-anchor':'end'},`細線＝各拍（${S.bs.length}拍） 太線＝代表拍`);
+ xTicks(P,[-100,-80,-60,0,80,120,150],t=>(t>0?'+':'')+t,330);
+ el(s,'text',{x:836,y:350,'font-size':11,class:'t-mut','text-anchor':'end'},'R波からの時間（ms）');
+ document.getElementById('measFacts').innerHTML=[['波高',S.amp.toFixed(2)+' mV'],['呼吸のゆれ','±'+Math.round(S.ampVar*100)+'%'],['QRS幅',S.width+' ms'],['極性',S.pol>0?'上向き':'下向き'],['心拍数',HR+' bpm'],['使った拍',S.bs.length+' 拍']]
+   .map(([k,v])=>`<div class="fact"><span class="k">${k}（サンプル）</span><span class="v">${v}</span></div>`).join('');
+}
+
+// --- 図11：段の統合 ---
+{const s=document.getElementById('poolRows');const svg=s.ownerSVGElement;
+ const rows=[['段1','72 bpm','使用','ok',0],['段2','74 bpm','使用','ok',0],['段3','181 bpm','頻拍で除外','bad',1],['段4','111 bpm','他より速い（1.35倍超）で除外','bad',2],['段5','73 bpm・相関0.62','形が違う（イベント中）で除外','bad',3]];
+ rows.forEach(([n,h,res,c,kind],k)=>{const yy=20+k*54;
+   el(s,'text',{x:20,y:yy+30,'font-weight':700},n);el(s,'text',{x:70,y:yy+30,'font-size':12,class:'m t-mut'},h);
+   let d='';const per=kind===1?14:kind===2?24:40;for(let i=0;i<=120;i++){const t=i*6;let v=0;for(let r=20;r<720;r+=per*6){v+=kind===3?(.7*g(t,r,22)-.6*g(t,r+50,22)):(1.1*g(t,r,7)-.35*g(t,r+16,7)+.25*g(t,r+170,30));}
+     if(kind===2)v+=(i%2?.12:-.12);d+=(i?'L':'M')+(220+i*3.3).toFixed(1)+' '+(yy+30-v*20).toFixed(1);}
+   el(s,'path',{d,fill:'none',class:c==='ok'?'s-tr':'s-mut','stroke-width':1.5,'stroke-opacity':c==='ok'?1:.7});
+   el(s,'text',{x:640,y:yy+34,'font-size':12,class:c==='ok'?'t-tr':'t-bad','font-weight':700},res);});
+ el(s,'text',{x:20,y:292,'font-size':11,class:'t-mut'},'波形は説明用の模式図です。段1・2の拍だけで代表拍を作ります。');
+}
+
+// --- 図12：比較 ---
+{const s=document.getElementById('figCmp');const xs=[...Array(L).keys()].map(j=>j*DT-PRE);
+ const wide=new Float32Array(L);for(let j=0;j<L;j++)wide[j]=beatShape(xs[j],true)*1.4;const bl=med(wide.subarray(0,idxOf(-60)));for(let j=0;j<L;j++)wide[j]-=bl;
+ const W=summarize([wide,wide.map(v=>v*1.02),wide.map(v=>v*.98)]);
+ const qa=idxOf(QRS_A),qb=idxOf(QRS_B);const{corr,lag}=shiftCorr(S.tpl,W.tpl,qa,qb,10);
+ const ratio=W.amp/S.amp,tol=Math.max(.30,2*Math.hypot(S.ampVar,W.ampVar)),dW=W.width-S.width;
+ const all=[...S.tpl,...W.tpl];const P=panel(s,{x:56,y:20,w:780,h:260},[-PRE,POST],[Math.min(...all)-.15,Math.max(...all)+.2]);frame(P,'');
+ el(s,'rect',{x:P.X(QRS_A),y:20,width:P.X(QRS_B)-P.X(QRS_A),height:260,class:'f-soft','fill-opacity':.6});
+ let d='';for(let j=qa;j<=qb;j++)d+=(j===qa?'M':'L')+P.X(xs[j]).toFixed(1)+' '+P.Y(S.tpl[j]).toFixed(1);for(let j=qb;j>=qa;j--){const k=Math.min(L-1,Math.max(0,j+lag));d+='L'+P.X(xs[j]).toFixed(1)+' '+P.Y(W.tpl[k]).toFixed(1);}
+ el(s,'path',{d:d+'Z',class:'f-bad','fill-opacity':.16});
+ el(s,'line',{x1:56,x2:836,y1:P.Y(0),y2:P.Y(0),class:'s-line'});
+ path(P,xs,Array.from(S.tpl),{class:'s-mut','stroke-width':2,'stroke-dasharray':'6 4'});
+ path(P,xs,Array.from(W.tpl),{class:'s-tr','stroke-width':2.4});
+ for(const[t,c]of[[S.on,'s-mut'],[S.off,'s-mut'],[W.on,'s-tr'],[W.off,'s-tr']])el(s,'line',{x1:P.X(t),x2:P.X(t),y1:270,y2:280,class:c,'stroke-width':2});
+ el(s,'text',{x:66,y:40,'font-size':12,class:'t-mut'},'- - 前回（サンプル）');el(s,'text',{x:66,y:58,'font-size':12,class:'t-tr'},'― 今回（QRSを広げた例）');
+ el(s,'text',{x:836,y:40,'font-size':12,class:'t-bad','text-anchor':'end'},'赤＝ずれている面積');
+ xTicks(P,[-100,-80,0,120,150],t=>(t>0?'+':'')+t,300);el(s,'text',{x:836,y:322,'font-size':11,class:'t-mut','text-anchor':'end'},'R波からの時間（ms）');
+ const lv=(r,y)=>r?'<span class="pill bad">要確認</span>':y?'<span class="pill warn">注意</span>':'<span class="pill ok">範囲内</span>';
+ const cRed=corr<.8,cYel=corr<.9,wRed=dW>=30||(W.width>=120&&dW>=20),wYel=dW>=20,aRed=ratio>1+tol*1.6||ratio<1/(1+tol*1.6),aYel=ratio>1+tol||ratio<1/(1+tol);
+ document.getElementById('cmpFacts').innerHTML=[
+   ['QRS相関',corr.toFixed(2)+`（ずらし ${lag*DT} ms）`,lv(cRed,cYel)],['QRS幅',`${S.width} → ${W.width} ms（+${dW}）`,lv(wRed,wYel)],
+   ['波高',`${S.amp.toFixed(2)} → ${W.amp.toFixed(2)} mV（${Math.round(ratio*100)}%）`,lv(aRed,aYel)],['極性',S.pol===W.pol?'変化なし':'反転',lv(S.pol!==W.pol,0)]]
+   .map(([k,v,p])=>`<div class="fact"><span class="k">${k}</span><span class="v" style="font-size:14px">${v}</span>${p}</div>`).join('');
+ // 波高の許容幅の例
+ const t=document.getElementById('figTol');const T=Math.max(.30,2*Math.hypot(.08,.10));
+ const Q=panel(t,{x:40,y:60,w:780,h:30},[.4,1.9],[0,1]);
+ const band=(a,b,c,o)=>el(t,'rect',{x:Q.X(a),y:60,width:Q.X(b)-Q.X(a),height:30,class:c,'fill-opacity':o});
+ const hiY=1+T,hiR=1+1.6*T;band(.4,1/hiR,'f-bad',.35);band(1/hiR,1/hiY,'f-acc',.15);band(1/hiY,hiY,'f-tr',.25);band(hiY,hiR,'f-acc',.15);band(hiR,1.9,'f-bad',.35);
+ el(t,'text',{x:40,y:24,'font-size':12,class:'t-mut'},`例：前回のゆれ ±8%、今回 ±10% → 2×√(0.08²+0.10²)=${(2*Math.hypot(.08,.10)).toFixed(2)} → 最低値0.30を採用`);
+ el(t,'text',{x:40,y:46,'font-size':12},'今回÷前回 の比');
+ for(const[v,l]of[[1/hiR,(1/hiR).toFixed(2)],[1/hiY,(1/hiY).toFixed(2)],[1,'1.00'],[hiY,hiY.toFixed(2)],[hiR,hiR.toFixed(2)]]){el(t,'line',{x1:Q.X(v),x2:Q.X(v),y1:56,y2:96,class:'s-fg'});el(t,'text',{x:Q.X(v),y:112,'font-size':11,class:'m','text-anchor':'middle'},l);}
+ el(t,'text',{x:Q.X(1),y:140,'font-size':12,class:'t-tr','text-anchor':'middle'},'範囲内');
+ el(t,'text',{x:Q.X((hiY+hiR)/2),y:140,'font-size':12,class:'t-acc','text-anchor':'middle'},'注意');el(t,'text',{x:Q.X((1/hiY+1/hiR)/2),y:140,'font-size':12,class:'t-acc','text-anchor':'middle'},'注意');
+ el(t,'text',{x:Q.X(1.72),y:140,'font-size':12,class:'t-bad','text-anchor':'middle'},'要確認');el(t,'text',{x:Q.X(.5),y:140,'font-size':12,class:'t-bad','text-anchor':'middle'},'要確認');
+}
+})();
+</script>
