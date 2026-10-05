@@ -512,10 +512,23 @@ $('evalBtn').onclick=async()=>{
   const rowName=['上段','下段'];
   const feats=curFeat.map(f=>f&&!f.error?f:null);
   const errs=curFeat.map((f,k)=>f&&f.error?`${rowName[k]}：${f.error}`:null).filter(Boolean);
-  const base=await readBaseline(id);
-  const bf=base&&base.feat?base.feat:[null,null];
-  const now={id,name:$('fName').value,date:$('fDate').value,device:$('fDev').value,ts:Date.now(),crops:[crop,crop2],
-    feat:feats.map((f,k)=>f?{tpl:f.tpl,amp:f.amp,ampVar:f.ampVar,width:f.width,on:f.on,off:f.off,pol:f.pol,hr:f.hr,nBeats:f.nBeats}:bf[k]||null)};
+  const store=await readBaseline(id);
+  // レポートは照会日ごとに保存し、「今回より前の日付で一番新しいレポート」と比べる（同じレポートを何度評価しても結果は同じ）
+  const dateKey=d=>{const m=String(d||'').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})(?:\D+(\d{1,2}):(\d{2}))?/);return m?m[1]+m[2].padStart(2,'0')+m[3].padStart(2,'0')+(m[4]||'0').padStart(2,'0')+(m[5]||'00'):'';};
+  const reports=store?(store.reports||(store.feat?[{date:store.date,key:dateKey(store.date),feat:store.feat,ts:store.ts||0}]:[])):[];
+  const curKey=dateKey($('fDate').value);
+  const others=reports.filter(r=>r.key!==curKey||!curKey);
+  const older=curKey?others.filter(r=>r.key&&r.key<curKey):others;
+  const ref=(older.length?older:[]).sort((a,b)=>a.key<b.key?1:-1)[0]||null; // 比較相手
+  const base=ref?{date:ref.date,history:store.history}:null;
+  const bf=ref&&ref.feat?ref.feat:[null,null];
+  const curFeatSave=feats.map(f=>f?{tpl:f.tpl,amp:f.amp,ampVar:f.ampVar,width:f.width,on:f.on,off:f.off,pol:f.pol,hr:f.hr,nBeats:f.nBeats}:null);
+  const now={id,name:$('fName').value,date:$('fDate').value,device:$('fDev').value,ts:Date.now(),crops:[crop,crop2]};
+  const saveStore=async(histEntry)=>{
+    const rs=reports.filter(r=>!(curKey&&r.key===curKey));rs.push({date:now.date,key:curKey,feat:curFeatSave,ts:now.ts});rs.sort((a,b)=>a.key<b.key?-1:1);
+    const hist=((store&&store.history)||[]).filter(h=>!(curKey&&dateKey(h.date)===curKey));if(histEntry)hist.push(histEntry);
+    await writeBaseline(id,{...now,reports:rs,history:hist});
+  };
   // ノイズ（前回不要・今回の波形だけで判定）
   const noise=[curSig,curSig2].map(sg=>sg?noiseScan(sg):null);
   const noiseFlags=noise.map((z,k)=>z&&z.bad.length?`${rowName[k]}：ノイズ疑い（ギザギザ区間 ${z.bad.length}か所・最大 ${z.max}／閾値 ${z.thr}）。プレビューの赤い帯の位置です。`:null).filter(Boolean);
@@ -524,8 +537,9 @@ $('evalBtn').onclick=async()=>{
   const measure=(f)=>`拍 ${f.nBeats}・心拍 ${f.hr??'—'}bpm・波高 ${f.amp.toFixed(2)}mV（呼吸のゆれ ±${Math.round(f.ampVar*100)}%）・QRS幅 ${f.width}ms・向き ${f.pol>0?'上':'下'}`;
   const rows=[0,1].filter(k=>feats[k]&&bf[k]&&bf[k].tpl).map(k=>({k,b:bf[k],c:feats[k],...compareFeat(bf[k],feats[k])}));
   if(!rows.length){
-    await writeBaseline(id,{...now,history:[...(base&&base.history||[]),{date:now.date,note:base?'新方式で基準登録':'初回登録'}]});
-    $('result').innerHTML=`<div class="verdict info"><h2>${base?'新しい計測方式で基準を登録しました':'初回登録しました'}</h2>この患者（ID:${id}）の基準として保存しました。次回レポートから自動比較されます。${dirHandle?'':'<br><b>※フォルダ未選択のため保存できていません。</b>'}
+    await saveStore({date:now.date,note:'基準登録'});
+    const why=!reports.length?'初回登録しました':(store&&store.feat&&!store.reports)?'新しい計測方式で基準を登録しました':'比較できる前の日付のレポートがありません';
+    $('result').innerHTML=`<div class="verdict info"><h2>${why}</h2>この患者（ID:${id}）の${now.date||'今回'}のレポートとして保存しました。これより後の日付のレポートを評価すると自動で比較されます。${curKey?'':'<br><b>※照会日が読み取れていません。照会日を入力すると前後関係で正しく比較できます。</b>'}${dirHandle?'':'<br><b>※フォルダ未選択のため保存できていません。</b>'}
       ${feats.map((f,k)=>f?`<div class="hint" style="margin-top:6px">${rowName[k]}：${measure(f)}</div>`:'').join('')}</div>${errHtml}${noiseHtml}`;
     $('overlayCard').hidden=true; return;
   }
@@ -543,11 +557,10 @@ $('evalBtn').onclick=async()=>{
     </div><div class="hint">波高の許容範囲は、前回と今回の拍ごとのゆれ（呼吸など）から自動で決めています（今回 ±${Math.round(r.tol*100)}%）。</div>`;
   const newRows=[0,1].filter(k=>feats[k]&&!(bf[k]&&bf[k].tpl)).map(k=>rowName[k]);
   $('result').innerHTML=`<div class="verdict ${cls}"><h2>${title}</h2>
-    <div>前回：${base.date||'?'} → 今回：${now.date||'?'}</div>
+    <div>比較：${base.date||'?'}（前回のレポート） → ${now.date||'?'}（今回）</div>
     ${rows.map(rowHtml).join('')}
     ${newRows.length?`<div class="hint" style="margin-top:8px">${newRows.join('・')}は前回データが無いため、今回を基準として登録しました（次回から比較）。</div>`:''}</div>${errHtml}${noiseHtml}`;
-  const history=(base.history||[]).concat([{date:now.date,level,rows:rows.map(r=>({row:rowName[r.k],corr:+r.corr.toFixed(3),amp:r.c.amp,ampRatio:+r.ampRatio.toFixed(2),width:r.c.width,dW:r.dW,pol:r.c.pol,hr:r.c.hr,level:r.level}))}]);
-  await writeBaseline(id,{...now,history});
+  await saveStore({date:now.date,ref:ref.date,level,rows:rows.map(r=>({row:rowName[r.k],corr:+r.corr.toFixed(3),amp:r.c.amp,ampRatio:+r.ampRatio.toFixed(2),width:r.c.width,dW:r.dW,pol:r.c.pol,hr:r.c.hr,level:r.level}))});
   const r1=rows.find(r=>r.k===0), r2=rows.find(r=>r.k===1);
   $('row2Wrap').hidden=!r2; $('overlayCard').hidden=false; // 先に表示してから描く（幅を正しく取るため）
   if(r1) drawBeat(r1); else { $('overlay').getContext('2d').clearRect(0,0,$('overlay').width,$('overlay').height); $('diff').getContext('2d').clearRect(0,0,$('diff').width,$('diff').height); }
