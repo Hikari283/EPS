@@ -15,4 +15,4 @@ PDFはこのパソコンに保存するだけで、外部には送りません�
 設定（アイコンをクリック）
 - 自動で保存する：オン／オフ
 - 保存先：ダウンロード先の中のフォルダ名（既定 LATITUDE）
-- 対象サイト：LATITUDEのアドレス（既定 bostonscientific.com）
+- 対象サイト：LATITUDEのアドレス（既定 bostonscientific.com / bostonscientific.jp）

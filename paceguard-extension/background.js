@@ -1,6 +1,6 @@
 // PaceGuard LATITUDE 取り込み：LATITUDEで開いたPDFを ダウンロード\<フォルダ>\ に自動保存する
-const DEF = { enabled: true, folder: 'LATITUDE', hosts: ['bostonscientific.com'], count: 0 };
-const getCfg = async () => ({ ...DEF, ...(await chrome.storage.local.get(Object.keys(DEF))) });
+const DEF = { enabled: true, folder: 'LATITUDE', hosts: ['bostonscientific.com', 'bostonscientific.jp'], count: 0 };
+const getCfg = async () => { const c = { ...DEF, ...(await chrome.storage.local.get(Object.keys(DEF))) }; c.hosts = [...new Set([...DEF.hosts, ...(c.hosts || [])])]; return c; };
 const hostOk = (url, cfg) => { try { const h = new URL(url).hostname; return cfg.hosts.some(d => h === d || h.endsWith('.' + d)); } catch (_) { return false; } };
 const recent = new Map(); // 同じPDFを二重に保存しない
 const stamp = () => { const d = new Date(), p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; };
@@ -57,7 +57,7 @@ chrome.runtime.onMessage.addListener((m, sender) => {
 // 追加したサイトにも、ページ内PDFの見張りを入れる
 async function syncScripts() {
   const cfg = await getCfg();
-  const extra = cfg.hosts.filter(h => h !== 'bostonscientific.com').flatMap(h => [`https://${h}/*`, `https://*.${h}/*`, `http://${h}/*`, `http://*.${h}/*`]);
+  const extra = cfg.hosts.filter(h => !DEF.hosts.includes(h)).flatMap(h => [`https://${h}/*`, `https://*.${h}/*`, `http://${h}/*`, `http://*.${h}/*`]);
   try { await chrome.scripting.unregisterContentScripts({ ids: ['pg-hook', 'pg-bridge'] }); } catch (_) {}
   if (!extra.length) return;
   try {

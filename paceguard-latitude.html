@@ -360,6 +360,17 @@ async function ocrId(){
 }
 $('teachId').onclick=()=>{ if(!pageBackup.width){alert('先にPDFを読み込んでください');return;} drawMode='id'; $('dbg').innerHTML='<b>IDの数字の上をドラッグして囲んでください</b>（8桁の数字だけを枠に入れる）。'; };
 
+// 複数ページのPDF（サマリー＋波形など）から、緑の波形が一番多いページを選ぶ
+let curPageNo=1;
+async function pickEcgPage(pdf){
+  const n=Math.min(pdf.numPages||1,30);if(n<=1)return 1;
+  let best=1,bestCnt=-1;const c=document.createElement('canvas'),x=c.getContext('2d',{willReadFrequently:true});
+  for(let i=1;i<=n;i++){try{const pg=await pdf.getPage(i),vp=pg.getViewport({scale:0.6});c.width=vp.width;c.height=vp.height;x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);
+    await pg.render({canvasContext:x,viewport:vp}).promise;const d=x.getImageData(0,0,c.width,c.height).data;let cnt=0;
+    for(let k=0;k<d.length;k+=4)if(d[k+1]-Math.max(d[k],d[k+2])>18)cnt++;
+    if(cnt>bestCnt){bestCnt=cnt;best=i;}}catch(_){}}
+  return best;
+}
 async function loadPDF(file,{forceEval=false}={}){
   try{
     const lib=await ensurePdfjs();
@@ -367,7 +378,8 @@ async function loadPDF(file,{forceEval=false}={}){
     // ★pdf.jsはdataのArrayBufferを転送（detach）して空にするため、先にコピーから自前抽出しておく
     let rawPdfText=''; try{ rawPdfText=await extractRawPdfText(buf.slice(0)); }catch(_){}
     const pdf=await lib.getDocument({data:new Uint8Array(buf)}).promise;lastPdfDoc=pdf;
-    const page=await pdf.getPage(1);
+    const pno=await pickEcgPage(pdf);curPageNo=pno;
+    const page=await pdf.getPage(pno);
     const vp=page.getViewport({scale:renderScale});
     pageCanvas.width=vp.width; pageCanvas.height=vp.height;
     await page.render({canvasContext:pctx,viewport:vp}).promise;
