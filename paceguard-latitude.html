@@ -156,6 +156,11 @@
     <div id="insideBody"></div>
   </details>
 
+  <div class="card" id="eyeCard" hidden style="margin-top:14px">
+    <h2>👁 元の波形を目で比べる</h2>
+    <div class="hint">PDFの波形の部分をそのまま並べています（上から 基準 → 前回 → 今回）。</div>
+    <div id="eyeBody"></div>
+  </div>
   <div class="card" id="overlayCard" hidden style="margin-top:14px">
     <h2>重ね描き（青=前回 / 橙=今回）と差分</h2>
     <div class="hint">全段の代表拍どうし（横 ms・縦 mV の実寸）</div>
@@ -821,6 +826,43 @@ function drawInsidePool(){
     `</table><div class="hint" style="margin-top:6px">代表拍：${p.usedRows.length}段・${p.nBeats}拍／心拍 ${p.hr??'—'}bpm／波高 ${inFmt(p.amp)}mV（ゆれ ±${Math.round(p.ampVar*100)}%）／QRS ${p.width}ms／${p.pol>0?'上向き':'下向き'}</div>`;
 }
 
+
+// ===== 👁 比較相手（前回・基準）のPDFの波形を、今回と並べて表示 =====
+async function fileFromPath(path){
+  if(!dirHandle||!path)return null;
+  try{const parts=path.split('/');let d=dirHandle;for(const p of parts.slice(0,-1))d=await d.getDirectoryHandle(p);return await (await d.getFileHandle(parts[parts.length-1])).getFile();}catch(_){return null;}
+}
+async function findRefPdf(ref,id,obj){
+  let f=await fileFromPath(ref&&ref.pdf);if(f)return f;
+  // 記録が無い古いデータ：患者PDFフォルダから照会日で探す
+  const m=String(ref&&ref.date||'').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})(?:\D+(\d{1,2}):(\d{2}))?/);if(!m||!dirHandle)return null;
+  const stem=`${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}${m[4]?'_'+m[4].padStart(2,'0')+m[5]:''}`;
+  try{const top=await dirHandle.getDirectoryHandle(PDF_DIR);const pd=await top.getDirectoryHandle(fileNameFor(id,obj).replace(/\.json$/i,'')||id);
+    const names=[];for await(const [n,h] of pd.entries())if(h.kind==='file'&&n.startsWith(stem)&&/\.pdf$/i.test(n)&&!/_書類\d/.test(n))names.push(n);
+    names.sort();if(!names.length)return null;return await (await pd.getFileHandle(names[names.length-1])).getFile();}catch(_){return null;}
+}
+async function ecgImage(doc){ // 波形のページを描いて、緑の線がある範囲だけ切り出す
+  const pno=await pickEcgPage(doc),pg=await doc.getPage(pno),vp=pg.getViewport({scale:2});
+  const c=document.createElement('canvas');c.width=vp.width;c.height=vp.height;const x=c.getContext('2d',{willReadFrequently:true});x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);
+  await pg.render({canvasContext:x,viewport:vp}).promise;
+  const d=x.getImageData(0,0,c.width,c.height).data;let x0=c.width,y0=c.height,x1=0,y1=0;
+  for(let yy=0;yy<c.height;yy+=2)for(let xx=0;xx<c.width;xx+=2){const i=(yy*c.width+xx)*4;if(d[i+1]-Math.max(d[i],d[i+2])>18){if(xx<x0)x0=xx;if(xx>x1)x1=xx;if(yy<y0)y0=yy;if(yy>y1)y1=yy;}}
+  if(x1<=x0||y1<=y0)return c;
+  const pad=24;x0=Math.max(0,x0-pad);y0=Math.max(0,y0-pad);x1=Math.min(c.width,x1+pad);y1=Math.min(c.height,y1+pad);
+  const o=document.createElement('canvas');o.width=x1-x0;o.height=y1-y0;o.getContext('2d').drawImage(c,x0,y0,o.width,o.height,0,0,o.width,o.height);return o;
+}
+async function showEyeCompare(refs,now){
+  const box=$('eyeBody');$('eyeCard').hidden=false;box.innerHTML='<div class="hint">読み込み中…</div>';
+  const out=[],miss=[];
+  for(const {rep,label} of refs){const rf=await findRefPdf(rep,now.id,now);
+    if(!rf){miss.push(label);continue;}
+    try{const lib=await ensurePdfjs();const doc=await lib.getDocument({data:new Uint8Array(await rf.arrayBuffer())}).promise;out.push({label:`${label}：${rep.date||'?'}`,cv:await ecgImage(doc)});}catch(_){miss.push(label);}}
+  if(lastPdfDoc)out.push({label:`今回：${now.date||'?'}`,cv:await ecgImage(lastPdfDoc)});
+  box.innerHTML='';
+  if(miss.length)box.insertAdjacentHTML('beforeend',`<div class="hint warn-t" style="margin:6px 0">${miss.join('・')}のPDFが「${escH(PDF_DIR)}」フォルダに見つかりませんでした（このツールで整理する前のレポートです）。</div>`);
+  for(const o of out){const w=document.createElement('div');w.style.margin='8px 0';w.innerHTML=`<div style="font-weight:700;margin-bottom:4px">${escH(o.label)}</div>`;
+    const im=document.createElement('img');im.src=o.cv.toDataURL('image/png');im.style.cssText='width:100%;background:#fff;border-radius:6px;display:block';w.appendChild(im);box.appendChild(w);}
+}
 // ===== 🖨 印刷（PDFそのまま／比較結果つき）=====
 let lastPdfDoc=null;
 async function pdfPagesHtml(){
@@ -840,6 +882,7 @@ async function doPrint(withResult){
     h+=`<div class="pp" style="text-align:left"><div class="prhead"><b>PaceGuard LATITUDE　比較結果</b><span>印刷 ${new Date().toLocaleString('ja-JP')}</span></div>
       <div>患者ID：<b>${escH($('fId').value||'—')}</b>　氏名：${escH($('fName').value||'—')}　照会日：${escH($('fDate').value||'—')}　機種：${escH($('fDev').value||'—')}</div>
       ${res.innerHTML.trim()?res.innerHTML:'<div class="verdict info"><h2>比較結果がありません</h2>評価を行ってから印刷してください。</div>'}
+      ${!$('eyeCard').hidden?`<div style="margin-top:8px"><b>元の波形</b></div>${[...$('eyeBody').querySelectorAll('div')].filter(d=>d.querySelector('img')).map(d=>`<div style="margin-top:4px">${escH(d.firstChild.textContent)}</div><img style="width:100%" src="${d.querySelector('img').src}">`).join('')}`:''}
       ${ov?`<div style="margin-top:8px"><b>重ね描き</b>（青＝比較相手／橙＝今回、赤＝形が違う所）</div>${ov}`:''}
       <div class="hint" style="margin-top:8px">研究・院内検証用の参考情報です。最終判断は医師が行ってください。</div></div>`;
   }
@@ -857,7 +900,7 @@ $('evalBaseBtn').onclick=()=>runEval('base');
 let lastEval=null; // 「この波形を基準にする」用
 document.addEventListener('click',async e=>{if(!e.target.closest('#setBaseBtn')||!lastEval)return;
   const st=await readBaseline(lastEval.id);if(!st){$('setBaseMsg').textContent='保存先に接続できません';return;}
-  st.baseline={date:lastEval.date,key:lastEval.key,feat:lastEval.feat,ts:lastEval.ts};await writeBaseline(lastEval.id,st);
+  st.baseline={date:lastEval.date,key:lastEval.key,feat:lastEval.feat,ts:lastEval.ts,pdf:lastEval.pdf||null};await writeBaseline(lastEval.id,st);
   $('setBaseMsg').innerHTML='<span class="ok-t">✅ '+(lastEval.date||'今回')+'の波形を基準にしました</span>';});
 async function runEval(mode){
   const auto=mode==='auto';
@@ -884,11 +927,12 @@ async function runEval(mode){
   const rowsSave=curFeat.map((f,k)=>{const u=curPool&&curPool.rowInfo[k]||{};return f&&!f.error?{hr:f.hr,amp:f.amp,width:f.width,nBeats:f.nBeats,noise:curNoise[k].max,used:!!u.used,reason:u.reason||'',corr:u.corr??null}:{error:true};});
   const poolSave=pool?{tpl:pool.tpl,amp:pool.amp,ampVar:pool.ampVar,width:pool.width,on:pool.on,off:pool.off,pol:pool.pol,hr:pool.hr,nBeats:pool.nBeats,rows:rowsSave}:null;
   const now={id,name:$('fName').value,date:$('fDate').value,device:$('fDev').value,ts:Date.now()};
+  let nowPdf=null; // 患者PDFフォルダに整理したこのPDFの場所（基準・前回のPDFを後で表示するために記録）
   const saveStore=async(histEntry)=>{
-    const rs=reports.filter(r=>!(curKey&&r.key===curKey));rs.push({date:now.date,key:curKey,feat:poolSave,ts:now.ts});rs.sort((a,b)=>a.key<b.key?-1:1);
+    nowPdf=await archivePdf(id,now);
+    const rs=reports.filter(r=>!(curKey&&r.key===curKey));rs.push({date:now.date,key:curKey,feat:poolSave,ts:now.ts,pdf:nowPdf});rs.sort((a,b)=>a.key<b.key?-1:1);
     const hist=((store&&store.history)||[]).filter(h=>!(curKey&&dateKey(h.date)===curKey));if(histEntry)hist.push(histEntry);
-    await writeBaseline(id,{...now,reports:rs,history:hist,baseline:baseRep||{date:now.date,key:curKey,feat:poolSave,ts:now.ts}});
-    await archivePdf(id,now);
+    await writeBaseline(id,{...now,reports:rs,history:hist,baseline:baseRep||{date:now.date,key:curKey,feat:poolSave,ts:now.ts,pdf:nowPdf}});
   };
   // 段ごとの一覧（使った段・除外した段と理由）
   const ic=l=>l===2?'⚠️':l===1?'🟡':'✅';
@@ -903,14 +947,14 @@ async function runEval(mode){
       const lv=u.used?0:1;return `<tr class="lv${lv}"><td>${k+1}</td><td>${f.nBeats}</td><td>${f.hr??'—'} bpm</td><td>${f.amp.toFixed(2)} mV</td><td>${f.width} ms</td><td>${u.corr!=null?u.corr.toFixed(2):'—'}</td><td>${nz.max}/${nz.thr}</td><td>${u.used?'✅ 使用':'🟡 除外：'+u.reason}</td></tr>`;}).join('')}</table>
     <div class="hint">全段の拍をまとめて代表拍を作り、頻拍・ノイズ・形が大きく違う段は代表拍から外しています。</div>`;
   const measure=f=>`代表拍（${pool.usedRows.length}段・${f.nBeats}拍）：心拍 ${f.hr??'—'}bpm・波高 ${f.amp.toFixed(2)}mV（呼吸のゆれ ±${Math.round(f.ampVar*100)}%）・QRS幅 ${f.width}ms・向き ${f.pol>0?'上':'下'}`;
-  if(!pool){$('result').innerHTML=`<div class="verdict bad"><h2>代表拍を作れませんでした</h2>${curPool&&curPool.error||'波形を読み取れませんでした'}</div>${rowTable}`;$('overlayCard').hidden=true;return;}
+  if(!pool){$('result').innerHTML=`<div class="verdict bad"><h2>代表拍を作れませんでした</h2>${curPool&&curPool.error||'波形を読み取れませんでした'}</div>${rowTable}`;$('overlayCard').hidden=true;$('eyeCard').hidden=true;return;}
   if(!bp||!bp.tpl){
     await saveStore({date:now.date,note:'登録'});
     const first=!baseRep;
     const why=first?((store&&store.feat&&!store.reports)?'新しい計測方式で登録しました（この波形が基準になります）':'初回登録しました（この波形が基準になります）'):'比較できる前の日付のレポートがありません';
     $('result').innerHTML=`<div class="verdict info"><h2>${why}</h2>この患者（ID:${id}）の${now.date||'今回'}のレポートとして保存しました。${first?'次から「📌 基準と比較」で、同じ日付のレポートでも比べられます。':'同じ日付どうしを比べるときは「📌 基準と比較」を使ってください。'}${curKey?'':'<br><b>※照会日が読み取れていません。照会日を入力すると前後関係で正しく比較できます。</b>'}${dirHandle?'':'<br><b>※フォルダ未選択のため保存できていません。</b>'}
       <div class="hint" style="margin-top:6px">${measure(pool)}</div>${rowNotes.length?`<div class="cause">記録の中の所見：${rowNotes.map(x=>`${ic(x.lv)} ${x.row}：${x.why}`).join('　')}</div>`:''}</div>${rowTable}`;
-    $('overlayCard').hidden=true; return;
+    $('overlayCard').hidden=true;$('eyeCard').hidden=true; return;
   }
   const r={k:0,b:bp,c:pool,...compareFeat(bp,pool)};
   const sign=v=>(v>0?'+':'')+v;
@@ -935,11 +979,13 @@ async function runEval(mode){
     ${crit.map(x=>`<tr class="lv${x.lv}"><td>${x.name}</td><td>${x.prev}</td><td>${x.cur}</td><td>${x.chg}</td><td class="hint">${x.rule}</td><td>${x.name==='心拍数（参考）'?'—':ic(x.lv)}</td></tr>`).join('')}</table>
     ${rowTable}
     <div class="hint" style="margin-top:6px">下の重ね描きで、形が違う部分を赤く塗っています（青＝${refLabel}、橙＝今回）。</div></div>`;
-  lastEval={id,date:now.date,key:curKey,feat:poolSave,ts:now.ts};
+  lastEval={id,date:now.date,key:curKey,feat:poolSave,ts:now.ts,name:now.name,device:now.device};
   $('result').insertAdjacentHTML('beforeend','<div style="margin-top:8px"><button id="setBaseBtn">📌 今回の波形を基準にする</button> <span class="hint" id="setBaseMsg"></span></div>');
   await saveStore({date:now.date,ref:ref.date,mode,level,corr:+r.corr.toFixed(3),amp:pool.amp,ampRatio:+r.ampRatio.toFixed(2),width:pool.width,dW:r.dW,pol:pool.pol,hr:pool.hr,rows:rowsSave});
+  lastEval.pdf=nowPdf;
   $('overlayCard').hidden=false; // 先に表示してから描く（幅を正しく取るため）
   drawBeat(r);
+  showEyeCompare([...(baseRep&&ref!==baseRep&&baseRep.key!==ref.key?[{rep:baseRep,label:'基準'}]:[]),{rep:ref,label:refLabel}],now).catch(()=>{});
 };
 // 代表拍の重ね描き（実寸：横 ms・縦 mV。青＝前回、橙＝今回。QRSの始まりと終わりに縦線）
 function drawBeat(r,ovId='overlay',diffId='diff'){
