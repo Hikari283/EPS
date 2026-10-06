@@ -251,3 +251,10 @@ USBで持ち運ぶ場合、**常に「最後に編集した方が最新」**。�
 - 保存先は「最後に印刷画面でPDFを保存したフォルダ」。変更時は `--kiosk-printing` なしの「LATITUDE設定用」で1回 Ctrl+P→PDFに保存→フォルダ指定。
 - 構成: デスクトップ\波形認識\ { LATITUDE(見張り) / 基準 / 患者PDF\{ID}\{日付}.pdf }
 - 毎日: 専用Chromeでツールを開く→👀見張りを始める→LATITUDEで波形を開いて Ctrl+P。
+
+## 運用（2026-10-06 拡張機能で確定・実機OK）
+- Chromeに「LATITUDE」プロフィール（ゲスト不可）。拡張機能 paceguard-extension（v0.1.1、bostonscientific.com/.jp）を読み込み。
+- ダウンロード保存先＝デスクトップ\波形認識 → 拡張機能が LATITUDE\ に自動保存。ツールの👀見張り＝波形認識\LATITUDE。
+- LATITUDEの印刷（conprint/report、GETのPDF・サマリー＋波形が1ファイル）→ 自動保存→波形ページ自動選択→比較→患者PDF\{ID}\へ移動。
+- kiosk-printingショートカットは廃止。
+- 次：実データでしきい値調整、見張り一覧の改善（要確認を上に／日次まとめ）。
