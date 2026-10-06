@@ -1063,13 +1063,19 @@ function saveSeen(){try{localStorage.setItem(WSEEN,JSON.stringify([...watchSeen]
 function setWatchStatus(h){$('watchStatus').innerHTML=h;}
 function renderWatchLog(){
   $('watchLog').innerHTML=watchLog.length?`<table class="crit"><tr><th>時刻</th><th>ファイル</th><th>患者ID</th><th>照会日</th><th>判定</th><th>主な原因</th></tr>${watchLog.map(r=>`<tr class="lv${r.lv>0?r.lv:0}"><td>${r.t}</td><td>${escH(r.file)}${r.moved?`<div class="hint">${escH(r.moved)}</div>`:''}</td><td>${escH(r.id||'—')}</td><td>${escH(r.date||'—')}</td><td>${escH(r.verdict)}</td><td class="hint">${escH(r.cause||'')}</td></tr>`).join('')}</table>`:'<div class="hint">まだ処理したPDFはありません。</div>';}
+// 通知：拡張機能が入っていれば拡張機能から出す（ファイルとして開いたページからは通知が出ないことがあるため）。無ければブラウザの通知
+function notifyResult(title,body,level){
+  if(document.documentElement.dataset.pgExt){window.postMessage({__pgNotify:true,title,body,level},'*');return;}
+  try{if(window.Notification&&Notification.permission==='granted')new Notification(title,{body});}catch(_){}
+}
 const escH=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 async function startWatch(dir,{processExisting=false}={}){
   watchDir=dir;
   if(!processExisting){for await(const [name,h] of dir.entries()){if(h.kind!=='file'||!/\.pdf$/i.test(name))continue;try{const f=await h.getFile();if(!watchSeen.has(wkey(f)))watchSeen.set(wkey(f),'existing');}catch(_){}}saveSeen();}
   try{if(window.Notification&&Notification.permission==='default')await Notification.requestPermission();}catch(_){}
   clearInterval(watchTimer);watchTimer=setInterval(pollWatch,3000);pollWatch();
-  setWatchStatus(`<span class="ok-t">👀 見張り中：${escH(dir.name)}</span>（新しいPDFをダウンロードすると自動で評価します。このタブは開いたままにしてください）`);
+  setWatchStatus(`<span class="ok-t">👀 見張り中：${escH(dir.name)}</span>（新しいPDFをダウンロードすると自動で評価します。このタブは開いたままにしてください）`+
+    (document.documentElement.dataset.pgExt?'　🔔 通知：拡張機能から出します':'<br><span class="warn-t">🔔 通知が出ない時は、chrome://extensions →「PaceGuard LATITUDE 取り込み」の「詳細」→「ファイルの URL へのアクセスを許可する」をオンにして、このタブを再読み込みしてください。</span>'));
   $('watchStop').disabled=false;
 }
 const sizeSeen=new Map();
@@ -1103,7 +1109,7 @@ async function pollWatch(){
       if(lastArchive&&lastArchive.file===f){moved=lastArchive.path;if($('watchMove').checked){try{await watchDir.removeEntry(f.name);moved='→ '+moved;}catch(_){moved='コピー：'+moved;}}else moved='コピー：'+moved;}
       const row={t:new Date().toLocaleTimeString('ja-JP'),file:f.name,moved,id:$('fId').value,date:$('fDate').value,verdict,cause:cause?cause.textContent.replace(/^主な原因：/,''):'',lv};
       watchLog.unshift(row);renderWatchLog();
-      if(isEcg)try{if(window.Notification&&Notification.permission==='granted')new Notification('PaceGuard LATITUDE：'+verdict,{body:`ID ${row.id||'—'}　${row.date||''}\n${row.cause}`});}catch(_){}
+      if(isEcg)notifyResult('PaceGuard LATITUDE：'+verdict,`ID ${row.id||'—'}　${row.date||''}\n${row.cause}`,lv);
       if(isEcg)document.title=(lv===2?'⚠️ ':lv===1?'🟡 ':'✅ ')+'PaceGuard LATITUDE';
     }
     setWatchStatus(`<span class="ok-t">👀 見張り中：${escH(watchDir.name)}</span>（最終確認 ${new Date().toLocaleTimeString('ja-JP')}）`);

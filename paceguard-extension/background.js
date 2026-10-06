@@ -68,3 +68,13 @@ async function syncScripts() {
 }
 chrome.runtime.onInstalled.addListener(syncScripts);
 chrome.storage.onChanged.addListener(ch => { if (ch.hosts) syncScripts(); });
+
+// ③ ツールの評価結果をWindowsの通知で知らせる（ファイルとして開いたページからは通知が出せないため、拡張機能が代わりに出す）
+chrome.runtime.onMessage.addListener((m, sender) => {
+  if (!m || m.type !== 'notify') return;
+  if (!sender.url || !sender.url.startsWith('file:')) return;
+  chrome.notifications.create('pg-' + Date.now(), {
+    type: 'basic', iconUrl: 'icon128.png', title: m.title.slice(0, 120), message: m.body.slice(0, 300),
+    priority: m.level >= 2 ? 2 : 0, requireInteraction: m.level >= 2
+  });
+});

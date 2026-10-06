@@ -16,3 +16,7 @@ PDFはこのパソコンに保存するだけで、外部には送りません�
 - 自動で保存する：オン／オフ
 - 保存先：ダウンロード先の中のフォルダ名（既定 LATITUDE）
 - 対象サイト：LATITUDEのアドレス（既定 bostonscientific.com / bostonscientific.jp）
+
+通知（v0.2.0〜）
+- ツールの評価結果を、拡張機能がWindowsの通知で知らせます。
+- chrome://extensions →「PaceGuard LATITUDE 取り込み」の「詳細」→「ファイルの URL へのアクセスを許可する」をオンにしてください。
