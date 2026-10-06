@@ -1,0 +1,20 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>PaceGuard LATITUDE 取り込み</title>
+<style>
+body{font:13px/1.6 "Yu Gothic UI","Meiryo",sans-serif;margin:0;padding:14px 16px;width:360px;color:#0f172a;background:#fff}
+h1{font-size:15px;margin:0 0 8px} label{display:flex;gap:8px;align-items:center;margin:8px 0}
+input[type=text]{flex:1;padding:4px 6px;border:1px solid #cbd5e1;border-radius:6px;font:inherit}
+button{padding:4px 10px;border:1px solid #94a3b8;border-radius:6px;background:#f1f5f9;font:inherit;cursor:pointer}
+.hint{color:#475569;font-size:12px} .st{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:6px 8px;margin:8px 0}
+.err{color:#b91c1c}
+</style></head><body>
+<h1>PaceGuard LATITUDE 取り込み</h1>
+<label><input type="checkbox" id="enabled"> LATITUDEで開いたPDFを自動で保存する</label>
+<label>保存先：ダウンロード\<input type="text" id="folder"></label>
+<div class="hint">PaceGuardの「👀 見張りを始める」では、このフォルダ（ダウンロードの中）を選んでください。</div>
+<label>対象サイト：<input type="text" id="hosts"></label>
+<div class="hint">LATITUDEのアドレスの一部（例：bostonscientific.com）。複数はカンマ区切り。</div>
+<div style="margin-top:8px"><button id="save">保存</button> <span id="msg" class="hint"></span></div>
+<div class="st" id="status"></div>
+<div class="hint">PDFはこのパソコンのフォルダに保存するだけで、外部には送りません。</div>
+<script src="options.js"></script>
+</body></html>

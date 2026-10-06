@@ -560,7 +560,7 @@ $('pdfDirSave').onclick=()=>{const v=safeName($('pdfDirName').value);if(!v){$('p
 try{const v=localStorage.getItem('pg_lat_watchmove');if(v)$('watchMove').checked=v==='1';}catch(_){}
 $('watchMove').addEventListener('change',()=>{try{localStorage.setItem('pg_lat_watchmove',$('watchMove').checked?'1':'0');}catch(_){}});
 let lastPdfFile=null,lastArchive=null; // 読み込んだPDF／最後に整理したPDF
-async function archivePdf(id,obj){
+async function archivePdf(id,obj,tag){
   if(!dirHandle||!lastPdfFile||!id)return null;
   try{
     const top=await dirHandle.getDirectoryHandle(PDF_DIR,{create:true});
@@ -568,9 +568,11 @@ async function archivePdf(id,obj){
     const pd=await top.getDirectoryHandle(folder,{create:true});
     const m=String(obj.date||'').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})(?:\D+(\d{1,2}):(\d{2}))?/);
     const name=m?`${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}${m[4]?'_'+m[4].padStart(2,'0')+m[5]:''}.pdf`:safeName(lastPdfFile.name);
-    if(lastArchive&&lastArchive.file===lastPdfFile&&lastArchive.path.endsWith(folder+'/'+name))return lastArchive.path;
-    const fh=await pd.getFileHandle(name,{create:true});const w=await fh.createWritable();await w.write(await lastPdfFile.arrayBuffer());await w.close();
-    lastArchive={file:lastPdfFile,path:`${PDF_DIR}/${folder}/${name}`};return lastArchive.path;
+    if(lastArchive&&lastArchive.file===lastPdfFile&&(tag||lastArchive.path.endsWith(folder+'/'+name)))return lastArchive.path;
+    let fname=name;
+    if(tag){const stem=name.replace(/\.pdf$/i,'');for(let k=1;k<100;k++){fname=`${stem}_${tag}${k}.pdf`;try{await pd.getFileHandle(fname);}catch(_){break;}}}
+    const fh=await pd.getFileHandle(fname,{create:true});const w=await fh.createWritable();await w.write(await lastPdfFile.arrayBuffer());await w.close();
+    lastArchive={file:lastPdfFile,path:`${PDF_DIR}/${folder}/${fname}`};return lastArchive.path;
   }catch(e){return null;}
 }
 // 患者ID → ファイル名 の対応表（フォルダ内の .json を読んで中の id で作る）
@@ -1002,17 +1004,22 @@ async function pollWatch(){
     for(const f of todo){
       watchSeen.set(wkey(f),'done');saveSeen();
       setWatchStatus(`<span class="ok-t">⏳ 処理中：${escH(f.name)}</span>`);
+      const prevRes=$('result').innerHTML,prevOv=$('overlayCard').hidden;
       $('result').innerHTML='';
       await loadPDF(f,{forceEval:true});
-      const h2=document.querySelector('#result h2'),cause=document.querySelector('#result .cause');
-      const verdict=h2?h2.textContent.replace('（自動評価）','').trim():(curSigs.length?'評価なし':'S-ECGなし（スキップ）');
+      const isEcg=curSigs.length>0;
+      if(!isEcg){ // 波形のない書類（一緒に印刷した他のPDF）：IDが読めれば患者フォルダへ一緒に整理し、画面の結果は前の波形のものに戻す
+        const id=$('fId').value.trim();if(id&&dirHandle)await archivePdf(id,{name:$('fName').value,date:$('fDate').value,device:$('fDev').value},'書類');
+        $('result').innerHTML=prevRes;$('overlayCard').hidden=prevOv;}
+      const h2=isEcg?document.querySelector('#result h2'):null,cause=isEcg?document.querySelector('#result .cause'):null;
+      const verdict=h2?h2.textContent.replace('（自動評価）','').trim():(isEcg?'評価なし':'波形なしの書類'+($('fId').value.trim()?'（患者フォルダへ）':'（IDが読めず残しました）'));
       const lv=/要確認/.test(verdict)?2:/注意/.test(verdict)?1:0;
       let moved='';
       if(lastArchive&&lastArchive.file===f){moved=lastArchive.path;if($('watchMove').checked){try{await watchDir.removeEntry(f.name);moved='→ '+moved;}catch(_){moved='コピー：'+moved;}}else moved='コピー：'+moved;}
       const row={t:new Date().toLocaleTimeString('ja-JP'),file:f.name,moved,id:$('fId').value,date:$('fDate').value,verdict,cause:cause?cause.textContent.replace(/^主な原因：/,''):'',lv};
       watchLog.unshift(row);renderWatchLog();
-      try{if(window.Notification&&Notification.permission==='granted')new Notification('PaceGuard LATITUDE：'+verdict,{body:`ID ${row.id||'—'}　${row.date||''}\n${row.cause}`});}catch(_){}
-      document.title=(lv===2?'⚠️ ':lv===1?'🟡 ':'✅ ')+'PaceGuard LATITUDE';
+      if(isEcg)try{if(window.Notification&&Notification.permission==='granted')new Notification('PaceGuard LATITUDE：'+verdict,{body:`ID ${row.id||'—'}　${row.date||''}\n${row.cause}`});}catch(_){}
+      if(isEcg)document.title=(lv===2?'⚠️ ':lv===1?'🟡 ':'✅ ')+'PaceGuard LATITUDE';
     }
     setWatchStatus(`<span class="ok-t">👀 見張り中：${escH(watchDir.name)}</span>（最終確認 ${new Date().toLocaleTimeString('ja-JP')}）`);
   }catch(e){setWatchStatus(`<span class="warn-t">見張りでエラー：${escH(e.message||e)}。「👀 見張りを始める」を押し直してください。</span>`);clearInterval(watchTimer);watchDir=null;}

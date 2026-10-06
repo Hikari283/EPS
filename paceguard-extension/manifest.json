@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "PaceGuard LATITUDE 取り込み",
+  "version": "0.1.0",
+  "description": "LATITUDEで開いたPDFを自動でフォルダに保存し、PaceGuard LATITUDE（ローカルツール）で比較できるようにします。データは外部に送りません。",
+  "permissions": ["downloads", "webRequest", "storage", "scripting"],
+  "host_permissions": ["https://*.bostonscientific.com/*"],
+  "optional_host_permissions": ["https://*/*", "http://*/*"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    { "matches": ["https://*.bostonscientific.com/*"], "js": ["hook.js"], "world": "MAIN", "run_at": "document_start", "all_frames": true },
+    { "matches": ["https://*.bostonscientific.com/*"], "js": ["bridge.js"], "run_at": "document_start", "all_frames": true }
+  ],
+  "action": { "default_title": "PaceGuard LATITUDE 取り込み", "default_popup": "options.html" },
+  "options_page": "options.html"
+}
