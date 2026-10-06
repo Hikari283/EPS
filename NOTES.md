@@ -245,3 +245,9 @@ USBで持ち運ぶ場合、**常に「最後に編集した方が最新」**。�
 ### 注意
 - 病名（RBBB/LBBB/ARVC）判定はしない。変化検知の補助のみ
 - ユーザーへの配布はファイル直送が確実（raw.githubusercontent はキャッシュで古い版が落ちることがある）
+
+## 運用手順（2026-10-06 実機で動作確認）
+- 専用Chrome: `chrome.exe --kiosk-printing --user-data-dir="C:\LATITUDE-Chrome"`（LATITUDE専用）。Ctrl+P だけでPDF保存。
+- 保存先は「最後に印刷画面でPDFを保存したフォルダ」。変更時は `--kiosk-printing` なしの「LATITUDE設定用」で1回 Ctrl+P→PDFに保存→フォルダ指定。
+- 構成: デスクトップ\波形認識\ { LATITUDE(見張り) / 基準 / 患者PDF\{ID}\{日付}.pdf }
+- 毎日: 専用Chromeでツールを開く→👀見張りを始める→LATITUDEで波形を開いて Ctrl+P。
