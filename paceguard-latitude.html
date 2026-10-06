@@ -48,6 +48,22 @@
   .status{font-size:12px;color:var(--sub)}
   .ok-t{color:var(--ok)} .bad-t{color:var(--bad)} .warn-t{color:var(--warn)}
   footer{color:var(--sub);font-size:11px;margin-top:22px;border-top:1px solid var(--line);padding-top:12px}
+  #printArea{display:none}
+  .prbtns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  @media print{
+    @page{size:A4;margin:8mm}
+    body{background:#fff!important;color:#000!important}
+    body>*:not(#printArea){display:none!important}
+    #printArea{display:block!important;--tx:#000;--sub:#444;--line:#aaa;--card:#fff;--bg:#fff;--accent:#0369a1;color:#000;font-size:11px}
+    #printArea .pp{break-after:page;text-align:center}
+    #printArea .pp:last-child{break-after:auto}
+    #printArea .pp img{width:100%;height:auto;max-height:280mm;object-fit:contain}
+    #printArea .ov{width:100%;filter:invert(1) hue-rotate(180deg)}
+    #printArea .verdict{border-width:2px;padding:8px 10px}
+    #printArea .verdict h2{font-size:16px}
+    #printArea button{display:none}
+    #printArea .prhead{display:flex;justify-content:space-between;border-bottom:2px solid #000;padding-bottom:4px;margin-bottom:6px;font-size:12px}
+  }
 </style>
 </head>
 <body>
@@ -103,6 +119,7 @@
     <div class="status" id="watchStatus" style="margin-top:6px">止まっています。「👀 見張りを始める」で、LATITUDEのPDFを保存するフォルダを選んでください。</div>
     <div class="hint" style="margin-top:4px;color:var(--warn)">⚠ 「ダウンロード」フォルダそのものはChromeの制限で選べません（「システム ファイルが含まれている」と出ます）。ダウンロードの中に <b>LATITUDE</b> などのフォルダを作り、Chromeの設定 → ダウンロード → 保存先 をそのフォルダにするか、「ダウンロード前に各ファイルの保存場所を確認する」をオンにしてそこへ保存してください。</div>
     <div class="hint">LATITUDEからPDFをダウンロードすると、数秒で自動的に読み込み→患者ID・段の認識→前回/基準と比較→保存し、通知と下の一覧に結果を出します。このタブは開いたままにしてください（裏に回っても動きますが、確認の間隔が長くなることがあります）。</div>
+    <div class="prbtns"><button class="prWith">🖨 最後のPDFを印刷（比較結果つき）</button><button class="prPlain">🖨 最後のPDFを印刷（そのまま）</button><span class="hint" style="align-self:center">※このツールは <b>--kiosk-printing なし</b> のChromeで開いてください（ありだと紙ではなくPDFに保存されます）</span></div>
     <div id="watchLog" style="margin-top:8px"></div>
   </div>
   <div class="grid">
@@ -127,6 +144,7 @@
       <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="primary" id="evalBtn">🔍 前回と比較</button><button class="primary" id="evalBaseBtn" style="background:#a78bfa;border-color:#a78bfa">📌 基準と比較</button></div>
       <label class="hint" style="display:flex;gap:6px;align-items:center;margin-top:6px"><input type="checkbox" id="autoEval" checked> PDFを開いたら自動で評価する（前回があれば前回、なければ基準と比較）</label>
       <div class="hint" id="baseInfo" style="margin-top:4px">前回＝今回より前の日付で一番新しいレポート／基準＝固定した基準レポート（同じ日付でも比べられます）</div>
+      <div class="prbtns"><button class="prWith">🖨 印刷（比較結果つき）</button><button class="prPlain">🖨 印刷（PDFそのまま）</button></div>
       <div id="result"></div>
     </div>
   </div>
@@ -348,7 +366,7 @@ async function loadPDF(file,{forceEval=false}={}){
     const buf=await file.arrayBuffer();lastPdfFile=file;
     // ★pdf.jsはdataのArrayBufferを転送（detach）して空にするため、先にコピーから自前抽出しておく
     let rawPdfText=''; try{ rawPdfText=await extractRawPdfText(buf.slice(0)); }catch(_){}
-    const pdf=await lib.getDocument({data:new Uint8Array(buf)}).promise;
+    const pdf=await lib.getDocument({data:new Uint8Array(buf)}).promise;lastPdfDoc=pdf;
     const page=await pdf.getPage(1);
     const vp=page.getViewport({scale:renderScale});
     pageCanvas.width=vp.width; pageCanvas.height=vp.height;
@@ -785,6 +803,37 @@ function drawInsidePool(){
     curFeat.map((f,k)=>{const u=p.rowInfo[k]||{};const ci=extra.findIndex(e=>e.k===k);return `<tr><td style="padding:3px 6px 3px 0"><span style="color:${ci>=0?cols[ci%5]:'var(--sub)'}">■</span> ${k+1}</td><td>${f&&f.hr?f.hr:'—'}</td><td>${u.corr??'—'}</td><td>${u.used?'<span class="ok-t">使用</span>':`<span class="warn-t">${u.reason||'除外'}</span>`}</td></tr>`;}).join('')+
     `</table><div class="hint" style="margin-top:6px">代表拍：${p.usedRows.length}段・${p.nBeats}拍／心拍 ${p.hr??'—'}bpm／波高 ${inFmt(p.amp)}mV（ゆれ ±${Math.round(p.ampVar*100)}%）／QRS ${p.width}ms／${p.pol>0?'上向き':'下向き'}</div>`;
 }
+
+// ===== 🖨 印刷（PDFそのまま／比較結果つき）=====
+let lastPdfDoc=null;
+async function pdfPagesHtml(){
+  let h='';
+  for(let i=1;i<=(lastPdfDoc.numPages||1);i++){const pg=await lastPdfDoc.getPage(i),vp=pg.getViewport({scale:2.5});
+    const c=document.createElement('canvas');c.width=vp.width;c.height=vp.height;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);
+    await pg.render({canvasContext:x,viewport:vp}).promise;h+=`<div class="pp"><img src="${c.toDataURL('image/png')}"></div>`;}
+  return h;
+}
+async function doPrint(withResult){
+  const pa=$('printArea');
+  if(!pdfLoaded||!lastPdfDoc){alertMsg('印刷するPDFがありません。先にPDFを読み込んでください。');return;}
+  let h='';
+  if(withResult){
+    const res=$('result').cloneNode(true);res.querySelectorAll('button,#setBaseMsg').forEach(e=>e.remove());
+    const ov=!$('overlayCard').hidden?['overlay','diff'].map(id=>{try{return `<img class="ov" src="${$(id).toDataURL()}">`;}catch(_){return '';}}).join(''):'';
+    h+=`<div class="pp" style="text-align:left"><div class="prhead"><b>PaceGuard LATITUDE　比較結果</b><span>印刷 ${new Date().toLocaleString('ja-JP')}</span></div>
+      <div>患者ID：<b>${escH($('fId').value||'—')}</b>　氏名：${escH($('fName').value||'—')}　照会日：${escH($('fDate').value||'—')}　機種：${escH($('fDev').value||'—')}</div>
+      ${res.innerHTML.trim()?res.innerHTML:'<div class="verdict info"><h2>比較結果がありません</h2>評価を行ってから印刷してください。</div>'}
+      ${ov?`<div style="margin-top:8px"><b>重ね描き</b>（青＝比較相手／橙＝今回、赤＝形が違う所）</div>${ov}`:''}
+      <div class="hint" style="margin-top:8px">研究・院内検証用の参考情報です。最終判断は医師が行ってください。</div></div>`;
+  }
+  h+=await pdfPagesHtml();
+  pa.innerHTML=h;
+  await Promise.all([...pa.querySelectorAll('img')].map(im=>im.complete?0:new Promise(r=>{im.onload=im.onerror=r;})));
+  window.print();
+}
+function alertMsg(t){$('result').insertAdjacentHTML('afterbegin',`<div class="verdict info"><h2>${t}</h2></div>`);}
+window.addEventListener('afterprint',()=>{$('printArea').innerHTML='';});
+document.addEventListener('click',e=>{if(e.target.closest('.prWith'))doPrint(true);else if(e.target.closest('.prPlain'))doPrint(false);});
 $('evalBtn').onclick=()=>runEval('prev');
 $('autoEval').addEventListener('change',()=>{try{localStorage.setItem('pg_lat_autoeval',$('autoEval').checked?'1':'0');}catch(_){}});
 $('evalBaseBtn').onclick=()=>runEval('base');
@@ -984,5 +1033,6 @@ $('watchStop').onclick=()=>{clearInterval(watchTimer);watchDir=null;$('watchStop
 (async()=>{let d=null;try{d=await idb('readonly',st=>st.get('watch'));}catch(_){}if(d){setWatchStatus(`前回の見張りフォルダ：${escH(d.name)}（「👀 見張りを始める」で再開）`);}})();
 renderWatchLog();
 </script>
+<div id="printArea"></div>
 </body>
 </html>
