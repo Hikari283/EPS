@@ -583,6 +583,9 @@ async function archivePdf(id,obj,tag){
     if(lastArchive&&lastArchive.file===lastPdfFile&&(tag||lastArchive.path.endsWith(folder+'/'+name)))return lastArchive.path;
     let fname=name;
     if(tag){const stem=name.replace(/\.pdf$/i,'');for(let k=1;k<100;k++){fname=`${stem}_${tag}${k}.pdf`;try{await pd.getFileHandle(fname);}catch(_){break;}}}
+    else{ // 毎回別のファイルにする：照会日＋保存した日時（同じ患者・同じ照会日を何度保存しても上書きしない）
+      const d=new Date(),p2=v=>String(v).padStart(2,'0');
+      fname=`${name.replace(/\.pdf$/i,'')}_保存${d.getFullYear()}${p2(d.getMonth()+1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}.pdf`;}
     const fh=await pd.getFileHandle(fname,{create:true});const w=await fh.createWritable();await w.write(await lastPdfFile.arrayBuffer());await w.close();
     lastArchive={file:lastPdfFile,path:`${PDF_DIR}/${folder}/${fname}`};return lastArchive.path;
   }catch(e){return null;}
