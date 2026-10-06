@@ -127,6 +127,7 @@
       <h2>① LATITUDE レポートPDF</h2>
       <div class="drop" id="drop">PDFをドロップ / クリックで選択</div>
       <div id="pageWrap"><canvas id="page"></canvas></div>
+      <div id="pageBtns" class="hint" style="margin:6px 0"></div>
       <div id="cropHint">PDFを読み込むと、S-ECGの段をページ全体から自動で見つけます。</div>
       <div id="previews"></div>
       <div id="traceMsg" class="hint"></div>
@@ -365,25 +366,39 @@ async function ocrId(){
 }
 $('teachId').onclick=()=>{ if(!pageBackup.width){alert('先にPDFを読み込んでください');return;} drawMode='id'; $('dbg').innerHTML='<b>IDの数字の上をドラッグして囲んでください</b>（8桁の数字だけを枠に入れる）。'; };
 
-// 複数ページのPDF（サマリー＋波形など）から、緑の波形が一番多いページを選ぶ
-let curPageNo=1;
+// 複数ページのPDF（サマリー＋波形など）から、波形のページを選ぶ。
+// 「緑の画素の量」ではなく「細い緑の線が横に長く続き、上下に揺れている段」の長さで点数を付ける（緑のロゴ・表・帯は点数にならない）
+let curPageNo=1,pageScores=[];
+function ecgScore(x,W,H){
+  const d=x.getImageData(0,0,W,H).data,isG=i=>d[i+1]-Math.max(d[i],d[i+2])>18;
+  const cnt=new Uint32Array(H);for(let y=0;y<H;y++){let c=0;for(let xx=0;xx<W;xx++)if(isG((y*W+xx)*4))c++;cnt[y]=c;}
+  let score=0,y=0;
+  while(y<H){if(!cnt[y]){y++;continue;}let a=y,gap=0;while(y<H&&gap<=6){if(cnt[y])gap=0;else gap++;y++;}const b=y-gap,h=b-a;if(h<8)continue;
+    let thin=0;const cy=[];
+    for(let xx=0;xx<W;xx++){let n=0,sy=0;for(let yy=a;yy<b;yy++)if(isG((yy*W+xx)*4)){n++;sy+=yy;}
+      if(n>0&&n<=Math.max(4,h*0.3)){thin++;cy.push(sy/n);}}
+    if(thin<W*0.25||cy.length<10)continue;
+    const m=cy.reduce((p,v)=>p+v,0)/cy.length,sd=Math.sqrt(cy.reduce((p,v)=>p+(v-m)**2,0)/cy.length);
+    if(sd<1)continue; // まっすぐな緑の線（罫線）は除く
+    score+=thin;}
+  return score;
+}
 async function pickEcgPage(pdf){
-  const n=Math.min(pdf.numPages||1,30);if(n<=1)return 1;
-  let best=1,bestCnt=-1;const c=document.createElement('canvas'),x=c.getContext('2d',{willReadFrequently:true});
-  for(let i=1;i<=n;i++){try{const pg=await pdf.getPage(i),vp=pg.getViewport({scale:0.6});c.width=vp.width;c.height=vp.height;x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);
-    await pg.render({canvasContext:x,viewport:vp}).promise;const d=x.getImageData(0,0,c.width,c.height).data;let cnt=0;
-    for(let k=0;k<d.length;k+=4)if(d[k+1]-Math.max(d[k],d[k+2])>18)cnt++;
-    if(cnt>bestCnt){bestCnt=cnt;best=i;}}catch(_){}}
+  const n=Math.min(pdf.numPages||1,30);pageScores=[];if(n<=1){pageScores=[1];return 1;}
+  let best=1,bestS=-1;const c=document.createElement('canvas'),x=c.getContext('2d',{willReadFrequently:true});
+  for(let i=1;i<=n;i++){let sc=0;try{const pg=await pdf.getPage(i),vp=pg.getViewport({scale:1});c.width=Math.round(vp.width);c.height=Math.round(vp.height);x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);
+    await pg.render({canvasContext:x,viewport:vp}).promise;sc=ecgScore(x,c.width,c.height);}catch(_){}
+    pageScores.push(sc);if(sc>bestS){bestS=sc;best=i;}}
   return best;
 }
-async function loadPDF(file,{forceEval=false}={}){
+async function loadPDF(file,{forceEval=false,pageNo=0}={}){
   try{
     const lib=await ensurePdfjs();
-    const buf=await file.arrayBuffer();lastPdfFile=file;
+    const buf=await file.arrayBuffer();lastPdfFile=file;lastPdfBytes=buf.slice(0);
     // ★pdf.jsはdataのArrayBufferを転送（detach）して空にするため、先にコピーから自前抽出しておく
     let rawPdfText=''; try{ rawPdfText=await extractRawPdfText(buf.slice(0)); }catch(_){}
     const pdf=await lib.getDocument({data:new Uint8Array(buf)}).promise;lastPdfDoc=pdf;
-    const pno=await pickEcgPage(pdf);curPageNo=pno;
+    const pno=pageNo&&pageNo<=(pdf.numPages||1)?pageNo:await pickEcgPage(pdf);curPageNo=pno;renderPageBtns(pdf.numPages||1,pno,!!pageNo);
     const page=await pdf.getPage(pno);
     const vp=page.getViewport({scale:renderScale});
     pageCanvas.width=vp.width; pageCanvas.height=vp.height;
@@ -576,7 +591,8 @@ $('pdfDirName').value=PDF_DIR;
 $('pdfDirSave').onclick=()=>{const v=safeName($('pdfDirName').value);if(!v){$('pdfDirMsg').innerHTML='<span class="warn-t">名前を入れてください</span>';return;}PDF_DIR=v;$('pdfDirName').value=v;try{localStorage.setItem('pg_lat_pdfdir',v);}catch(_){}$('pdfDirMsg').innerHTML='<span class="ok-t">保存しました</span>';};
 try{const v=localStorage.getItem('pg_lat_watchmove');if(v)$('watchMove').checked=v==='1';}catch(_){}
 $('watchMove').addEventListener('change',()=>{try{localStorage.setItem('pg_lat_watchmove',$('watchMove').checked?'1':'0');}catch(_){}});
-let lastPdfFile=null,lastArchive=null; // 読み込んだPDF／最後に整理したPDF
+let lastPdfFile=null,lastPdfBytes=null,lastArchive=null;
+const pdfKey=f=>f?`${f.name}|${f.size}|${f.lastModified}`:''; // 読み込んだPDF／最後に整理したPDF
 async function archivePdf(id,obj,tag){
   if(!dirHandle||!lastPdfFile||!id)return null;
   try{
@@ -585,14 +601,14 @@ async function archivePdf(id,obj,tag){
     const pd=await top.getDirectoryHandle(folder,{create:true});
     const m=String(obj.date||'').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})(?:\D+(\d{1,2}):(\d{2}))?/);
     const name=m?`${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}${m[4]?'_'+m[4].padStart(2,'0')+m[5]:''}.pdf`:safeName(lastPdfFile.name);
-    if(lastArchive&&lastArchive.file===lastPdfFile&&(tag||lastArchive.path.endsWith(folder+'/'+name)))return lastArchive.path;
+    if(lastArchive&&lastArchive.key===pdfKey(lastPdfFile)&&lastArchive.path.startsWith(`${PDF_DIR}/${folder}/`))return lastArchive.path; // 同じPDFを評価し直した時は二重に保存しない
     let fname=name;
     if(tag){const stem=name.replace(/\.pdf$/i,'');for(let k=1;k<100;k++){fname=`${stem}_${tag}${k}.pdf`;try{await pd.getFileHandle(fname);}catch(_){break;}}}
     else{ // 毎回別のファイルにする：照会日＋保存した日時（同じ患者・同じ照会日を何度保存しても上書きしない）
       const d=new Date(),p2=v=>String(v).padStart(2,'0');
       fname=`${name.replace(/\.pdf$/i,'')}_保存${d.getFullYear()}${p2(d.getMonth()+1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}.pdf`;}
     const fh=await pd.getFileHandle(fname,{create:true});const w=await fh.createWritable();await w.write(await lastPdfFile.arrayBuffer());await w.close();
-    lastArchive={file:lastPdfFile,path:`${PDF_DIR}/${folder}/${fname}`};return lastArchive.path;
+    lastArchive={file:lastPdfFile,key:pdfKey(lastPdfFile),path:`${PDF_DIR}/${folder}/${fname}`};return lastArchive.path;
   }catch(e){return null;}
 }
 // 患者ID → ファイル名 の対応表（フォルダ内の .json を読んで中の id で作る）
@@ -827,6 +843,14 @@ function drawInsidePool(){
 }
 
 
+// 複数ページの時：どのページを使っているか表示し、手で選び直せるボタン
+function renderPageBtns(n,cur,manual){
+  const b=$('pageBtns');if(!b)return;if(n<=1){b.innerHTML='';return;}
+  b.innerHTML=`このPDFは${n}ページあります。${manual?'選んだ':'波形があると判断した'}<b>${cur}ページ目</b>で評価しています。違う時は押してください：`+
+    Array.from({length:n},(_,i)=>`<button class="pgSel${i+1===cur?' primary':''}" data-p="${i+1}" style="padding:2px 10px;margin:2px">${i+1}</button>`).join('');
+}
+document.addEventListener('click',e=>{const b=e.target.closest('.pgSel');if(!b||!lastPdfBytes)return; // 患者フォルダへ移動済みでも読めるよう、メモリに残した中身から読み直す
+  loadPDF(new File([lastPdfBytes],lastPdfFile.name,{lastModified:lastPdfFile.lastModified}),{forceEval:true,pageNo:+b.dataset.p});});
 // ===== 👁 比較相手（前回・基準）のPDFの波形を、今回と並べて表示 =====
 async function fileFromPath(path){
   if(!dirHandle||!path)return null;
@@ -841,8 +865,8 @@ async function findRefPdf(ref,id,obj){
     const names=[];for await(const [n,h] of pd.entries())if(h.kind==='file'&&n.startsWith(stem)&&/\.pdf$/i.test(n)&&!/_書類\d/.test(n))names.push(n);
     names.sort();if(!names.length)return null;return await (await pd.getFileHandle(names[names.length-1])).getFile();}catch(_){return null;}
 }
-async function ecgImage(doc){ // 波形のページを描いて、緑の線がある範囲だけ切り出す
-  const pno=await pickEcgPage(doc),pg=await doc.getPage(pno),vp=pg.getViewport({scale:2});
+async function ecgImage(doc,pageNo){ // 波形のページを描いて、緑の線がある範囲だけ切り出す
+  const pno=pageNo||await pickEcgPage(doc),pg=await doc.getPage(pno),vp=pg.getViewport({scale:2});
   const c=document.createElement('canvas');c.width=vp.width;c.height=vp.height;const x=c.getContext('2d',{willReadFrequently:true});x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);
   await pg.render({canvasContext:x,viewport:vp}).promise;
   const d=x.getImageData(0,0,c.width,c.height).data;let x0=c.width,y0=c.height,x1=0,y1=0;
@@ -857,7 +881,7 @@ async function showEyeCompare(refs,now){
   for(const {rep,label} of refs){const rf=await findRefPdf(rep,now.id,now);
     if(!rf){miss.push(label);continue;}
     try{const lib=await ensurePdfjs();const doc=await lib.getDocument({data:new Uint8Array(await rf.arrayBuffer())}).promise;out.push({label:`${label}：${rep.date||'?'}`,cv:await ecgImage(doc)});}catch(_){miss.push(label);}}
-  if(lastPdfDoc)out.push({label:`今回：${now.date||'?'}`,cv:await ecgImage(lastPdfDoc)});
+  if(lastPdfDoc)out.push({label:`今回：${now.date||'?'}`,cv:await ecgImage(lastPdfDoc,curPageNo)});
   box.innerHTML='';
   if(miss.length)box.insertAdjacentHTML('beforeend',`<div class="hint warn-t" style="margin:6px 0">${miss.join('・')}のPDFが「${escH(PDF_DIR)}」フォルダに見つかりませんでした（このツールで整理する前のレポートです）。</div>`);
   for(const o of out){const w=document.createElement('div');w.style.margin='8px 0';w.innerHTML=`<div style="font-weight:700;margin-bottom:4px">${escH(o.label)}</div>`;
