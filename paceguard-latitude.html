@@ -1175,7 +1175,7 @@ async function tlGo(i){
   const it=tl.items[i];tlVs();
   [...$('tlStrip').children].forEach((c,k)=>c.style.outline=k===i?'3px solid var(--accent)':'none');
   const th=$('tlStrip').children[i];if(th){const sp=$('tlStrip');sp.scrollLeft=th.offsetLeft-sp.clientWidth/2+th.clientWidth/2;}
-  await tlPanel($('tlCur'),it,`${i+1}/${tl.items.length}　${it.date||'?'}`);
+  await tlPanel($('tlCur'),it,`${i+1}/${tl.items.length}　${it.date||'?'}${it.saved?'（'+it.saved+'）':''}`);
 }
 async function tlLoad(idArg,quiet){
   if(!dirHandle)await ensureDir();if(!dirHandle){$('tlMsg').innerHTML='<span class="warn-t">データフォルダに接続できません。📁で選んでください。</span>';return;}
@@ -1184,9 +1184,27 @@ async function tlLoad(idArg,quiet){
   tl.id=id;tl.obj={name:st.name,device:st.device};tl.cache.clear();
   const lvOf=r=>{const h=(st.history||[]).filter(x=>x.date===r.date&&x.level!=null).pop();return h?h.level:null;};
   const hOf=r=>(st.history||[]).filter(x=>x.date===r.date&&x.level!=null).pop()||null;
-  tl.items=[...st.reports].sort((a,b)=>a.key<b.key?-1:1).map(r=>({...r,lv:lvOf(r),h:hOf(r)}));
-  tl.base=st.baseline||tl.items[0];
-  $('tlMsg').textContent=`ID ${id}：${tl.items.length}回分の記録`;$('tlSum').textContent=`ID ${id}・${tl.items.length}回分`;$('tlBody').hidden=false;$('tlId').value=id;
+  const reps=[...st.reports].sort((a,b)=>a.key<b.key?-1:1).map(r=>({...r,lv:lvOf(r),h:hOf(r)}));
+  // 患者PDFフォルダのPDFを全部並べる（同じ照会日に何度保存したPDFも1枚ずつ）。判定・数値は同じ照会日の記録から付ける
+  const files=[];
+  try{const top=await dirHandle.getDirectoryHandle(PDF_DIR);
+    for(const fname of [...new Set([fileNameFor(id,tl.obj).replace(/\.json$/i,''),id])]){let pd=null;try{pd=await top.getDirectoryHandle(fname);}catch(_){}if(!pd)continue;
+      for await(const [n,h] of pd.entries()){if(h.kind!=='file'||!/\.pdf$/i.test(n))continue;
+        const m=n.match(/^(\d{4})-(\d{2})-(\d{2})(?:_(\d{2})(\d{2}))?/);const key=m?m[1]+m[2]+m[3]+(m[4]||'00')+(m[5]||'00'):'';
+        files.push({n,key,path:`${PDF_DIR}/${fname}/${n}`,doc:/_書類\d/.test(n)});}}}catch(_){}
+  const items=[];
+  for(const f of files.filter(f=>!f.doc).sort((a,b)=>a.key===b.key?(a.n<b.n?-1:1):(a.key<b.key?-1:1))){
+    const r=reps.find(x=>x.key===f.key)||reps.find(x=>x.key&&f.key&&x.key.slice(0,8)===f.key.slice(0,8))||null;
+    const saved=(f.n.match(/保存(\d{8})-(\d{2})(\d{2})/)||[]);
+    items.push({...(r||{}),date:(r&&r.date)||f.key.replace(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})$/,'$1年$2月$3日 $4:$5'),key:f.key,pdf:f.path,file:f.n,
+      saved:saved[1]?`${saved[1].slice(4,6)}/${saved[1].slice(6,8)} ${saved[2]}:${saved[3]}保存`:'',lv:r?r.lv:null,h:r?r.h:null,feat:r?r.feat:null});}
+  // PDFが見つからない日付の記録も（数値だけでも）入れる
+  for(const r of reps)if(!items.some(it=>it.key===r.key))items.push(r);
+  items.sort((a,b)=>a.key===b.key?((a.file||'')<(b.file||'')?-1:1):(a.key<b.key?-1:1));
+  tl.items=items;
+  tl.base=st.baseline?{...st.baseline,...(items.find(it=>it.pdf&&st.baseline.pdf&&it.pdf===st.baseline.pdf)||{})}:items[0];
+  const nPdf=items.filter(it=>it.file).length;
+  $('tlMsg').textContent=`ID ${id}：PDF ${nPdf}枚・評価の記録 ${reps.length}日分`;$('tlSum').textContent=`ID ${id}・${items.length}枚`;$('tlBody').hidden=false;$('tlId').value=id;
   $('tlSlider').max=tl.items.length-1;
   $('tlStrip').innerHTML=tl.items.map((it,k)=>`<button class="tlTh" data-k="${k}" style="flex:0 0 auto;padding:4px;width:150px;text-align:left"><div style="font-size:11px">${escH(it.date||'?')} ${it.lv==null?'':['✅','🟡','⚠️'][it.lv]}</div><div class="tlImg" style="height:46px;background:#fff;border-radius:4px;overflow:hidden"></div></button>`).join('');
   $('tlTSlider').max=tl.items.length-1;
@@ -1207,7 +1225,7 @@ async function tlThumbs(){ // サムネイルは後から順番に読み込む
 async function tlTop(i){
   if(!tl.items.length)return;
   if(i>=0){i=Math.max(0,Math.min(tl.items.length-1,i));tl.top=i;$('tlTSlider').value=i;$('tlTSlider').style.opacity=1;
-    const it=tl.items[i];tlVs();await tlPanel($('tlBase'),it,`⬆ ${i+1}/${tl.items.length}　${it.date||'?'}`);}
+    const it=tl.items[i];tlVs();await tlPanel($('tlBase'),it,`⬆ ${i+1}/${tl.items.length}　${it.date||'?'}${it.saved?'（'+it.saved+'）':''}`);}
   else{tl.top=-1;const bi=tl.items.findIndex(it=>it.key===tl.base.key);$('tlTSlider').value=bi>=0?bi:0;$('tlTSlider').style.opacity=.5;
     tlVs();await tlPanel($('tlBase'),{...tl.base,lv:null},`📌 基準：${tl.base.date||'?'}`);}
 }
