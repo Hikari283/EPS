@@ -3,7 +3,8 @@ const DEF = { enabled: true, folder: 'LATITUDE', hosts: ['bostonscientific.com',
 async function load() {
   const c = { ...DEF, ...(await chrome.storage.local.get(null)) };
   $('enabled').checked = c.enabled; $('folder').value = c.folder; $('hosts').value = c.hosts.join(', ');
-  $('status').innerHTML = `保存したPDF：<b>${c.count || 0}</b> 件${c.last ? '（最後：' + c.last + '）' : ''}` + (c.lastError ? `<div class="err">最後のエラー：${c.lastError}</div>` : '');
+  const today = new Date().toLocaleDateString('ja-JP'), tc = c.todayDate === today ? (c.todayCount || 0) : 0;
+  $('status').innerHTML = `今日保存したPDF：<b>${tc}</b> 件（これまでの合計 ${c.count || 0} 件）${c.last ? '<br>最後：' + c.last : ''} <button id="resetCnt" style="font-size:11px;padding:1px 6px">数を0に戻す</button>` + (c.lastError ? `<div class="err">最後のエラー：${c.lastError}</div>` : '');
 }
 $('enabled').onchange = () => chrome.storage.local.set({ enabled: $('enabled').checked });
 $('save').onclick = async () => {
@@ -19,3 +20,6 @@ load();
 chrome.storage.local.get({ autoArrange: true }).then(c => { $('autoArrange').checked = c.autoArrange; });
 $('autoArrange').onchange = () => chrome.storage.local.set({ autoArrange: $('autoArrange').checked });
 $('arrangeNow').onclick = async () => { const r = await chrome.runtime.sendMessage({ type: 'arrange' }); $('arrMsg').textContent = r === 'OK' ? '並べました' : (r || ''); };
+
+document.addEventListener('click', async e => { if (e.target.id !== 'resetCnt') return;
+  await chrome.storage.local.set({ count: 0, todayCount: 0 }); chrome.action.setBadgeText({ text: '' }); load(); });

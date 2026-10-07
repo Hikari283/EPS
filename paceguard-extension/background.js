@@ -14,8 +14,11 @@ async function save(opts, key) {
   const filename = `${safe(cfg.folder) || 'LATITUDE'}/LATITUDE_${stamp()}_${Math.random().toString(36).slice(2, 6)}.pdf`;
   try {
     await chrome.downloads.download({ ...opts, filename, conflictAction: 'uniquify', saveAs: false });
-    const count = (cfg.count || 0) + 1; await chrome.storage.local.set({ count, last: new Date().toLocaleString('ja-JP') });
-    chrome.action.setBadgeBackgroundColor({ color: '#16a34a' }); chrome.action.setBadgeText({ text: String(count % 1000) });
+    // 件数：今日の件数（日付が変わると0から）と、これまでの合計
+    const today = new Date().toLocaleDateString('ja-JP'), st = await chrome.storage.local.get({ todayDate: '', todayCount: 0 });
+    const todayCount = (st.todayDate === today ? st.todayCount : 0) + 1, count = (cfg.count || 0) + 1;
+    await chrome.storage.local.set({ count, todayDate: today, todayCount, last: new Date().toLocaleString('ja-JP') });
+    chrome.action.setBadgeBackgroundColor({ color: '#2563eb' }); chrome.action.setBadgeText({ text: String(todayCount) }); // 判定が出たら OK／!／!! に変わる
   } catch (e) { chrome.storage.local.set({ lastError: String(e && e.message || e) }); }
 }
 
