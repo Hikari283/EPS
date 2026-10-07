@@ -166,14 +166,22 @@
       <span class="hint" id="tlMsg">「患者PDF」に整理したPDFの波形を、日付順にめくって見られます。</span>
     </div>
     <div id="tlBody" hidden>
-      <div id="tlBase" style="margin-top:10px"></div>
       <div style="display:flex;gap:8px;align-items:center;margin:10px 0 4px">
+        <span class="hint" style="white-space:nowrap">上：</span>
+        <button id="tlTPrev" title="上の波形：前の日付">◀</button>
+        <input type="range" id="tlTSlider" min="0" max="0" value="0" style="flex:1">
+        <button id="tlTNext" title="上の波形：次の日付">▶</button>
+        <button id="tlTBase" title="上の波形を基準に戻す">📌 基準</button>
+      </div>
+      <div id="tlBase"></div>
+      <div style="display:flex;gap:8px;align-items:center;margin:10px 0 4px">
+        <span class="hint" style="white-space:nowrap">下：</span>
         <button id="tlPrev" title="前の日付">◀</button>
         <input type="range" id="tlSlider" min="0" max="0" value="0" style="flex:1">
         <button id="tlNext" title="次の日付">▶</button>
       </div>
       <div id="tlCur"></div>
-      <div class="hint" style="margin-top:8px">全部の日付（クリックでその日へ。キーボードの ← → でもめくれます）</div>
+      <div class="hint" style="margin-top:8px">全部の日付（クリックで下の波形をその日に。キーボードの ← → で下、Shift＋← → で上をめくれます）</div>
       <div id="tlStrip" style="display:flex;gap:6px;overflow-x:auto;padding:6px 0"></div>
     </div>
   </div>
@@ -909,7 +917,7 @@ async function showEyeCompare(refs,now){
 }
 
 // ===== 🎞 タイムライン：保存した元のPDFの波形を、スライドバーで日付順にめくる（上に基準を固定）=====
-const tl={id:'',obj:{},items:[],base:null,cache:new Map(),idx:0};
+const tl={id:'',obj:{},items:[],base:null,cache:new Map(),idx:0,top:-1}; // top=-1 は「基準」
 async function tlImage(rep){
   const k=(rep.pdf||'')+'|'+(rep.key||rep.date);if(tl.cache.has(k))return tl.cache.get(k);
   let url=null;
@@ -942,16 +950,30 @@ $('tlShow').onclick=async()=>{
   $('tlMsg').textContent=`ID ${id}：${tl.items.length}回分の記録`;$('tlBody').hidden=false;
   $('tlSlider').max=tl.items.length-1;
   $('tlStrip').innerHTML=tl.items.map((it,k)=>`<button class="tlTh" data-k="${k}" style="flex:0 0 auto;padding:4px;width:150px;text-align:left"><div style="font-size:11px">${escH(it.date||'?')} ${it.lv==null?'':['✅','🟡','⚠️'][it.lv]}</div><div class="tlImg" style="height:46px;background:#fff;border-radius:4px;overflow:hidden"></div></button>`).join('');
-  await tlPanel($('tlBase'),{...tl.base,lv:null},`📌 基準：${tl.base.date||'?'}`);
+  $('tlTSlider').max=tl.items.length-1;
+  await tlTop(-1);
   await tlGo(tl.items.length-1);
   // サムネイルは後から順番に読み込む
   for(let k=0;k<tl.items.length;k++){if(tl.id!==id)return;const url=await tlImage(tl.items[k]);const c=$('tlStrip').children[k];if(c&&url)c.querySelector('.tlImg').innerHTML=`<img src="${url}" style="width:100%;height:100%;object-fit:cover;object-position:left top">`;}
 };
+// 上の波形：基準（-1）か、スライドバーで選んだ日付
+async function tlTop(i){
+  if(!tl.items.length)return;
+  if(i>=0){i=Math.max(0,Math.min(tl.items.length-1,i));tl.top=i;$('tlTSlider').value=i;$('tlTSlider').style.opacity=1;
+    const it=tl.items[i];await tlPanel($('tlBase'),it,`⬆ ${i+1}/${tl.items.length}　${it.date||'?'}`);}
+  else{tl.top=-1;const bi=tl.items.findIndex(it=>it.key===tl.base.key);$('tlTSlider').value=bi>=0?bi:0;$('tlTSlider').style.opacity=.5;
+    await tlPanel($('tlBase'),{...tl.base,lv:null},`📌 基準：${tl.base.date||'?'}`);}
+}
+$('tlTSlider').oninput=e=>tlTop(+e.target.value);
+$('tlTPrev').onclick=()=>tlTop((tl.top<0?+$('tlTSlider').value:tl.top)-1);
+$('tlTNext').onclick=()=>tlTop((tl.top<0?+$('tlTSlider').value:tl.top)+1);
+$('tlTBase').onclick=()=>tlTop(-1);
 $('tlSlider').oninput=e=>tlGo(+e.target.value);
 $('tlPrev').onclick=()=>tlGo(tl.idx-1);$('tlNext').onclick=()=>tlGo(tl.idx+1);
 document.addEventListener('click',e=>{const b=e.target.closest('.tlTh');if(b)tlGo(+b.dataset.k);});
 document.addEventListener('keydown',e=>{if($('tlBody').hidden||/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))return; // スライドバー自体は矢印キーで動く
-  if(e.key==='ArrowLeft'){tlGo(tl.idx-1);e.preventDefault();}else if(e.key==='ArrowRight'){tlGo(tl.idx+1);e.preventDefault();}});
+  const d=e.key==='ArrowLeft'?-1:e.key==='ArrowRight'?1:0;if(!d)return;e.preventDefault();
+  if(e.shiftKey)tlTop((tl.top<0?+$('tlTSlider').value:tl.top)+d);else tlGo(tl.idx+d);});
 // ===== 🖨 印刷（PDFそのまま／比較結果つき）=====
 let lastPdfDoc=null;
 async function pdfPagesHtml(){
