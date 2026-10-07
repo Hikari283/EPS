@@ -180,6 +180,7 @@
         <input type="range" id="tlSlider" min="0" max="0" value="0" style="flex:1">
         <button id="tlNext" title="次の日付">▶</button>
       </div>
+      <div id="tlVs" class="hint" style="margin:2px 0 6px;padding:6px 10px;border:1px solid var(--line);border-radius:8px"></div>
       <div id="tlCur"></div>
       <div class="hint" style="margin-top:8px">全部の日付（クリックで下の波形をその日に。キーボードの ← → で下、Shift＋← → で上をめくれます）</div>
       <div id="tlStrip" style="display:flex;gap:6px;overflow-x:auto;padding:6px 0"></div>
@@ -700,6 +701,17 @@ function analyzeRow(sig){
   const hr=rrs.length?60000/median2(rrs):null;
   return {...sum,hr:hr&&Math.round(hr),peaks,dbg};
 }
+// QRS幅：代表拍の傾きが「最大傾きの12%」と「基線部分（−100〜−60ms）のノイズの傾きの3倍」の大きい方を超えている範囲。
+// ノイズが多い記録でQRSの始まり・終わりが外側に伸びて、幅が長く測られるのを防ぐ
+function qrsSpan(tpl){
+  const L=tpl.length,qa=idxOf(QRS_A),qb=idxOf(QRS_B);
+  const ts=new Float32Array(L);for(let j=1;j<L-1;j++){const a=tpl[j+1],b=tpl[j-1];ts[j]=isNaN(a)||isNaN(b)?0:Math.abs(a-b);}
+  let smax=0;for(let j=qa;j<=qb;j++)smax=Math.max(smax,ts[j]);
+  const noise=median2(Array.from(ts.slice(1,idxOf(-60))));
+  const st=Math.max(smax*0.12,noise*3);let on=idxOf(0),off=idxOf(0);
+  while(on>qa&&(ts[on]>st||ts[on-1]>st||ts[on-2]>st))on--;while(off<qb&&(ts[off]>st||ts[off+1]>st||ts[off+2]>st))off++;
+  return {on,off,width:(off-on)*DT};
+}
 // 拍の集まり → 中央値の代表拍・波高（とゆれ）・QRS幅・向き
 function summarizeBeats(beats){
   const L=beats[0].b.length;
@@ -712,9 +724,7 @@ function summarizeBeats(beats){
   const amps=beats.map(q=>{let mx=-1e9,mn=1e9;for(let j=idxOf(-60);j<=idxOf(80);j++){const v=q.b[j];if(isNaN(v))continue;if(v>mx)mx=v;if(v<mn)mn=v;}return mx-mn;});
   const amp=median2(amps),ampVar=amp?(pct(amps,0.9)-pct(amps,0.1))/2/amp:0;
   const beatCorr=median2(beats.map(q=>pearson(Array.from(tpl.slice(qa,qb+1)),Array.from(q.b.slice(qa,qb+1)))));
-  // QRS幅：代表拍の傾きが最大傾きの12%を超えている範囲（R波の前後で探す）
-  const ts=new Float32Array(L);for(let j=1;j<L-1;j++)ts[j]=Math.abs(tpl[j+1]-tpl[j-1]);let smax=0;for(let j=qa;j<=qb;j++)smax=Math.max(smax,ts[j]);
-  const st=smax*0.12;let on=idxOf(0),off=idxOf(0);while(on>qa&&(ts[on]>st||ts[on-1]>st||ts[on-2]>st))on--;while(off<qb&&(ts[off]>st||ts[off+1]>st||ts[off+2]>st))off++;
+  const {on,off}=qrsSpan(tpl);
   let pk=idxOf(0);for(let j=qa;j<=qb;j++)if(Math.abs(tpl[j])>Math.abs(tpl[pk]))pk=j;
   return {tpl:Array.from(tpl,v=>+v.toFixed(4)),amp:+amp.toFixed(3),ampVar:+ampVar.toFixed(3),width:(off-on)*DT,on:(on*DT-PRE),off:(off*DT-PRE),pol:tpl[pk]>=0?1:-1,nBeats:beats.length,beatCorr:+beatCorr.toFixed(3),beats};
 }
@@ -746,6 +756,8 @@ function compareFeat(b,c){
   const qa=idxOf(QRS_A),qb=idxOf(QRS_B);
   const {corr,lag}=shiftCorr(b.tpl,c.tpl,qa,qb,10);
   const ampRatio=c.amp/(b.amp||1),tol=Math.max(0.30,2*Math.hypot(b.ampVar||0,c.ampVar||0));
+  // QRS幅は保存値ではなく、両方の代表拍から同じ方法で測り直す（測り方を改良しても古い記録と公平に比べられる）
+  const sb=qrsSpan(b.tpl),sc=qrsSpan(c.tpl);b={...b,width:sb.width,on:sb.on*DT-PRE,off:sb.off*DT-PRE};c={...c,width:sc.width,on:sc.on*DT-PRE,off:sc.off*DT-PRE};
   const dW=c.width-b.width,polFlip=b.pol!==c.pol;
   const red=[],yel=[];
   if(polFlip)red.push('QRSの主な向きが逆転（上向き⇄下向き）');
@@ -754,7 +766,7 @@ function compareFeat(b,c){
   const hiT=1+tol*1.6,hiY=1+tol;
   if(ampRatio>hiT||ampRatio<1/hiT)red.push(`波高が大きく変化 ${b.amp.toFixed(2)}→${c.amp.toFixed(2)}mV（${Math.round(ampRatio*100)}%、呼吸のゆれの範囲 ±${Math.round(tol*100)}%を大きく超える）`);
   else if(ampRatio>hiY||ampRatio<1/hiY)yel.push(`波高の変化 ${b.amp.toFixed(2)}→${c.amp.toFixed(2)}mV（${Math.round(ampRatio*100)}%、呼吸のゆれの範囲 ±${Math.round(tol*100)}%を超える）`);
-  return {corr,lag,ampRatio,tol,dW,polFlip,level:red.length?2:yel.length?1:0,red,yel};
+  return {corr,lag,ampRatio,tol,dW,polFlip,level:red.length?2:yel.length?1:0,red,yel,b,c};
 }
 const THR=0.94;
 function compareRow(base,cur){
@@ -915,14 +927,29 @@ async function tlImage(rep){
 }
 const tlPill=lv=>lv==null?'':`<span class="${['ok-t','warn-t','bad-t'][lv]}" style="font-weight:700">${['✅ 変化なし','🟡 注意','⚠️ 要確認'][lv]}</span>`;
 const tlNums=f=>f?`波高 ${(+f.amp).toFixed(2)} mV・QRS幅 ${f.width} ms・心拍 ${f.hr??'—'} bpm`:'';
+function tlWhy(h){ // その日に評価した時の判定の理由と、比較相手
+  if(!h)return '';
+  let c=h.causes;
+  if(!c){c=[];if(h.dW>=20)c.push(`QRS幅 +${h.dW}ms`);if(h.corr!=null&&h.corr<0.9)c.push(`形 相関${(+h.corr).toFixed(2)}`);
+    if(h.ampRatio&&(h.ampRatio<0.77||h.ampRatio>1.3))c.push(`波高 ${Math.round(h.ampRatio*100)}%`);
+    (h.rows||[]).forEach((r,k)=>{if(r&&!r.used&&r.reason)c.push(`${k+1}段目：${r.reason.replace(/（.*$/,'')}`);});}
+  return `<div class="hint">評価した時の比較相手：${escH(h.ref||'?')}（${h.mode==='base'?'基準':'前回'}）${c.length?'　理由：'+escH(c.join('／')):''}</div>`;
+}
 async function tlPanel(box,rep,title){
-  box.innerHTML=`<div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap"><b>${escH(title)}</b>${tlPill(rep.lv)}<span class="hint">${tlNums(rep.feat)}</span></div><div class="hint">読み込み中…</div>`;
+  box.innerHTML=`<div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap"><b>${escH(title)}</b>${tlPill(rep.lv)}<span class="hint">${tlNums(rep.feat)}</span></div>${rep.lv?tlWhy(rep.h):''}<div class="hint">読み込み中…</div>`;
   const url=await tlImage(rep);
   box.lastElementChild.outerHTML=url?`<img src="${url}" style="width:100%;background:#fff;border-radius:6px;display:block;margin-top:4px">`:'<div class="hint warn-t">この日のPDFが「'+escH(PDF_DIR)+'」に見つかりません（このツールで整理する前のレポート）。</div>';
 }
+function tlVs(){ // 今表示している上と下を、その場で比べる（同じ物差し）
+  const top=tl.top<0?tl.base:tl.items[tl.top],bot=tl.items[tl.idx],b=top&&top.feat,c=bot&&bot.feat;
+  if(!b||!c||!b.tpl||!c.tpl){$('tlVs').innerHTML='';return;}
+  const r=compareFeat(b,c);
+  $('tlVs').innerHTML=`<b>上と下をこの場で比べると：</b>${tlPill(r.level)}　形 相関 ${r.corr.toFixed(2)}・QRS幅 ${r.dW>=0?'+':''}${r.dW} ms・波高 ${Math.round(r.ampRatio*100)}%（許容 ±${Math.round(r.tol*100)}%）${r.polFlip?'・<b>向きが逆</b>':''}`
+    +(r.red.length+r.yel.length?`<br>理由：${escH([...r.red,...r.yel].join('／'))}`:'');
+}
 async function tlGo(i){
   if(!tl.items.length)return;i=Math.max(0,Math.min(tl.items.length-1,i));tl.idx=i;$('tlSlider').value=i;
-  const it=tl.items[i];
+  const it=tl.items[i];tlVs();
   [...$('tlStrip').children].forEach((c,k)=>c.style.outline=k===i?'3px solid var(--accent)':'none');
   const th=$('tlStrip').children[i];if(th)th.scrollIntoView({block:'nearest',inline:'center'});
   await tlPanel($('tlCur'),it,`${i+1}/${tl.items.length}　${it.date||'?'}`);
@@ -933,7 +960,8 @@ $('tlShow').onclick=async()=>{
   const st=await readBaseline(id);if(!st||!(st.reports||[]).length){$('tlMsg').innerHTML=`<span class="warn-t">ID ${escH(id)} の記録がありません。</span>`;$('tlBody').hidden=true;return;}
   tl.id=id;tl.obj={name:st.name,device:st.device};tl.cache.clear();
   const lvOf=r=>{const h=(st.history||[]).filter(x=>x.date===r.date&&x.level!=null).pop();return h?h.level:null;};
-  tl.items=[...st.reports].sort((a,b)=>a.key<b.key?-1:1).map(r=>({...r,lv:lvOf(r)}));
+  const hOf=r=>(st.history||[]).filter(x=>x.date===r.date&&x.level!=null).pop()||null;
+  tl.items=[...st.reports].sort((a,b)=>a.key<b.key?-1:1).map(r=>({...r,lv:lvOf(r),h:hOf(r)}));
   tl.base=st.baseline||tl.items[0];
   $('tlMsg').textContent=`ID ${id}：${tl.items.length}回分の記録`;$('tlBody').hidden=false;
   $('tlSlider').max=tl.items.length-1;
@@ -948,9 +976,9 @@ $('tlShow').onclick=async()=>{
 async function tlTop(i){
   if(!tl.items.length)return;
   if(i>=0){i=Math.max(0,Math.min(tl.items.length-1,i));tl.top=i;$('tlTSlider').value=i;$('tlTSlider').style.opacity=1;
-    const it=tl.items[i];await tlPanel($('tlBase'),it,`⬆ ${i+1}/${tl.items.length}　${it.date||'?'}`);}
+    const it=tl.items[i];tlVs();await tlPanel($('tlBase'),it,`⬆ ${i+1}/${tl.items.length}　${it.date||'?'}`);}
   else{tl.top=-1;const bi=tl.items.findIndex(it=>it.key===tl.base.key);$('tlTSlider').value=bi>=0?bi:0;$('tlTSlider').style.opacity=.5;
-    await tlPanel($('tlBase'),{...tl.base,lv:null},`📌 基準：${tl.base.date||'?'}`);}
+    tlVs();await tlPanel($('tlBase'),{...tl.base,lv:null},`📌 基準：${tl.base.date||'?'}`);}
 }
 $('tlTSlider').oninput=e=>tlTop(+e.target.value);
 $('tlTPrev').onclick=()=>tlTop((tl.top<0?+$('tlTSlider').value:tl.top)-1);
@@ -1079,7 +1107,7 @@ async function runEval(mode){
     <div class="hint" style="margin-top:6px">下の重ね描きで、形が違う部分を赤く塗っています（青＝${refLabel}、橙＝今回）。</div></div>`;
   lastEval={id,date:now.date,key:curKey,feat:poolSave,ts:now.ts,name:now.name,device:now.device};
   $('result').insertAdjacentHTML('beforeend','<div style="margin-top:8px"><button id="setBaseBtn">📌 今回の波形を基準にする</button> <span class="hint" id="setBaseMsg"></span></div>');
-  await saveStore({date:now.date,ref:ref.date,mode,level,corr:+r.corr.toFixed(3),amp:pool.amp,ampRatio:+r.ampRatio.toFixed(2),width:pool.width,dW:r.dW,pol:pool.pol,hr:pool.hr,rows:rowsSave});
+  await saveStore({date:now.date,ref:ref.date,mode,level,corr:+r.corr.toFixed(3),amp:pool.amp,ampRatio:+r.ampRatio.toFixed(2),width:pool.width,dW:r.dW,pol:pool.pol,hr:pool.hr,rows:rowsSave,causes:causes.map(x=>x.txt)});
   lastEval.pdf=nowPdf;
   $('overlayCard').hidden=false; // 先に表示してから描く（幅を正しく取るため）
   drawBeat(r);
