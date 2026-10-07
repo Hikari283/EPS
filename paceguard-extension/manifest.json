@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PaceGuard LATITUDE 取り込み",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "LATITUDEで開いたPDFを自動でフォルダに保存し、PaceGuard LATITUDE（ローカルツール）で比較できるようにします。データは外部に送りません。",
   "permissions": [
     "downloads",

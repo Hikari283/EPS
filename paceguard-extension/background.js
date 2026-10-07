@@ -85,7 +85,7 @@ chrome.runtime.onMessage.addListener((m, sender) => {
   try { chrome.notifications.create('pg-' + Date.now(), { type: 'basic', iconUrl: 'icon128.png', title, message: body, priority: m.level >= 2 ? 2 : 0, requireInteraction: m.level >= 2 }); } catch (_) {}
 });
 
-// ④ 開いた時に「左：LATITUDE／右：ツール」に自動で並べる
+// ④ 開いた時に「左：ツール／右：LATITUDE」に自動で並べる
 async function arrange() {
   const cfg = await getCfg();
   const tabs = await chrome.tabs.query({});
@@ -97,8 +97,8 @@ async function arrange() {
   const left = { left: wa.left, top: wa.top, width: half, height: wa.height };
   const right = { left: wa.left + half, top: wa.top, width: wa.width - half, height: wa.height };
   let toolWin = tool.windowId;
-  if (tool.windowId === lat.windowId) toolWin = (await chrome.windows.create({ tabId: tool.id, focused: false, ...right })).id;
-  for (const [id, r] of [[toolWin, right], [lat.windowId, left]]) {
+  if (tool.windowId === lat.windowId) toolWin = (await chrome.windows.create({ tabId: tool.id, focused: false, ...left })).id;
+  for (const [id, r] of [[toolWin, left], [lat.windowId, right]]) {
     await chrome.windows.update(id, { state: 'normal' });
     await chrome.windows.update(id, r);
   }
