@@ -185,11 +185,6 @@
       <div id="tlStrip" style="display:flex;gap:6px;overflow-x:auto;padding:6px 0"></div>
     </div>
   </div>
-  <div class="card" id="eyeCard" hidden style="margin-top:14px">
-    <h2>👁 元の波形を目で比べる</h2>
-    <div class="hint">PDFの波形の部分をそのまま並べています（上から 基準 → 前回 → 今回）。</div>
-    <div id="eyeBody"></div>
-  </div>
   <div class="card" id="overlayCard" hidden style="margin-top:14px">
     <h2>重ね描き（青=前回 / 橙=今回）と差分</h2>
     <div class="hint">全段の代表拍どうし（横 ms・縦 mV の実寸）</div>
@@ -893,27 +888,20 @@ async function findRefPdf(ref,id,obj){
     const names=[];for await(const [n,h] of pd.entries())if(h.kind==='file'&&n.startsWith(stem)&&/\.pdf$/i.test(n)&&!/_書類\d/.test(n))names.push(n);
     names.sort();if(!names.length)return null;return await (await pd.getFileHandle(names[names.length-1])).getFile();}catch(_){return null;}
 }
-async function ecgImage(doc,pageNo){ // 波形のページを描いて、緑の線がある範囲だけ切り出す
-  const pno=pageNo||await pickEcgPage(doc),pg=await doc.getPage(pno),vp=pg.getViewport({scale:2});
-  const c=document.createElement('canvas');c.width=vp.width;c.height=vp.height;const x=c.getContext('2d',{willReadFrequently:true});x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);
-  await pg.render({canvasContext:x,viewport:vp}).promise;
+async function ecgImage(doc,pageNo){ // 波形のページから、緑の線がある範囲だけを高い倍率で描き直す（くっきり表示用）
+  const pno=pageNo||await pickEcgPage(doc),pg=await doc.getPage(pno);
+  // ① まず低い倍率で描いて、緑の線がある範囲を探す
+  const s1=1.5,v1=pg.getViewport({scale:s1}),c=document.createElement('canvas');c.width=Math.round(v1.width);c.height=Math.round(v1.height);
+  const x=c.getContext('2d',{willReadFrequently:true});x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);await pg.render({canvasContext:x,viewport:v1}).promise;
   const d=x.getImageData(0,0,c.width,c.height).data;let x0=c.width,y0=c.height,x1=0,y1=0;
-  for(let yy=0;yy<c.height;yy+=2)for(let xx=0;xx<c.width;xx+=2){const i=(yy*c.width+xx)*4;if(d[i+1]-Math.max(d[i],d[i+2])>18){if(xx<x0)x0=xx;if(xx>x1)x1=xx;if(yy<y0)y0=yy;if(yy>y1)y1=yy;}}
-  if(x1<=x0||y1<=y0)return c;
-  const pad=24;x0=Math.max(0,x0-pad);y0=Math.max(0,y0-pad);x1=Math.min(c.width,x1+pad);y1=Math.min(c.height,y1+pad);
-  const o=document.createElement('canvas');o.width=x1-x0;o.height=y1-y0;o.getContext('2d').drawImage(c,x0,y0,o.width,o.height,0,0,o.width,o.height);return o;
-}
-async function showEyeCompare(refs,now){
-  const box=$('eyeBody');$('eyeCard').hidden=false;box.innerHTML='<div class="hint">読み込み中…</div>';
-  const out=[],miss=[];
-  for(const {rep,label} of refs){const rf=await findRefPdf(rep,now.id,now);
-    if(!rf){miss.push(label);continue;}
-    try{const lib=await ensurePdfjs();const doc=await lib.getDocument({data:new Uint8Array(await rf.arrayBuffer())}).promise;out.push({label:`${label}：${rep.date||'?'}`,cv:await ecgImage(doc)});}catch(_){miss.push(label);}}
-  if(lastPdfDoc)out.push({label:`今回：${now.date||'?'}`,cv:await ecgImage(lastPdfDoc,curPageNo)});
-  box.innerHTML='';
-  if(miss.length)box.insertAdjacentHTML('beforeend',`<div class="hint warn-t" style="margin:6px 0">${miss.join('・')}のPDFが「${escH(PDF_DIR)}」フォルダに見つかりませんでした（このツールで整理する前のレポートです）。</div>`);
-  for(const o of out){const w=document.createElement('div');w.style.margin='8px 0';w.innerHTML=`<div style="font-weight:700;margin-bottom:4px">${escH(o.label)}</div>`;
-    const im=document.createElement('img');im.src=o.cv.toDataURL('image/png');im.style.cssText='width:100%;background:#fff;border-radius:6px;display:block';w.appendChild(im);box.appendChild(w);}
+  for(let yy=0;yy<c.height;yy++)for(let xx=0;xx<c.width;xx++){const i=(yy*c.width+xx)*4;if(d[i+1]-Math.max(d[i],d[i+2])>18){if(xx<x0)x0=xx;if(xx>x1)x1=xx;if(yy<y0)y0=yy;if(yy>y1)y1=yy;}}
+  if(x1<=x0||y1<=y0){x0=0;y0=0;x1=c.width;y1=c.height;}
+  const pad=12;x0=Math.max(0,x0-pad);y0=Math.max(0,y0-pad);x1=Math.min(c.width,x1+pad);y1=Math.min(c.height,y1+pad);
+  // ② その範囲だけを、横が約3000pxになる倍率で描き直す
+  const S=Math.min(8,3000/((x1-x0)/s1)),k=S/s1,o=document.createElement('canvas');o.width=Math.round((x1-x0)*k);o.height=Math.round((y1-y0)*k);
+  const ox=o.getContext('2d');ox.fillStyle='#fff';ox.fillRect(0,0,o.width,o.height);
+  await pg.render({canvasContext:ox,viewport:pg.getViewport({scale:S,offsetX:-x0*k,offsetY:-y0*k})}).promise;
+  return o;
 }
 
 // ===== 🎞 タイムライン：保存した元のPDFの波形を、スライドバーで日付順にめくる（上に基準を固定）=====
@@ -922,7 +910,7 @@ async function tlImage(rep){
   const k=(rep.pdf||'')+'|'+(rep.key||rep.date);if(tl.cache.has(k))return tl.cache.get(k);
   let url=null;
   try{const f=await findRefPdf(rep,tl.id,tl.obj);
-    if(f){const lib=await ensurePdfjs();const doc=await lib.getDocument({data:new Uint8Array(await f.arrayBuffer())}).promise;url=(await ecgImage(doc)).toDataURL('image/jpeg',0.88);}}catch(_){}
+    if(f){const lib=await ensurePdfjs();const doc=await lib.getDocument({data:new Uint8Array(await f.arrayBuffer())}).promise;url=(await ecgImage(doc)).toDataURL('image/png');}}catch(_){}
   tl.cache.set(k,url);return url;
 }
 const tlPill=lv=>lv==null?'':`<span class="${['ok-t','warn-t','bad-t'][lv]}" style="font-weight:700">${['✅ 変化なし','🟡 注意','⚠️ 要確認'][lv]}</span>`;
@@ -993,7 +981,6 @@ async function doPrint(withResult){
     h+=`<div class="pp" style="text-align:left"><div class="prhead"><b>PaceGuard LATITUDE　比較結果</b><span>印刷 ${new Date().toLocaleString('ja-JP')}</span></div>
       <div>患者ID：<b>${escH($('fId').value||'—')}</b>　氏名：${escH($('fName').value||'—')}　照会日：${escH($('fDate').value||'—')}　機種：${escH($('fDev').value||'—')}</div>
       ${res.innerHTML.trim()?res.innerHTML:'<div class="verdict info"><h2>比較結果がありません</h2>評価を行ってから印刷してください。</div>'}
-      ${!$('eyeCard').hidden?`<div style="margin-top:8px"><b>元の波形</b></div>${[...$('eyeBody').querySelectorAll('div')].filter(d=>d.querySelector('img')).map(d=>`<div style="margin-top:4px">${escH(d.firstChild.textContent)}</div><img style="width:100%" src="${d.querySelector('img').src}">`).join('')}`:''}
       ${ov?`<div style="margin-top:8px"><b>重ね描き</b>（青＝比較相手／橙＝今回、赤＝形が違う所）</div>${ov}`:''}
       <div class="hint" style="margin-top:8px">研究・院内検証用の参考情報です。最終判断は医師が行ってください。</div></div>`;
   }
@@ -1058,14 +1045,14 @@ async function runEval(mode){
       const lv=u.used?0:1;return `<tr class="lv${lv}"><td>${k+1}</td><td>${f.nBeats}</td><td>${f.hr??'—'} bpm</td><td>${f.amp.toFixed(2)} mV</td><td>${f.width} ms</td><td>${u.corr!=null?u.corr.toFixed(2):'—'}</td><td>${nz.max}/${nz.thr}</td><td>${u.used?'✅ 使用':'🟡 除外：'+u.reason}</td></tr>`;}).join('')}</table>
     <div class="hint">全段の拍をまとめて代表拍を作り、頻拍・ノイズ・形が大きく違う段は代表拍から外しています。</div>`;
   const measure=f=>`代表拍（${pool.usedRows.length}段・${f.nBeats}拍）：心拍 ${f.hr??'—'}bpm・波高 ${f.amp.toFixed(2)}mV（呼吸のゆれ ±${Math.round(f.ampVar*100)}%）・QRS幅 ${f.width}ms・向き ${f.pol>0?'上':'下'}`;
-  if(!pool){$('result').innerHTML=`<div class="verdict bad"><h2>代表拍を作れませんでした</h2>${curPool&&curPool.error||'波形を読み取れませんでした'}</div>${rowTable}`;$('overlayCard').hidden=true;$('eyeCard').hidden=true;return;}
+  if(!pool){$('result').innerHTML=`<div class="verdict bad"><h2>代表拍を作れませんでした</h2>${curPool&&curPool.error||'波形を読み取れませんでした'}</div>${rowTable}`;$('overlayCard').hidden=true;return;}
   if(!bp||!bp.tpl){
     await saveStore({date:now.date,note:'登録'});
     const first=!baseRep;
     const why=first?((store&&store.feat&&!store.reports)?'新しい計測方式で登録しました（この波形が基準になります）':'初回登録しました（この波形が基準になります）'):'比較できる前の日付のレポートがありません';
     $('result').innerHTML=`<div class="verdict info"><h2>${why}</h2>この患者（ID:${id}）の${now.date||'今回'}のレポートとして保存しました。${first?'次から「📌 基準と比較」で、同じ日付のレポートでも比べられます。':'同じ日付どうしを比べるときは「📌 基準と比較」を使ってください。'}${curKey?'':'<br><b>※照会日が読み取れていません。照会日を入力すると前後関係で正しく比較できます。</b>'}${dirHandle?'':'<br><b>※フォルダ未選択のため保存できていません。</b>'}
       <div class="hint" style="margin-top:6px">${measure(pool)}</div>${rowNotes.length?`<div class="cause">記録の中の所見：${rowNotes.map(x=>`${ic(x.lv)} ${x.row}：${x.why}`).join('　')}</div>`:''}</div>${rowTable}`;
-    $('overlayCard').hidden=true;$('eyeCard').hidden=true; return;
+    $('overlayCard').hidden=true; return;
   }
   const r={k:0,b:bp,c:pool,...compareFeat(bp,pool)};
   const sign=v=>(v>0?'+':'')+v;
@@ -1096,7 +1083,6 @@ async function runEval(mode){
   lastEval.pdf=nowPdf;
   $('overlayCard').hidden=false; // 先に表示してから描く（幅を正しく取るため）
   drawBeat(r);
-  showEyeCompare([...(baseRep&&ref!==baseRep&&baseRep.key!==ref.key?[{rep:baseRep,label:'基準'}]:[]),{rep:ref,label:refLabel}],now).catch(()=>{});
 };
 // 代表拍の重ね描き（実寸：横 ms・縦 mV。青＝前回、橙＝今回。QRSの始まりと終わりに縦線）
 function drawBeat(r,ovId='overlay',diffId='diff'){
