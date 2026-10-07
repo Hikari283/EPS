@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><title>PaceGuard LATITUDE 波形比較の方法</title>
+<style>
+@page{size:A4;margin:14mm 14mm 16mm}
+*{box-sizing:border-box}
+body{font-family:"IPAGothic","IPAゴシック","Yu Gothic","Meiryo",sans-serif;color:#111;font-size:10.5pt;line-height:1.65;margin:0;background:#fff}
+h1{font-size:20pt;margin:0 0 2mm} h2{font-size:13.5pt;margin:7mm 0 2.5mm;padding:1.5mm 3mm;background:#f1f5f9;border-left:4px solid #b91c1c}
+h3{font-size:11pt;margin:4mm 0 1.5mm}
+p{margin:1.5mm 0} .sub{color:#475569;font-size:9.5pt}
+table{border-collapse:collapse;width:100%;margin:2mm 0;font-size:9.5pt;page-break-inside:avoid}
+th,td{border:1px solid #94a3b8;padding:1.5mm 2mm;text-align:left;vertical-align:top}
+th{background:#e2e8f0}
+.mono{font-family:"DejaVu Sans Mono",monospace}
+.box{border:1px solid #94a3b8;border-radius:2mm;padding:2.5mm 3.5mm;margin:2.5mm 0;page-break-inside:avoid}
+.key{background:#fff7ed;border-color:#f59e0b}
+.fig{page-break-inside:avoid;margin:2mm 0;border:1px solid #cbd5e1;border-radius:2mm;padding:2mm}
+.fig svg{width:100%;height:auto;display:block}
+svg text{font-family:"IPAGothic",sans-serif;fill:#111}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:3mm}
+.p{display:inline-block;font-weight:bold;padding:0 2mm;border-radius:1mm}
+.ok{background:#dcfce7;color:#166534} .warn{background:#fef3c7;color:#92400e} .bad{background:#fee2e2;color:#991b1b}
+.pb{page-break-before:always}
+ol,ul{margin:1mm 0;padding-left:6mm} li{margin:.5mm 0}
+.foot{margin-top:6mm;font-size:8.5pt;color:#475569;border-top:1px solid #cbd5e1;padding-top:2mm}
+</style></head><body>
+
+<h1>PaceGuard LATITUDE　波形比較の方法</h1>
+<p class="sub">S-ICD（LATITUDE）レポートのS-ECGを、前回・基準と比べるしくみ（研究・院内検証用。最終判断は医師）　作成：2026年10月</p>
+
+<div class="box key"><b>ひとことで：</b>その日の波形から<b>「いつもの1拍（代表拍）」</b>を作り、前回（または基準）の代表拍と<b>4つの物差し（形・幅・高さ・向き）</b>で比べます。呼吸による波高の自然な揺れでは反応しにくく、脚ブロックや明らかな波高の変化で反応するように作っています。</div>
+
+<h2>1. 前提：記録条件と目盛り</h2>
+<table>
+<tr><th>項目</th><th>値</th><th>意味</th></tr>
+<tr><td>紙送り</td><td class="mono">25 mm/秒</td><td>横1 mm ＝ 40 ms</td></tr>
+<tr><td>感度</td><td class="mono">2.5 mm/mV</td><td>縦2.5 mm ＝ 1 mV</td></tr>
+<tr><td>解析の解像度</td><td class="mono">PDFを4倍で描画（1 pt＝4 px）</td><td>横1 px ≒ 3.5 ms、縦1 mV ≒ 28 px</td></tr>
+</table>
+<p>画面の拡大率に左右されないよう、計測は必ずこの固定倍率で行います。ゲイン設定が違うレポートでは波高の数値がずれます。</p>
+
+<h2>2. 代表拍（いつもの1拍）を作る</h2>
+<div class="fig"><svg id="figTpl" viewBox="0 0 860 280"></svg></div>
+<ol>
+<li><b>波形の段を見つける：</b>PDFの緑の線を拾い、2〜5段を自動で切り分けます（複数ページのPDFは波形のページを自動で選択）。</li>
+<li><b>線をなぞる：</b>1列（約3.5 ms）ごとに緑の線の中心の高さを求め、mVに換算します。</li>
+<li><b>基線を除く：</b>400 ms幅の移動中央値を基線とみなして引き、呼吸による上下の揺れを除きます。</li>
+<li><b>R波を見つける：</b>傾きが大きい所（上位0.5%の値×0.45以上）の前後±60 msで振れが最大の点をR波とし、260 msの不応期を置きます。</li>
+<li><b>1拍ずつ切り出す：</b>R波の<b>100 ms前〜150 ms後</b>を<b>2 ms刻み（126点）</b>で取り出し、−100〜−60 msの中央値を0 mVにそろえます。時間を固定するので、心拍数が違っても形は変わりません。</li>
+<li><b>中央値で代表拍を作る：</b>全拍の各時点の中央値をとり、各拍を代表拍に±10 msずらして合わせ直してから、もう一度中央値をとります。期外収縮やノイズの1拍に引っぱられません。</li>
+</ol>
+
+<h3>段をまとめる（イベント記録などで段が複数ある時）</h3>
+<table>
+<tr><th>順</th><th>この段は使わない（除外）</th></tr>
+<tr><td>1</td><td>R波が2拍以上取れない</td></tr>
+<tr><td>2</td><td>ノイズ疑い（細かいギザギザが局所的に多い）</td></tr>
+<tr><td>3</td><td>心拍数 150 bpm 超（頻拍の記録）</td></tr>
+<tr><td>4</td><td>他の段の心拍数の中央値の 1.35倍 超（ノイズ・T波の二重カウント・頻拍の可能性）</td></tr>
+<tr><td>5</td><td>まとめた代表拍との相関 0.85 未満（この段だけ形が違う＝イベント中の可能性）</td></tr>
+</table>
+<p>残った段の拍を全部集めて代表拍を作ります。除外した段は「記録の中の所見」として結果に表示します。</p>
+
+<h2 class="pb">3. 代表拍から測る値</h2>
+<table>
+<tr><th>計測値</th><th>求め方</th></tr>
+<tr><td><b>波高（mV）</b></td><td>各拍の −60〜+80 ms の最大−最小（peak-to-peak）の中央値</td></tr>
+<tr><td><b>呼吸の揺れ</b></td><td>各拍の波高の（90パーセンタイル − 10パーセンタイル）÷ 2 ÷ 波高</td></tr>
+<tr><td><b>QRS幅（ms）</b></td><td>代表拍の傾きが、QRS内の最大傾きの <b>12%</b> を超えている範囲（R波から前後に、3点続けて下回るまで）</td></tr>
+<tr><td><b>極性</b></td><td>−80〜+120 ms で絶対値が最大の点が上向きか下向きか</td></tr>
+<tr><td><b>心拍数（参考）</b></td><td>RR間隔（250〜2400 ms、途中に線の切れ目がないもの）の中央値から。判定には使わない</td></tr>
+</table>
+
+<h2>4. 4つの物差しで比べる</h2>
+<p>青の点線＝前回（または基準）、橙の実線＝今回 の代表拍です（模式図）。</p>
+<div class="g2">
+ <div class="fig"><b>① 形（相関）</b><svg id="r1" viewBox="0 0 400 170"></svg></div>
+ <div class="fig"><b>② 幅（QRS幅）</b><svg id="r2" viewBox="0 0 400 170"></svg></div>
+ <div class="fig"><b>③ 高さ（波高）</b><svg id="r3" viewBox="0 0 400 170"></svg></div>
+ <div class="fig"><b>④ 向き（極性）</b><svg id="r4" viewBox="0 0 400 170"></svg></div>
+</div>
+<table>
+<tr><th>物差し</th><th>計算</th><th><span class="p warn">注意</span></th><th><span class="p bad">要確認</span></th></tr>
+<tr><td><b>① 形</b></td><td>−80〜+120 ms のピアソン相関。<b>±20 ms</b> ずらして一番合う位置の値を採用（位置のずれだけでは下がらない）</td><td class="mono">&lt; 0.90</td><td class="mono">&lt; 0.80</td></tr>
+<tr><td><b>② 幅</b></td><td>今回のQRS幅 − 前回のQRS幅</td><td class="mono">+20 ms 以上</td><td class="mono">+30 ms 以上<br>（今回120 ms以上なら +20 ms）</td></tr>
+<tr><td><b>③ 高さ</b></td><td>比 = 今回の波高 ÷ 前回の波高。許容幅 tol（下の式）と比べる。小さくなる側は逆数で判定</td><td class="mono">比 &gt; 1+tol<br>または &lt; 1/(1+tol)</td><td class="mono">比 &gt; 1+1.6×tol<br>または &lt; 1/(1+1.6×tol)</td></tr>
+<tr><td><b>④ 向き</b></td><td>上向き ⇄ 下向き</td><td>—</td><td>逆転</td></tr>
+</table>
+
+<h3>波高の許容幅（呼吸の揺れを考える）</h3>
+<div class="box"><span class="mono">tol = max( 0.30 , 2 × √(前回の揺れ² + 今回の揺れ²) )</span><br>
+揺れが小さい人は最低の ±30%。揺れが大きい人ほど許容幅が広がるので、呼吸だけでは引っかかりにくくなります。</div>
+<div class="fig"><svg id="figTol" viewBox="0 0 860 170"></svg></div>
+<table>
+<tr><th>例</th><th>tol</th><th>注意になる比</th><th>要確認になる比</th></tr>
+<tr><td>揺れ ±8% / ±10%</td><td class="mono">max(0.30, 0.26) = 0.30</td><td class="mono">1.30倍超 / 0.77倍未満</td><td class="mono">1.48倍超 / 0.68倍未満</td></tr>
+<tr><td>揺れ ±15% / ±20%</td><td class="mono">0.50</td><td class="mono">1.50倍超 / 0.67倍未満</td><td class="mono">1.80倍超 / 0.56倍未満</td></tr>
+</table>
+
+<h2 class="pb">5. 判定のまとめ方</h2>
+<div class="fig"><svg id="figFlow" viewBox="0 0 860 200"></svg></div>
+<ul>
+<li>4つのうち一番悪い結果が、全体の判定になります。</li>
+<li>段の中に頻拍・ノイズ・形の違う段があった時は「<span class="p warn">注意</span> 記録の中の所見」として知らせます。</li>
+<li>比べる相手：<b>前回</b>＝今回より前の日付で一番新しいレポート、<b>基準</b>＝固定した基準レポート（未設定なら一番古いもの）。自動評価では前回があれば前回、なければ基準と比べます。</li>
+</ul>
+
+<h2>6. 何に気づけるか</h2>
+<table>
+<tr><th>起きたこと</th><th>反応する物差し</th><th>結果の例</th></tr>
+<tr><td>脚ブロック（右脚・左脚）</td><td>② 幅（＋① 形）</td><td><span class="p bad">要確認</span> QRS幅 94→160 ms、相関 0.71</td></tr>
+<tr><td>リードの位置ずれ・センシング変化</td><td>③ 高さ、① 形</td><td><span class="p warn">注意</span>〜<span class="p bad">要確認</span> 波高 1.50→0.90 mV</td></tr>
+<tr><td>極性が変わるほどの変化</td><td>④ 向き</td><td><span class="p bad">要確認</span> 上向き→下向き</td></tr>
+<tr><td>呼吸で波高が少し変わった</td><td>反応しない</td><td><span class="p ok">変化なし</span></td></tr>
+<tr><td>心拍数が違うだけ</td><td>反応しない（時間をそろえて比べる）</td><td><span class="p ok">変化なし</span></td></tr>
+</table>
+
+<h2>7. 画面での確認の順番</h2>
+<ol>
+<li><b>判定と主な原因</b>：一番上の1行で、何が理由かが分かります。</li>
+<li><b>項目ごとの表</b>：各物差しの数値と基準。</li>
+<li><b>段ごとの記録</b>：どの段を使い、どの段をなぜ除外したか。</li>
+<li><b>重ね描き</b>：青＝比較相手、橙＝今回。形が違う所が赤く塗られます。</li>
+<li><b>👁 元の波形</b>：基準・前回・今回のPDFの波形を並べて、<b>最後は目で確認</b>します。</li>
+<li>読み取りが心配な時は「<b>🔬 解析の裏側</b>」で、なぞった線・R波の位置・除外理由を確認できます。</li>
+</ol>
+
+<h2>8. 注意と限界</h2>
+<ul>
+<li>研究・院内検証用です。判定は変化に気づくための目印で、<b>診断は医師</b>が行ってください。</li>
+<li>しきい値（0.90／0.80、+20／+30 ms、tol）は合成データで決めた仮の値で、実データで調整中です。</li>
+<li>記録条件 25 mm/秒・2.5 mm/mV を前提にしています。</li>
+<li>N・T などのマーカー、T波（R/T比）、使用ベクトルの違いはまだ見ていません。</li>
+<li>処理はすべてこのパソコンの中で行い、患者情報は外部に送りません。</li>
+</ul>
+<div class="foot">PaceGuard LATITUDE　波形比較の方法（印刷用）</div>
+
+<script>
+(()=>{
+const NS='http://www.w3.org/2000/svg',P='#2563eb',C='#ea580c',R='#dc2626',M='#64748b';
+const el=(p,t,a,txt)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);if(txt!=null)e.textContent=txt;p.appendChild(e);return e;};
+const g=(t,m,s)=>Math.exp(-((t-m)**2)/(2*s*s));
+const beat=(t,o={})=>{const a=o.amp??1,w=o.w??1,f=o.flip?-1:1;return f*a*(1.15*g(t,0,9*w)-.38*g(t,22*w,8*w)-.10*g(t,-24,7))+.28*g(t,250,42)*a;};
+const path=(fn,X,Y,t0,t1)=>{let d='';for(let t=t0;t<=t1;t+=2)d+=(t===t0?'M':'L')+X(t).toFixed(1)+' '+Y(fn(t)).toFixed(1);return d;};
+let seed=3;const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647;};
+{const s=document.getElementById('figTpl'),X=t=>20+(t+100)/400*400,Y=v=>190-v*115;
+ el(s,'text',{x:20,y:20,'font-size':13,fill:M},'R波でそろえて重ねた拍（細線）');
+ for(let k=0;k<9;k++){const a=1+(rnd()-.5)*.25,sh=(rnd()-.5)*6,odd=k===6;el(s,'path',{d:path(t=>odd?beat(t-30,{amp:.8,w:1.6}):beat(t-sh,{amp:a}),X,Y,-100,300),fill:'none',stroke:odd?R:'#16a34a','stroke-width':1.1,'stroke-opacity':odd?.9:.5});}
+ el(s,'text',{x:X(60),y:Y(.95),'font-size':12,fill:R},'← 変な1拍（期外収縮など）');
+ el(s,'line',{x1:X(0),x2:X(0),y1:35,y2:235,stroke:R,'stroke-dasharray':'3 4'});el(s,'text',{x:X(0),y:252,'font-size':12,'text-anchor':'middle',fill:R},'R波');
+ el(s,'text',{x:470,y:140,'font-size':14,'text-anchor':'middle',fill:M},'中央値 →');
+ const X2=t=>520+(t+100)/400*320;el(s,'path',{d:path(t=>beat(t),X2,Y,-100,300),fill:'none',stroke:'#111','stroke-width':3});
+ el(s,'text',{x:530,y:20,'font-size':13,fill:M},'代表拍（いつもの1拍）');el(s,'text',{x:530,y:268,'font-size':12,fill:M},'変な1拍の影響はほとんど残らない');}
+const mini=(id,prev,cur,extra)=>{const s=document.getElementById(id),X=t=>20+(t+80)/260*360,Y=v=>120-v*80;
+ el(s,'line',{x1:20,x2:380,y1:Y(0),y2:Y(0),stroke:'#cbd5e1'});if(extra)extra(s,X,Y);
+ el(s,'path',{d:path(prev,X,Y,-80,180),fill:'none',stroke:P,'stroke-width':2.2,'stroke-dasharray':'6 4'});
+ el(s,'path',{d:path(cur,X,Y,-80,180),fill:'none',stroke:C,'stroke-width':2.6});return {s,X,Y};};
+{const {s}=mini('r1',t=>beat(t),t=>beat(t,{w:1.25})*.95+.25*g(t,40,14),(s,X,Y)=>{let d='';for(let t=-60;t<=100;t+=2)d+=(t===-60?'M':'L')+X(t)+' '+Y(beat(t));for(let t=100;t>=-60;t-=2)d+='L'+X(t)+' '+Y(beat(t,{w:1.25})*.95+.25*g(t,40,14));el(s,'path',{d:d+'Z',fill:R,'fill-opacity':.18});});
+ el(s,'text',{x:380,y:22,'font-size':12,'text-anchor':'end',fill:R},'赤＝重ならない所');el(s,'text',{x:380,y:162,'font-size':12,'text-anchor':'end',fill:M},'相関 0.84 → 注意');}
+{const {s,X}=mini('r2',t=>beat(t),t=>beat(t,{w:1.9}));const bar=(a,b,y,c,l)=>{el(s,'line',{x1:X(a),x2:X(b),y1:y,y2:y,stroke:c,'stroke-width':2});[a,b].forEach(v=>el(s,'line',{x1:X(v),x2:X(v),y1:y-5,y2:y+5,stroke:c,'stroke-width':2}));el(s,'text',{x:X(b)+6,y:y+4,'font-size':12,fill:c},l);};
+ bar(-22,38,20,P,'前回 94 ms');bar(-36,70,38,C,'今回 160 ms');el(s,'text',{x:380,y:162,'font-size':12,'text-anchor':'end',fill:M},'+66 ms → 要確認');}
+{const {s,X,Y}=mini('r3',t=>beat(t),t=>beat(t,{amp:.6}));const v=(x,a,c,l)=>{el(s,'line',{x1:x,x2:x,y1:Y(1.15*a),y2:Y(-.38*a),stroke:c,'stroke-width':2.5});el(s,'text',{x:x+6,y:Y(.5*a),'font-size':12,fill:c},l);};
+ v(X(110),1,P,'1.50 mV');v(X(160),.6,C,'0.90 mV');el(s,'text',{x:380,y:162,'font-size':12,'text-anchor':'end',fill:M},'60% → 要確認');}
+{const {s}=mini('r4',t=>beat(t),t=>beat(t,{flip:true}));el(s,'text',{x:200,y:20,'font-size':12,'text-anchor':'middle',fill:P},'前回：上向き');el(s,'text',{x:200,y:162,'font-size':12,'text-anchor':'middle',fill:C},'今回：下向き → 要確認');}
+{const s=document.getElementById('figTol'),lo=.45,hi=1.75,X=v=>40+(v-lo)/(hi-lo)*780,y1=1.3,y2=1.48;
+ const band=(a,b,c,o)=>el(s,'rect',{x:X(a),y:50,width:X(b)-X(a),height:40,fill:c,'fill-opacity':o});
+ band(lo,1/y2,R,.3);band(1/y2,1/y1,'#f59e0b',.3);band(1/y1,y1,'#16a34a',.25);band(y1,y2,'#f59e0b',.3);band(y2,hi,R,.3);
+ el(s,'text',{x:40,y:30,'font-size':13},'今回の波高 ÷ 前回の波高（揺れが小さい人：tol = 0.30）');
+ for(const [v,l] of [[1/y2,'0.68'],[1/y1,'0.77'],[1,'1.00'],[y1,'1.30'],[y2,'1.48']]){el(s,'line',{x1:X(v),x2:X(v),y1:44,y2:96,stroke:'#111'});el(s,'text',{x:X(v),y:114,'font-size':12,'text-anchor':'middle'},l);}
+ el(s,'text',{x:X(1),y:76,'font-size':13,'text-anchor':'middle',fill:'#166534','font-weight':'bold'},'変化なし（呼吸の揺れの範囲）');
+ [[(y1+y2)/2,'注意','#92400e'],[(1/y1+1/y2)/2,'注意','#92400e'],[1.62,'要確認','#991b1b'],[.56,'要確認','#991b1b']].forEach(([v,l,c])=>el(s,'text',{x:X(v),y:76,'font-size':12,'text-anchor':'middle',fill:c,'font-weight':'bold'},l));}
+{const s=document.getElementById('figFlow');
+ const box=(x,y,w,h,l,c)=>{el(s,'rect',{x,y,width:w,height:h,rx:8,fill:'#fff',stroke:c,'stroke-width':1.6});l.split('\n').forEach((t,i,a)=>el(s,'text',{x:x+w/2,y:y+h/2+5+(i-(a.length-1)/2)*20,'font-size':14,'text-anchor':'middle'},t));};
+ ['① 形','② 幅','③ 高さ','④ 向き'].forEach((l,i)=>{box(20,8+i*47,130,38,l,'#94a3b8');el(s,'path',{d:`M150 ${27+i*47} C 220 ${27+i*47}, 220 100, 290 100`,fill:'none',stroke:M,'stroke-width':1.4});});
+ box(290,65,200,70,'一番悪い結果を\n全体の判定にする',R);el(s,'path',{d:'M490 100 H540',stroke:M,'stroke-width':1.6});
+ [[0,'⚠ 要確認','どれか1つでも要確認','#991b1b'],[1,'注意','どれか1つでも注意','#92400e'],[2,'変化なし','全部OK','#166534']].forEach(([i,l,d,c])=>{const y=16+i*60;
+   el(s,'path',{d:`M540 100 C 560 100, 560 ${y+25}, 580 ${y+25}`,fill:'none',stroke:M,'stroke-width':1.4});el(s,'rect',{x:580,y,width:260,height:50,rx:8,fill:'#fff',stroke:c,'stroke-width':2});
+   el(s,'text',{x:596,y:y+22,'font-size':15,'font-weight':'bold',fill:c},l);el(s,'text',{x:596,y:y+41,'font-size':12,fill:M},d);});}
+})();
+</script>
+</body></html>
