@@ -114,8 +114,10 @@
   .ok-t{color:var(--ok)} .bad-t{color:var(--bad)} .warn-t{color:var(--warn)}
   footer{color:var(--dim);font-size:11px;border-top:1px solid var(--line);padding:14px 2px 30px}
   /* ── タイムライン ── */
-  #tlBase img,#tlCur img{cursor:zoom-in;box-shadow:0 14px 34px -18px rgba(0,0,0,.9),0 0 0 1px rgba(255,255,255,.08);transition:transform .15s}
-  #tlBase img:hover,#tlCur img:hover{transform:translateY(-1px)}
+  #tlBase img,#tlCur img{cursor:zoom-in;border:1px solid #cbd5e1}
+  .seg{display:inline-flex;border:1px solid var(--line2);border-radius:10px;overflow:hidden}
+  .seg button{border:0;border-radius:0;background:transparent;padding:6px 12px}
+  .seg button.on{background:rgba(62,230,168,.18);color:var(--accent);font-weight:700}
   .tlTh{border-radius:12px!important}
   .tlnav{display:flex;gap:8px;align-items:center;margin:12px 0 6px;padding:6px 8px;border:1px solid var(--line);border-radius:12px;background:rgba(3,8,14,.45)}
   .tlnav .lbl{font-size:11px;color:var(--sub);white-space:nowrap;letter-spacing:.06em}
@@ -213,7 +215,8 @@
       <span class="status">患者ID</span>
       <input id="tlId" placeholder="空なら今の患者" class="inp" style="width:170px">
       <button class="primary" id="tlShow">🎞 表示</button>
-      <span class="hint" id="tlMsg">「患者PDF」に整理したPDFの波形を、日付順にめくって見られます。</span>
+      <span class="seg" title="表示のしかた"><button id="tlModeFull">📄 ページそのまま</button><button id="tlModeCrop">〰 波形の部分だけ</button></span>
+      <span class="hint" id="tlMsg">「患者PDF」に整理したPDFを、加工せずにそのまま表示し、日付順にめくって見られます。</span>
     </div>
     <div id="tlBody" hidden>
       <div class="tlnav">
@@ -1008,8 +1011,10 @@ async function findRefPdf(ref,id,obj){
     const names=[];for await(const [n,h] of pd.entries())if(h.kind==='file'&&n.startsWith(stem)&&/\.pdf$/i.test(n)&&!/_書類\d/.test(n))names.push(n);
     names.sort();if(!names.length)return null;return await (await pd.getFileHandle(names[names.length-1])).getFile();}catch(_){return null;}
 }
-async function ecgImage(doc,pageNo){ // 波形のページから、緑の線がある範囲だけを高い倍率で描き直す（くっきり表示用）
+async function ecgImage(doc,pageNo,full){ // 波形のページを描く。full＝ページをそのまま全部／それ以外＝緑の線がある範囲だけを高い倍率で（どちらもPDFの見た目は加工しない）
   const pno=pageNo||await pickEcgPage(doc),pg=await doc.getPage(pno);
+  if(full){const v0=pg.getViewport({scale:1}),S=Math.min(6,2400/v0.width),v=pg.getViewport({scale:S}),o=document.createElement('canvas');o.width=Math.round(v.width);o.height=Math.round(v.height);
+    const ox=o.getContext('2d');ox.fillStyle='#fff';ox.fillRect(0,0,o.width,o.height);await pg.render({canvasContext:ox,viewport:v}).promise;return o;}
   // ① まず低い倍率で描いて、緑の線がある範囲を探す
   const s1=1.5,v1=pg.getViewport({scale:s1}),c=document.createElement('canvas');c.width=Math.round(v1.width);c.height=Math.round(v1.height);
   const x=c.getContext('2d',{willReadFrequently:true});x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);await pg.render({canvasContext:x,viewport:v1}).promise;
@@ -1026,11 +1031,17 @@ async function ecgImage(doc,pageNo){ // 波形のページから、緑の線が�
 
 // ===== 🎞 タイムライン：保存した元のPDFの波形を、スライドバーで日付順にめくる（上に基準を固定）=====
 const tl={id:'',obj:{},items:[],base:null,cache:new Map(),idx:0,top:-1}; // top=-1 は「基準」
+let tlFull=true;try{tlFull=localStorage.getItem('pg_lat_tlmode')!=='crop';}catch(_){}
+function tlModeBtns(){$('tlModeFull').classList.toggle('on',tlFull);$('tlModeCrop').classList.toggle('on',!tlFull);}
+tlModeBtns();
+async function tlSetMode(full){tlFull=full;try{localStorage.setItem('pg_lat_tlmode',full?'full':'crop');}catch(_){}tlModeBtns();
+  if(!tl.items.length)return;await tlTop(tl.top);await tlGo(tl.idx);tlThumbs();}
+$('tlModeFull').onclick=()=>tlSetMode(true);$('tlModeCrop').onclick=()=>tlSetMode(false);
 async function tlImage(rep){
-  const k=(rep.pdf||'')+'|'+(rep.key||rep.date);if(tl.cache.has(k))return tl.cache.get(k);
+  const k=(tlFull?'F|':'C|')+(rep.pdf||'')+'|'+(rep.key||rep.date);if(tl.cache.has(k))return tl.cache.get(k);
   let url=null;
   try{const f=await findRefPdf(rep,tl.id,tl.obj);
-    if(f){const lib=await ensurePdfjs();const doc=await lib.getDocument({data:new Uint8Array(await f.arrayBuffer())}).promise;url=(await ecgImage(doc)).toDataURL('image/png');}}catch(_){}
+    if(f){const lib=await ensurePdfjs();const doc=await lib.getDocument({data:new Uint8Array(await f.arrayBuffer())}).promise;url=(await ecgImage(doc,0,tlFull)).toDataURL('image/png');}}catch(_){}
   tl.cache.set(k,url);return url;
 }
 const tlPill=lv=>lv==null?'':`<span class="${['ok-t','warn-t','bad-t'][lv]}" style="font-weight:700">${['✅ 変化なし','🟡 注意','⚠️ 要確認'][lv]}</span>`;
@@ -1077,9 +1088,12 @@ $('tlShow').onclick=async()=>{
   $('tlTSlider').max=tl.items.length-1;
   await tlTop(-1);
   await tlGo(tl.items.length-1);
-  // サムネイルは後から順番に読み込む
-  for(let k=0;k<tl.items.length;k++){if(tl.id!==id)return;const url=await tlImage(tl.items[k]);const c=$('tlStrip').children[k];if(c&&url)c.querySelector('.tlImg').innerHTML=`<img src="${url}" style="width:100%;height:100%;object-fit:cover;object-position:left top">`;}
+  tlThumbs();
 };
+async function tlThumbs(){ // サムネイルは後から順番に読み込む
+  const id=tl.id,mode=tlFull;
+  for(let k=0;k<tl.items.length;k++){if(tl.id!==id||tlFull!==mode)return;const url=await tlImage(tl.items[k]);const c=$('tlStrip').children[k];if(c&&url)c.querySelector('.tlImg').innerHTML=`<img src="${url}" style="width:100%;height:100%;object-fit:cover;object-position:left top">`;}
+}
 // 上の波形：基準（-1）か、スライドバーで選んだ日付
 async function tlTop(i){
   if(!tl.items.length)return;
