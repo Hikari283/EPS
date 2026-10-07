@@ -157,6 +157,26 @@
     <div id="insideBody"></div>
   </details>
 
+  <div class="card" id="tlCard" style="margin-top:14px">
+    <h2>🎞 タイムライン（保存した実際の波形を時系列で）</h2>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span class="status">患者ID</span>
+      <input id="tlId" placeholder="空なら今の患者" style="background:#0a1320;color:var(--tx);border:1px solid var(--line);border-radius:8px;padding:5px 8px;width:160px">
+      <button class="primary" id="tlShow">🎞 表示</button>
+      <span class="hint" id="tlMsg">「患者PDF」に整理したPDFの波形を、日付順にめくって見られます。</span>
+    </div>
+    <div id="tlBody" hidden>
+      <div id="tlBase" style="margin-top:10px"></div>
+      <div style="display:flex;gap:8px;align-items:center;margin:10px 0 4px">
+        <button id="tlPrev" title="前の日付">◀</button>
+        <input type="range" id="tlSlider" min="0" max="0" value="0" style="flex:1">
+        <button id="tlNext" title="次の日付">▶</button>
+      </div>
+      <div id="tlCur"></div>
+      <div class="hint" style="margin-top:8px">全部の日付（クリックでその日へ。キーボードの ← → でもめくれます）</div>
+      <div id="tlStrip" style="display:flex;gap:6px;overflow-x:auto;padding:6px 0"></div>
+    </div>
+  </div>
   <div class="card" id="eyeCard" hidden style="margin-top:14px">
     <h2>👁 元の波形を目で比べる</h2>
     <div class="hint">PDFの波形の部分をそのまま並べています（上から 基準 → 前回 → 今回）。</div>
@@ -887,6 +907,51 @@ async function showEyeCompare(refs,now){
   for(const o of out){const w=document.createElement('div');w.style.margin='8px 0';w.innerHTML=`<div style="font-weight:700;margin-bottom:4px">${escH(o.label)}</div>`;
     const im=document.createElement('img');im.src=o.cv.toDataURL('image/png');im.style.cssText='width:100%;background:#fff;border-radius:6px;display:block';w.appendChild(im);box.appendChild(w);}
 }
+
+// ===== 🎞 タイムライン：保存した元のPDFの波形を、スライドバーで日付順にめくる（上に基準を固定）=====
+const tl={id:'',obj:{},items:[],base:null,cache:new Map(),idx:0};
+async function tlImage(rep){
+  const k=(rep.pdf||'')+'|'+(rep.key||rep.date);if(tl.cache.has(k))return tl.cache.get(k);
+  let url=null;
+  try{const f=await findRefPdf(rep,tl.id,tl.obj);
+    if(f){const lib=await ensurePdfjs();const doc=await lib.getDocument({data:new Uint8Array(await f.arrayBuffer())}).promise;url=(await ecgImage(doc)).toDataURL('image/jpeg',0.88);}}catch(_){}
+  tl.cache.set(k,url);return url;
+}
+const tlPill=lv=>lv==null?'':`<span class="${['ok-t','warn-t','bad-t'][lv]}" style="font-weight:700">${['✅ 変化なし','🟡 注意','⚠️ 要確認'][lv]}</span>`;
+const tlNums=f=>f?`波高 ${(+f.amp).toFixed(2)} mV・QRS幅 ${f.width} ms・心拍 ${f.hr??'—'} bpm`:'';
+async function tlPanel(box,rep,title){
+  box.innerHTML=`<div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap"><b>${escH(title)}</b>${tlPill(rep.lv)}<span class="hint">${tlNums(rep.feat)}</span></div><div class="hint">読み込み中…</div>`;
+  const url=await tlImage(rep);
+  box.lastElementChild.outerHTML=url?`<img src="${url}" style="width:100%;background:#fff;border-radius:6px;display:block;margin-top:4px">`:'<div class="hint warn-t">この日のPDFが「'+escH(PDF_DIR)+'」に見つかりません（このツールで整理する前のレポート）。</div>';
+}
+async function tlGo(i){
+  if(!tl.items.length)return;i=Math.max(0,Math.min(tl.items.length-1,i));tl.idx=i;$('tlSlider').value=i;
+  const it=tl.items[i];
+  [...$('tlStrip').children].forEach((c,k)=>c.style.outline=k===i?'3px solid var(--accent)':'none');
+  const th=$('tlStrip').children[i];if(th)th.scrollIntoView({block:'nearest',inline:'center'});
+  await tlPanel($('tlCur'),it,`${i+1}/${tl.items.length}　${it.date||'?'}`);
+}
+$('tlShow').onclick=async()=>{
+  await ensureDir();if(!dirHandle){$('tlMsg').innerHTML='<span class="warn-t">データフォルダに接続できません。📁で選んでください。</span>';return;}
+  const id=$('tlId').value.trim()||$('fId').value.trim();if(!id){$('tlMsg').innerHTML='<span class="warn-t">患者IDを入れてください。</span>';return;}
+  const st=await readBaseline(id);if(!st||!(st.reports||[]).length){$('tlMsg').innerHTML=`<span class="warn-t">ID ${escH(id)} の記録がありません。</span>`;$('tlBody').hidden=true;return;}
+  tl.id=id;tl.obj={name:st.name,device:st.device};tl.cache.clear();
+  const lvOf=r=>{const h=(st.history||[]).filter(x=>x.date===r.date&&x.level!=null).pop();return h?h.level:null;};
+  tl.items=[...st.reports].sort((a,b)=>a.key<b.key?-1:1).map(r=>({...r,lv:lvOf(r)}));
+  tl.base=st.baseline||tl.items[0];
+  $('tlMsg').textContent=`ID ${id}：${tl.items.length}回分の記録`;$('tlBody').hidden=false;
+  $('tlSlider').max=tl.items.length-1;
+  $('tlStrip').innerHTML=tl.items.map((it,k)=>`<button class="tlTh" data-k="${k}" style="flex:0 0 auto;padding:4px;width:150px;text-align:left"><div style="font-size:11px">${escH(it.date||'?')} ${it.lv==null?'':['✅','🟡','⚠️'][it.lv]}</div><div class="tlImg" style="height:46px;background:#fff;border-radius:4px;overflow:hidden"></div></button>`).join('');
+  await tlPanel($('tlBase'),{...tl.base,lv:null},`📌 基準：${tl.base.date||'?'}`);
+  await tlGo(tl.items.length-1);
+  // サムネイルは後から順番に読み込む
+  for(let k=0;k<tl.items.length;k++){if(tl.id!==id)return;const url=await tlImage(tl.items[k]);const c=$('tlStrip').children[k];if(c&&url)c.querySelector('.tlImg').innerHTML=`<img src="${url}" style="width:100%;height:100%;object-fit:cover;object-position:left top">`;}
+};
+$('tlSlider').oninput=e=>tlGo(+e.target.value);
+$('tlPrev').onclick=()=>tlGo(tl.idx-1);$('tlNext').onclick=()=>tlGo(tl.idx+1);
+document.addEventListener('click',e=>{const b=e.target.closest('.tlTh');if(b)tlGo(+b.dataset.k);});
+document.addEventListener('keydown',e=>{if($('tlBody').hidden||/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))return; // スライドバー自体は矢印キーで動く
+  if(e.key==='ArrowLeft'){tlGo(tl.idx-1);e.preventDefault();}else if(e.key==='ArrowRight'){tlGo(tl.idx+1);e.preventDefault();}});
 // ===== 🖨 印刷（PDFそのまま／比較結果つき）=====
 let lastPdfDoc=null;
 async function pdfPagesHtml(){
