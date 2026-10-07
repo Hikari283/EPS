@@ -192,6 +192,7 @@
 </header>
 
 <main class="wrap">
+  <button id="startBanner" hidden style="width:100%;padding:16px;font-size:17px;font-weight:800;border-radius:16px;border:0;color:#fff;background:linear-gradient(135deg,#10b981,#0ea5e9);box-shadow:0 12px 30px -14px rgba(16,185,129,.9)">▶ ここを押して今日の見張りを開始（1日1回）<span style="display:block;font-size:12px;font-weight:500;opacity:.9">許可の画面が出たら「許可する」を押してください</span></button>
 
   <div class="grid">
     <section class="card" id="patientCard">
@@ -1333,7 +1334,7 @@ const WSEEN='pg_lat_watch_seen';
 try{for(const [k,v] of JSON.parse(localStorage.getItem(WSEEN)||'[]'))watchSeen.set(k,v);}catch(_){}
 const wkey=f=>f.name+'|'+f.size+'|'+f.lastModified;
 function saveSeen(){try{localStorage.setItem(WSEEN,JSON.stringify([...watchSeen].slice(-500)));}catch(_){}}
-function setWatchStatus(h){$('watchStatus').innerHTML=h;const on=!!watchDir;$('liveDot').classList.toggle('on',on);$('liveTxt').textContent=on?'見張り中：'+watchDir.name:'見張り停止中';}
+function setWatchStatus(h){$('watchStatus').innerHTML=h;const on=!!watchDir;if(on)$('startBanner').hidden=true;$('liveDot').classList.toggle('on',on);$('liveTxt').textContent=on?'見張り中：'+watchDir.name:'見張り停止中';}
 // ☀／🌙：白と黒の切り替え（覚えておく）。波形の図も描き直す
 function themeBtnLabel(){$('themeBtn').textContent=document.documentElement.dataset.theme==='dark'?'☀':'🌙';}
 themeBtnLabel();
@@ -1444,8 +1445,10 @@ $('watchStop').onclick=()=>{clearInterval(watchTimer);watchDir=null;$('watchStop
     await startWatch(w);return;
   }
   setWatchStatus(`<span class="warn-t">👆 画面のどこかを1回クリックすると、見張り（${escH(w.name)}）を始めます。</span><br><span class="hint">許可を聞かれたら「<b>訪問時に毎回許可</b>」を選ぶと、次からは開いただけで自動で始まります。</span>`);
-  const once=e=>{document.removeEventListener('pointerdown',once,true);if(watchDir||e.target.closest('#watchStart,#watchStop,#pickFolder'))return;$('watchStart').click();};
-  document.addEventListener('pointerdown',once,true);
+  $('startBanner').hidden=false;
+  const done=()=>{document.removeEventListener('pointerdown',once,true);document.removeEventListener('keydown',once,true);};
+  const once=e=>{done();if(watchDir||(e.target&&e.target.closest&&e.target.closest('#watchStart,#watchStop,#pickFolder')))return;$('watchStart').click();};
+  document.addEventListener('pointerdown',once,true);document.addEventListener('keydown',once,true);
 })();
 renderWatchLog();
 </script>
