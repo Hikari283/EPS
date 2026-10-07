@@ -120,6 +120,12 @@
   .seg button{border:0;border-radius:0;background:transparent;padding:6px 12px}
   .seg button.on{background:rgba(62,230,168,.18);color:var(--accent);font-weight:700}
   .tlTh{border-radius:12px!important}
+  .tlp{display:grid;gap:12px;align-items:start}
+  .tlp.lr{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .tlp.tb,.tlp.ov{grid-template-columns:minmax(0,1fr)}
+  .tlp.ov #tlBase>img,.tlp.ov #tlCur>img{display:none!important}
+  .tlp.lr .tlnav{flex-wrap:wrap}
+  #tlOverlay canvas{display:block;width:100%;height:auto;border:0;border-radius:0;margin:0;background:#fff}
   .tlnav{display:flex;gap:8px;align-items:center;margin:12px 0 6px;padding:6px 8px;border:1px solid var(--line);border-radius:12px;background:var(--inbg)}
   .tlnav .lbl{font-size:11px;color:var(--sub);white-space:nowrap;letter-spacing:.06em}
   #lightbox{position:fixed;inset:0;z-index:300;background:rgba(3,6,10,.92);backdrop-filter:blur(6px);display:none;overflow:auto;cursor:zoom-out;padding:24px}
@@ -234,22 +240,33 @@
       <span class="hint" id="tlMsg">「患者PDF」に整理したPDFを、加工せずにそのまま表示し、日付順にめくって見られます。</span>
     </div>
     <div id="tlBody" hidden>
-      <div class="tlnav">
-        <span class="lbl">上</span>
-        <button id="tlTPrev" title="上の波形：前の日付">◀</button>
-        <input type="range" id="tlTSlider" min="0" max="0" value="0" style="flex:1">
-        <button id="tlTNext" title="上の波形：次の日付">▶</button>
-        <button id="tlTBase" title="上の波形を基準に戻す">📌 基準</button>
+      <div class="row" style="margin-top:10px">
+        <span class="seg" title="並べ方"><button id="tlLayLR">◧ 左右</button><button id="tlLayTB">⬒ 上下</button><button id="tlLayOV">◩ 重ねる</button></span>
+        <span id="tlOvCtl" class="row hint" hidden>上の濃さ <input type="range" id="tlOvA" min="0" max="100" value="50" style="width:160px"> 下（色：<span style="color:#16a34a;font-weight:700">緑＝上</span>／<span style="color:#c026d3;font-weight:700">紫＝下</span>、重なる所は黒っぽく）</span>
       </div>
-      <div id="tlBase"></div>
-      <div class="tlnav">
-        <span class="lbl">下</span>
-        <button id="tlPrev" title="前の日付">◀</button>
-        <input type="range" id="tlSlider" min="0" max="0" value="0" style="flex:1">
-        <button id="tlNext" title="次の日付">▶</button>
+      <div id="tlVs" class="hint" style="margin:8px 0;padding:6px 10px;border:1px solid var(--line);border-radius:8px"></div>
+      <div id="tlPanels" class="tlp lr">
+        <div class="tlcol">
+          <div class="tlnav">
+            <span class="lbl">上</span>
+            <button id="tlTPrev" title="前の日付">◀</button>
+            <input type="range" id="tlTSlider" min="0" max="0" value="0" style="flex:1;min-width:60px">
+            <button id="tlTNext" title="次の日付">▶</button>
+            <button id="tlTBase" title="基準に戻す">📌</button>
+          </div>
+          <div id="tlBase"></div>
+        </div>
+        <div class="tlcol">
+          <div class="tlnav">
+            <span class="lbl">下</span>
+            <button id="tlPrev" title="前の日付">◀</button>
+            <input type="range" id="tlSlider" min="0" max="0" value="0" style="flex:1;min-width:60px">
+            <button id="tlNext" title="次の日付">▶</button>
+          </div>
+          <div id="tlCur"></div>
+        </div>
       </div>
-      <div id="tlVs" class="hint" style="margin:2px 0 6px;padding:6px 10px;border:1px solid var(--line);border-radius:8px"></div>
-      <div id="tlCur"></div>
+      <div id="tlOverlay" hidden style="position:relative;margin-top:8px;background:#fff;border:1px solid #cbd5e1;border-radius:6px;overflow:hidden"></div>
       <div class="hint" style="margin-top:8px">全部の日付（クリックで下の波形をその日に。キーボードの ← → で下、Shift＋← → で上をめくれます）</div>
       <div id="tlStrip" style="display:flex;gap:6px;overflow-x:auto;padding:6px 0"></div>
     </div>
@@ -847,9 +864,10 @@ function analyzeRow(sig){
     const b=new Float32Array(L);for(let j=0;j<L;j++)b[j]=sampleAt(y,r+(j*DT-PRE)/MS_PER_PX);const bl=median2(b.subarray(0,idxOf(-60)));beats.push({r,b:b.map(v=>v-bl)});}
   if(beats.length<2)return {peaks,dbg,nBeats:beats.length,error:'R波を2拍以上見つけられませんでした（枠の位置を確認してください）'};
   const sum=summarizeBeats(beats);
-  const rrs=[];for(let k=1;k<peaks.length;k++){let gap=false;for(let i=peaks[k-1];i<peaks[k];i++)if(!valid[i]){gap=true;break;}const ms=(peaks[k]-peaks[k-1])*MS_PER_PX;if(!gap&&ms>250&&ms<2400)rrs.push(ms);}
+  // 枠の細い線（線が数px消えるだけ）はまたいでもよい。約40ms以上線が消えている所（コマのすき間）をまたぐRRは使わない
+  const rrs=[],rrSeq=[];for(let k=1;k<peaks.length;k++){let gap=false,run=0;for(let i=peaks[k-1];i<peaks[k];i++){run=valid[i]?0:run+1;if(run>12){gap=true;break;}}const ms=(peaks[k]-peaks[k-1])*MS_PER_PX;const ok=!gap&&ms>250&&ms<2400;if(ok)rrs.push(ms);rrSeq.push(ok?ms:null);}
   const hr=rrs.length?60000/median2(rrs):null;
-  return {...sum,hr:hr&&Math.round(hr),peaks,dbg};
+  return {...sum,hr:hr&&Math.round(hr),peaks,dbg,rrSeq};
 }
 // QRS幅：代表拍の傾きが「最大傾きの12%」と「基線部分（−100〜−60ms）のノイズの傾きの3倍」の大きい方を超えている範囲。
 // ノイズが多い記録でQRSの始まり・終わりが外側に伸びて、幅が長く測られるのを防ぐ
@@ -878,6 +896,24 @@ function summarizeBeats(beats){
   let pk=idxOf(0);for(let j=qa;j<=qb;j++)if(Math.abs(tpl[j])>Math.abs(tpl[pk]))pk=j;
   return {tpl:Array.from(tpl,v=>+v.toFixed(4)),amp:+amp.toFixed(3),ampVar:+ampVar.toFixed(3),width:(off-on)*DT,on:(on*DT-PRE),off:(off*DT-PRE),pol:tpl[pk]>=0?1:-1,nBeats:beats.length,beatCorr:+beatCorr.toFixed(3),beats};
 }
+// リズム（RR間隔）の解析：心房細動のような「不規則に不規則」なRRを見分ける。
+//  ・呼吸性のゆっくりした揺れ → 連続するRRの差は小さい（反応しない）
+//  ・期外収縮が1〜2拍 → 大きな差は一部だけ（連続差の中央値は小さい → 反応しない）
+//  ・二段脈など規則的な交互 → 奇数番目・偶数番目それぞれは揃っている（心房細動とは区別）
+//  ・心房細動 → ほとんどの連続差が大きく、ばらつきも大きい
+function rhythmOf(feats,noises){
+  const rr=[],diffs=[],seqs=[];let altA=[],altB=[];
+  feats.forEach((f,k)=>{if(!f||f.error||!f.rrSeq||(noises[k]&&noises[k].bad.length))return;
+    const sq=f.rrSeq;seqs.push(sq);
+    sq.forEach((v,i)=>{if(v==null)return;rr.push(v);(i%2?altA:altB).push(v);if(i>0&&sq[i-1]!=null)diffs.push(Math.abs(v-sq[i-1]));});});
+  const n=rr.length;if(n<8)return {n,enough:false,seqs};
+  const med=median2(rr),mean=rr.reduce((a,b)=>a+b,0)/n,sd=Math.sqrt(rr.reduce((a,b)=>a+(b-mean)**2,0)/n),cv=sd/mean;
+  const madsd=diffs.length?median2(diffs)/med:0,irr=diffs.length?diffs.filter(d=>d>0.08*med).length/diffs.length:0;
+  const cvOf=a=>{if(a.length<3)return 1;const m=a.reduce((x,y)=>x+y,0)/a.length;return Math.sqrt(a.reduce((x,y)=>x+(y-m)**2,0)/a.length)/m;};
+  const bigem=cvOf(altA)<0.06&&cvOf(altB)<0.06&&Math.abs(median2(altA)-median2(altB))/med>0.12;
+  const af=!bigem&&madsd>=0.06&&irr>=0.5&&cv>=0.08;
+  return {n,enough:true,med,hr:Math.round(60000/med),cv:+cv.toFixed(3),madsd:+madsd.toFixed(3),irr:+irr.toFixed(2),af,bigem,seqs};
+}
 // 全段の拍をまとめて代表拍を作る。頻拍・ノイズ・拍が少ない段は除外し、形が大きく違う段には印を付ける
 function poolRows(feats,noises){
   const rowInfo=feats.map((f,k)=>{
@@ -890,7 +926,8 @@ function poolRows(feats,noises){
   const hrsAll=feats.map((f,k)=>rowInfo[k].used&&f.hr?f.hr:null).filter(Boolean);
   if(hrsAll.length>=2){const mh=median2(hrsAll);feats.forEach((f,k)=>{if(rowInfo[k].used&&f.hr&&f.hr>mh*1.35){rowInfo[k]={used:false,reason:`他の段より心拍が速い（${f.hr}bpm、他は${Math.round(mh)}bpm：ノイズ・T波の二重カウント・頻拍の可能性）`,fast:true};}});}
   let use=feats.map((f,k)=>rowInfo[k].used?k:-1).filter(k=>k>=0);
-  if(!use.length)return {error:'代表拍に使える段がありません（全段が頻拍・ノイズ・検出不能）',rowInfo,usedRows:[]};
+  const rhythm=rhythmOf(feats,noises);
+  if(!use.length)return {error:'代表拍に使える段がありません（全段が頻拍・ノイズ・検出不能）',rowInfo,usedRows:[],rhythm};
   let pooled=summarizeBeats(use.flatMap(k=>feats[k].beats));
   // 代表拍と形が大きく違う段（イベント中など）は除いて作り直す
   const qa=idxOf(QRS_A),qb=idxOf(QRS_B);
@@ -899,7 +936,7 @@ function poolRows(feats,noises){
   const use2=feats.map((f,k)=>rowInfo[k].used?k:-1).filter(k=>k>=0);
   if(use2.length&&use2.length<use.length){use=use2;pooled=summarizeBeats(use.flatMap(k=>feats[k].beats));}
   const hrs=use.map(k=>feats[k].hr).filter(Boolean);
-  return {...pooled,hr:hrs.length?Math.round(median2(hrs)):null,rowInfo,usedRows:use};
+  return {...pooled,hr:hrs.length?Math.round(median2(hrs)):null,rowInfo,usedRows:use,rhythm};
 }
 // 前回と今回の比較 → 3段階の判定と理由
 function compareFeat(b,c){
@@ -1070,6 +1107,33 @@ async function ecgImage(doc,pageNo,full){ // 波形のページを描く。full�
 
 // ===== 🎞 タイムライン：保存した元のPDFの波形を、スライドバーで日付順にめくる（上に基準を固定）=====
 const tl={id:'',obj:{},items:[],base:null,cache:new Map(),idx:0,top:-1}; // top=-1 は「基準」
+// 並べ方：左右（標準）／上下／重ねる
+let tlLay='lr';try{tlLay=localStorage.getItem('pg_lat_tllay')||'lr';}catch(_){}
+function tlApplyLay(){$('tlPanels').className='tlp '+tlLay;['LR','TB','OV'].forEach(k=>$('tlLay'+k).classList.toggle('on',tlLay===k.toLowerCase()));
+  $('tlOvCtl').hidden=tlLay!=='ov';$('tlOverlay').hidden=tlLay!=='ov';if(tlLay==='ov')tlRenderOverlay();}
+['LR','TB','OV'].forEach(k=>$('tlLay'+k).onclick=()=>{tlLay=k.toLowerCase();try{localStorage.setItem('pg_lat_tllay',tlLay);}catch(_){}tlApplyLay();});
+tlApplyLay();
+// 重ねる：上（緑）と下（紫）を重ね、違う所だけ色が分かれて見える。スライダーで上の濃さを変える
+let tlOvData=null;
+function tlRenderOverlay(){
+  if(tlLay!=='ov')return;const a=document.querySelector('#tlBase img'),b=document.querySelector('#tlCur img'),box=$('tlOverlay');
+  if(!a||!b){box.innerHTML='<div class="hint" style="padding:10px">上と下の両方のPDFが必要です。</div>';tlOvData=null;return;}
+  const go=()=>{ // 2枚の「線の濃さ」を取り出し、上＝緑・下＝紫で重ねる（紙の白はそのまま）。重なる所は黒っぽくなる
+    const W=Math.min(1600,Math.max(a.naturalWidth,b.naturalWidth)),H=Math.round(W*a.naturalHeight/a.naturalWidth);
+    const dark=im=>{const c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,W,H);x.drawImage(im,0,0,W,Math.round(W*im.naturalHeight/im.naturalWidth));
+      const d=x.getImageData(0,0,W,H).data,o=new Float32Array(W*H);for(let i=0,j=0;i<d.length;i+=4,j++)o[j]=1-(0.3*d[i]+0.59*d[i+1]+0.11*d[i+2])/255;return o;};
+    tlOvData={W,H,ta:dark(a),tb:dark(b)};box.innerHTML='<canvas></canvas>';tlOvA();};
+  if(a.complete&&b.complete)go();else Promise.all([a,b].map(im=>im.decode().catch(()=>{}))).then(go);
+}
+function tlOvA(){
+  if(!tlOvData)return;const {W,H,ta,tb}=tlOvData,v=+$('tlOvA').value/100,wa=Math.min(1,2*(1-v)),wb=Math.min(1,2*v);
+  const cv=document.querySelector('#tlOverlay canvas');if(!cv)return;cv.width=W;cv.height=H;const x=cv.getContext('2d'),img=x.createImageData(W,H),d=img.data;
+  const A=[255-22,255-163,255-74],B=[255-192,255-38,255-211]; // 緑（上）・紫（下）が白から引く量
+  for(let j=0,i=0;j<ta.length;j++,i+=4){const p=ta[j]*wa,q=tb[j]*wb;
+    d[i]=255-p*A[0]-q*B[0];d[i+1]=255-p*A[1]-q*B[1];d[i+2]=255-p*A[2]-q*B[2];d[i+3]=255;}
+  x.putImageData(img,0,0);
+}
+let ovT=0;$('tlOvA').oninput=()=>{clearTimeout(ovT);ovT=setTimeout(tlOvA,30);};
 let tlFull=true;try{tlFull=localStorage.getItem('pg_lat_tlmode')!=='crop';}catch(_){}
 function tlModeBtns(){$('tlModeFull').classList.toggle('on',tlFull);$('tlModeCrop').classList.toggle('on',!tlFull);}
 tlModeBtns();
@@ -1096,6 +1160,7 @@ function tlWhy(h){ // その日に評価した時の判定の理由と、比較�
 async function tlPanel(box,rep,title){
   box.innerHTML=`<div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap"><b>${escH(title)}</b>${tlPill(rep.lv)}<span class="hint">${tlNums(rep.feat)}</span></div>${rep.lv?tlWhy(rep.h):''}<div class="hint">読み込み中…</div>`;
   const url=await tlImage(rep);
+  setTimeout(tlRenderOverlay,0);
   box.lastElementChild.outerHTML=url?`<img src="${url}" style="width:100%;background:#fff;border-radius:6px;display:block;margin-top:4px">`:'<div class="hint warn-t">この日のPDFが「'+escH(PDF_DIR)+'」に見つかりません（このツールで整理する前のレポート）。</div>';
 }
 function tlVs(){ // 今表示している上と下を、その場で比べる（同じ物差し）
@@ -1217,7 +1282,7 @@ async function runEval(mode){
   const pooledOf=f=>!f?null:Array.isArray(f)?(f.find(Boolean)||null):f; // 以前の保存形式（上段・下段）にも対応
   const bp=ref?pooledOf(ref.feat):null;
   const rowsSave=curFeat.map((f,k)=>{const u=curPool&&curPool.rowInfo[k]||{};return f&&!f.error?{hr:f.hr,amp:f.amp,width:f.width,nBeats:f.nBeats,noise:curNoise[k].max,used:!!u.used,reason:u.reason||'',corr:u.corr??null}:{error:true};});
-  const poolSave=pool?{tpl:pool.tpl,amp:pool.amp,ampVar:pool.ampVar,width:pool.width,on:pool.on,off:pool.off,pol:pool.pol,hr:pool.hr,nBeats:pool.nBeats,rows:rowsSave}:null;
+  const poolSave=pool?{tpl:pool.tpl,amp:pool.amp,ampVar:pool.ampVar,width:pool.width,on:pool.on,off:pool.off,pol:pool.pol,hr:pool.hr,nBeats:pool.nBeats,rows:rowsSave,rh:(r0=>r0&&r0.enough?{cv:r0.cv,madsd:r0.madsd,irr:r0.irr,af:r0.af,bigem:r0.bigem,hr:r0.hr}:null)(curPool&&curPool.rhythm)}:null;
   const now={id,name:$('fName').value,date:$('fDate').value,device:$('fDev').value,ts:Date.now()};
   let nowPdf=null; // 患者PDFフォルダに整理したこのPDFの場所（基準・前回のPDFを後で表示するために記録）
   const saveStore=async(histEntry)=>{
@@ -1233,6 +1298,9 @@ async function runEval(mode){
     if(u.tachy||u.fast)rowNotes.push({lv:1,row:`${k+1}段目`,why:u.reason});
     else if(u.outlier)rowNotes.push({lv:1,row:`${k+1}段目`,why:u.reason});
     else if(u.reason==='ノイズ疑い')rowNotes.push({lv:1,row:`${k+1}段目`,why:`ノイズ疑い（${curNoise[k].max}／閾値 ${curNoise[k].thr}）`});});
+  const rh=curPool&&curPool.rhythm;
+  if(rh&&rh.af)rowNotes.unshift({lv:1,row:'リズム',why:`RR間隔が不規則（心房細動の疑い：RRのばらつき ${Math.round(rh.cv*100)}%・連続する差 ${Math.round(rh.madsd*100)}%）`});
+  else if(rh&&rh.bigem)rowNotes.push({lv:1,row:'リズム',why:'RRが規則的に長短を繰り返す（二段脈などの可能性）'});
   const rowTable=`<div style="margin-top:12px"><b>段ごとの記録</b>（${curSigs.length}段）</div>
     <table class="crit"><tr><th>段</th><th>拍</th><th>心拍</th><th>波高</th><th>QRS幅</th><th>代表拍との形</th><th>ノイズ</th><th>扱い</th></tr>
     ${curFeat.map((f,k)=>{const u=curPool&&curPool.rowInfo[k]||{},nz=curNoise[k];if(!f||f.error)return `<tr class="lv1"><td>${k+1}</td><td colspan="7">${f&&f.error||'読み取れません'}</td></tr>`;
@@ -1246,7 +1314,7 @@ async function runEval(mode){
     const why=first?((store&&store.feat&&!store.reports)?'新しい計測方式で登録しました（この波形が基準になります）':'初回登録しました（この波形が基準になります）'):'比較できる前の日付のレポートがありません';
     $('result').innerHTML=`<div class="verdict info"><h2>${why}</h2>この患者（ID:${id}）の${now.date||'今回'}のレポートとして保存しました。${first?'次から「📌 基準と比較」で、同じ日付のレポートでも比べられます。':'同じ日付どうしを比べるときは「📌 基準と比較」を使ってください。'}${curKey?'':'<br><b>※照会日が読み取れていません。照会日を入力すると前後関係で正しく比較できます。</b>'}${dirHandle?'':'<br><b>※フォルダ未選択のため保存できていません。</b>'}
       <div class="hint" style="margin-top:6px">${measure(pool)}</div>${rowNotes.length?`<div class="cause">記録の中の所見：${rowNotes.map(x=>`${ic(x.lv)} ${x.row}：${x.why}`).join('　')}</div>`:''}</div>${rowTable}`;
-    $('overlayCard').hidden=true; tlAuto(id); return;
+    $('overlayCard').hidden=true; showRhythm(); tlAuto(id); return;
   }
   const r={k:0,b:bp,c:pool,...compareFeat(bp,pool)};
   const sign=v=>(v>0?'+':'')+v;
@@ -1273,10 +1341,11 @@ async function runEval(mode){
     <div class="hint" style="margin-top:6px">下の重ね描きで、形が違う部分を赤く塗っています（青＝${refLabel}、橙＝今回）。</div></div>`;
   lastEval={id,date:now.date,key:curKey,feat:poolSave,ts:now.ts,name:now.name,device:now.device};
   $('result').insertAdjacentHTML('beforeend','<div style="margin-top:8px"><button id="setBaseBtn">📌 今回の波形を基準にする</button> <span class="hint" id="setBaseMsg"></span></div>');
-  await saveStore({date:now.date,ref:ref.date,mode,level,corr:+r.corr.toFixed(3),amp:pool.amp,ampRatio:+r.ampRatio.toFixed(2),width:pool.width,dW:r.dW,pol:pool.pol,hr:pool.hr,rows:rowsSave,causes:causes.map(x=>x.txt)});
+  await saveStore({date:now.date,ref:ref.date,mode,level,corr:+r.corr.toFixed(3),amp:pool.amp,ampRatio:+r.ampRatio.toFixed(2),width:pool.width,dW:r.dW,pol:pool.pol,hr:pool.hr,rows:rowsSave,causes:causes.map(x=>x.txt),af:!!(rh&&rh.af)});
   lastEval.pdf=nowPdf;
   $('overlayCard').hidden=false; // 先に表示してから描く（幅を正しく取るため）
   drawBeat(r);
+  showRhythm();
   tlAuto(id);
 };
 // 代表拍の重ね描き（実寸：横 ms・縦 mV。青＝前回、橙＝今回。QRSの始まりと終わりに縦線）
@@ -1340,6 +1409,27 @@ function themeBtnLabel(){$('themeBtn').textContent=document.documentElement.data
 themeBtnLabel();
 $('themeBtn').onclick=()=>{const t=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=t;try{localStorage.setItem('pg_lat_theme',t);}catch(_){}
   themeBtnLabel();try{if(curSigs.length)showSigPreview();if(lastBeatR&&!$('overlayCard').hidden)drawBeat(lastBeatR);}catch(_){}};
+// リズム（RR間隔）のグラフと判定を、結果の下に出す
+function showRhythm(){
+  const rh=curPool&&curPool.rhythm;if(!rh||!$('result'))return;
+  const box=document.createElement('div');box.style.marginTop='12px';
+  if(!rh.enough){box.innerHTML=`<b>リズム（RR間隔）</b>　<span class="hint">RR間隔が少ないため判定できません（${rh.n}個）</span>`;$('result').appendChild(box);return;}
+  const verdict=rh.af?'<span class="warn-t" style="font-weight:800">🟡 不規則（心房細動の疑い）</span>':rh.bigem?'<span class="warn-t" style="font-weight:800">🟡 規則的な長短の繰り返し（二段脈などの可能性）</span>':'<span class="ok-t" style="font-weight:800">✅ 規則的</span>';
+  box.innerHTML=`<b>リズム（RR間隔）</b>　${verdict}<div class="hint">RR 中央値 ${Math.round(rh.med)} ms（${rh.hr} bpm）・ばらつき ${Math.round(rh.cv*100)}%・連続するRRの差 ${Math.round(rh.madsd*100)}%・大きく変わった割合 ${Math.round(rh.irr*100)}%（${rh.n}個）　<span title="心房細動の疑い：ばらつき8%以上 かつ 連続する差6%以上 かつ 大きく変わった割合50%以上（二段脈のような規則的な交互は除く）">ⓘ判定の目安</span></div><canvas class="rrcv"></canvas>`;
+  $('result').appendChild(box);
+  const cv=box.querySelector('canvas'),W=Math.max(320,box.clientWidth||600),H=130,c=hiDPI(cv,W,H),P=pal();
+  c.fillStyle=P.bg;c.fillRect(0,0,W,H);
+  const all=rh.seqs.flat().filter(v=>v!=null),lo=Math.min(...all,rh.med*0.8),hi=Math.max(...all,rh.med*1.2),Y=v=>H-18-(v-lo)/(hi-lo||1)*(H-34);
+  const total=rh.seqs.reduce((a,q)=>a+q.length,0)+rh.seqs.length,X=i=>14+i*(W-28)/Math.max(1,total-1);
+  c.strokeStyle=P.minor;c.lineWidth=1;c.beginPath();for(let v=Math.ceil(lo/100)*100;v<=hi;v+=100){const y=Math.round(Y(v))+.5;c.moveTo(0,y);c.lineTo(W,y);}c.stroke();
+  c.fillStyle=P.text;c.font='11px "Segoe UI",sans-serif';for(let v=Math.ceil(lo/200)*200;v<=hi;v+=200)c.fillText(v+' ms',4,Y(v)-2);
+  c.strokeStyle=P.major;c.setLineDash([4,4]);c.beginPath();c.moveTo(0,Y(rh.med));c.lineTo(W,Y(rh.med));c.stroke();c.setLineDash([]);
+  let i=0;const col=rh.af||rh.bigem?(document.documentElement.dataset.theme==='dark'?'#fbbf24':'#d97706'):P.trace;
+  rh.seqs.forEach(sq=>{c.strokeStyle=col;c.lineWidth=1.5;c.beginPath();let pen=false;
+    sq.forEach(v=>{if(v==null){pen=false;i++;return;}const x=X(i),y=Y(v);pen?c.lineTo(x,y):c.moveTo(x,y);pen=true;i++;});c.stroke();
+    let j=i-sq.length;c.fillStyle=col;sq.forEach(v=>{if(v!=null){c.beginPath();c.arc(X(j),Y(v),3,0,7);c.fill();}j++;});i++;});
+  c.fillStyle=P.text;c.fillText('拍の順番（段ごとに区切り）→',W-170,H-4);
+}
 // 最新の結果を上のバーにも出す（押すと「患者と判定」へ）
 new MutationObserver(()=>{const h=document.querySelector('#result .verdict h2');const c=$('lastChip');if(!h){return;}
   const v=h.closest('.verdict'),t=h.textContent.replace('（自動評価）','').trim(),id=$('fId').value.trim();
