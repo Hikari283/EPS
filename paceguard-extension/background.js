@@ -69,12 +69,18 @@ async function syncScripts() {
 chrome.runtime.onInstalled.addListener(syncScripts);
 chrome.storage.onChanged.addListener(ch => { if (ch.hosts) syncScripts(); });
 
-// ③ ツールの評価結果をWindowsの通知で知らせる（ファイルとして開いたページからは通知が出せないため、拡張機能が代わりに出す）
+// ③ ツールの評価結果を知らせる：LATITUDEの画面の右上に表示＋拡張機能のアイコンに印＋Windowsの通知（出せる場合）
 chrome.runtime.onMessage.addListener((m, sender) => {
   if (!m || m.type !== 'notify') return;
   if (!sender.url || !sender.url.startsWith('file:')) return;
-  chrome.notifications.create('pg-' + Date.now(), {
-    type: 'basic', iconUrl: 'icon128.png', title: m.title.slice(0, 120), message: m.body.slice(0, 300),
-    priority: m.level >= 2 ? 2 : 0, requireInteraction: m.level >= 2
-  });
+  const title = m.title.slice(0, 120), body = m.body.slice(0, 300);
+  (async () => {
+    const cfg = await getCfg();
+    const urls = cfg.hosts.flatMap(h => [`https://${h}/*`, `https://*.${h}/*`]);
+    try { for (const t of await chrome.tabs.query({ url: urls })) chrome.tabs.sendMessage(t.id, { type: 'toast', title, body, level: m.level }).catch(() => {}); } catch (_) {}
+  })();
+  chrome.action.setBadgeBackgroundColor({ color: m.level >= 2 ? '#dc2626' : m.level === 1 ? '#f59e0b' : '#16a34a' });
+  chrome.action.setBadgeText({ text: m.level >= 2 ? '!!' : m.level === 1 ? '!' : 'OK' });
+  chrome.action.setTitle({ title: title + '\n' + body });
+  try { chrome.notifications.create('pg-' + Date.now(), { type: 'basic', iconUrl: 'icon128.png', title, message: body, priority: m.level >= 2 ? 2 : 0, requireInteraction: m.level >= 2 }); } catch (_) {}
 });
