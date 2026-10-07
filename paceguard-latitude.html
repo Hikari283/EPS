@@ -5,49 +5,125 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PaceGuard LATITUDE 自動モード（β）</title>
 <style>
-  :root{ --bg:#0b1120; --card:#111a2b; --line:#22314a; --tx:#e6eefb; --sub:#9aa8bf; --accent:#38bdf8; --ok:#34d399; --warn:#fbbf24; --bad:#f87171; }
+  /* PaceGuard LATITUDE — 心電図モニターの世界観（暗い画面に光る緑の線）。重要な判定ほど上・大きく */
+  :root{
+    --bg:#060a11; --bg2:#0a101a; --card:rgba(15,22,35,.78); --card2:#0d1522; --line:#1d2a3d; --line2:#2a3a54;
+    --tx:#e9eff8; --sub:#8a99b1; --dim:#5f6f88;
+    --accent:#3ee6a8; --accent2:#38bdf8; --ok:#34d399; --warn:#fbbf24; --bad:#fb7185;
+    --font:"BIZ UDPGothic","Yu Gothic UI","Segoe UI","Hiragino Kaku Gothic ProN","Meiryo",system-ui,sans-serif;
+    --num:"Segoe UI Variable","Segoe UI","Helvetica Neue",var(--font);
+    --r:16px;
+  }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--tx);font-family:-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;font-size:14px;line-height:1.6}
-  header{padding:14px 20px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
-  header h1{font-size:19px;margin:0}
-  header .tag{font-size:11px;color:var(--accent);border:1px solid var(--line);border-radius:999px;padding:2px 10px}
-  header .dis{font-size:11px;color:var(--warn);margin-left:auto}
-  .wrap{max-width:1200px;margin:0 auto;padding:16px}
-  .bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:14px}
-  .grid{display:grid;grid-template-columns:1.3fr 1fr;gap:14px}
-  @media(max-width:900px){.grid{grid-template-columns:1fr}}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
-  .card h2{font-size:14px;margin:0 0 8px;color:#bfe3fb}
-  .drop{border:2px dashed var(--line);border-radius:10px;padding:16px;text-align:center;color:var(--sub);cursor:pointer}
-  .drop.over{border-color:var(--accent);background:rgba(56,189,248,.06)}
-  button{background:#16233a;color:var(--tx);border:1px solid var(--line);border-radius:8px;padding:7px 12px;font-size:13px;cursor:pointer}
-  button:hover{border-color:var(--accent)}
-  button.primary{background:var(--accent);color:#04222e;border-color:var(--accent);font-weight:700}
-  .field{display:flex;align-items:center;gap:8px;margin:6px 0}
-  .field label{width:88px;font-size:12px;color:var(--sub)}
-  .field input{flex:1;background:#0a1320;color:var(--tx);border:1px solid var(--line);border-radius:8px;padding:6px 8px}
-  canvas{display:block;max-width:100%;border-radius:8px;background:#050a12;border:1px solid var(--line);margin-top:8px}
-  #pageWrap{position:relative;overflow:auto;max-height:560px;border:1px solid var(--line);border-radius:8px;margin-top:8px}
-  #cropHint{font-size:12px;color:var(--accent);margin-top:6px}
-  .verdict{margin-top:12px;border-radius:12px;padding:14px 16px;border:1px solid var(--line)}
-  .verdict.ok{background:rgba(52,211,153,.10);border-color:#1f6b52}
-  .verdict.warn{background:rgba(251,191,36,.10);border-color:#7a5f1f}
-  table.crit{width:100%;border-collapse:collapse;margin-top:6px;font-size:12.5px;font-variant-numeric:tabular-nums}
-  table.crit th,table.crit td{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertical-align:top}
-  table.crit th{color:var(--sub);font-weight:600;font-size:11px}
-  table.crit tr.lv2 td{background:rgba(248,113,113,.10)} table.crit tr.lv1 td{background:rgba(251,191,36,.08)}
-  .cause{margin-top:8px;padding:8px 10px;border-radius:8px;background:rgba(0,0,0,.25);font-weight:700}
-  .verdict.bad{background:rgba(248,113,113,.10);border-color:#7a2e2e}
-  .verdict.info{background:rgba(56,189,248,.08)}
-  .verdict h2{margin:0 0 4px;font-size:18px}
+  html{scroll-behavior:smooth}
+  body{margin:0;color:var(--tx);font-family:var(--font);font-size:14px;line-height:1.65;min-height:100vh;
+    background:
+      radial-gradient(1200px 600px at 10% -10%,rgba(62,230,168,.10),transparent 60%),
+      radial-gradient(900px 500px at 110% 0%,rgba(56,189,248,.10),transparent 60%),
+      linear-gradient(rgba(62,230,168,.035) 1px,transparent 1px) 0 0/24px 24px,
+      linear-gradient(90deg,rgba(62,230,168,.035) 1px,transparent 1px) 0 0/24px 24px,
+      var(--bg);}
+  ::selection{background:rgba(62,230,168,.3)}
+  a{color:var(--accent2)}
+  code{font-family:"Cascadia Mono",Consolas,monospace;font-size:.9em;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:5px}
+  /* ── 上のバー ── */
+  .appbar{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:10px 18px;
+    background:rgba(6,10,17,.72);backdrop-filter:blur(14px) saturate(140%);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+  .brand{display:flex;align-items:center;gap:10px}
+  .brand svg{width:34px;height:34px;flex:0 0 auto;filter:drop-shadow(0 0 8px rgba(62,230,168,.55))}
+  .brand svg path.run{stroke-dasharray:120;stroke-dashoffset:120;animation:draw 2.4s ease-in-out infinite}
+  @keyframes draw{0%{stroke-dashoffset:120}55%{stroke-dashoffset:0}100%{stroke-dashoffset:-120}}
+  .brand h1{font-size:17px;margin:0;letter-spacing:.02em;font-weight:800;line-height:1.1}
+  .brand h1 small{display:block;font-size:10.5px;font-weight:500;color:var(--sub);letter-spacing:.14em}
+  .chips{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-left:auto}
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--sub);background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:999px;padding:4px 11px;max-width:420px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .live{width:8px;height:8px;border-radius:50%;background:var(--dim);flex:0 0 auto}
+  .live.on{background:var(--accent);box-shadow:0 0 0 0 rgba(62,230,168,.7);animation:ping 1.8s infinite}
+  @keyframes ping{0%{box-shadow:0 0 0 0 rgba(62,230,168,.6)}80%{box-shadow:0 0 0 9px rgba(62,230,168,0)}100%{box-shadow:0 0 0 0 rgba(62,230,168,0)}}
+  .iconbtn{padding:6px 10px!important;border-radius:10px!important}
+  .disclaimer{width:100%;font-size:10.5px;color:var(--dim);margin-top:-4px}
+  /* ── レイアウト ── */
+  .wrap{max-width:1500px;margin:0 auto;padding:18px;display:grid;gap:16px}
+  .grid{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
+  @media(min-width:1400px){.grid{grid-template-columns:minmax(0,1.05fr) minmax(0,1fr)}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;
+    box-shadow:0 1px 0 rgba(255,255,255,.04) inset,0 18px 40px -24px rgba(0,0,0,.8);backdrop-filter:blur(6px)}
+  .card h2,.sec-title{font-size:13px;margin:0 0 10px;color:var(--sub);font-weight:700;letter-spacing:.08em;display:flex;align-items:center;gap:8px}
+  .card h2::before,.sec-title::before{content:"";width:3px;height:14px;border-radius:2px;background:linear-gradient(var(--accent),var(--accent2))}
+  details.card>summary{list-style:none;cursor:pointer;font-weight:700;font-size:13px;color:var(--sub);letter-spacing:.06em;display:flex;align-items:center;gap:8px}
+  details.card>summary::-webkit-details-marker{display:none}
+  details.card>summary::after{content:"＋";margin-left:auto;color:var(--dim);font-weight:400}
+  details.card[open]>summary::after{content:"−"}
+  details.card[open]>summary{margin-bottom:12px}
+  .bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  /* ── 部品 ── */
+  button{font-family:inherit;background:linear-gradient(180deg,#172338,#121c2d);color:var(--tx);border:1px solid var(--line2);border-radius:11px;padding:8px 14px;font-size:13px;cursor:pointer;
+    transition:transform .08s,border-color .15s,box-shadow .15s,background .15s}
+  button:hover{border-color:var(--accent2);box-shadow:0 0 0 3px rgba(56,189,248,.12)}
+  button:active{transform:translateY(1px)}
+  button:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  button:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
+  button.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#03151a;border-color:transparent;font-weight:800;box-shadow:0 8px 22px -10px rgba(62,230,168,.8)}
+  button.primary:hover{box-shadow:0 10px 26px -8px rgba(62,230,168,.9),0 0 0 3px rgba(62,230,168,.18)}
+  button.ghost{background:transparent}
+  input[type=text],input:not([type]),input[type=search]{font-family:inherit}
+  .field{display:grid;gap:3px}
+  .field label{font-size:10.5px;color:var(--sub);letter-spacing:.08em}
+  .field input,.inp{width:100%;background:rgba(3,8,14,.7);color:var(--tx);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:14px;font-variant-numeric:tabular-nums;transition:border-color .15s}
+  .field input:focus,.inp:focus{border-color:var(--accent2);outline:none;box-shadow:0 0 0 3px rgba(56,189,248,.15)}
+  .fields{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+  @media(max-width:760px){.fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  .field.id input{font-size:17px;font-weight:800;letter-spacing:.04em;color:#fff}
+  input[type=checkbox]{accent-color:var(--accent)}
+  input[type=range]{accent-color:var(--accent);height:22px;cursor:pointer}
+  .drop{border:1.5px dashed var(--line2);border-radius:14px;padding:14px;text-align:center;color:var(--sub);cursor:pointer;transition:all .15s;
+    background:repeating-linear-gradient(135deg,transparent 0 10px,rgba(255,255,255,.015) 10px 20px)}
+  .drop:hover{border-color:var(--accent2);color:var(--tx)}
+  .drop.over{border-color:var(--accent);background:rgba(62,230,168,.08);color:var(--tx)}
+  body.dragging::after{content:"PDFをはなすと読み込みます";position:fixed;inset:12px;border:2px dashed var(--accent);border-radius:20px;background:rgba(6,10,17,.82);
+    display:grid;place-items:center;font-size:22px;font-weight:800;color:var(--accent);z-index:200;pointer-events:none}
+  canvas{display:block;max-width:100%;border-radius:12px;background:#04080d;border:1px solid var(--line);margin-top:8px}
+  #pageWrap{position:relative;overflow:auto;max-height:560px;border:1px solid var(--line);border-radius:12px;margin-top:10px;background:#fff}
+  #pageWrap canvas{border:0;border-radius:0;margin:0}
+  #cropHint{font-size:12px;color:var(--accent2);margin-top:8px}
+  /* ── 判定 ── */
+  .verdict{position:relative;margin-top:14px;border-radius:16px;padding:16px 18px 16px 22px;border:1px solid var(--line);overflow:hidden;background:var(--card2)}
+  .verdict::before{content:"";position:absolute;left:0;top:0;bottom:0;width:6px;background:var(--accent2)}
+  .verdict.ok{background:linear-gradient(120deg,rgba(52,211,153,.14),rgba(52,211,153,.03) 60%);border-color:rgba(52,211,153,.35)}
+  .verdict.ok::before{background:var(--ok);box-shadow:0 0 18px var(--ok)}
+  .verdict.warn{background:linear-gradient(120deg,rgba(251,191,36,.15),rgba(251,191,36,.03) 60%);border-color:rgba(251,191,36,.4)}
+  .verdict.warn::before{background:var(--warn);box-shadow:0 0 18px var(--warn)}
+  .verdict.bad{background:linear-gradient(120deg,rgba(251,113,133,.18),rgba(251,113,133,.04) 60%);border-color:rgba(251,113,133,.5)}
+  .verdict.bad::before{background:var(--bad);box-shadow:0 0 22px var(--bad)}
+  .verdict.info{background:linear-gradient(120deg,rgba(56,189,248,.12),rgba(56,189,248,.02) 60%)}
+  .verdict h2{margin:0 0 6px;font-size:23px;letter-spacing:.01em;line-height:1.3;color:var(--tx);display:block}
+  .verdict h2::before{display:none}
+  .cause{margin-top:10px;padding:10px 12px;border-radius:12px;background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.06);font-weight:700}
+  table.crit{width:100%;border-collapse:separate;border-spacing:0;margin-top:8px;font-size:12.5px;font-variant-numeric:tabular-nums}
+  table.crit th,table.crit td{border-bottom:1px solid var(--line);padding:7px 8px;text-align:left;vertical-align:top}
+  table.crit th{color:var(--sub);font-weight:600;font-size:10.5px;letter-spacing:.06em;background:rgba(255,255,255,.02)}
+  table.crit tr:hover td{background:rgba(255,255,255,.025)}
+  table.crit tr.lv2 td{background:rgba(251,113,133,.10)} table.crit tr.lv1 td{background:rgba(251,191,36,.08)}
   .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:10px}
-  .m{background:#0a1320;border:1px solid var(--line);border-radius:9px;padding:8px 10px}
-  .m .k{font-size:10.5px;color:var(--sub)} .m .v{font-size:18px;font-weight:800}
+  .m{background:rgba(3,8,14,.6);border:1px solid var(--line);border-radius:12px;padding:8px 10px}
+  .m .k{font-size:10.5px;color:var(--sub)} .m .v{font-size:18px;font-weight:800;font-family:var(--num)}
   .m.flag{border-color:#7a2e2e} .m.good{border-color:#1f6b52}
   .hint{font-size:11.5px;color:var(--sub)}
   .status{font-size:12px;color:var(--sub)}
   .ok-t{color:var(--ok)} .bad-t{color:var(--bad)} .warn-t{color:var(--warn)}
-  footer{color:var(--sub);font-size:11px;margin-top:22px;border-top:1px solid var(--line);padding-top:12px}
+  footer{color:var(--dim);font-size:11px;border-top:1px solid var(--line);padding:14px 2px 30px}
+  /* ── タイムライン ── */
+  #tlBase img,#tlCur img{cursor:zoom-in;box-shadow:0 14px 34px -18px rgba(0,0,0,.9),0 0 0 1px rgba(255,255,255,.08);transition:transform .15s}
+  #tlBase img:hover,#tlCur img:hover{transform:translateY(-1px)}
+  .tlTh{border-radius:12px!important}
+  .tlnav{display:flex;gap:8px;align-items:center;margin:12px 0 6px;padding:6px 8px;border:1px solid var(--line);border-radius:12px;background:rgba(3,8,14,.45)}
+  .tlnav .lbl{font-size:11px;color:var(--sub);white-space:nowrap;letter-spacing:.06em}
+  #lightbox{position:fixed;inset:0;z-index:300;background:rgba(3,6,10,.92);backdrop-filter:blur(6px);display:none;overflow:auto;cursor:zoom-out;padding:24px}
+  #lightbox.on{display:block}
+  #lightbox img{display:block;margin:0 auto;max-width:none;width:min(2400px,96vw);background:#fff;border-radius:8px}
+  #lightbox .cap{position:sticky;top:0;color:#fff;font-weight:700;margin-bottom:10px;text-shadow:0 1px 6px #000}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
   #printArea{display:none}
   .prbtns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
   @media print{
@@ -67,115 +143,89 @@
 </style>
 </head>
 <body>
-<header>
-  <h1>PaceGuard <span style="color:var(--sub);font-weight:400">LATITUDE 自動モード</span></h1><span class="tag">β</span>
-  <span class="dis">⚠️ 研究・院内検証用。完全ローカル処理（PHIは端末外に出ません）。最終判断は医師。</span>
+<header class="appbar">
+  <div class="brand">
+    <svg viewBox="0 0 40 40" aria-hidden="true"><rect x="1" y="1" width="38" height="38" rx="11" fill="#0b1a1a" stroke="rgba(62,230,168,.45)"/><path class="base" d="M4 22h8l3-5 4 13 4-21 3 13h10" fill="none" stroke="#3ee6a8" stroke-opacity=".35" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path class="run" d="M4 22h8l3-5 4 13 4-21 3 13h10" fill="none" stroke="#3ee6a8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <h1>PaceGuard <span style="color:var(--accent)">LATITUDE</span><small>S-ICD WAVEFORM MONITOR · β</small></h1>
+  </div>
+  <div class="chips">
+    <span class="chip" title="自動見張りの状態"><span class="live" id="liveDot"></span><span id="liveTxt">見張り停止中</span></span>
+    <span class="chip" id="folderStatus">フォルダ未選択（比較結果の保存に必要）</span>
+    <button id="pickFolder" class="iconbtn" title="データフォルダを選ぶ">📁 フォルダ</button>
+    <button id="openSettings" class="iconbtn ghost" title="設定">⚙</button>
+  </div>
+  <div class="disclaimer">研究・院内検証用｜完全ローカル処理（患者情報はこのPCの外に出ません）｜最終判断は医師</div>
 </header>
 
-<div class="wrap">
-  <div class="bar">
-    <button id="pickFolder">📁 データフォルダを選択</button>
-    <span class="status" id="folderStatus">フォルダ未選択（比較結果の保存に必要）</span>
-    <span style="flex:1"></span>
-    <button id="redrawCrop">✂️ 範囲の指定を解除（ページ全体から自動）</button>
-    <button id="teachId">🔢 IDの位置を教える</button>
-    <button id="demoBtn">▶ 動作デモ</button>
-  </div>
-  <details class="bar" id="settings" style="display:block">
-    <summary style="cursor:pointer">⚙ 設定（保存先）</summary>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
-      <span class="status">基準フォルダの名前</span>
-      <input id="baseDirName" style="background:#0a1320;color:var(--tx);border:1px solid var(--line);border-radius:8px;padding:5px 8px;width:180px">
-      <button id="baseDirSave">保存</button>
-      <span class="status" id="baseDirMsg"></span>
-    </div>
-    <div class="hint" style="margin-top:6px">データフォルダの中で、患者ごとのデータ（患者ID.json）を入れるフォルダの名前です。フォルダの名前を手で変えたときは、ここも同じ名前に変えてください。無い名前を入れると新しく作ります。</div>
-    <div id="baseDirCands" class="hint" style="margin-top:4px"></div>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px">
-      <span class="status">患者ファイルの名前</span>
-      <input id="filePat" style="background:#0a1320;color:var(--tx);border:1px solid var(--line);border-radius:8px;padding:5px 8px;width:220px">
-      <button id="filePatSave">保存</button>
-      <span class="status" id="filePatMsg"></span>
-    </div>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px">
-      <span class="status">PDFを整理するフォルダ</span>
-      <input id="pdfDirName" style="background:#0a1320;color:var(--tx);border:1px solid var(--line);border-radius:8px;padding:5px 8px;width:180px">
-      <button id="pdfDirSave">保存</button>
-      <span class="status" id="pdfDirMsg"></span>
-    </div>
-    <div class="hint" style="margin-top:6px">評価したPDFを「データフォルダ／このフォルダ／患者ごとのフォルダ／日付.pdf」に保存します。患者ごとのフォルダ名は下の「患者ファイルの名前」と同じ形（.jsonを除いたもの）です。</div>
-    <div class="hint" style="margin-top:6px">新しい患者のファイルを作るときの名前です。使える項目：<code>{ID}</code>（患者ID）・<code>{氏名}</code>・<code>{機種}</code>　例：<code>{ID}.json</code>、<code>{ID}_{氏名}.json</code>。<br>既にあるファイルは今の名前のまま使います。ファイル名を手で変えても、ファイルの中に書かれた患者IDで自動的に見つけます。</div>
-  </details>
-
-  <div class="card" style="margin-bottom:14px">
-    <h2>👀 自動見張り（ダウンロードしたPDFを自動で評価）</h2>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+<main class="wrap">
+  <section class="card" id="watchCard">
+    <h2>自動見張り</h2>
+    <div class="row">
       <button class="primary" id="watchStart">👀 見張りを始める</button>
       <button id="watchStop" disabled>■ 止める</button>
-      <label class="hint" style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="watchPick"> 別のフォルダを選ぶ</label>
-      <label class="hint" style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="watchExisting"> フォルダに今あるPDFも処理する</label>
-      <label class="hint" style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="watchMove" checked> 処理したPDFを患者ごとのフォルダへ移動する</label>
+      <div class="status" id="watchStatus" style="flex:1;min-width:240px">止まっています。「👀 見張りを始める」で、LATITUDEのPDFを保存するフォルダを選んでください。</div>
     </div>
-    <div class="status" id="watchStatus" style="margin-top:6px">止まっています。「👀 見張りを始める」で、LATITUDEのPDFを保存するフォルダを選んでください。</div>
-    <div class="hint" style="margin-top:4px;color:var(--warn)">⚠ 「ダウンロード」フォルダそのものはChromeの制限で選べません（「システム ファイルが含まれている」と出ます）。ダウンロードの中に <b>LATITUDE</b> などのフォルダを作り、Chromeの設定 → ダウンロード → 保存先 をそのフォルダにするか、「ダウンロード前に各ファイルの保存場所を確認する」をオンにしてそこへ保存してください。</div>
-    <div class="hint">LATITUDEからPDFをダウンロードすると、数秒で自動的に読み込み→患者ID・段の認識→前回/基準と比較→保存し、通知と下の一覧に結果を出します。このタブは開いたままにしてください（裏に回っても動きますが、確認の間隔が長くなることがあります）。</div>
-    <div class="prbtns"><button class="prWith">🖨 最後のPDFを印刷（比較結果つき）</button><button class="prPlain">🖨 最後のPDFを印刷（そのまま）</button><span class="hint" style="align-self:center">※このツールは <b>--kiosk-printing なし</b> のChromeで開いてください（ありだと紙ではなくPDFに保存されます）</span></div>
-    <div id="watchLog" style="margin-top:8px"></div>
-  </div>
+    <details style="margin-top:8px"><summary class="hint" style="cursor:pointer">見張りの設定・注意</summary>
+      <div class="row" style="margin-top:6px">
+        <label class="hint row"><input type="checkbox" id="watchPick"> 別のフォルダを選ぶ</label>
+        <label class="hint row"><input type="checkbox" id="watchExisting"> フォルダに今あるPDFも処理する</label>
+        <label class="hint row"><input type="checkbox" id="watchMove" checked> 処理したPDFを患者ごとのフォルダへ移動する</label>
+      </div>
+      <div class="hint" style="margin-top:4px;color:var(--warn)">⚠ 「ダウンロード」フォルダそのものはChromeの制限で選べません（「システム ファイルが含まれている」と出ます）。ダウンロードの中に <b>LATITUDE</b> などのフォルダを作り、Chromeの設定 → ダウンロード → 保存先 をそのフォルダにするか、「ダウンロード前に各ファイルの保存場所を確認する」をオンにしてそこへ保存してください。</div>
+      <div class="prbtns"><button class="prWith">🖨 最後のPDFを印刷（比較結果つき）</button><button class="prPlain">🖨 最後のPDFを印刷（そのまま）</button><span class="hint" style="align-self:center">※印刷は --kiosk-printing なしのChromeで</span></div>
+    </details>
+    <div id="watchLog" style="margin-top:10px"></div>
+  </section>
+
   <div class="grid">
-    <div class="card">
-      <h2>① LATITUDE レポートPDF</h2>
-      <div class="drop" id="drop">PDFをドロップ / クリックで選択</div>
-      <div id="pageWrap"><canvas id="page"></canvas></div>
-      <div id="pageBtns" class="hint" style="margin:6px 0"></div>
-      <div id="cropHint">PDFを読み込むと、S-ECGの段をページ全体から自動で見つけます。</div>
-      <div id="previews"></div>
-      <div id="traceMsg" class="hint"></div>
-    </div>
-
-    <div class="card">
-      <h2>② 抽出情報（自動）</h2>
-      <div class="field"><label>患者ID</label><input id="fId" placeholder="自動抽出"></div>
-      <div class="field"><label>氏名</label><input id="fName" placeholder="自動抽出"></div>
-      <div class="field"><label>照会日</label><input id="fDate" placeholder="自動抽出"></div>
-      <div class="field"><label>デバイス</label><input id="fDev" placeholder="自動抽出"></div>
-      <div class="hint">自動抽出が違う場合は直接修正してください（IDが正しければ自動照合されます）。</div>
-      <div id="dbg" class="hint" style="margin-top:8px;padding:8px;background:#0a1320;border:1px solid var(--line);border-radius:8px;word-break:break-all">抽出テキスト：（PDFを読み込むと表示）</div>
-      <div id="ocrDbg" class="hint" style="margin-top:6px"></div>
-      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="primary" id="evalBtn">🔍 前回と比較</button><button class="primary" id="evalBaseBtn" style="background:#a78bfa;border-color:#a78bfa">📌 基準と比較</button></div>
-      <label class="hint" style="display:flex;gap:6px;align-items:center;margin-top:6px"><input type="checkbox" id="autoEval" checked> PDFを開いたら自動で評価する（前回があれば前回、なければ基準と比較）</label>
-      <div class="hint" id="baseInfo" style="margin-top:4px">前回＝今回より前の日付で一番新しいレポート／基準＝固定した基準レポート（同じ日付でも比べられます）</div>
-      <div class="prbtns"><button class="prWith">🖨 印刷（比較結果つき）</button><button class="prPlain">🖨 印刷（PDFそのまま）</button></div>
+    <section class="card" id="patientCard">
+      <h2>患者と判定</h2>
+      <div class="drop" id="drop">📄 PDFをここにドロップ／クリックして選択<span class="hint">（画面のどこにドロップしてもOK）</span></div>
+      <div class="fields" style="margin-top:12px">
+        <div class="field id"><label>患者ID</label><input id="fId" placeholder="自動抽出"></div>
+        <div class="field"><label>氏名</label><input id="fName" placeholder="自動抽出"></div>
+        <div class="field"><label>照会日</label><input id="fDate" placeholder="自動抽出"></div>
+        <div class="field"><label>デバイス</label><input id="fDev" placeholder="自動抽出"></div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button class="primary" id="evalBtn">🔍 前回と比較</button>
+        <button class="primary" id="evalBaseBtn" style="background:linear-gradient(135deg,#a78bfa,#38bdf8)">📌 基準と比較</button>
+        <span style="flex:1"></span>
+        <button class="prWith ghost">🖨 比較結果つき</button><button class="prPlain ghost">🖨 PDFのまま</button>
+      </div>
+      <label class="hint row" style="margin-top:8px"><input type="checkbox" id="autoEval" checked> PDFを開いたら自動で評価する（前回があれば前回、なければ基準と比較）</label>
+      <div class="hint" id="baseInfo">前回＝今回より前の日付で一番新しいレポート／基準＝固定した基準レポート（同じ日付でも比べられます）</div>
       <div id="result"></div>
+    </section>
+
+    <div class="card" id="overlayCard" hidden>
+      <h2>代表拍の重ね描き（青＝比較相手／橙＝今回）</h2>
+      <div class="hint">全段の代表拍どうし（横 ms・縦 mV の実寸）。赤い帯＝形が違う所</div>
+      <canvas id="overlay" height="220"></canvas>
+      <canvas id="diff" height="80"></canvas>
+      <div id="row2Wrap" hidden></div>
     </div>
   </div>
 
-
-  <details class="card" id="inside" style="margin-top:14px">
-    <summary style="cursor:pointer;font-weight:700">🔬 解析の裏側（このPDFを実際にどう解析したか）</summary>
-    <div class="hint" style="margin:6px 0">段ごとに、①PDFの画像となぞった線 ②mVに換算した線と基線 ③基線を引いた線とR波 ④傾きとしきい値 を同じ横軸で並べています。横にスクロールできます（横1px＝約3.5ms）。</div>
-    <div id="insideBody"></div>
-  </details>
-
-  <div class="card" id="tlCard" style="margin-top:14px">
+  <div class="card" id="tlCard">
     <h2>🎞 タイムライン（保存した実際の波形を時系列で）</h2>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <span class="status">患者ID</span>
-      <input id="tlId" placeholder="空なら今の患者" style="background:#0a1320;color:var(--tx);border:1px solid var(--line);border-radius:8px;padding:5px 8px;width:160px">
+      <input id="tlId" placeholder="空なら今の患者" class="inp" style="width:170px">
       <button class="primary" id="tlShow">🎞 表示</button>
       <span class="hint" id="tlMsg">「患者PDF」に整理したPDFの波形を、日付順にめくって見られます。</span>
     </div>
     <div id="tlBody" hidden>
-      <div style="display:flex;gap:8px;align-items:center;margin:10px 0 4px">
-        <span class="hint" style="white-space:nowrap">上：</span>
+      <div class="tlnav">
+        <span class="lbl">上</span>
         <button id="tlTPrev" title="上の波形：前の日付">◀</button>
         <input type="range" id="tlTSlider" min="0" max="0" value="0" style="flex:1">
         <button id="tlTNext" title="上の波形：次の日付">▶</button>
         <button id="tlTBase" title="上の波形を基準に戻す">📌 基準</button>
       </div>
       <div id="tlBase"></div>
-      <div style="display:flex;gap:8px;align-items:center;margin:10px 0 4px">
-        <span class="hint" style="white-space:nowrap">下：</span>
+      <div class="tlnav">
+        <span class="lbl">下</span>
         <button id="tlPrev" title="前の日付">◀</button>
         <input type="range" id="tlSlider" min="0" max="0" value="0" style="flex:1">
         <button id="tlNext" title="次の日付">▶</button>
@@ -186,19 +236,61 @@
       <div id="tlStrip" style="display:flex;gap:6px;overflow-x:auto;padding:6px 0"></div>
     </div>
   </div>
-  <div class="card" id="overlayCard" hidden style="margin-top:14px">
-    <h2>重ね描き（青=前回 / 橙=今回）と差分</h2>
-    <div class="hint">全段の代表拍どうし（横 ms・縦 mV の実寸）</div>
-    <canvas id="overlay" height="180"></canvas>
-    <canvas id="diff" height="80"></canvas>
-    <div id="row2Wrap" hidden></div>
-  </div>
+
+  <details class="card" id="pdfSec" open>
+    <summary>📄 読み込んだPDFと段の読み取り</summary>
+    <div class="row">
+      <button id="redrawCrop">✂️ 範囲の指定を解除</button>
+      <button id="teachId">🔢 IDの位置を教える</button>
+      <button id="demoBtn">▶ 動作デモ</button>
+    </div>
+    <div id="pageWrap"><canvas id="page"></canvas></div>
+    <div id="pageBtns" class="hint" style="margin:8px 0"></div>
+    <div id="cropHint">PDFを読み込むと、S-ECGの段をページ全体から自動で見つけます。</div>
+    <div id="previews"></div>
+    <div id="traceMsg" class="hint"></div>
+    <div id="dbg" class="hint" style="margin-top:10px;padding:8px 10px;background:rgba(3,8,14,.6);border:1px solid var(--line);border-radius:10px;word-break:break-all">抽出テキスト：（PDFを読み込むと表示）</div>
+    <div id="ocrDbg" class="hint" style="margin-top:6px"></div>
+  </details>
+
+  <details class="card" id="inside">
+    <summary>🔬 解析の裏側（このPDFを実際にどう解析したか）</summary>
+    <div class="hint" style="margin:6px 0">段ごとに、①PDFの画像となぞった線 ②mVに換算した線と基線 ③基線を引いた線とR波 ④傾きとしきい値 を同じ横軸で並べています。横にスクロールできます（横1px＝約3.5ms）。</div>
+    <div id="insideBody"></div>
+  </details>
+
+  <details class="card" id="settings">
+    <summary>⚙ 設定（保存先）</summary>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
+      <span class="status">基準フォルダの名前</span>
+      <input id="baseDirName" class="inp" style="width:200px">
+      <button id="baseDirSave">保存</button>
+      <span class="status" id="baseDirMsg"></span>
+    </div>
+    <div class="hint" style="margin-top:6px">データフォルダの中で、患者ごとのデータ（患者ID.json）を入れるフォルダの名前です。フォルダの名前を手で変えたときは、ここも同じ名前に変えてください。無い名前を入れると新しく作ります。</div>
+    <div id="baseDirCands" class="hint" style="margin-top:4px"></div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px">
+      <span class="status">患者ファイルの名前</span>
+      <input id="filePat" class="inp" style="width:240px">
+      <button id="filePatSave">保存</button>
+      <span class="status" id="filePatMsg"></span>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px">
+      <span class="status">PDFを整理するフォルダ</span>
+      <input id="pdfDirName" class="inp" style="width:200px">
+      <button id="pdfDirSave">保存</button>
+      <span class="status" id="pdfDirMsg"></span>
+    </div>
+    <div class="hint" style="margin-top:6px">評価したPDFを「データフォルダ／このフォルダ／患者ごとのフォルダ／日付.pdf」に保存します。患者ごとのフォルダ名は下の「患者ファイルの名前」と同じ形（.jsonを除いたもの）です。</div>
+    <div class="hint" style="margin-top:6px">新しい患者のファイルを作るときの名前です。使える項目：<code>{ID}</code>（患者ID）・<code>{氏名}</code>・<code>{機種}</code>　例：<code>{ID}.json</code>、<code>{ID}_{氏名}.json</code>。<br>既にあるファイルは今の名前のまま使います。ファイル名を手で変えても、ファイルの中に書かれた患者IDで自動的に見つけます。</div>
+  </details>
 
   <footer>
-    PaceGuard LATITUDE β — Boston LATITUDE の S-ECG を前回自動比較。pdf.jsをCDNから読み込みます（初回のみ要ネット）。<br>
-    フォルダ内の「基準」フォルダに <code>&lt;患者ID&gt;.json</code> として基準波形を保存し、同IDの新規レポートを自動照合します。医療機器ではありません。
+    PaceGuard LATITUDE β — Boston LATITUDE の S-ICD 波形（S-ECG）を前回・基準と自動比較します。pdf.jsをCDNから読み込みます（初回のみ要ネット）。<br>
+    データフォルダの「基準」フォルダに <code>&lt;患者ID&gt;.json</code> として波形の記録を保存します。医療機器ではありません。
   </footer>
-</div>
+</main>
+<div id="lightbox"></div>
 
 <script type="module">
 const PDFJS_URL='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs';
@@ -501,13 +593,29 @@ let pageBackup=document.createElement('canvas'), pdfLoaded=false;
 function savePageBackup(){ pageBackup.width=pageCanvas.width;pageBackup.height=pageCanvas.height;pageBackup.getContext('2d').drawImage(pageCanvas,0,0); }
 function restorePage(){ if(pageBackup.width){pctx.drawImage(pageBackup,0,0);} }
 // 切り出した波形のプレビュー（認識できたか一目で分かる）
+// 高精細キャンバス（画面の拡大率に合わせて、にじまずくっきり描く）
+function hiDPI(cv,W,H){const r=Math.min(3,window.devicePixelRatio||1);cv.width=Math.round(W*r);cv.height=Math.round(H*r);cv.style.width=W+'px';cv.style.height=H+'px';const c=cv.getContext('2d');c.setTransform(r,0,0,r,0,0);return c;}
+// 心電図モニター風の方眼（細線＝1目盛り、太線＝5目盛り）
+function monitorGrid(c,W,H,step,y0=H/2){
+  c.fillStyle='#03080c';c.fillRect(0,0,W,H);
+  const lines=(st,a)=>{c.strokeStyle=`rgba(62,230,168,${a})`;c.lineWidth=1;c.beginPath();
+    for(let x=0;x<=W;x+=st){const xx=Math.round(x)+.5;c.moveTo(xx,0);c.lineTo(xx,H);}
+    for(let y=y0%st;y<=H;y+=st){const yy=Math.round(y)+.5;c.moveTo(0,yy);c.lineTo(W,yy);}c.stroke();};
+  if(step>=3)lines(step,.06);lines(step*5,.15);
+}
+function glowLine(c,pts,col,w=1.7){
+  c.save();c.lineJoin='round';c.lineCap='round';
+  c.strokeStyle=col;c.globalAlpha=.25;c.lineWidth=w*3.2;c.shadowColor=col;c.shadowBlur=10;c.beginPath();pts(c);c.stroke();
+  c.globalAlpha=1;c.lineWidth=w;c.shadowBlur=4;c.beginPath();pts(c);c.stroke();c.restore();
+}
 function drawSigPreview(cv,sig,feat,nz){
-  const W=cv.clientWidth||520;cv.width=W;cv.height=56;const c=cv.getContext('2d');
-  c.fillStyle='#050a12';c.fillRect(0,0,W,56);
-  if(nz){c.fillStyle='rgba(248,113,113,.28)';for(const b of nz.bad)c.fillRect(b.st*(W-1)/(sig.length-1),0,nz.W*(W-1)/(sig.length-1),56);}
-  const n=normalize(Array.from(sig));const mx=Math.max(1,...n.map(Math.abs));
-  c.strokeStyle='#34d399';c.lineWidth=1.3;c.beginPath();for(let i=0;i<n.length;i++){const x=i*(W-1)/(n.length-1),y=30-n[i]/mx*24;i?c.lineTo(x,y):c.moveTo(x,y);}c.stroke();
-  if(feat&&feat.peaks){c.fillStyle='#fbbf24';for(const p of feat.peaks){const x=p*(W-1)/(sig.length-1);c.beginPath();c.moveTo(x-4,1);c.lineTo(x+4,1);c.lineTo(x,8);c.closePath();c.fill();}} // 見つけたR波の位置
+  const W=Math.max(320,cv.parentElement&&cv.parentElement.clientWidth||520),H=78,c=hiDPI(cv,W,H),n=sig.length,sx=(W-1)/(n-1);
+  monitorGrid(c,W,H,PX_PER_MM*sx);
+  if(nz&&nz.bad.length){for(const b of nz.bad){const g=c.createLinearGradient(0,0,0,H);g.addColorStop(0,'rgba(251,113,133,.35)');g.addColorStop(1,'rgba(251,113,133,.08)');c.fillStyle=g;c.fillRect(b.st*sx,0,nz.W*sx,H);}}
+  const z=normalize(Array.from(sig));const mx=Math.max(1,...z.map(Math.abs));
+  if(feat&&feat.peaks){c.strokeStyle='rgba(251,191,36,.22)';c.lineWidth=1;c.beginPath();for(const p of feat.peaks){const x=Math.round(p*sx)+.5;c.moveTo(x,10);c.lineTo(x,H);}c.stroke();
+    c.fillStyle='#fbbf24';for(const p of feat.peaks){const x=p*sx;c.beginPath();c.moveTo(x-4.5,2);c.lineTo(x+4.5,2);c.lineTo(x,9);c.closePath();c.fill();}}
+  glowLine(c,cx=>{for(let i=0;i<n;i++){const x=i*sx,y=H/2+4-z[i]/mx*(H/2-12);i?cx.lineTo(x,y):cx.moveTo(x,y);}},'#46f0b2',1.5);
 }
 function rowStatusText(k){const f=curFeat[k],u=curPool&&curPool.rowInfo[k];
   if(!f)return '';if(f.error)return `<span class="warn-t">${f.error}</span>`;
@@ -1114,27 +1222,32 @@ async function runEval(mode){
 };
 // 代表拍の重ね描き（実寸：横 ms・縦 mV。青＝前回、橙＝今回。QRSの始まりと終わりに縦線）
 function drawBeat(r,ovId='overlay',diffId='diff'){
-  const cv=$(ovId),W=cv.parentElement.clientWidth||900,Hh=200;cv.width=W;cv.height=Hh;const c=cv.getContext('2d');c.clearRect(0,0,W,Hh);
-  const A=r.b.tpl,B=r.c.tpl,L=A.length,mx=Math.max(0.3,...A.map(Math.abs),...B.map(Math.abs))*1.1,X=j=>j*(W-1)/(L-1),Y=v=>Hh/2-v/mx*(Hh/2-14);
-  c.strokeStyle='#1a2740';c.lineWidth=1;for(let ms=-100;ms<=150;ms+=50){const x=X(idxOf(ms));c.beginPath();c.moveTo(x,0);c.lineTo(x,Hh);c.stroke();}
-  c.beginPath();c.moveTo(0,Hh/2);c.lineTo(W,Hh/2);c.stroke();
-  c.fillStyle='#7c8aa0';c.font='11px sans-serif';for(let ms=-100;ms<=150;ms+=50)c.fillText(ms+'ms',X(idxOf(ms))+3,Hh-4);c.fillText(`±${mx.toFixed(2)}mV`,4,12);
-  const mark=(f,col)=>{c.strokeStyle=col;c.setLineDash([4,4]);for(const ms of [f.on,f.off]){if(ms==null)continue;const x=X(idxOf(ms));c.beginPath();c.moveTo(x,10);c.lineTo(x,Hh-16);c.stroke();}c.setLineDash([]);};
-  mark(r.b,'rgba(56,189,248,.6)');mark(r.c,'rgba(251,191,36,.6)');
-  const pl=(arr,col,off)=>{c.strokeStyle=col;c.lineWidth=2;c.beginPath();let st=false;for(let j=0;j<L;j++){const v=arr[j+off];if(v==null||isNaN(v))continue;const x=X(j),y=Y(v);st?c.lineTo(x,y):c.moveTo(x,y);st=true;}c.stroke();};
-  // 形が違う部分（差が波高の20%を超える所）を赤く塗る
-  const thrD=0.2*Math.max(r.b.amp,r.c.amp);c.fillStyle='rgba(248,113,113,.22)';
-  {let st=-1;for(let j=0;j<=L;j++){const v=j<L?B[j+r.lag]:null,on=j<L&&v!=null&&!isNaN(v)&&!isNaN(A[j])&&Math.abs(A[j]-v)>thrD;if(on&&st<0)st=j;if(!on&&st>=0){c.fillRect(X(st)-2,0,X(j-1)-X(st)+4,Hh-14);st=-1;}}}
-  pl(A,'#38bdf8',0);pl(B,'#fbbf24',r.lag);
-  // 波高（QRSの山と谷の差）とQRS幅を図に書き込む
-  const ann=(arr,off,f,col,xLab,yRow)=>{let mx=-1e9,mn=1e9,jx=0,jn=0;for(let j=idxOf(-60);j<=idxOf(80);j++){const v=arr[j+off];if(v==null||isNaN(v))continue;if(v>mx){mx=v;jx=j;}if(v<mn){mn=v;jn=j;}}
-    c.strokeStyle=col;c.lineWidth=2;c.beginPath();c.moveTo(xLab,Y(mx));c.lineTo(xLab,Y(mn));c.stroke();c.beginPath();c.moveTo(xLab-5,Y(mx));c.lineTo(xLab+5,Y(mx));c.moveTo(xLab-5,Y(mn));c.lineTo(xLab+5,Y(mn));c.stroke();
-    c.fillStyle=col;c.font='bold 12px sans-serif';c.fillText(`${(mx-mn).toFixed(2)}mV`,xLab+8,Y((mx+mn)/2));
-    if(f.on!=null&&f.off!=null){const xa=X(idxOf(f.on)),xb=X(idxOf(f.off)),yy=yRow;c.beginPath();c.moveTo(xa,yy);c.lineTo(xb,yy);c.moveTo(xa,yy-4);c.lineTo(xa,yy+4);c.moveTo(xb,yy-4);c.lineTo(xb,yy+4);c.stroke();c.fillText(`QRS ${f.width}ms`,xb+6,yy+4);}};
-  ann(A,0,r.b,'#38bdf8',X(idxOf(-95)),18);ann(B,r.lag,r.c,'#fbbf24',X(idxOf(-80)),34);
-  const d=$(diffId);d.width=W;d.height=70;const dc=d.getContext('2d');dc.clearRect(0,0,W,70);dc.strokeStyle='#f87171';dc.lineWidth=1.4;dc.beginPath();
-  for(let j=0;j<L;j++){const v=(A[j]-(B[j+r.lag]??A[j])),x=X(j),y=35-v/mx*30;j?dc.lineTo(x,y):dc.moveTo(x,y);}dc.stroke();
-  dc.fillStyle='#7c8aa0';dc.font='11px sans-serif';dc.fillText('差分（前回−今回）',8,14);
+  const cv=$(ovId),W=Math.max(320,cv.parentElement.clientWidth-2||900),H=240,c=hiDPI(cv,W,H);
+  const A=r.b.tpl,B=r.c.tpl,L=A.length,mx=Math.max(0.3,...A.map(Math.abs),...B.map(Math.abs))*1.12,X=j=>j*(W-1)/(L-1),Y=v=>H/2-v/mx*(H/2-18),xMs=ms=>X(idxOf(ms));
+  // 方眼：横 10ms（細）／50ms（太）、縦 0.1mV（細）／0.5mV（太）
+  c.fillStyle='#03080c';c.fillRect(0,0,W,H);
+  const vgrid=(st,a)=>{c.strokeStyle=`rgba(62,230,168,${a})`;c.lineWidth=1;c.beginPath();for(let ms=-100;ms<=150;ms+=st){const x=Math.round(xMs(ms))+.5;c.moveTo(x,0);c.lineTo(x,H);}
+    const mvSt=st===10?0.1:0.5;for(let v=0;v<=mx;v+=mvSt){for(const s2 of [1,-1]){const y=Math.round(Y(v*s2))+.5;c.moveTo(0,y);c.lineTo(W,y);}}c.stroke();};
+  vgrid(10,.05);vgrid(50,.14);
+  c.fillStyle='#6b7d96';c.font='11px "Segoe UI",sans-serif';for(let ms=-100;ms<=150;ms+=50)c.fillText(ms+' ms',xMs(ms)+4,H-5);c.fillText(`1目盛り 0.1 mV`,6,13);
+  // 形が違う所（差が波高の20%を超える）を赤い帯で
+  const thrD=0.2*Math.max(r.b.amp,r.c.amp);
+  {let st=-1;for(let j=0;j<=L;j++){const v=j<L?B[j+r.lag]:null,on=j<L&&v!=null&&!isNaN(v)&&!isNaN(A[j])&&Math.abs(A[j]-v)>thrD;if(on&&st<0)st=j;
+    if(!on&&st>=0){const g=c.createLinearGradient(0,0,0,H);g.addColorStop(0,'rgba(251,113,133,.30)');g.addColorStop(1,'rgba(251,113,133,.06)');c.fillStyle=g;c.fillRect(X(st)-2,0,X(j-1)-X(st)+4,H-16);st=-1;}}}
+  const mark=(f,col)=>{c.strokeStyle=col;c.setLineDash([3,4]);c.lineWidth=1;for(const ms of [f.on,f.off]){if(ms==null)continue;const x=Math.round(xMs(ms))+.5;c.beginPath();c.moveTo(x,12);c.lineTo(x,H-18);c.stroke();}c.setLineDash([]);};
+  mark(r.b,'rgba(96,165,250,.7)');mark(r.c,'rgba(251,191,36,.7)');
+  const path=(arr,off)=>cx=>{let st=false;for(let j=0;j<L;j++){const v=arr[j+off];if(v==null||isNaN(v)){st=false;continue;}const x=X(j),y=Y(v);st?cx.lineTo(x,y):cx.moveTo(x,y);st=true;}};
+  glowLine(c,path(A,0),'#60a5fa',2);glowLine(c,path(B,r.lag),'#fbbf24',2.2);
+  // 波高とQRS幅の書き込み
+  const ann=(arr,off,f,col,xLab,yRow)=>{let a=-1e9,b=1e9;for(let j=idxOf(-60);j<=idxOf(80);j++){const v=arr[j+off];if(v==null||isNaN(v))continue;if(v>a)a=v;if(v<b)b=v;}
+    c.strokeStyle=col;c.fillStyle=col;c.lineWidth=2;c.beginPath();c.moveTo(xLab,Y(a));c.lineTo(xLab,Y(b));c.moveTo(xLab-5,Y(a));c.lineTo(xLab+5,Y(a));c.moveTo(xLab-5,Y(b));c.lineTo(xLab+5,Y(b));c.stroke();
+    c.font='bold 12px "Segoe UI",sans-serif';c.fillText(`${(a-b).toFixed(2)} mV`,xLab+8,Y((a+b)/2)+4);
+    if(f.on!=null&&f.off!=null){const xa=xMs(f.on),xb=xMs(f.off);c.beginPath();c.moveTo(xa,yRow);c.lineTo(xb,yRow);c.moveTo(xa,yRow-4);c.lineTo(xa,yRow+4);c.moveTo(xb,yRow-4);c.lineTo(xb,yRow+4);c.stroke();c.fillText(`QRS ${f.width} ms`,xb+6,yRow+4);}};
+  ann(A,0,r.b,'#60a5fa',xMs(-95),22);ann(B,r.lag,r.c,'#fbbf24',xMs(-80),40);
+  // 差分
+  const d=$(diffId),DH=80,dc=hiDPI(d,W,DH);monitorGrid(dc,W,DH,(xMs(10)-xMs(0)),DH/2);
+  glowLine(dc,cx=>{for(let j=0;j<L;j++){const v=(A[j]-(B[j+r.lag]??A[j])),x=X(j),y=DH/2-v/mx*(DH/2-8);j?cx.lineTo(x,y):cx.moveTo(x,y);}},'#fb7185',1.4);
+  dc.fillStyle='#6b7d96';dc.font='11px "Segoe UI",sans-serif';dc.fillText('差（比較相手 − 今回）',8,14);
 }
 function drawOverlay(a,b,lag,ovId='overlay',diffId='diff'){const cv=$(ovId);const W=cv.parentElement.clientWidth||900;cv.width=W;cv.height=180;const c=cv.getContext('2d');c.clearRect(0,0,W,180);
   const A=normalize(Array.from(a)),B=normalize(Array.from(b));const mx=Math.max(1,...A.map(Math.abs),...B.map(Math.abs));
@@ -1161,7 +1274,26 @@ const WSEEN='pg_lat_watch_seen';
 try{for(const [k,v] of JSON.parse(localStorage.getItem(WSEEN)||'[]'))watchSeen.set(k,v);}catch(_){}
 const wkey=f=>f.name+'|'+f.size+'|'+f.lastModified;
 function saveSeen(){try{localStorage.setItem(WSEEN,JSON.stringify([...watchSeen].slice(-500)));}catch(_){}}
-function setWatchStatus(h){$('watchStatus').innerHTML=h;}
+function setWatchStatus(h){$('watchStatus').innerHTML=h;const on=!!watchDir;$('liveDot').classList.toggle('on',on);$('liveTxt').textContent=on?'見張り中：'+watchDir.name:'見張り停止中';}
+// ⚙ ボタン → 設定を開いてそこへ移動
+$('openSettings').onclick=()=>{$('settings').open=true;$('settings').scrollIntoView({block:'start'});};
+// 「PDFと段の読み取り」を開いているか閉じているかを覚える
+try{const v=localStorage.getItem('pg_lat_pdfsec');if(v)$('pdfSec').open=v==='1';}catch(_){}
+$('pdfSec').addEventListener('toggle',()=>{try{localStorage.setItem('pg_lat_pdfsec',$('pdfSec').open?'1':'0');}catch(_){};if($('pdfSec').open&&curSigs.length)showSigPreview();});
+// 画面のどこにPDFをドロップしても読み込む
+let dragDepth=0;
+document.addEventListener('dragenter',e=>{if([...(e.dataTransfer?.types||[])].includes('Files')){dragDepth++;document.body.classList.add('dragging');}});
+document.addEventListener('dragleave',()=>{if(--dragDepth<=0){dragDepth=0;document.body.classList.remove('dragging');}});
+document.addEventListener('dragover',e=>{if([...(e.dataTransfer?.types||[])].includes('Files'))e.preventDefault();});
+document.addEventListener('drop',e=>{dragDepth=0;document.body.classList.remove('dragging');if(e.target.closest&&e.target.closest('#drop'))return;
+  const f=[...(e.dataTransfer?.files||[])].find(f=>/\.pdf$/i.test(f.name)||f.type==='application/pdf');if(f){e.preventDefault();loadPDF(f);}});
+// タイムラインの波形をクリック → 大きく表示（Escかクリックで閉じる）
+document.addEventListener('click',e=>{const im=e.target.closest('#tlBase img,#tlCur img');if(im){const box=im.closest('#tlBase,#tlCur'),cap=box.querySelector('b');
+  $('lightbox').innerHTML=`<div class="cap">${cap?escH(cap.textContent):''}　（クリックかEscで閉じる）</div><img src="${im.src}">`;$('lightbox').classList.add('on');return;}
+  if(e.target.closest('#lightbox'))$('lightbox').classList.remove('on');});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')$('lightbox').classList.remove('on');});
+// 画面の幅が変わったら波形を描き直す
+let rsT=0;window.addEventListener('resize',()=>{clearTimeout(rsT);rsT=setTimeout(()=>{try{if(curSigs.length)showSigPreview();}catch(_){}},200);});
 function renderWatchLog(){
   $('watchLog').innerHTML=watchLog.length?`<table class="crit"><tr><th>時刻</th><th>ファイル</th><th>患者ID</th><th>照会日</th><th>判定</th><th>主な原因</th></tr>${watchLog.map(r=>`<tr class="lv${r.lv>0?r.lv:0}"><td>${r.t}</td><td>${escH(r.file)}${r.moved?`<div class="hint">${escH(r.moved)}</div>`:''}</td><td>${escH(r.id||'—')}</td><td>${escH(r.date||'—')}</td><td>${escH(r.verdict)}</td><td class="hint">${escH(r.cause||'')}</td></tr>`).join('')}</table>`:'<div class="hint">まだ処理したPDFはありません。</div>';}
 // 通知：拡張機能が入っていれば拡張機能から出す（ファイルとして開いたページからは通知が出ないことがあるため）。無ければブラウザの通知
