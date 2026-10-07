@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PaceGuard LATITUDE 自動モード（β）</title>
+<script>try{document.documentElement.dataset.theme=localStorage.getItem('pg_lat_theme')||'light';}catch(_){document.documentElement.dataset.theme='light';}</script>
 <style>
   /* PaceGuard LATITUDE — 心電図モニターの世界観（暗い画面に光る緑の線）。重要な判定ほど上・大きく */
   :root{
@@ -12,7 +13,7 @@
     --accent:#3ee6a8; --accent2:#38bdf8; --ok:#34d399; --warn:#fbbf24; --bad:#fb7185;
     --font:"BIZ UDPGothic","Yu Gothic UI","Segoe UI","Hiragino Kaku Gothic ProN","Meiryo",system-ui,sans-serif;
     --num:"Segoe UI Variable","Segoe UI","Helvetica Neue",var(--font);
-    --r:16px;
+    --r:16px; --inbg:rgba(3,8,14,.65); --tblh:rgba(255,255,255,.02); --hov:rgba(255,255,255,.025); --causebg:rgba(0,0,0,.28);
   }
   *{box-sizing:border-box}
   html{scroll-behavior:smooth}
@@ -70,7 +71,7 @@
   input[type=text],input:not([type]),input[type=search]{font-family:inherit}
   .field{display:grid;gap:3px}
   .field label{font-size:10.5px;color:var(--sub);letter-spacing:.08em}
-  .field input,.inp{width:100%;background:rgba(3,8,14,.7);color:var(--tx);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:14px;font-variant-numeric:tabular-nums;transition:border-color .15s}
+  .field input,.inp{width:100%;background:var(--inbg);color:var(--tx);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:14px;font-variant-numeric:tabular-nums;transition:border-color .15s}
   .field input:focus,.inp:focus{border-color:var(--accent2);outline:none;box-shadow:0 0 0 3px rgba(56,189,248,.15)}
   .fields{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
   @media(max-width:760px){.fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -99,14 +100,14 @@
   .verdict.info{background:linear-gradient(120deg,rgba(56,189,248,.12),rgba(56,189,248,.02) 60%)}
   .verdict h2{margin:0 0 6px;font-size:23px;letter-spacing:.01em;line-height:1.3;color:var(--tx);display:block}
   .verdict h2::before{display:none}
-  .cause{margin-top:10px;padding:10px 12px;border-radius:12px;background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.06);font-weight:700}
+  .cause{margin-top:10px;padding:10px 12px;border-radius:12px;background:var(--causebg);border:1px solid rgba(255,255,255,.06);font-weight:700}
   table.crit{width:100%;border-collapse:separate;border-spacing:0;margin-top:8px;font-size:12.5px;font-variant-numeric:tabular-nums}
   table.crit th,table.crit td{border-bottom:1px solid var(--line);padding:7px 8px;text-align:left;vertical-align:top}
-  table.crit th{color:var(--sub);font-weight:600;font-size:10.5px;letter-spacing:.06em;background:rgba(255,255,255,.02)}
-  table.crit tr:hover td{background:rgba(255,255,255,.025)}
+  table.crit th{color:var(--sub);font-weight:600;font-size:10.5px;letter-spacing:.06em;background:var(--tblh)}
+  table.crit tr:hover td{background:var(--hov)}
   table.crit tr.lv2 td{background:rgba(251,113,133,.10)} table.crit tr.lv1 td{background:rgba(251,191,36,.08)}
   .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:10px}
-  .m{background:rgba(3,8,14,.6);border:1px solid var(--line);border-radius:12px;padding:8px 10px}
+  .m{background:var(--inbg);border:1px solid var(--line);border-radius:12px;padding:8px 10px}
   .m .k{font-size:10.5px;color:var(--sub)} .m .v{font-size:18px;font-weight:800;font-family:var(--num)}
   .m.flag{border-color:#7a2e2e} .m.good{border-color:#1f6b52}
   .hint{font-size:11.5px;color:var(--sub)}
@@ -119,12 +120,41 @@
   .seg button{border:0;border-radius:0;background:transparent;padding:6px 12px}
   .seg button.on{background:rgba(62,230,168,.18);color:var(--accent);font-weight:700}
   .tlTh{border-radius:12px!important}
-  .tlnav{display:flex;gap:8px;align-items:center;margin:12px 0 6px;padding:6px 8px;border:1px solid var(--line);border-radius:12px;background:rgba(3,8,14,.45)}
+  .tlnav{display:flex;gap:8px;align-items:center;margin:12px 0 6px;padding:6px 8px;border:1px solid var(--line);border-radius:12px;background:var(--inbg)}
   .tlnav .lbl{font-size:11px;color:var(--sub);white-space:nowrap;letter-spacing:.06em}
   #lightbox{position:fixed;inset:0;z-index:300;background:rgba(3,6,10,.92);backdrop-filter:blur(6px);display:none;overflow:auto;cursor:zoom-out;padding:24px}
   #lightbox.on{display:block}
   #lightbox img{display:block;margin:0 auto;max-width:none;width:min(2400px,96vw);background:#fff;border-radius:8px}
   #lightbox .cap{position:sticky;top:0;color:#fff;font-weight:700;margin-bottom:10px;text-shadow:0 1px 6px #000}
+  /* ── 白いテーマ（標準）：PDF・印刷と同じ白地。心電図用紙のピンクの方眼をうっすら ── */
+  html[data-theme=light]{
+    --bg:#f5f7fa; --bg2:#fff; --card:#ffffff; --card2:#ffffff; --line:#e3e8ef; --line2:#cfd8e3;
+    --tx:#0f172a; --sub:#526079; --dim:#8794a8;
+    --accent:#059669; --accent2:#0284c7; --ok:#059669; --warn:#b45309; --bad:#e11d48;
+    --inbg:#f8fafc; --tblh:#f1f5f9; --hov:#f8fafc; --causebg:rgba(255,255,255,.75);
+  }
+  html[data-theme=light] body{background:
+      linear-gradient(rgba(239,68,68,.05) 1px,transparent 1px) 0 0/24px 24px,
+      linear-gradient(90deg,rgba(239,68,68,.05) 1px,transparent 1px) 0 0/24px 24px,
+      linear-gradient(180deg,#f8fafc,#eef2f7);}
+  html[data-theme=light] .appbar{background:rgba(255,255,255,.82);border-bottom-color:var(--line)}
+  html[data-theme=light] .card{box-shadow:0 1px 2px rgba(15,23,42,.05),0 12px 32px -20px rgba(15,23,42,.25);backdrop-filter:none}
+  html[data-theme=light] button{background:linear-gradient(180deg,#ffffff,#f3f6fa);color:var(--tx)}
+  html[data-theme=light] button.primary{background:linear-gradient(135deg,#10b981,#0ea5e9);color:#fff;box-shadow:0 8px 20px -12px rgba(5,150,105,.7)}
+  html[data-theme=light] button.ghost{background:#fff}
+  html[data-theme=light] .seg button{background:transparent}
+  html[data-theme=light] .seg button.on{background:rgba(5,150,105,.12)}
+  html[data-theme=light] .field.id input{color:#0f172a}
+  html[data-theme=light] .chip{background:#f8fafc}
+  html[data-theme=light] .verdict.ok{background:linear-gradient(120deg,rgba(16,185,129,.12),#fff 65%)}
+  html[data-theme=light] .verdict.warn{background:linear-gradient(120deg,rgba(245,158,11,.14),#fff 65%)}
+  html[data-theme=light] .verdict.bad{background:linear-gradient(120deg,rgba(225,29,72,.12),#fff 65%)}
+  html[data-theme=light] .verdict.info{background:linear-gradient(120deg,rgba(14,165,233,.10),#fff 65%)}
+  html[data-theme=light] .verdict::before{box-shadow:none!important}
+  html[data-theme=light] canvas{background:#fff;border-color:var(--line)}
+  html[data-theme=light] .drop{background:repeating-linear-gradient(135deg,transparent 0 10px,rgba(15,23,42,.02) 10px 20px)}
+  html[data-theme=light] body.dragging::after{background:rgba(255,255,255,.9)}
+  html[data-theme=light] .brand svg{filter:none}
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
   #printArea{display:none}
   .prbtns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
@@ -154,6 +184,7 @@
     <span class="chip" title="自動見張りの状態"><span class="live" id="liveDot"></span><span id="liveTxt">見張り停止中</span></span>
     <span class="chip" id="folderStatus">フォルダ未選択（比較結果の保存に必要）</span>
     <button id="pickFolder" class="iconbtn" title="データフォルダを選ぶ">📁 フォルダ</button>
+    <button id="themeBtn" class="iconbtn ghost" title="白／黒の切り替え">🌙</button>
     <button id="openSettings" class="iconbtn ghost" title="設定">⚙</button>
   </div>
   <div class="disclaimer">研究・院内検証用｜完全ローカル処理（患者情報はこのPCの外に出ません）｜最終判断は医師</div>
@@ -252,7 +283,7 @@
     <div id="cropHint">PDFを読み込むと、S-ECGの段をページ全体から自動で見つけます。</div>
     <div id="previews"></div>
     <div id="traceMsg" class="hint"></div>
-    <div id="dbg" class="hint" style="margin-top:10px;padding:8px 10px;background:rgba(3,8,14,.6);border:1px solid var(--line);border-radius:10px;word-break:break-all">抽出テキスト：（PDFを読み込むと表示）</div>
+    <div id="dbg" class="hint" style="margin-top:10px;padding:8px 10px;background:var(--inbg);border:1px solid var(--line);border-radius:10px;word-break:break-all">抽出テキスト：（PDFを読み込むと表示）</div>
     <div id="ocrDbg" class="hint" style="margin-top:6px"></div>
   </details>
 
@@ -598,27 +629,32 @@ function restorePage(){ if(pageBackup.width){pctx.drawImage(pageBackup,0,0);} }
 // 切り出した波形のプレビュー（認識できたか一目で分かる）
 // 高精細キャンバス（画面の拡大率に合わせて、にじまずくっきり描く）
 function hiDPI(cv,W,H){const r=Math.min(3,window.devicePixelRatio||1);cv.width=Math.round(W*r);cv.height=Math.round(H*r);cv.style.width=W+'px';cv.style.height=H+'px';const c=cv.getContext('2d');c.setTransform(r,0,0,r,0,0);return c;}
+// 波形の図の色（白テーマ＝心電図用紙のピンクの方眼／黒テーマ＝モニター風の緑の方眼）
+function pal(){return document.documentElement.dataset.theme==='dark'
+  ?{bg:'#03080c',minor:'rgba(62,230,168,.06)',major:'rgba(62,230,168,.15)',trace:'#46f0b2',prev:'#60a5fa',cur:'#fbbf24',bad:'251,113,133',diff:'#fb7185',text:'#6b7d96',peak:'#fbbf24',peakLine:'rgba(251,191,36,.22)',glow:true}
+  :{bg:'#ffffff',minor:'rgba(239,68,68,.10)',major:'rgba(239,68,68,.28)',trace:'#0b8a4a',prev:'#2563eb',cur:'#d97706',bad:'225,29,72',diff:'#e11d48',text:'#64748b',peak:'#d97706',peakLine:'rgba(217,119,6,.25)',glow:false};}
 // 心電図モニター風の方眼（細線＝1目盛り、太線＝5目盛り）
 function monitorGrid(c,W,H,step,y0=H/2){
-  c.fillStyle='#03080c';c.fillRect(0,0,W,H);
-  const lines=(st,a)=>{c.strokeStyle=`rgba(62,230,168,${a})`;c.lineWidth=1;c.beginPath();
+  const P=pal();c.fillStyle=P.bg;c.fillRect(0,0,W,H);
+  const lines=(st,a)=>{c.strokeStyle=a;c.lineWidth=1;c.beginPath();
     for(let x=0;x<=W;x+=st){const xx=Math.round(x)+.5;c.moveTo(xx,0);c.lineTo(xx,H);}
     for(let y=y0%st;y<=H;y+=st){const yy=Math.round(y)+.5;c.moveTo(0,yy);c.lineTo(W,yy);}c.stroke();};
-  if(step>=3)lines(step,.06);lines(step*5,.15);
+  if(step>=3)lines(step,P.minor);lines(step*5,P.major);
 }
 function glowLine(c,pts,col,w=1.7){
   c.save();c.lineJoin='round';c.lineCap='round';
+  if(!pal().glow){c.strokeStyle=col;c.lineWidth=w;c.beginPath();pts(c);c.stroke();c.restore();return;}
   c.strokeStyle=col;c.globalAlpha=.25;c.lineWidth=w*3.2;c.shadowColor=col;c.shadowBlur=10;c.beginPath();pts(c);c.stroke();
   c.globalAlpha=1;c.lineWidth=w;c.shadowBlur=4;c.beginPath();pts(c);c.stroke();c.restore();
 }
 function drawSigPreview(cv,sig,feat,nz){
   const W=Math.max(320,cv.parentElement&&cv.parentElement.clientWidth||520),H=78,c=hiDPI(cv,W,H),n=sig.length,sx=(W-1)/(n-1);
   monitorGrid(c,W,H,PX_PER_MM*sx);
-  if(nz&&nz.bad.length){for(const b of nz.bad){const g=c.createLinearGradient(0,0,0,H);g.addColorStop(0,'rgba(251,113,133,.35)');g.addColorStop(1,'rgba(251,113,133,.08)');c.fillStyle=g;c.fillRect(b.st*sx,0,nz.W*sx,H);}}
+  if(nz&&nz.bad.length){for(const b of nz.bad){const P=pal(),g=c.createLinearGradient(0,0,0,H);g.addColorStop(0,`rgba(${P.bad},.30)`);g.addColorStop(1,`rgba(${P.bad},.06)`);c.fillStyle=g;c.fillRect(b.st*sx,0,nz.W*sx,H);}}
   const z=normalize(Array.from(sig));const mx=Math.max(1,...z.map(Math.abs));
-  if(feat&&feat.peaks){c.strokeStyle='rgba(251,191,36,.22)';c.lineWidth=1;c.beginPath();for(const p of feat.peaks){const x=Math.round(p*sx)+.5;c.moveTo(x,10);c.lineTo(x,H);}c.stroke();
-    c.fillStyle='#fbbf24';for(const p of feat.peaks){const x=p*sx;c.beginPath();c.moveTo(x-4.5,2);c.lineTo(x+4.5,2);c.lineTo(x,9);c.closePath();c.fill();}}
-  glowLine(c,cx=>{for(let i=0;i<n;i++){const x=i*sx,y=H/2+4-z[i]/mx*(H/2-12);i?cx.lineTo(x,y):cx.moveTo(x,y);}},'#46f0b2',1.5);
+  if(feat&&feat.peaks){const P=pal();c.strokeStyle=P.peakLine;c.lineWidth=1;c.beginPath();for(const p of feat.peaks){const x=Math.round(p*sx)+.5;c.moveTo(x,10);c.lineTo(x,H);}c.stroke();
+    c.fillStyle=P.peak;for(const p of feat.peaks){const x=p*sx;c.beginPath();c.moveTo(x-4.5,2);c.lineTo(x+4.5,2);c.lineTo(x,9);c.closePath();c.fill();}}
+  glowLine(c,cx=>{for(let i=0;i<n;i++){const x=i*sx,y=H/2+4-z[i]/mx*(H/2-12);i?cx.lineTo(x,y):cx.moveTo(x,y);}},pal().trace,1.5);
 }
 function rowStatusText(k){const f=curFeat[k],u=curPool&&curPool.rowInfo[k];
   if(!f)return '';if(f.error)return `<span class="warn-t">${f.error}</span>`;
@@ -1235,33 +1271,34 @@ async function runEval(mode){
   drawBeat(r);
 };
 // 代表拍の重ね描き（実寸：横 ms・縦 mV。青＝前回、橙＝今回。QRSの始まりと終わりに縦線）
+let lastBeatR=null;
 function drawBeat(r,ovId='overlay',diffId='diff'){
   const cv=$(ovId),W=Math.max(320,cv.parentElement.clientWidth-2||900),H=240,c=hiDPI(cv,W,H);
   const A=r.b.tpl,B=r.c.tpl,L=A.length,mx=Math.max(0.3,...A.map(Math.abs),...B.map(Math.abs))*1.12,X=j=>j*(W-1)/(L-1),Y=v=>H/2-v/mx*(H/2-18),xMs=ms=>X(idxOf(ms));
   // 方眼：横 10ms（細）／50ms（太）、縦 0.1mV（細）／0.5mV（太）
-  c.fillStyle='#03080c';c.fillRect(0,0,W,H);
-  const vgrid=(st,a)=>{c.strokeStyle=`rgba(62,230,168,${a})`;c.lineWidth=1;c.beginPath();for(let ms=-100;ms<=150;ms+=st){const x=Math.round(xMs(ms))+.5;c.moveTo(x,0);c.lineTo(x,H);}
+  lastBeatR=r;const P=pal();c.fillStyle=P.bg;c.fillRect(0,0,W,H);
+  const vgrid=(st,a)=>{c.strokeStyle=a;c.lineWidth=1;c.beginPath();for(let ms=-100;ms<=150;ms+=st){const x=Math.round(xMs(ms))+.5;c.moveTo(x,0);c.lineTo(x,H);}
     const mvSt=st===10?0.1:0.5;for(let v=0;v<=mx;v+=mvSt){for(const s2 of [1,-1]){const y=Math.round(Y(v*s2))+.5;c.moveTo(0,y);c.lineTo(W,y);}}c.stroke();};
-  vgrid(10,.05);vgrid(50,.14);
-  c.fillStyle='#6b7d96';c.font='11px "Segoe UI",sans-serif';for(let ms=-100;ms<=150;ms+=50)c.fillText(ms+' ms',xMs(ms)+4,H-5);c.fillText(`1目盛り 0.1 mV`,6,13);
+  vgrid(10,P.minor);vgrid(50,P.major);
+  c.fillStyle=P.text;c.font='11px "Segoe UI",sans-serif';for(let ms=-100;ms<=150;ms+=50)c.fillText(ms+' ms',xMs(ms)+4,H-5);c.fillText(`1目盛り 0.1 mV`,6,13);
   // 形が違う所（差が波高の20%を超える）を赤い帯で
   const thrD=0.2*Math.max(r.b.amp,r.c.amp);
   {let st=-1;for(let j=0;j<=L;j++){const v=j<L?B[j+r.lag]:null,on=j<L&&v!=null&&!isNaN(v)&&!isNaN(A[j])&&Math.abs(A[j]-v)>thrD;if(on&&st<0)st=j;
-    if(!on&&st>=0){const g=c.createLinearGradient(0,0,0,H);g.addColorStop(0,'rgba(251,113,133,.30)');g.addColorStop(1,'rgba(251,113,133,.06)');c.fillStyle=g;c.fillRect(X(st)-2,0,X(j-1)-X(st)+4,H-16);st=-1;}}}
+    if(!on&&st>=0){const g=c.createLinearGradient(0,0,0,H);g.addColorStop(0,`rgba(${P.bad},.26)`);g.addColorStop(1,`rgba(${P.bad},.05)`);c.fillStyle=g;c.fillRect(X(st)-2,0,X(j-1)-X(st)+4,H-16);st=-1;}}}
   const mark=(f,col)=>{c.strokeStyle=col;c.setLineDash([3,4]);c.lineWidth=1;for(const ms of [f.on,f.off]){if(ms==null)continue;const x=Math.round(xMs(ms))+.5;c.beginPath();c.moveTo(x,12);c.lineTo(x,H-18);c.stroke();}c.setLineDash([]);};
-  mark(r.b,'rgba(96,165,250,.7)');mark(r.c,'rgba(251,191,36,.7)');
+  mark(r.b,P.prev);mark(r.c,P.cur);
   const path=(arr,off)=>cx=>{let st=false;for(let j=0;j<L;j++){const v=arr[j+off];if(v==null||isNaN(v)){st=false;continue;}const x=X(j),y=Y(v);st?cx.lineTo(x,y):cx.moveTo(x,y);st=true;}};
-  glowLine(c,path(A,0),'#60a5fa',2);glowLine(c,path(B,r.lag),'#fbbf24',2.2);
+  glowLine(c,path(A,0),P.prev,2);glowLine(c,path(B,r.lag),P.cur,2.2);
   // 波高とQRS幅の書き込み
   const ann=(arr,off,f,col,xLab,yRow)=>{let a=-1e9,b=1e9;for(let j=idxOf(-60);j<=idxOf(80);j++){const v=arr[j+off];if(v==null||isNaN(v))continue;if(v>a)a=v;if(v<b)b=v;}
     c.strokeStyle=col;c.fillStyle=col;c.lineWidth=2;c.beginPath();c.moveTo(xLab,Y(a));c.lineTo(xLab,Y(b));c.moveTo(xLab-5,Y(a));c.lineTo(xLab+5,Y(a));c.moveTo(xLab-5,Y(b));c.lineTo(xLab+5,Y(b));c.stroke();
     c.font='bold 12px "Segoe UI",sans-serif';c.fillText(`${(a-b).toFixed(2)} mV`,xLab+8,Y((a+b)/2)+4);
     if(f.on!=null&&f.off!=null){const xa=xMs(f.on),xb=xMs(f.off);c.beginPath();c.moveTo(xa,yRow);c.lineTo(xb,yRow);c.moveTo(xa,yRow-4);c.lineTo(xa,yRow+4);c.moveTo(xb,yRow-4);c.lineTo(xb,yRow+4);c.stroke();c.fillText(`QRS ${f.width} ms`,xb+6,yRow+4);}};
-  ann(A,0,r.b,'#60a5fa',xMs(-95),22);ann(B,r.lag,r.c,'#fbbf24',xMs(-80),40);
+  ann(A,0,r.b,P.prev,xMs(-95),22);ann(B,r.lag,r.c,P.cur,xMs(-80),40);
   // 差分
   const d=$(diffId),DH=80,dc=hiDPI(d,W,DH);monitorGrid(dc,W,DH,(xMs(10)-xMs(0)),DH/2);
-  glowLine(dc,cx=>{for(let j=0;j<L;j++){const v=(A[j]-(B[j+r.lag]??A[j])),x=X(j),y=DH/2-v/mx*(DH/2-8);j?cx.lineTo(x,y):cx.moveTo(x,y);}},'#fb7185',1.4);
-  dc.fillStyle='#6b7d96';dc.font='11px "Segoe UI",sans-serif';dc.fillText('差（比較相手 − 今回）',8,14);
+  glowLine(dc,cx=>{for(let j=0;j<L;j++){const v=(A[j]-(B[j+r.lag]??A[j])),x=X(j),y=DH/2-v/mx*(DH/2-8);j?cx.lineTo(x,y):cx.moveTo(x,y);}},P.diff,1.4);
+  dc.fillStyle=P.text;dc.font='11px "Segoe UI",sans-serif';dc.fillText('差（比較相手 − 今回）',8,14);
 }
 function drawOverlay(a,b,lag,ovId='overlay',diffId='diff'){const cv=$(ovId);const W=cv.parentElement.clientWidth||900;cv.width=W;cv.height=180;const c=cv.getContext('2d');c.clearRect(0,0,W,180);
   const A=normalize(Array.from(a)),B=normalize(Array.from(b));const mx=Math.max(1,...A.map(Math.abs),...B.map(Math.abs));
@@ -1289,6 +1326,11 @@ try{for(const [k,v] of JSON.parse(localStorage.getItem(WSEEN)||'[]'))watchSeen.s
 const wkey=f=>f.name+'|'+f.size+'|'+f.lastModified;
 function saveSeen(){try{localStorage.setItem(WSEEN,JSON.stringify([...watchSeen].slice(-500)));}catch(_){}}
 function setWatchStatus(h){$('watchStatus').innerHTML=h;const on=!!watchDir;$('liveDot').classList.toggle('on',on);$('liveTxt').textContent=on?'見張り中：'+watchDir.name:'見張り停止中';}
+// ☀／🌙：白と黒の切り替え（覚えておく）。波形の図も描き直す
+function themeBtnLabel(){$('themeBtn').textContent=document.documentElement.dataset.theme==='dark'?'☀':'🌙';}
+themeBtnLabel();
+$('themeBtn').onclick=()=>{const t=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=t;try{localStorage.setItem('pg_lat_theme',t);}catch(_){}
+  themeBtnLabel();try{if(curSigs.length)showSigPreview();if(lastBeatR&&!$('overlayCard').hidden)drawBeat(lastBeatR);}catch(_){}};
 // ⚙ ボタン → 設定を開いてそこへ移動
 $('openSettings').onclick=()=>{$('settings').open=true;$('settings').scrollIntoView({block:'start'});};
 // 「PDFと段の読み取り」を開いているか閉じているかを覚える
