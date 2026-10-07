@@ -181,6 +181,7 @@
     <h1>PaceGuard <span style="color:var(--accent)">LATITUDE</span><small>S-ICD WAVEFORM MONITOR · β</small></h1>
   </div>
   <div class="chips">
+    <button class="chip" id="lastChip" title="最新の結果（押すとその場所へ）" hidden style="cursor:pointer"></button>
     <span class="chip" title="自動見張りの状態"><span class="live" id="liveDot"></span><span id="liveTxt">見張り停止中</span></span>
     <span class="chip" id="folderStatus">フォルダ未選択（比較結果の保存に必要）</span>
     <button id="pickFolder" class="iconbtn" title="データフォルダを選ぶ">📁 フォルダ</button>
@@ -191,24 +192,6 @@
 </header>
 
 <main class="wrap">
-  <section class="card" id="watchCard">
-    <h2>自動見張り</h2>
-    <div class="row">
-      <button class="primary" id="watchStart">👀 見張りを始める</button>
-      <button id="watchStop" disabled>■ 止める</button>
-      <div class="status" id="watchStatus" style="flex:1;min-width:240px">止まっています。「👀 見張りを始める」で、LATITUDEのPDFを保存するフォルダを選んでください。</div>
-    </div>
-    <details style="margin-top:8px"><summary class="hint" style="cursor:pointer">見張りの設定・注意</summary>
-      <div class="row" style="margin-top:6px">
-        <label class="hint row"><input type="checkbox" id="watchPick"> 別のフォルダを選ぶ</label>
-        <label class="hint row"><input type="checkbox" id="watchExisting"> フォルダに今あるPDFも処理する</label>
-        <label class="hint row"><input type="checkbox" id="watchMove" checked> 処理したPDFを患者ごとのフォルダへ移動する</label>
-      </div>
-      <div class="hint" style="margin-top:4px;color:var(--warn)">⚠ 「ダウンロード」フォルダそのものはChromeの制限で選べません（「システム ファイルが含まれている」と出ます）。ダウンロードの中に <b>LATITUDE</b> などのフォルダを作り、Chromeの設定 → ダウンロード → 保存先 をそのフォルダにするか、「ダウンロード前に各ファイルの保存場所を確認する」をオンにしてそこへ保存してください。</div>
-      <div class="prbtns"><button class="prWith">🖨 最後のPDFを印刷（比較結果つき）</button><button class="prPlain">🖨 最後のPDFを印刷（そのまま）</button><span class="hint" style="align-self:center">※印刷は --kiosk-printing なしのChromeで</span></div>
-    </details>
-    <div id="watchLog" style="margin-top:10px"></div>
-  </section>
 
   <div class="grid">
     <section class="card" id="patientCard">
@@ -240,8 +223,8 @@
     </div>
   </div>
 
-  <div class="card" id="tlCard">
-    <h2>🎞 タイムライン（保存した実際の波形を時系列で）</h2>
+  <details class="card" id="tlCard" open>
+    <summary>🎞 タイムライン（保存したPDFを時系列で）<span class="hint" id="tlSum" style="margin-left:8px;font-weight:400;letter-spacing:0"></span></summary>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <span class="status">患者ID</span>
       <input id="tlId" placeholder="空なら今の患者" class="inp" style="width:170px">
@@ -269,7 +252,26 @@
       <div class="hint" style="margin-top:8px">全部の日付（クリックで下の波形をその日に。キーボードの ← → で下、Shift＋← → で上をめくれます）</div>
       <div id="tlStrip" style="display:flex;gap:6px;overflow-x:auto;padding:6px 0"></div>
     </div>
-  </div>
+  </details>
+
+  <section class="card" id="watchCard">
+    <h2>自動見張り</h2>
+    <div class="row">
+      <button class="primary" id="watchStart">👀 見張りを始める</button>
+      <button id="watchStop" disabled>■ 止める</button>
+      <div class="status" id="watchStatus" style="flex:1;min-width:240px">止まっています。「👀 見張りを始める」で、LATITUDEのPDFを保存するフォルダを選んでください。</div>
+    </div>
+    <details style="margin-top:8px"><summary class="hint" style="cursor:pointer">見張りの設定・注意</summary>
+      <div class="row" style="margin-top:6px">
+        <label class="hint row"><input type="checkbox" id="watchPick"> 別のフォルダを選ぶ</label>
+        <label class="hint row"><input type="checkbox" id="watchExisting"> フォルダに今あるPDFも処理する</label>
+        <label class="hint row"><input type="checkbox" id="watchMove" checked> 処理したPDFを患者ごとのフォルダへ移動する</label>
+      </div>
+      <div class="hint" style="margin-top:4px;color:var(--warn)">⚠ 「ダウンロード」フォルダそのものはChromeの制限で選べません（「システム ファイルが含まれている」と出ます）。ダウンロードの中に <b>LATITUDE</b> などのフォルダを作り、Chromeの設定 → ダウンロード → 保存先 をそのフォルダにするか、「ダウンロード前に各ファイルの保存場所を確認する」をオンにしてそこへ保存してください。</div>
+      <div class="prbtns"><button class="prWith">🖨 最後のPDFを印刷（比較結果つき）</button><button class="prPlain">🖨 最後のPDFを印刷（そのまま）</button><span class="hint" style="align-self:center">※印刷は --kiosk-printing なしのChromeで</span></div>
+    </details>
+    <div id="watchLog" style="margin-top:10px"></div>
+  </section>
 
   <details class="card" id="pdfSec" open>
     <summary>📄 読み込んだPDFと段の読み取り</summary>
@@ -1106,26 +1108,31 @@ async function tlGo(i){
   if(!tl.items.length)return;i=Math.max(0,Math.min(tl.items.length-1,i));tl.idx=i;$('tlSlider').value=i;
   const it=tl.items[i];tlVs();
   [...$('tlStrip').children].forEach((c,k)=>c.style.outline=k===i?'3px solid var(--accent)':'none');
-  const th=$('tlStrip').children[i];if(th)th.scrollIntoView({block:'nearest',inline:'center'});
+  const th=$('tlStrip').children[i];if(th){const sp=$('tlStrip');sp.scrollLeft=th.offsetLeft-sp.clientWidth/2+th.clientWidth/2;}
   await tlPanel($('tlCur'),it,`${i+1}/${tl.items.length}　${it.date||'?'}`);
 }
-$('tlShow').onclick=async()=>{
-  await ensureDir();if(!dirHandle){$('tlMsg').innerHTML='<span class="warn-t">データフォルダに接続できません。📁で選んでください。</span>';return;}
-  const id=$('tlId').value.trim()||$('fId').value.trim();if(!id){$('tlMsg').innerHTML='<span class="warn-t">患者IDを入れてください。</span>';return;}
+async function tlLoad(idArg,quiet){
+  if(!dirHandle)await ensureDir();if(!dirHandle){$('tlMsg').innerHTML='<span class="warn-t">データフォルダに接続できません。📁で選んでください。</span>';return;}
+  const id=idArg||$('tlId').value.trim()||$('fId').value.trim();if(!id){$('tlMsg').innerHTML='<span class="warn-t">患者IDを入れてください。</span>';return;}
   const st=await readBaseline(id);if(!st||!(st.reports||[]).length){$('tlMsg').innerHTML=`<span class="warn-t">ID ${escH(id)} の記録がありません。</span>`;$('tlBody').hidden=true;return;}
   tl.id=id;tl.obj={name:st.name,device:st.device};tl.cache.clear();
   const lvOf=r=>{const h=(st.history||[]).filter(x=>x.date===r.date&&x.level!=null).pop();return h?h.level:null;};
   const hOf=r=>(st.history||[]).filter(x=>x.date===r.date&&x.level!=null).pop()||null;
   tl.items=[...st.reports].sort((a,b)=>a.key<b.key?-1:1).map(r=>({...r,lv:lvOf(r),h:hOf(r)}));
   tl.base=st.baseline||tl.items[0];
-  $('tlMsg').textContent=`ID ${id}：${tl.items.length}回分の記録`;$('tlBody').hidden=false;
+  $('tlMsg').textContent=`ID ${id}：${tl.items.length}回分の記録`;$('tlSum').textContent=`ID ${id}・${tl.items.length}回分`;$('tlBody').hidden=false;$('tlId').value=id;
   $('tlSlider').max=tl.items.length-1;
   $('tlStrip').innerHTML=tl.items.map((it,k)=>`<button class="tlTh" data-k="${k}" style="flex:0 0 auto;padding:4px;width:150px;text-align:left"><div style="font-size:11px">${escH(it.date||'?')} ${it.lv==null?'':['✅','🟡','⚠️'][it.lv]}</div><div class="tlImg" style="height:46px;background:#fff;border-radius:4px;overflow:hidden"></div></button>`).join('');
   $('tlTSlider').max=tl.items.length-1;
   await tlTop(-1);
   await tlGo(tl.items.length-1);
   tlThumbs();
-};
+}
+$('tlShow').onclick=()=>tlLoad();
+// 評価が終わったら、その患者のタイムラインを自動で表示（たたんであれば中身だけ準備）
+function tlAuto(id){if(id)tlLoad(id,true).catch(()=>{});}
+try{const v=localStorage.getItem('pg_lat_tlopen');if(v)$('tlCard').open=v==='1';}catch(_){}
+$('tlCard').addEventListener('toggle',()=>{try{localStorage.setItem('pg_lat_tlopen',$('tlCard').open?'1':'0');}catch(_){}});
 async function tlThumbs(){ // サムネイルは後から順番に読み込む
   const id=tl.id,mode=tlFull;
   for(let k=0;k<tl.items.length;k++){if(tl.id!==id||tlFull!==mode)return;const url=await tlImage(tl.items[k]);const c=$('tlStrip').children[k];if(c&&url)c.querySelector('.tlImg').innerHTML=`<img src="${url}" style="width:100%;height:100%;object-fit:cover;object-position:left top">`;}
@@ -1238,7 +1245,7 @@ async function runEval(mode){
     const why=first?((store&&store.feat&&!store.reports)?'新しい計測方式で登録しました（この波形が基準になります）':'初回登録しました（この波形が基準になります）'):'比較できる前の日付のレポートがありません';
     $('result').innerHTML=`<div class="verdict info"><h2>${why}</h2>この患者（ID:${id}）の${now.date||'今回'}のレポートとして保存しました。${first?'次から「📌 基準と比較」で、同じ日付のレポートでも比べられます。':'同じ日付どうしを比べるときは「📌 基準と比較」を使ってください。'}${curKey?'':'<br><b>※照会日が読み取れていません。照会日を入力すると前後関係で正しく比較できます。</b>'}${dirHandle?'':'<br><b>※フォルダ未選択のため保存できていません。</b>'}
       <div class="hint" style="margin-top:6px">${measure(pool)}</div>${rowNotes.length?`<div class="cause">記録の中の所見：${rowNotes.map(x=>`${ic(x.lv)} ${x.row}：${x.why}`).join('　')}</div>`:''}</div>${rowTable}`;
-    $('overlayCard').hidden=true; return;
+    $('overlayCard').hidden=true; tlAuto(id); return;
   }
   const r={k:0,b:bp,c:pool,...compareFeat(bp,pool)};
   const sign=v=>(v>0?'+':'')+v;
@@ -1269,6 +1276,7 @@ async function runEval(mode){
   lastEval.pdf=nowPdf;
   $('overlayCard').hidden=false; // 先に表示してから描く（幅を正しく取るため）
   drawBeat(r);
+  tlAuto(id);
 };
 // 代表拍の重ね描き（実寸：横 ms・縦 mV。青＝前回、橙＝今回。QRSの始まりと終わりに縦線）
 let lastBeatR=null;
@@ -1331,6 +1339,14 @@ function themeBtnLabel(){$('themeBtn').textContent=document.documentElement.data
 themeBtnLabel();
 $('themeBtn').onclick=()=>{const t=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=t;try{localStorage.setItem('pg_lat_theme',t);}catch(_){}
   themeBtnLabel();try{if(curSigs.length)showSigPreview();if(lastBeatR&&!$('overlayCard').hidden)drawBeat(lastBeatR);}catch(_){}};
+// 最新の結果を上のバーにも出す（押すと「患者と判定」へ）
+new MutationObserver(()=>{const h=document.querySelector('#result .verdict h2');const c=$('lastChip');if(!h){return;}
+  const v=h.closest('.verdict'),t=h.textContent.replace('（自動評価）','').trim(),id=$('fId').value.trim();
+  c.hidden=false;c.textContent=(id?'ID '+id+'　':'')+t;c.style.color=v.classList.contains('bad')?'var(--bad)':v.classList.contains('warn')?'var(--warn)':v.classList.contains('ok')?'var(--ok)':'var(--accent2)';c.style.fontWeight='700';
+}).observe($('result'),{childList:true,subtree:true});
+$('lastChip').onclick=()=>$('patientCard').scrollIntoView({block:'start'});
+// 見張りの一覧：行を押すと、その患者のタイムラインを開く
+document.addEventListener('click',e=>{const tr=e.target.closest('#watchLog tr[data-id]');if(!tr)return;$('tlCard').open=true;tlLoad(tr.dataset.id).then(()=>$('tlCard').scrollIntoView({block:'start'}));});
 // ⚙ ボタン → 設定を開いてそこへ移動
 $('openSettings').onclick=()=>{$('settings').open=true;$('settings').scrollIntoView({block:'start'});};
 // 「PDFと段の読み取り」を開いているか閉じているかを覚える
@@ -1351,7 +1367,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')$('lightbox').classL
 // 画面の幅が変わったら波形を描き直す
 let rsT=0;window.addEventListener('resize',()=>{clearTimeout(rsT);rsT=setTimeout(()=>{try{if(curSigs.length)showSigPreview();}catch(_){}},200);});
 function renderWatchLog(){
-  $('watchLog').innerHTML=watchLog.length?`<table class="crit"><tr><th>時刻</th><th>ファイル</th><th>患者ID</th><th>照会日</th><th>判定</th><th>主な原因</th></tr>${watchLog.map(r=>`<tr class="lv${r.lv>0?r.lv:0}"><td>${r.t}</td><td>${escH(r.file)}${r.moved?`<div class="hint">${escH(r.moved)}</div>`:''}</td><td>${escH(r.id||'—')}</td><td>${escH(r.date||'—')}</td><td>${escH(r.verdict)}</td><td class="hint">${escH(r.cause||'')}</td></tr>`).join('')}</table>`:'<div class="hint">まだ処理したPDFはありません。</div>';}
+  $('watchLog').innerHTML=watchLog.length?`<table class="crit"><tr><th>時刻</th><th>ファイル</th><th>患者ID</th><th>照会日</th><th>判定</th><th>主な原因</th></tr>${watchLog.map(r=>`<tr class="lv${r.lv>0?r.lv:0}"${r.id?` data-id="${escH(r.id)}" style="cursor:pointer" title="押すとこの患者のタイムラインを開きます"`:''}><td>${r.t}</td><td>${escH(r.file)}${r.moved?`<div class="hint">${escH(r.moved)}</div>`:''}</td><td>${escH(r.id||'—')}</td><td>${escH(r.date||'—')}</td><td>${escH(r.verdict)}</td><td class="hint">${escH(r.cause||'')}</td></tr>`).join('')}</table>`:'<div class="hint">まだ処理したPDFはありません。</div>';}
 // 通知：拡張機能が入っていれば拡張機能から出す（ファイルとして開いたページからは通知が出ないことがあるため）。無ければブラウザの通知
 function notifyResult(title,body,level){
   if(document.documentElement.dataset.pgExt){window.postMessage({__pgNotify:true,title,body,level},'*');return;}
