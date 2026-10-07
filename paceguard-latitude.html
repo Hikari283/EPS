@@ -1128,7 +1128,20 @@ $('watchStart').onclick=async()=>{
   }catch(e){setWatchStatus(`<span class="warn-t">開始できませんでした（${escH(e.message||e)}）</span>`);}
 };
 $('watchStop').onclick=()=>{clearInterval(watchTimer);watchDir=null;$('watchStop').disabled=true;setWatchStatus('停止中');};
-(async()=>{let d=null;try{d=await idb('readonly',st=>st.get('watch'));}catch(_){}if(d){setWatchStatus(`前回の見張りフォルダ：${escH(d.name)}（「👀 見張りを始める」で再開）`);}})();
+// 見張りの自動開始：前回のフォルダの許可が残っていれば、開いただけで始める。
+// 残っていなければ（Chromeの決まりで許可はクリックの時しか聞けない）、画面のどこかを1回クリックした時に始める。
+(async()=>{
+  let w=null,d=null;try{w=await idb('readonly',st=>st.get('watch'));d=await idb('readonly',st=>st.get('dir'));}catch(_){}
+  if(!w)return;
+  const granted=async h=>{try{return (await h.queryPermission({mode:'readwrite'}))==='granted';}catch(_){return false;}};
+  if(d&&await granted(d)&&await granted(w)){
+    dirHandle=d;savedHandle=d;setFolderStatus('<span class="ok-t">フォルダ接続済み：'+escH(d.name)+'（自動）</span>');
+    await startWatch(w);return;
+  }
+  setWatchStatus(`<span class="warn-t">👆 画面のどこかを1回クリックすると、見張り（${escH(w.name)}）を始めます。</span><br><span class="hint">許可を聞かれたら「<b>訪問時に毎回許可</b>」を選ぶと、次からは開いただけで自動で始まります。</span>`);
+  const once=e=>{document.removeEventListener('pointerdown',once,true);if(watchDir||e.target.closest('#watchStart,#watchStop,#pickFolder'))return;$('watchStart').click();};
+  document.addEventListener('pointerdown',once,true);
+})();
 renderWatchLog();
 </script>
 <div id="printArea"></div>
