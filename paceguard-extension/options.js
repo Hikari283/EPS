@@ -15,3 +15,7 @@ $('save').onclick = async () => {
   $('msg').textContent = '保存しました'; load();
 };
 load();
+
+chrome.storage.local.get({ autoArrange: true }).then(c => { $('autoArrange').checked = c.autoArrange; });
+$('autoArrange').onchange = () => chrome.storage.local.set({ autoArrange: $('autoArrange').checked });
+$('arrangeNow').onclick = async () => { const r = await chrome.runtime.sendMessage({ type: 'arrange' }); $('arrMsg').textContent = r === 'OK' ? '並べました' : (r || ''); };

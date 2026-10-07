@@ -84,3 +84,38 @@ chrome.runtime.onMessage.addListener((m, sender) => {
   chrome.action.setTitle({ title: title + '\n' + body });
   try { chrome.notifications.create('pg-' + Date.now(), { type: 'basic', iconUrl: 'icon128.png', title, message: body, priority: m.level >= 2 ? 2 : 0, requireInteraction: m.level >= 2 }); } catch (_) {}
 });
+
+// ④ 開いた時に「左：LATITUDE／右：ツール」に自動で並べる
+async function arrange() {
+  const cfg = await getCfg();
+  const tabs = await chrome.tabs.query({});
+  const tool = tabs.find(t => t.url && t.url.startsWith('file:') && /paceguard-latitude/i.test(t.url));
+  const lat = tabs.find(t => t.url && hostOk(t.url, cfg));
+  if (!tool || !lat) return '見つからない：' + (!tool ? 'ツールのタブ ' : '') + (!lat ? 'LATITUDEのタブ' : '');
+  const ds = await chrome.system.display.getInfo(); const wa = (ds.find(d => d.isPrimary) || ds[0]).workArea;
+  const half = Math.floor(wa.width / 2);
+  const left = { left: wa.left, top: wa.top, width: half, height: wa.height };
+  const right = { left: wa.left + half, top: wa.top, width: wa.width - half, height: wa.height };
+  let toolWin = tool.windowId;
+  if (tool.windowId === lat.windowId) toolWin = (await chrome.windows.create({ tabId: tool.id, focused: false, ...right })).id;
+  for (const [id, r] of [[toolWin, right], [lat.windowId, left]]) {
+    await chrome.windows.update(id, { state: 'normal' });
+    await chrome.windows.update(id, r);
+  }
+  await chrome.tabs.update(lat.id, { active: true }); await chrome.windows.update(lat.windowId, { focused: true });
+  return 'OK';
+}
+chrome.runtime.onMessage.addListener((m, sender, reply) => {
+  if (!m) return;
+  if (m.type === 'toolReady') { // ツールのタブが開いた：このChromeを起動して最初の1回だけ自動で並べる
+    (async () => {
+      const cfg = await chrome.storage.local.get({ autoArrange: true }); if (!cfg.autoArrange) return;
+      const s = await chrome.storage.session.get('arranged'); if (s.arranged) return;
+      for (let i = 0; i < 10; i++) { // LATITUDEのタブが開くのを少し待つ
+        await new Promise(r => setTimeout(r, 1000));
+        if ((await arrange()) === 'OK') { await chrome.storage.session.set({ arranged: true }); return; }
+      }
+    })();
+  }
+  if (m.type === 'arrange') { arrange().then(r => reply && reply(r)); return true; }
+});
