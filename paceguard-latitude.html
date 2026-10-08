@@ -1342,9 +1342,10 @@ async function runEval(mode){
     else if(u.outlier)rowNotes.push({lv:1,row:`${k+1}段目`,why:u.reason});
     else if(u.reason==='ノイズ疑い')rowNotes.push({lv:1,row:`${k+1}段目`,why:`ノイズ疑い（${curNoise[k].max}／閾値 ${curNoise[k].thr}）`});});
   const rh=curPool&&curPool.rhythm;
-  if(rh&&rh.pvc)rowNotes.unshift({lv:1,row:'期外収縮',why:`心室性期外収縮の疑い ${rh.pvc}拍（形が違って早く来る拍：${rh.pvcRows.map(n=>n+'段目').join('・')}）`});
+  if(rh&&rh.pvc)rowNotes.push({lv:0,info:true,row:'PVC',why:`心室性期外収縮の疑い ${rh.pvc}拍（形が違って早く来る拍：${rh.pvcRows.map(n=>n+'段目').join('・')}）`});
+  const pvcTag=rh&&rh.pvc?`＋ PVCあり（${rh.bigem?'二段脈・':''}${rh.pvc}拍）`:'';
   if(rh&&rh.af)rowNotes.unshift({lv:1,row:'リズム',why:`RR間隔が不規則（心房細動の疑い：RRのばらつき ${Math.round(rh.cv*100)}%・連続する差 ${Math.round(rh.madsd*100)}%）`});
-  else if(rh&&rh.bigem)rowNotes.push({lv:1,row:'リズム',why:'RRが規則的に長短を繰り返す（二段脈などの可能性）'});
+  else if(rh&&rh.bigem&&!rh.pvc)rowNotes.push({lv:1,row:'リズム',why:'RRが規則的に長短を繰り返す（二段脈などの可能性）'});
   const rowTable=`<div style="margin-top:12px"><b>段ごとの記録</b>（${curSigs.length}段）</div>
     <table class="crit"><tr><th>段</th><th>拍</th><th>心拍</th><th>波高</th><th>QRS幅</th><th>代表拍との形</th><th>ノイズ</th><th>扱い</th></tr>
     ${curFeat.map((f,k)=>{const u=curPool&&curPool.rowInfo[k]||{},nz=curNoise[k];if(!f||f.error)return `<tr class="lv1"><td>${k+1}</td><td colspan="7">${f&&f.error||'読み取れません'}</td></tr>`;
@@ -1357,7 +1358,7 @@ async function runEval(mode){
     const first=!baseRep;
     const why=first?((store&&store.feat&&!store.reports)?'新しい計測方式で登録しました（この波形が基準になります）':'初回登録しました（この波形が基準になります）'):'比較できる前の日付のレポートがありません';
     $('result').innerHTML=`<div class="verdict info"><h2>${why}</h2>この患者（ID:${id}）の${now.date||'今回'}のレポートとして保存しました。${first?'次から「📌 基準と比較」で、同じ日付のレポートでも比べられます。':'同じ日付どうしを比べるときは「📌 基準と比較」を使ってください。'}${curKey?'':'<br><b>※照会日が読み取れていません。照会日を入力すると前後関係で正しく比較できます。</b>'}${dirHandle?'':'<br><b>※フォルダ未選択のため保存できていません。</b>'}
-      <div class="hint" style="margin-top:6px">${measure(pool)}</div>${rowNotes.length?`<div class="cause">記録の中の所見：${rowNotes.map(x=>`${ic(x.lv)} ${x.row}：${x.why}`).join('　')}</div>`:''}</div>${rowTable}`;
+      <div class="hint" style="margin-top:6px">${measure(pool)}</div>${rowNotes.length?`<div class="cause">記録の中の所見：${rowNotes.map(x=>`${x.info?'ℹ️':ic(x.lv)} ${x.row}：${x.why}`).join('　')}</div>`:''}</div>${rowTable}`;
     $('overlayCard').hidden=true; showRhythm(); tlAuto(id); return;
   }
   const r={k:0,b:bp,c:pool,...compareFeat(bp,pool)};
@@ -1372,8 +1373,8 @@ async function runEval(mode){
     {lv:0,name:'心拍数（参考）',prev:`${r.b.hr??'—'} bpm`,cur:`${r.c.hr??'—'} bpm`,chg:'',rule:'判定には使わない',why:''},
   ];
   const level=Math.max(...crit.map(x=>x.lv),...rowNotes.map(x=>x.lv),0);
-  const cls=['ok','warn','bad'][level],title=[`✅ 変化なし（${refLabel}と同等）`,'🟡 注意 — 変化の兆候・記録内の所見','⚠️ 要確認 — 明らかな変化'][level]+(auto?'<small style="font-size:12px;font-weight:400;opacity:.7">（自動評価）</small>':'');
-  const causes=[...crit.filter(x=>x.lv>0).map(x=>({lv:x.lv,txt:`${x.why}（${x.prev!=='—'?x.prev+'→'+x.cur:x.chg}）`})),...rowNotes.map(x=>({lv:x.lv,txt:`${x.row}：${x.why}`}))].sort((a,b)=>b.lv-a.lv);
+  const cls=['ok','warn','bad'][level],title=[`✅ 変化なし（${refLabel}と同等）`,'🟡 注意 — 変化の兆候・記録内の所見','⚠️ 要確認 — 明らかな変化'][level]+(pvcTag?`<span style="font-size:15px;font-weight:800;color:var(--accent2);margin-left:8px">${pvcTag}</span>`:'')+(auto?'<small style="font-size:12px;font-weight:400;opacity:.7">（自動評価）</small>':'');
+  const causes=[...crit.filter(x=>x.lv>0).map(x=>({lv:x.lv,txt:`${x.why}（${x.prev!=='—'?x.prev+'→'+x.cur:x.chg}）`})),...rowNotes.filter(x=>!x.info).map(x=>({lv:x.lv,txt:`${x.row}：${x.why}`}))].sort((a,b)=>b.lv-a.lv);
   const causeHtml=`<div class="cause">主な原因：${causes.length?causes.slice(0,4).map(x=>`${ic(x.lv)} ${x.txt}`).join('　'):'なし（すべての項目が基準内）'}</div>`;
   $('result').innerHTML=`<div class="verdict ${cls}"><h2>${title}</h2>
     <div>比較：${ref.date||'?'}（${refLabel}） → ${now.date||'?'}（今回）</div>
@@ -1457,9 +1458,9 @@ $('themeBtn').onclick=()=>{const t=document.documentElement.dataset.theme==='dar
 function showRhythm(){
   const rh=curPool&&curPool.rhythm;if(!rh||!$('result'))return;
   const box=document.createElement('div');box.style.marginTop='12px';
-  if(!rh.enough){box.innerHTML=`<b>リズム（RR間隔）</b>　<span class="hint">RR間隔が少ないため判定できません（${rh.n}個）</span>${rh.pvc?`　<span class="warn-t" style="font-weight:800">🟡 心室性期外収縮の疑い ${rh.pvc}拍</span>`:''}`;$('result').appendChild(box);return;}
-  const verdict=rh.af?'<span class="warn-t" style="font-weight:800">🟡 不規則（心房細動の疑い）</span>':rh.bigem?'<span class="warn-t" style="font-weight:800">🟡 規則的な長短の繰り返し（二段脈などの可能性）</span>':'<span class="ok-t" style="font-weight:800">✅ 規則的</span>';
-  box.innerHTML=`<b>リズム（RR間隔）</b>　${verdict}${rh.pvc?`　<span class="warn-t" style="font-weight:800">🟡 心室性期外収縮の疑い ${rh.pvc}拍</span>`:''}<div class="hint">RR 中央値 ${Math.round(rh.med)} ms（${rh.hr} bpm）・ばらつき ${Math.round(rh.cv*100)}%・連続するRRの差 ${Math.round(rh.madsd*100)}%・大きく変わった割合 ${Math.round(rh.irr*100)}%（${rh.n}個）　<span title="心房細動の疑い：ばらつき8%以上 かつ 連続する差6%以上 かつ 大きく変わった割合50%以上（二段脈のような規則的な交互は除く）">ⓘ判定の目安</span></div><canvas class="rrcv"></canvas>`;
+  if(!rh.enough){box.innerHTML=`<b>リズム（RR間隔）</b>　<span class="hint">RR間隔が少ないため判定できません（${rh.n}個）</span>${rh.pvc?`　<span style="font-weight:800;color:var(--accent2)">ℹ️ PVCあり（心室性期外収縮の疑い ${rh.pvc}拍）</span>`:''}`;$('result').appendChild(box);return;}
+  const verdict=rh.af?'<span class="warn-t" style="font-weight:800">🟡 不規則（心房細動の疑い）</span>':rh.bigem&&rh.pvc?'<span style="font-weight:800;color:var(--accent2)">ℹ️ PVCの二段脈</span>':rh.bigem?'<span class="warn-t" style="font-weight:800">🟡 規則的な長短の繰り返し（二段脈などの可能性）</span>':'<span class="ok-t" style="font-weight:800">✅ 規則的</span>';
+  box.innerHTML=`<b>リズム（RR間隔）</b>　${verdict}${rh.pvc?`　<span style="font-weight:800;color:var(--accent2)">ℹ️ PVCあり（心室性期外収縮の疑い ${rh.pvc}拍）</span>`:''}<div class="hint">RR 中央値 ${Math.round(rh.med)} ms（${rh.hr} bpm）・ばらつき ${Math.round(rh.cv*100)}%・連続するRRの差 ${Math.round(rh.madsd*100)}%・大きく変わった割合 ${Math.round(rh.irr*100)}%（${rh.n}個）　<span title="心房細動の疑い：ばらつき8%以上 かつ 連続する差6%以上 かつ 大きく変わった割合50%以上（二段脈のような規則的な交互は除く）">ⓘ判定の目安</span></div><canvas class="rrcv"></canvas>`;
   $('result').appendChild(box);
   const cv=box.querySelector('canvas'),W=Math.max(320,box.clientWidth||600),H=130,c=hiDPI(cv,W,H),P=pal();
   c.fillStyle=P.bg;c.fillRect(0,0,W,H);
