@@ -57,7 +57,7 @@ chrome.runtime.onMessage.addListener((m, sender) => {
   }
 });
 
-// 追加したサイトにも、ページ内PDFの見張りを入れる
+// 追加したサイトにも、ページ内PDFの自動比較を入れる
 async function syncScripts() {
   const cfg = await getCfg();
   const extra = cfg.hosts.filter(h => !DEF.hosts.includes(h)).flatMap(h => [`https://${h}/*`, `https://*.${h}/*`, `http://${h}/*`, `http://*.${h}/*`]);

@@ -1,7 +1,7 @@
 PaceGuard LATITUDE 取り込み（Chrome拡張機能）
 
 LATITUDEで開いたPDFを、自動で「ダウンロード先\LATITUDE\」に保存します。
-PaceGuard LATITUDE（paceguard-latitude.html）の「👀 見張り」がそのフォルダを見て、
+PaceGuard LATITUDE（paceguard-latitude.html）の「👀 自動比較」がそのフォルダを見て、
 波形のPDFを比較し、全部のPDFを患者ごとのフォルダへ整理します。
 PDFはこのパソコンに保存するだけで、外部には送りません。
 

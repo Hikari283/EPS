@@ -200,7 +200,7 @@
   </div>
   <div class="chips">
     <button class="chip" id="lastChip" title="最新の結果（押すとその場所へ）" hidden style="cursor:pointer"></button>
-    <span class="chip" title="自動見張りの状態"><span class="live" id="liveDot"></span><span id="liveTxt">見張り停止中</span></span>
+    <span class="chip" title="自動比較の状態"><span class="live" id="liveDot"></span><span id="liveTxt">自動比較 停止中</span></span>
     <span class="chip" id="folderStatus">フォルダ未選択（比較結果の保存に必要）</span>
     <button id="pickFolder" class="iconbtn" title="データフォルダを選ぶ">📁 フォルダ</button>
     <button id="themeBtn" class="iconbtn ghost" title="白／黒の切り替え">🌙</button>
@@ -210,7 +210,7 @@
 </header>
 
 <main class="wrap">
-  <button id="startBanner" hidden style="width:100%;padding:16px;font-size:17px;font-weight:800;border-radius:16px;border:0;color:#fff;background:linear-gradient(135deg,#10b981,#0ea5e9);box-shadow:0 12px 30px -14px rgba(16,185,129,.9)">▶ ここを押して今日の見張りを開始（1日1回）<span style="display:block;font-size:12px;font-weight:500;opacity:.9">許可の画面が出たら「許可する」を押してください</span></button>
+  <button id="startBanner" hidden style="width:100%;padding:16px;font-size:17px;font-weight:800;border-radius:16px;border:0;color:#fff;background:linear-gradient(135deg,#10b981,#0ea5e9);box-shadow:0 12px 30px -14px rgba(16,185,129,.9)">▶ ここを押して今日の波形比較を開始（1日1回）<span style="display:block;font-size:12px;font-weight:500;opacity:.9">許可の画面が出たら「許可する」を押してください</span></button>
 
   <div class="grid">
     <section class="card" id="patientCard">
@@ -285,13 +285,13 @@
   </details>
 
   <section class="card" id="watchCard">
-    <h2>自動見張り</h2>
+    <h2>自動比較</h2>
     <div class="row">
-      <button class="primary" id="watchStart">👀 見張りを始める</button>
+      <button class="primary" id="watchStart">👀 自動比較を始める</button>
       <button id="watchStop" disabled>■ 止める</button>
-      <div class="status" id="watchStatus" style="flex:1;min-width:240px">止まっています。「👀 見張りを始める」で、LATITUDEのPDFを保存するフォルダを選んでください。</div>
+      <div class="status" id="watchStatus" style="flex:1;min-width:240px">止まっています。「👀 自動比較を始める」で、LATITUDEのPDFを保存するフォルダを選んでください。</div>
     </div>
-    <details style="margin-top:8px"><summary class="hint" style="cursor:pointer">見張りの設定・注意</summary>
+    <details style="margin-top:8px"><summary class="hint" style="cursor:pointer">自動比較の設定・注意</summary>
       <div class="row" style="margin-top:6px">
         <label class="hint row"><input type="checkbox" id="watchPick"> 別のフォルダを選ぶ</label>
         <label class="hint row"><input type="checkbox" id="watchExisting"> フォルダに今あるPDFも処理する</label>
@@ -362,10 +362,10 @@
     <svg viewBox="0 0 40 40" aria-hidden="true" style="width:72px;height:72px"><path d="M4 22h8l3-5 4 13 4-21 3 13h10" fill="none" stroke="#10b981" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
     <div class="ss-title">PaceGuard LATITUDE</div>
     <div class="ss-date" id="ssDate"></div>
-    <button id="ssStart">▶ 今日の見張りを開始</button>
+    <button id="ssStart">▶ 今日の波形比較を開始</button>
     <div class="ss-note">押したあと、許可の画面が出たら「許可する」を押してください。<br>初めての時は、LATITUDEのPDFが入るフォルダ（波形認識\LATITUDE）を選びます。</div>
     <div class="ss-note" id="ssNote2" style="color:var(--accent);font-weight:700"></div>
-    <button id="ssLater" class="ss-later">あとで（見張りなしで使う）</button>
+    <button id="ssLater" class="ss-later">あとで（自動比較なしで使う）</button>
   </div>
 </div>
 
@@ -1472,13 +1472,13 @@ $('demoBtn').onclick=()=>{
   $('result').innerHTML=`<div class="verdict bad"><h2>⚠️ 変化あり — 要確認（デモ）</h2><div>前回:2026年06月01日 → 今回:2026年09月28日</div><div>・S-ECG波形の相関が低下（${corr.toFixed(3)}）＝形態変化（新規伝導異常/リード移動などを要確認）</div><div class="metrics"><div class="m flag"><div class="k">波形相関</div><div class="v">${corr.toFixed(3)}</div></div><div class="m"><div class="k">振幅比</div><div class="v">${(ampRatio*100).toFixed(0)}%</div></div><div class="m"><div class="k">幅比</div><div class="v">${widthRatio.toFixed(2)}倍</div></div></div></div>`;
   $('row2Wrap').hidden=true;$('overlayCard').hidden=false;drawOverlay(a,b,lag);
 };
-// ===== ダウンロードフォルダの見張り：新しいPDFが来たら自動で読み込み→評価→通知 =====
+// ===== ダウンロードフォルダの自動比較：新しいPDFが来たら自動で読み込み→評価→通知 =====
 let watchDir=null,watchTimer=null,watchBusy=false,watchSeen=new Map(),watchLog=[];
 const WSEEN='pg_lat_watch_seen';
 try{for(const [k,v] of JSON.parse(localStorage.getItem(WSEEN)||'[]'))watchSeen.set(k,v);}catch(_){}
 const wkey=f=>f.name+'|'+f.size+'|'+f.lastModified;
 function saveSeen(){try{localStorage.setItem(WSEEN,JSON.stringify([...watchSeen].slice(-500)));}catch(_){}}
-function setWatchStatus(h){$('watchStatus').innerHTML=h;const on=!!watchDir;if(on){$('startBanner').hidden=true;$('startScreen').hidden=true;}$('liveDot').classList.toggle('on',on);$('liveTxt').textContent=on?'見張り中：'+watchDir.name:'見張り停止中';}
+function setWatchStatus(h){$('watchStatus').innerHTML=h;const on=!!watchDir;if(on){$('startBanner').hidden=true;$('startScreen').hidden=true;}$('liveDot').classList.toggle('on',on);$('liveTxt').textContent=on?'自動比較中：'+watchDir.name:'自動比較 停止中';}
 // ☀／🌙：白と黒の切り替え（覚えておく）。波形の図も描き直す
 function themeBtnLabel(){$('themeBtn').textContent=document.documentElement.dataset.theme==='dark'?'☀':'🌙';}
 themeBtnLabel();
@@ -1511,7 +1511,7 @@ new MutationObserver(()=>{const h=document.querySelector('#result .verdict h2');
   c.hidden=false;c.textContent=(id?'ID '+id+'　':'')+t;c.style.color=v.classList.contains('bad')?'var(--bad)':v.classList.contains('warn')?'var(--warn)':v.classList.contains('ok')?'var(--ok)':'var(--accent2)';c.style.fontWeight='700';
 }).observe($('result'),{childList:true,subtree:true});
 $('lastChip').onclick=()=>$('patientCard').scrollIntoView({block:'start'});
-// 見張りの一覧：行を押すと、その患者のタイムラインを開く
+// 自動比較の一覧：行を押すと、その患者のタイムラインを開く
 document.addEventListener('click',e=>{const tr=e.target.closest('#watchLog tr[data-id]');if(!tr)return;$('tlCard').open=true;tlLoad(tr.dataset.id).then(()=>$('tlCard').scrollIntoView({block:'start'}));});
 // ⚙ ボタン → 設定を開いてそこへ移動
 $('openSettings').onclick=()=>{$('settings').open=true;$('settings').scrollIntoView({block:'start'});};
@@ -1545,7 +1545,7 @@ async function startWatch(dir,{processExisting=false}={}){
   if(!processExisting){for await(const [name,h] of dir.entries()){if(h.kind!=='file'||!/\.pdf$/i.test(name))continue;try{const f=await h.getFile();if(!watchSeen.has(wkey(f)))watchSeen.set(wkey(f),'existing');}catch(_){}}saveSeen();}
   try{if(window.Notification&&Notification.permission==='default')await Notification.requestPermission();}catch(_){}
   clearInterval(watchTimer);watchTimer=setInterval(pollWatch,3000);pollWatch();
-  setWatchStatus(`<span class="ok-t">👀 見張り中：${escH(dir.name)}</span>（新しいPDFをダウンロードすると自動で評価します。このタブは開いたままにしてください）`+
+  setWatchStatus(`<span class="ok-t">👀 自動比較中：${escH(dir.name)}</span>（新しいPDFをダウンロードすると自動で評価します。このタブは開いたままにしてください）`+
     (document.documentElement.dataset.pgExt?'　🔔 通知：拡張機能から出します':'<br><span class="warn-t">🔔 通知が出ない時は、chrome://extensions →「PaceGuard LATITUDE 取り込み」の「詳細」→「ファイルの URL へのアクセスを許可する」をオンにして、このタブを再読み込みしてください。</span>'));
   $('watchStop').disabled=false;
 }
@@ -1583,8 +1583,8 @@ async function pollWatch(){
       if(isEcg)notifyResult('PaceGuard LATITUDE：'+verdict,`ID ${row.id||'—'}　${row.date||''}\n${row.cause}`,lv);
       if(isEcg)document.title=(lv===2?'⚠️ ':lv===1?'🟡 ':'✅ ')+'PaceGuard LATITUDE';
     }
-    setWatchStatus(`<span class="ok-t">👀 見張り中：${escH(watchDir.name)}</span>（最終確認 ${new Date().toLocaleTimeString('ja-JP')}）`);
-  }catch(e){setWatchStatus(`<span class="warn-t">見張りでエラー：${escH(e.message||e)}。「👀 見張りを始める」を押し直してください。</span>`);clearInterval(watchTimer);watchDir=null;}
+    setWatchStatus(`<span class="ok-t">👀 自動比較中：${escH(watchDir.name)}</span>（最終確認 ${new Date().toLocaleTimeString('ja-JP')}）`);
+  }catch(e){setWatchStatus(`<span class="warn-t">自動比較でエラー：${escH(e.message||e)}。「👀 自動比較を始める」を押し直してください。</span>`);clearInterval(watchTimer);watchDir=null;}
   finally{watchBusy=false;}
 }
 $('watchStart').onclick=async()=>{
@@ -1599,13 +1599,13 @@ $('watchStart').onclick=async()=>{
   }catch(e){setWatchStatus(`<span class="warn-t">開始できませんでした（${escH(e.message||e)}）</span>`);}
 };
 $('watchStop').onclick=()=>{clearInterval(watchTimer);watchDir=null;$('watchStop').disabled=true;setWatchStatus('停止中');};
-// 見張りの自動開始：前回のフォルダの許可が残っていれば、開いただけで始める。
+// 自動比較の自動開始：前回のフォルダの許可が残っていれば、開いただけで始める。
 // 残っていなければ（Chromeの決まりで許可はクリックの時しか聞けない）、スタート画面を出して1回押してもらう。
 function showStartScreen(){const d=new Date();$('ssDate').textContent=`${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${'日月火水木金土'[d.getDay()]}）`;$('startScreen').hidden=false;$('ssStart').focus();}
 $('ssStart').onclick=async()=>{
-  if(!dirHandle&&!savedHandle){ // 初めての時：先にデータフォルダ（波形認識）を選ぶ → もう一度押して見張りフォルダ
+  if(!dirHandle&&!savedHandle){ // 初めての時：先にデータフォルダ（波形認識）を選ぶ → もう一度押して受け取りフォルダ
     await $('pickFolder').onclick();
-    if(dirHandle){$('ssStart').textContent='▶ 見張りフォルダ（LATITUDE）を選んで開始';$('ssNote2').textContent='データフォルダを選びました。もう一度押して、LATITUDEのPDFが入るフォルダを選んでください。';}
+    if(dirHandle){$('ssStart').textContent='▶ 受け取りフォルダ（LATITUDE）を選んで開始';$('ssNote2').textContent='データフォルダを選びました。もう一度押して、LATITUDEのPDFが入るフォルダを選んでください。';}
     return;}
   $('startScreen').hidden=true;$('watchStart').click();};
 $('ssLater').onclick=()=>{$('startScreen').hidden=true;$('startBanner').hidden=false;};
