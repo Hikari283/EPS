@@ -1211,7 +1211,7 @@ function tlWhy(h){ // その日に評価した時の判定の理由と、比較�
 async function tlPanel(box,rep,title){
   const need=rep.file&&!rep.own;
   const sent=rep.tx||rep.date||'',fmt=d=>String(d).replace(/(\d{4})年(\d{2})月(\d{2})日\s*/,'$1/$2/$3 ').replace(/\s*JST/,'');
-  const txLine=`<div class="hint" style="margin-top:2px">📡 デバイスからの送信 <b style="color:var(--tx)">${escH(fmt(sent)||'—')}</b>${rep.clinic?`　🏥 診察室での読込み ${escH(fmt(rep.clinic))}`:''}${rep.saved?`　💾 ${escH(rep.saved)}`:''}</div>`;
+  const txLine=`<div class="hint" style="margin-top:2px">📡 デバイスからの送信 <b style="color:var(--tx)">${escH(fmt(sent)||'—')}</b></div>`;
   box.innerHTML=`<div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap"><b>${escH(title)}</b>${tlPill(rep.lv)}<span class="hint">${tlNums(rep.feat)}</span>${rep.file?`<button class="tlDel ghost" data-pdf="${escH(rep.pdf)}" title="このPDFを削除（_削除済みフォルダへ移す）" style="padding:2px 9px;font-size:12px;margin-left:auto">🗑 削除</button>`:''}${need?`<button class="tlReeval" data-pdf="${escH(rep.pdf)}" style="padding:3px 10px;font-size:12px">📥 このPDFで評価し直す（数値を作る）</button><span class="hint warn-t">このPDFの数値はまだありません</span>`:''}</div>${txLine}${rep.lv?tlWhy(rep.h):''}<div class="hint">読み込み中…</div>`;
   const url=await tlImage(rep);
   setTimeout(tlRenderOverlay,0);
