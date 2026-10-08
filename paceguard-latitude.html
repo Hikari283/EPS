@@ -218,7 +218,7 @@
       <div class="drop" id="drop">📄 PDFをここにドロップ／クリックして選択<span class="hint">（画面のどこにドロップしてもOK）</span></div>
       <div class="fields" style="margin-top:12px">
         <div class="field id"><label>患者ID</label><input id="fId" placeholder="自動抽出"></div>
-        <div class="field"><label>氏名</label><input id="fName" placeholder="自動抽出"></div>
+        <input id="fName" type="hidden" value="">
         <div class="field"><label>照会日</label><input id="fDate" placeholder="自動抽出"></div>
         <div class="field"><label>デバイス</label><input id="fDev" placeholder="自動抽出"></div>
       </div>
@@ -349,7 +349,7 @@
       <span class="status" id="pdfDirMsg"></span>
     </div>
     <div class="hint" style="margin-top:6px">評価したPDFを「データフォルダ／このフォルダ／患者ごとのフォルダ／日付.pdf」に保存します。患者ごとのフォルダ名は下の「患者ファイルの名前」と同じ形（.jsonを除いたもの）です。</div>
-    <div class="hint" style="margin-top:6px">新しい患者のファイルを作るときの名前です。使える項目：<code>{ID}</code>（患者ID）・<code>{氏名}</code>・<code>{機種}</code>　例：<code>{ID}.json</code>、<code>{ID}_{氏名}.json</code>。<br>既にあるファイルは今の名前のまま使います。ファイル名を手で変えても、ファイルの中に書かれた患者IDで自動的に見つけます。</div>
+    <div class="hint" style="margin-top:6px">新しい患者のファイルを作るときの名前です。使える項目：<code>{ID}</code>（患者ID）・<code>{機種}</code>　例：<code>{ID}.json</code>、<code>{ID}_{機種}.json</code>。<br>既にあるファイルは今の名前のまま使います。ファイル名を手で変えても、ファイルの中に書かれた患者IDで自動的に見つけます。</div>
   </details>
 
   <footer>
@@ -665,10 +665,8 @@ function extractFields(items, annotStrs, rawPdfText){
   const idCand=idParen||nums[0]||'';
   // IDが決まらない時のために、それらしい数字（6〜10桁）を候補として出す
   const idOpts=[...new Set([...t.matchAll(/\d{6,10}/g)].map(m=>m[0]).filter(n=>n!==serial&&!/^(19|20)\d\d(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])/.test(n)))].slice(0,8);
-  // 氏名：漢字/かな名の直後に（ふりがな）が続く形（田中太郎（たなか…））
-  const nameParen=(t.match(/([一-鿿々]{1,10})[（(][ぁ-ゟ][ぁ-ゟ　\s]*[）)]/)||[])[1];
-  const bad=/ふりがな|フリガナ|レポート|ページ|波形|ゲイン|センシング|プログラム|バージョン|Boston|LATITUDE|Scientific|reserved|©|MRI|S-ICD|S-ECG|センス|ペース|Noise|検出|充電|結果|イベント|病院|施設|患者管理/i;
-  const nameCand=nameParen||(annotStrs.concat(lines).find(l=>/[぀-ヿ一-鿿]/.test(l)&&l.length<=16&&!/^\d+$/.test(l)&&!/年|月|日/.test(l)&&!bad.test(l))||'').replace(/[（(].*?[）)]/g,'').trim();
+  // 氏名は読み取らない（個人情報保護のため。患者はIDだけで管理する）
+  const nameCand='';
   $('fId').value=idCand||''; $('fName').value=nameCand; $('fDate').value=interro; $('fDev').value=dev;
   // 右上の日付：前回のデバイスからの送信／前回の診察室での情報読込み／植込み日（ラベルが読めた時）
   const {tx,clinic,implant,events:evs,secg,allDT}=headerInfo(t,wt,interro);
@@ -678,7 +676,7 @@ function extractFields(items, annotStrs, rawPdfText){
   const dbg=$('dbg');
   if(dbg) dbg.innerHTML = `文字項目：<b>${items.length}</b>／注釈：<b>${annotStrs.length}</b>／自前抽出：<b>${rawPdfText.length}</b>字（stream ${rawDiag.streams}／展開 ${rawDiag.inflated}）`
     + (idCand?'':(idOpts.length?`<br><span class="warn-t">IDを自動で決められませんでした。候補：</span>${idOpts.map(n=>`<button class="idopt" data-id="${n}" style="padding:1px 8px;margin:2px">${n}</button>`).join('')}（押すと入ります）`:'<br><span class="warn-t">IDらしい数字が見つかりませんでした。手で入力するか「🔢 IDの位置を教える」を使ってください。</span>'))
-    + `<br>ID:<b>${idCand||'—'}</b> 氏名:<b>${nameCand||'—'}</b> 照会:<b>${interro||'—'}</b> 機種:<b>${dev||'—'}</b>`
+    + `<br>ID:<b>${idCand||'—'}</b> 照会:<b>${interro||'—'}</b> 機種:<b>${dev||'—'}</b>`
     + `<br>見つけた日時：${allDT.length?allDT.map(x=>'<b>'+x+'</b>').join('、'):'なし'}`
     + (()=>{const k=t.search(/ECG/);return k>=0?`<br>「ECG」の周り：<code>${escH(t.slice(Math.max(0,k-6),k+40))}</code>`:'<br>「ECG」という文字は見つかりませんでした';})();
   updateCropHint();
@@ -832,7 +830,7 @@ $('filePat').value=FILE_PAT;
 const safeName=x=>String(x||'').replace(/[\\/:*?"<>|\r\n]/g,'').trim();
 function fileNameFor(id,obj){let n=FILE_PAT.replace(/\{ID\}/g,id).replace(/\{氏名\}/g,safeName(obj&&obj.name)||'').replace(/\{機種\}/g,safeName(obj&&obj.device)||'');n=safeName(n).replace(/_+\.json$/,'.json').replace(/^_+/,'');if(!/\.json$/i.test(n))n+='.json';return n||id+'.json';}
 $('filePatSave').onclick=()=>{const v=$('filePat').value.trim();if(!/\{ID\}/.test(v)){$('filePatMsg').innerHTML='<span class="warn-t">{ID} を必ず入れてください（例：{ID}.json）</span>';return;}
-  FILE_PAT=v;try{localStorage.setItem('pg_lat_filepat',v);}catch(_){}$('filePatMsg').innerHTML=`<span class="ok-t">保存しました。例：${fileNameFor('01652389',{name:'山田太郎',device:'A219'})}</span>`;};
+  FILE_PAT=v;try{localStorage.setItem('pg_lat_filepat',v);}catch(_){}$('filePatMsg').innerHTML=`<span class="ok-t">保存しました。例：${fileNameFor('01652389',{name:'',device:'A219'})}</span>`;};
 // ===== PDFを患者ごとのフォルダに整理 =====
 let PDF_DIR='患者PDF';try{const v=localStorage.getItem('pg_lat_pdfdir');if(v)PDF_DIR=v;}catch(_){}
 $('pdfDirName').value=PDF_DIR;
@@ -1382,7 +1380,7 @@ async function doPrint(withResult){
     const res=$('result').cloneNode(true);res.querySelectorAll('button,#setBaseMsg').forEach(e=>e.remove());
     const ov=!$('overlayCard').hidden?['overlay','diff'].map(id=>{try{return `<img class="ov" src="${$(id).toDataURL()}">`;}catch(_){return '';}}).join(''):'';
     h+=`<div class="pp" style="text-align:left"><div class="prhead"><b>PaceGuard LATITUDE　比較結果</b><span>印刷 ${new Date().toLocaleString('ja-JP')}</span></div>
-      <div>患者ID：<b>${escH($('fId').value||'—')}</b>　氏名：${escH($('fName').value||'—')}　照会日：${escH($('fDate').value||'—')}　機種：${escH($('fDev').value||'—')}</div>
+      <div>患者ID：<b>${escH($('fId').value||'—')}</b>　照会日：${escH($('fDate').value||'—')}　機種：${escH($('fDev').value||'—')}</div>
       ${res.innerHTML.trim()?res.innerHTML:'<div class="verdict info"><h2>比較結果がありません</h2>評価を行ってから印刷してください。</div>'}
       ${ov?`<div style="margin-top:8px"><b>重ね描き</b>（青＝比較相手／橙＝今回、赤＝形が違う所）</div>${ov}`:''}
       <div class="hint" style="margin-top:8px">研究・院内検証用の参考情報です。最終判断は医師が行ってください。</div></div>`;
@@ -1538,11 +1536,11 @@ function drawOverlay(a,b,lag,ovId='overlay',diffId='diff'){const cv=$(ovId);cons
 // ===== デモ（PDFなしで動作確認）=====
 $('demoBtn').onclick=()=>{
   function ecg(N,{amp=1,width=1}={}){const o=new Float32Array(N),fs=250,beat=60/75*fs;const w=t=>{const g=(c,ww,a)=>a*Math.exp(-((t-c)**2)/(2*ww*ww));let v=0;v+=g(.16*fs,.03*fs,.12);v+=g(.33*fs,.012*fs*width,1*amp);v+=g(.36*fs,.012*fs*width,-.3*amp);v+=g(.55*fs,.05*fs,.22);return v;};for(let i=0;i<N;i++)o[i]=w(i%beat)+(Math.random()-.5)*.05;return o;}
-  const base={id:'DEMO001',name:'デモ 太郎',date:'2026年06月01日',template:Array.from(foldTemplate(ecg(1000,{}))),history:[]};
+  const base={id:'DEMO001',name:'',date:'2026年06月01日',template:Array.from(foldTemplate(ecg(1000,{}))),history:[]};
   const now=foldTemplate(ecg(1000,{width:2.0,amp:0.8}));
   const a=Float32Array.from(base.template),b=now;const {corr,lag}=bestXcorr(a,b,50);
   const ampRatio=(std(Array.from(b)))/(std(Array.from(a)));const widthRatio=qrsWidth(b)/qrsWidth(a);
-  $('fId').value='DEMO001';$('fName').value='デモ 太郎';$('fDate').value='2026年09月28日';$('fDev').value='EMBLEM MRI S-ICD';
+  $('fId').value='DEMO001';$('fName').value='';$('fDate').value='2026年09月28日';$('fDev').value='EMBLEM MRI S-ICD';
   $('result').innerHTML=`<div class="verdict bad"><h2>⚠️ 変化あり — 要確認（デモ）</h2><div>前回:2026年06月01日 → 今回:2026年09月28日</div><div>・S-ECG波形の相関が低下（${corr.toFixed(3)}）＝形態変化（新規伝導異常/リード移動などを要確認）</div><div class="metrics"><div class="m flag"><div class="k">波形相関</div><div class="v">${corr.toFixed(3)}</div></div><div class="m"><div class="k">振幅比</div><div class="v">${(ampRatio*100).toFixed(0)}%</div></div><div class="m"><div class="k">幅比</div><div class="v">${widthRatio.toFixed(2)}倍</div></div></div></div>`;
   $('row2Wrap').hidden=true;$('overlayCard').hidden=false;drawOverlay(a,b,lag);
 };
