@@ -1178,7 +1178,7 @@ async function ecgImage(doc,pageNo,full){ // 波形のページを描く。full�
 const tl={id:'',obj:{},items:[],base:null,cache:new Map(),idx:0,top:-1}; // top=-1 は「基準」
 // 並べ方：左右（標準）／上下／重ねる
 let tlLay='lr';try{tlLay=localStorage.getItem('pg_lat_tllay')||'lr';}catch(_){}
-function tlApplyLay(){$('tlPanels').className='tlp '+tlLay;['LR','TB','OV'].forEach(k=>$('tlLay'+k).classList.toggle('on',tlLay===k.toLowerCase()));
+function tlApplyLay(){$('tlPanels').className='tlp '+tlLay;setTimeout(()=>{try{tlEqualize();}catch(_){}},0);['LR','TB','OV'].forEach(k=>$('tlLay'+k).classList.toggle('on',tlLay===k.toLowerCase()));
   $('tlOvCtl').hidden=tlLay!=='ov';$('tlOverlay').hidden=tlLay!=='ov';if(tlLay==='ov')tlRenderOverlay();}
 ['LR','TB','OV'].forEach(k=>$('tlLay'+k).onclick=()=>{tlLay=k.toLowerCase();try{localStorage.setItem('pg_lat_tllay',tlLay);}catch(_){}tlApplyLay();});
 tlApplyLay();
@@ -1232,11 +1232,18 @@ async function tlPanel(box,rep,title){
   const evLine=(rep.events||[]).length?`<div class="hint" style="margin-top:2px">⚡ イベント ${rep.events.map(e=>`<b style="color:var(--tx)">${escH(e.no)}：${escH(fmt(e.dt))}</b>${e.type?`（<b style="color:var(--warn)">${escH(e.type)}</b>）`:''}`).join('、')}</div>`:'';
   const sgLine=rep.secg?`<div class="hint" style="margin-top:2px">〰 S-ECG記録 <b style="color:var(--tx)">${escH(fmt(rep.secg))}</b></div>`:'';
   const txLine=evLine+sgLine+`<div class="hint" style="margin-top:2px">📡 デバイスからの送信 <b style="color:var(--tx)">${escH(fmt(sent)||'—')}</b></div>`;
-  box.innerHTML=`<div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap"><b>${escH(title)}</b>${tlPill(rep.lv)}<span class="hint">${tlNums(rep.feat)}</span>${rep.file?`<button class="tlDel ghost" data-pdf="${escH(rep.pdf)}" title="このPDFを削除（_削除済みフォルダへ移す）" style="padding:2px 9px;font-size:12px;margin-left:auto">🗑 削除</button>`:''}${need?`<button class="tlReeval" data-pdf="${escH(rep.pdf)}" style="padding:3px 10px;font-size:12px">📥 このPDFで評価し直す（数値を作る）</button><span class="hint warn-t">このPDFの数値はまだありません</span>`:''}</div>${txLine}${rep.lv?tlWhy(rep.h):''}<div class="hint">読み込み中…</div>`;
+  box.innerHTML=`<div class="tlhead"><div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap"><b>${escH(title)}</b>${tlPill(rep.lv)}<span class="hint">${tlNums(rep.feat)}</span>${rep.file?`<button class="tlDel ghost" data-pdf="${escH(rep.pdf)}" title="このPDFを削除（_削除済みフォルダへ移す）" style="padding:2px 9px;font-size:12px;margin-left:auto">🗑 削除</button>`:''}${need?`<button class="tlReeval" data-pdf="${escH(rep.pdf)}" style="padding:3px 10px;font-size:12px">📥 このPDFで評価し直す（数値を作る）</button><span class="hint warn-t">このPDFの数値はまだありません</span>`:''}</div>${txLine}${rep.lv?tlWhy(rep.h):''}</div><div class="hint">読み込み中…</div>`;
   const url=await tlImage(rep);
   setTimeout(tlRenderOverlay,0);
+  tlEqualize();
   box.lastElementChild.outerHTML=url?`<img src="${url}" style="width:100%;background:#fff;border-radius:6px;display:block;margin-top:4px">`:'<div class="hint warn-t">この日のPDFが「'+escH(PDF_DIR)+'」に見つかりません（このツールで整理する前のレポート）。</div>';
 }
+// 左右に並べた時、見出しの高さをそろえて、波形が同じ高さから始まるようにする
+function tlEqualize(){
+  const hs=[...document.querySelectorAll('#tlBase .tlhead,#tlCur .tlhead')];hs.forEach(h=>h.style.minHeight='');
+  if(tlLay!=='lr'||hs.length<2)return;const m=Math.max(...hs.map(h=>h.offsetHeight));hs.forEach(h=>h.style.minHeight=m+'px');
+}
+window.addEventListener('resize',()=>{try{tlEqualize();}catch(_){}});
 function tlVs(){ // 今表示している上と下を、その場で比べる（同じ物差し）
   const top=tl.top<0?tl.base:tl.items[tl.top],bot=tl.items[tl.idx],b=top&&top.feat,c=bot&&bot.feat;
   if(!b||!c||!b.tpl||!c.tpl){$('tlVs').innerHTML=top&&bot?'上と下をこの場で比べるには、両方のPDFの数値が必要です（「📥 このPDFで評価し直す」を押してください）':'';return;}
