@@ -656,8 +656,14 @@ function extractFields(items, annotStrs, rawPdfText){
   const tx=lab(/デバイスからの送信[:：]?(\d{4})年(\d{1,2})月(\d{1,2})日(\d{1,2}:\d{2})?/)||(wt?interro:'');
   const clinic=lab(/診察室での情報読込み?[:：]?(\d{4})年(\d{1,2})月(\d{1,2})日(\d{1,2}:\d{2})?/);
   const implant=lab(/植込み日[:：]?(\d{4})年(\d{1,2})月(\d{1,2})日/);
-  meta={id:idCand||'',name:nameCand,date:interro,device:dev,tx,clinic,implant};
-  if($('fMeta'))$('fMeta').innerHTML=[tx&&`📡 前回のデバイスからの送信：<b>${tx}</b>`,clinic&&`🏥 前回の診察室での情報読込み：<b>${clinic}</b>`,implant&&`🫀 植込み日：<b>${implant}</b>`].filter(Boolean).join('　')||'';
+  // イベント記録の見出し：「002: 2025年10月13日 23:41 JST, AF」（番号・発生日時・種類）
+  const events=[...t.matchAll(/(?:^|[^\d])(\d{3})[:：](\d{4})年(\d{1,2})月(\d{1,2})日(\d{1,2}:\d{2})(?:JST)?[,，、]?\s*([A-Za-z][A-Za-z/\-]{0,11}|[一-龯ぁ-んァ-ヶー]{1,8}?(?=頻拍治療|頻拍検出|デバイス|前回|治療設定|\d|$))?/g)]
+    .map(m=>({no:m[1],dt:`${m[2]}年${m[3].padStart(2,'0')}月${m[4].padStart(2,'0')}日 ${m[5]}`,type:(m[6]||'').trim()}));
+  const evs=[...new Map(events.map(e=>[e.no+e.dt,e])).values()];
+  // S-ECGの記録日時：「S-ECG表示(2026年09月28日 06:50 JST)」
+  const secg=lab(/S-?ECG表示[(（](\d{4})年(\d{1,2})月(\d{1,2})日(\d{1,2}:\d{2})/);
+  meta={id:idCand||'',name:nameCand,date:interro,device:dev,tx,clinic,implant,events:evs,secg};
+  if($('fMeta'))$('fMeta').innerHTML=[secg&&`〰 S-ECG記録：<b>${secg}</b>`,evs.length&&`⚡ イベント ${evs.map(e=>`<b>${e.no}：${e.dt}${e.type?'（'+e.type+'）':''}</b>`).join('、')}`,tx&&`📡 前回のデバイスからの送信：<b>${tx}</b>`,clinic&&`🏥 前回の診察室での情報読込み：<b>${clinic}</b>`,implant&&`🫀 植込み日：<b>${implant}</b>`].filter(Boolean).join('　')||'';
   // デバッグ：文字項目数＋注釈数＋抽出テキスト先頭を表示
   const dbg=$('dbg');
   if(dbg) dbg.innerHTML = `文字項目：<b>${items.length}</b>／注釈：<b>${annotStrs.length}</b>／自前抽出：<b>${rawPdfText.length}</b>字（stream ${rawDiag.streams}／展開 ${rawDiag.inflated}）`
@@ -1211,7 +1217,9 @@ function tlWhy(h){ // その日に評価した時の判定の理由と、比較�
 async function tlPanel(box,rep,title){
   const need=rep.file&&!rep.own;
   const sent=rep.tx||rep.date||'',fmt=d=>String(d).replace(/(\d{4})年(\d{2})月(\d{2})日\s*/,'$1/$2/$3 ').replace(/\s*JST/,'');
-  const txLine=`<div class="hint" style="margin-top:2px">📡 デバイスからの送信 <b style="color:var(--tx)">${escH(fmt(sent)||'—')}</b></div>`;
+  const evLine=(rep.events||[]).length?`<div class="hint" style="margin-top:2px">⚡ イベント ${rep.events.map(e=>`<b style="color:var(--tx)">${escH(e.no)}：${escH(fmt(e.dt))}</b>${e.type?`（<b style="color:var(--warn)">${escH(e.type)}</b>）`:''}`).join('、')}</div>`:'';
+  const sgLine=rep.secg?`<div class="hint" style="margin-top:2px">〰 S-ECG記録 <b style="color:var(--tx)">${escH(fmt(rep.secg))}</b></div>`:'';
+  const txLine=evLine+sgLine+`<div class="hint" style="margin-top:2px">📡 デバイスからの送信 <b style="color:var(--tx)">${escH(fmt(sent)||'—')}</b></div>`;
   box.innerHTML=`<div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap"><b>${escH(title)}</b>${tlPill(rep.lv)}<span class="hint">${tlNums(rep.feat)}</span>${rep.file?`<button class="tlDel ghost" data-pdf="${escH(rep.pdf)}" title="このPDFを削除（_削除済みフォルダへ移す）" style="padding:2px 9px;font-size:12px;margin-left:auto">🗑 削除</button>`:''}${need?`<button class="tlReeval" data-pdf="${escH(rep.pdf)}" style="padding:3px 10px;font-size:12px">📥 このPDFで評価し直す（数値を作る）</button><span class="hint warn-t">このPDFの数値はまだありません</span>`:''}</div>${txLine}${rep.lv?tlWhy(rep.h):''}<div class="hint">読み込み中…</div>`;
   const url=await tlImage(rep);
   setTimeout(tlRenderOverlay,0);
@@ -1385,13 +1393,13 @@ async function runEval(mode){
   const bp=ref?pooledOf(ref.feat):null;
   const rowsSave=curFeat.map((f,k)=>{const u=curPool&&curPool.rowInfo[k]||{};return f&&!f.error?{hr:f.hr,amp:f.amp,width:f.width,nBeats:f.nBeats,noise:curNoise[k].max,used:!!u.used,reason:u.reason||'',corr:u.corr??null}:{error:true};});
   const poolSave=pool?{tpl:pool.tpl,amp:pool.amp,ampVar:pool.ampVar,width:pool.width,on:pool.on,off:pool.off,pol:pool.pol,hr:pool.hr,nBeats:pool.nBeats,rows:rowsSave,rh:(r0=>r0&&r0.enough?{cv:r0.cv,madsd:r0.madsd,irr:r0.irr,af:r0.af,bigem:r0.bigem,hr:r0.hr}:null)(curPool&&curPool.rhythm)}:null;
-  const now={id,name:$('fName').value,date:$('fDate').value,device:$('fDev').value,ts:Date.now(),tx:meta.tx||'',clinic:meta.clinic||''};
+  const now={id,name:$('fName').value,date:$('fDate').value,device:$('fDev').value,ts:Date.now(),tx:meta.tx||'',clinic:meta.clinic||'',events:meta.events||[],secg:meta.secg||''};
   let nowPdf=null; // 患者PDFフォルダに整理したこのPDFの場所（基準・前回のPDFを後で表示するために記録）
   const saveStore=async(histEntry)=>{
     nowPdf=await archivePdf(id,now);
     // PDF1枚ごとの記録（照会日が同じ別のイベント記録でも上書きしない）
     const saves=((store&&store.saves)||[]).filter(x=>!(nowPdf&&x.pdf===nowPdf));
-    saves.push({pdf:nowPdf,page:curPageNo,date:now.date,tx:now.tx,clinic:now.clinic,key:curKey,feat:poolSave,ts:now.ts,level:histEntry&&histEntry.level!=null?histEntry.level:null,causes:histEntry&&histEntry.causes||null,ref:histEntry&&histEntry.ref||null,mode:histEntry&&histEntry.mode||null});
+    saves.push({pdf:nowPdf,page:curPageNo,date:now.date,tx:now.tx,clinic:now.clinic,events:now.events,secg:now.secg,key:curKey,feat:poolSave,ts:now.ts,level:histEntry&&histEntry.level!=null?histEntry.level:null,causes:histEntry&&histEntry.causes||null,ref:histEntry&&histEntry.ref||null,mode:histEntry&&histEntry.mode||null});
     const rs=reports.filter(r=>!(curKey&&r.key===curKey));rs.push({date:now.date,key:curKey,feat:poolSave,ts:now.ts,pdf:nowPdf});rs.sort((a,b)=>a.key<b.key?-1:1);
     const hist=((store&&store.history)||[]).filter(h=>!(curKey&&dateKey(h.date)===curKey));if(histEntry)hist.push(histEntry);
     await writeBaseline(id,{...now,reports:rs,history:hist,saves,baseline:baseRep||{date:now.date,key:curKey,feat:poolSave,ts:now.ts,pdf:nowPdf}});
