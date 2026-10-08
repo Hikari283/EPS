@@ -622,6 +622,25 @@ async function loadPDF(file,{forceEval=false,pageNo=0}={}){
     if($('autoEval').checked||forceEval) await runEval('auto');
   }catch(e){ $('result').innerHTML=`<div class="verdict bad"><h2>PDF読み込みエラー</h2>${e}<br><span class="hint">pdf.jsの読み込みにインターネットが必要です（初回のみ）。院内でCDNが塞がれている場合はpdf.jsを同梱版に切り替えます。</span></div>`; }
 }
+// PDFの文字から、送信日時・イベント・S-ECGの記録日時を読む（タイムラインで、保存済みのPDFにも使う）
+function headerInfo(t,wt,interro){
+  const lab=re=>{const m=t.match(re);return m?`${m[1]}年${m[2].padStart(2,'0')}月${m[3].padStart(2,'0')}日${m[4]?' '+m[4]:''}`:'';};
+  const tx=lab(/デバイスからの送信[:：]?(\d{4})年(\d{1,2})月(\d{1,2})日(\d{1,2}:\d{2})?/)||(wt?interro:'');
+  const clinic=lab(/診察室での情報読込み?[:：]?(\d{4})年(\d{1,2})月(\d{1,2})日(\d{1,2}:\d{2})?/);
+  const implant=lab(/植込み日[:：]?(\d{4})年(\d{1,2})月(\d{1,2})日/);
+  // イベント記録の見出し：「002: 2025年10月13日 23:41 JST, AF」（番号・発生日時・種類）
+  const events=[...t.matchAll(/(?:^|[^\d])(\d{3})[:：](\d{4})年(\d{1,2})月(\d{1,2})日(\d{1,2}:\d{2})(?:JST)?[,，、]?\s*([A-Za-z][A-Za-z/\-]{0,11}|[一-龯ぁ-んァ-ヶー]{1,8}?(?=頻拍治療|頻拍検出|デバイス|前回|治療設定|\d|$))?/g)]
+    .map(m=>({no:m[1],dt:`${m[2]}年${m[3].padStart(2,'0')}月${m[4].padStart(2,'0')}日 ${m[5]}`,type:(m[6]||'').trim()}));
+  if(!events.length)for(const m of t.matchAll(/(?:^|[^\d])(\d{3})[:：]\s*(\d{4})\D{1,4}?(\d{1,2})\D{1,4}?(\d{1,2})\D{0,6}?(\d{1,2}:\d{2})\D{0,6}?([A-Za-z]{2,5})?/g))
+    events.push({no:m[1],dt:`${m[2]}年${m[3].padStart(2,'0')}月${m[4].padStart(2,'0')}日 ${m[5]}`,type:m[6]||''}); // 漢字が読めない時
+  const evs=[...new Map(events.map(e=>[e.no+e.dt,e])).values()];
+  // 確認用：PDFの中で見つけた「日付＋時刻」を全部
+  const allDT=[...new Set([...t.matchAll(/(\d{4})\D{1,4}?(\d{1,2})\D{1,4}?(\d{1,2})\D{0,6}?(\d{1,2}:\d{2})/g)].map(m=>`${m[1]}/${m[2].padStart(2,'0')}/${m[3].padStart(2,'0')} ${m[4]}`))];
+  // S-ECGの記録日時：「S-ECG表示(2026年09月28日 06:50 JST)」
+  // 漢字（表示・年月日）が文字化けしていても読めるよう、「ECG」の直後の日時を探す（ハイフンの種類も問わない）
+  const secg=lab(/S.?ECG表示[(（](\d{4})年(\d{1,2})月(\d{1,2})日(\d{1,2}:\d{2})/)||lab(/ECG[^\d]{0,12}?(\d{4})\D{1,4}?(\d{1,2})\D{1,4}?(\d{1,2})\D{0,6}?(\d{1,2}:\d{2})/);
+  return {tx,clinic,implant,events:evs,secg,allDT};
+}
 function extractFields(items, annotStrs, rawPdfText){
   annotStrs=annotStrs||[]; rawPdfText=rawPdfText||'';
   // pdf.jsの文字・注釈・自前抽出（圧縮ストリーム）を合わせて解析
@@ -652,21 +671,7 @@ function extractFields(items, annotStrs, rawPdfText){
   const nameCand=nameParen||(annotStrs.concat(lines).find(l=>/[぀-ヿ一-鿿]/.test(l)&&l.length<=16&&!/^\d+$/.test(l)&&!/年|月|日/.test(l)&&!bad.test(l))||'').replace(/[（(].*?[）)]/g,'').trim();
   $('fId').value=idCand||''; $('fName').value=nameCand; $('fDate').value=interro; $('fDev').value=dev;
   // 右上の日付：前回のデバイスからの送信／前回の診察室での情報読込み／植込み日（ラベルが読めた時）
-  const lab=re=>{const m=t.match(re);return m?`${m[1]}年${m[2].padStart(2,'0')}月${m[3].padStart(2,'0')}日${m[4]?' '+m[4]:''}`:'';};
-  const tx=lab(/デバイスからの送信[:：]?(\d{4})年(\d{1,2})月(\d{1,2})日(\d{1,2}:\d{2})?/)||(wt?interro:'');
-  const clinic=lab(/診察室での情報読込み?[:：]?(\d{4})年(\d{1,2})月(\d{1,2})日(\d{1,2}:\d{2})?/);
-  const implant=lab(/植込み日[:：]?(\d{4})年(\d{1,2})月(\d{1,2})日/);
-  // イベント記録の見出し：「002: 2025年10月13日 23:41 JST, AF」（番号・発生日時・種類）
-  const events=[...t.matchAll(/(?:^|[^\d])(\d{3})[:：](\d{4})年(\d{1,2})月(\d{1,2})日(\d{1,2}:\d{2})(?:JST)?[,，、]?\s*([A-Za-z][A-Za-z/\-]{0,11}|[一-龯ぁ-んァ-ヶー]{1,8}?(?=頻拍治療|頻拍検出|デバイス|前回|治療設定|\d|$))?/g)]
-    .map(m=>({no:m[1],dt:`${m[2]}年${m[3].padStart(2,'0')}月${m[4].padStart(2,'0')}日 ${m[5]}`,type:(m[6]||'').trim()}));
-  if(!events.length)for(const m of t.matchAll(/(?:^|[^\d])(\d{3})[:：]\s*(\d{4})\D{1,4}?(\d{1,2})\D{1,4}?(\d{1,2})\D{0,6}?(\d{1,2}:\d{2})\D{0,6}?([A-Za-z]{2,5})?/g))
-    events.push({no:m[1],dt:`${m[2]}年${m[3].padStart(2,'0')}月${m[4].padStart(2,'0')}日 ${m[5]}`,type:m[6]||''}); // 漢字が読めない時
-  const evs=[...new Map(events.map(e=>[e.no+e.dt,e])).values()];
-  // 確認用：PDFの中で見つけた「日付＋時刻」を全部
-  const allDT=[...new Set([...t.matchAll(/(\d{4})\D{1,4}?(\d{1,2})\D{1,4}?(\d{1,2})\D{0,6}?(\d{1,2}:\d{2})/g)].map(m=>`${m[1]}/${m[2].padStart(2,'0')}/${m[3].padStart(2,'0')} ${m[4]}`))];
-  // S-ECGの記録日時：「S-ECG表示(2026年09月28日 06:50 JST)」
-  // 漢字（表示・年月日）が文字化けしていても読めるよう、「ECG」の直後の日時を探す（ハイフンの種類も問わない）
-  const secg=lab(/S.?ECG表示[(（](\d{4})年(\d{1,2})月(\d{1,2})日(\d{1,2}:\d{2})/)||lab(/ECG[^\d]{0,12}?(\d{4})\D{1,4}?(\d{1,2})\D{1,4}?(\d{1,2})\D{0,6}?(\d{1,2}:\d{2})/);
+  const {tx,clinic,implant,events:evs,secg,allDT}=headerInfo(t,wt,interro);
   meta={id:idCand||'',name:nameCand,date:interro,device:dev,tx,clinic,implant,events:evs,secg,allDT};
   if($('fMeta'))$('fMeta').innerHTML=[secg&&`〰 S-ECG記録：<b>${secg}</b>`,evs.length&&`⚡ イベント ${evs.map(e=>`<b>${e.no}：${e.dt}${e.type?'（'+e.type+'）':''}</b>`).join('、')}`,tx&&`📡 前回のデバイスからの送信：<b>${tx}</b>`,clinic&&`🏥 前回の診察室での情報読込み：<b>${clinic}</b>`,implant&&`🫀 植込み日：<b>${implant}</b>`].filter(Boolean).join('　')||'';
   // デバッグ：文字項目数＋注釈数＋抽出テキスト先頭を表示
@@ -1244,7 +1249,7 @@ async function tlGo(i){
   const it=tl.items[i];tlVs();
   [...$('tlStrip').children].forEach((c,k)=>c.style.outline=k===i?'3px solid var(--accent)':'none');
   const th=$('tlStrip').children[i];if(th){const sp=$('tlStrip');sp.scrollLeft=th.offsetLeft-sp.clientWidth/2+th.clientWidth/2;}
-  await tlPanel($('tlCur'),it,`${i+1}/${tl.items.length}　${(it.tx||it.date||'?').replace(/\s*JST/,'')}`);
+  await tlPanel($('tlCur'),it,`${i+1}/${tl.items.length}　${(it.secg||it.tx||it.date||'?').replace(/\s*JST/,'')}`);
 }
 async function tlLoad(idArg,quiet){
   if(!dirHandle)await ensureDir();if(!dirHandle){$('tlMsg').innerHTML='<span class="warn-t">データフォルダに接続できません。📁で選んでください。</span>';return;}
@@ -1271,6 +1276,10 @@ async function tlLoad(idArg,quiet){
   // PDFが見つからない日付の記録も（数値だけでも）入れる
   for(const r of reps)if(!items.some(it=>it.key===r.key))items.push({...r,own:true});
   items.sort((a,b)=>a.key===b.key?((a.file||'')<(b.file||'')?-1:1):(a.key<b.key?-1:1));
+  // 保存済みのPDFで送信日時やS-ECGの記録日時が記録されていないものは、PDFの文字から直接読む
+  for(const it of items){if(!it.pdf||(it.secg&&it.tx))continue;
+    try{const f=await fileFromPath(it.pdf);if(!f)continue;const h=headerInfo((await extractRawPdfText(await f.arrayBuffer())).replace(/\s+/g,''),false,'');
+      if(!it.secg&&h.secg)it.secg=h.secg;if(!it.tx&&h.tx)it.tx=h.tx;if(!(it.events||[]).length&&h.events.length)it.events=h.events;}catch(_){}}
   tl.items=items;
   tl.base=st.baseline?{...st.baseline,...(items.find(it=>it.pdf&&st.baseline.pdf&&it.pdf===st.baseline.pdf)||{})}:items[0];
   const nPdf=items.filter(it=>it.file).length;
@@ -1324,7 +1333,7 @@ async function tlThumbs(){ // サムネイルは後から順番に読み込む
 async function tlTop(i){
   if(!tl.items.length)return;
   if(i>=0){i=Math.max(0,Math.min(tl.items.length-1,i));tl.top=i;$('tlTSlider').value=i;$('tlTSlider').style.opacity=1;
-    const it=tl.items[i];tlVs();await tlPanel($('tlBase'),it,`⬆ ${i+1}/${tl.items.length}　${(it.tx||it.date||'?').replace(/\s*JST/,'')}`);}
+    const it=tl.items[i];tlVs();await tlPanel($('tlBase'),it,`⬆ ${i+1}/${tl.items.length}　${(it.secg||it.tx||it.date||'?').replace(/\s*JST/,'')}`);}
   else{tl.top=-1;const bi=tl.items.findIndex(it=>it.key===tl.base.key);$('tlTSlider').value=bi>=0?bi:0;$('tlTSlider').style.opacity=.5;
     tlVs();await tlPanel($('tlBase'),{...tl.base,lv:null},`📌 基準：${tl.base.date||'?'}`);}
 }
