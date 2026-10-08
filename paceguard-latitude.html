@@ -784,7 +784,9 @@ try{const v=localStorage.getItem('pg_lat_watchmove');if(v)$('watchMove').checked
 $('watchMove').addEventListener('change',()=>{try{localStorage.setItem('pg_lat_watchmove',$('watchMove').checked?'1':'0');}catch(_){}});
 let lastPdfFile=null,lastPdfBytes=null,lastArchive=null;
 const pdfKey=f=>f?`${f.name}|${f.size}|${f.lastModified}`:''; // 読み込んだPDF／最後に整理したPDF
+let reloadArchived=null; // タイムラインから「評価し直す」で読み込んだ時：すでに患者PDFにあるので保存し直さない
 async function archivePdf(id,obj,tag){
+  if(reloadArchived&&!tag)return reloadArchived;
   if(!dirHandle||!lastPdfFile||!id)return null;
   try{
     const top=await dirHandle.getDirectoryHandle(PDF_DIR,{create:true});
@@ -1158,14 +1160,15 @@ function tlWhy(h){ // その日に評価した時の判定の理由と、比較�
   return `<div class="hint">評価した時の比較相手：${escH(h.ref||'?')}（${h.mode==='base'?'基準':'前回'}）${c.length?'　理由：'+escH(c.join('／')):''}</div>`;
 }
 async function tlPanel(box,rep,title){
-  box.innerHTML=`<div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap"><b>${escH(title)}</b>${tlPill(rep.lv)}<span class="hint">${tlNums(rep.feat)}</span></div>${rep.lv?tlWhy(rep.h):''}<div class="hint">読み込み中…</div>`;
+  const need=rep.file&&!rep.own;
+  box.innerHTML=`<div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap"><b>${escH(title)}</b>${tlPill(rep.lv)}<span class="hint">${tlNums(rep.feat)}</span>${need?`<button class="tlReeval" data-pdf="${escH(rep.pdf)}" style="padding:3px 10px;font-size:12px">📥 このPDFで評価し直す（数値を作る）</button><span class="hint warn-t">このPDFの数値はまだありません</span>`:''}</div>${rep.lv?tlWhy(rep.h):''}<div class="hint">読み込み中…</div>`;
   const url=await tlImage(rep);
   setTimeout(tlRenderOverlay,0);
   box.lastElementChild.outerHTML=url?`<img src="${url}" style="width:100%;background:#fff;border-radius:6px;display:block;margin-top:4px">`:'<div class="hint warn-t">この日のPDFが「'+escH(PDF_DIR)+'」に見つかりません（このツールで整理する前のレポート）。</div>';
 }
 function tlVs(){ // 今表示している上と下を、その場で比べる（同じ物差し）
   const top=tl.top<0?tl.base:tl.items[tl.top],bot=tl.items[tl.idx],b=top&&top.feat,c=bot&&bot.feat;
-  if(!b||!c||!b.tpl||!c.tpl){$('tlVs').innerHTML='';return;}
+  if(!b||!c||!b.tpl||!c.tpl){$('tlVs').innerHTML=top&&bot?'上と下をこの場で比べるには、両方のPDFの数値が必要です（「📥 このPDFで評価し直す」を押してください）':'';return;}
   const r=compareFeat(b,c);
   $('tlVs').innerHTML=`<b>上と下をこの場で比べると：</b>${tlPill(r.level)}　形 相関 ${r.corr.toFixed(2)}・QRS幅 ${r.dW>=0?'+':''}${r.dW} ms・波高 ${Math.round(r.ampRatio*100)}%（許容 ±${Math.round(r.tol*100)}%）${r.polFlip?'・<b>向きが逆</b>':''}`
     +(r.red.length+r.yel.length?`<br>理由：${escH([...r.red,...r.yel].join('／'))}`:'');
@@ -1194,12 +1197,13 @@ async function tlLoad(idArg,quiet){
         files.push({n,key,path:`${PDF_DIR}/${fname}/${n}`,doc:/_書類\d/.test(n)});}}}catch(_){}
   const items=[];
   for(const f of files.filter(f=>!f.doc).sort((a,b)=>a.key===b.key?(a.n<b.n?-1:1):(a.key<b.key?-1:1))){
-    const r=reps.find(x=>x.key===f.key)||reps.find(x=>x.key&&f.key&&x.key.slice(0,8)===f.key.slice(0,8))||null;
+    const sv=(st.saves||[]).find(x=>x.pdf===f.path);
+    const r=sv?{...sv,lv:sv.level,h:sv.level!=null?{level:sv.level,causes:sv.causes,ref:sv.ref,mode:sv.mode}:null}:null; // このPDF自身の記録だけを使う
     const saved=(f.n.match(/保存(\d{8})-(\d{2})(\d{2})/)||[]);
     items.push({...(r||{}),date:(r&&r.date)||f.key.replace(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})$/,'$1年$2月$3日 $4:$5'),key:f.key,pdf:f.path,file:f.n,
-      saved:saved[1]?`${saved[1].slice(4,6)}/${saved[1].slice(6,8)} ${saved[2]}:${saved[3]}保存`:'',lv:r?r.lv:null,h:r?r.h:null,feat:r?r.feat:null});}
+      saved:saved[1]?`${saved[1].slice(4,6)}/${saved[1].slice(6,8)} ${saved[2]}:${saved[3]}保存`:'',lv:r?r.lv:null,h:r?r.h:null,feat:r?r.feat:null,own:!!r});}
   // PDFが見つからない日付の記録も（数値だけでも）入れる
-  for(const r of reps)if(!items.some(it=>it.key===r.key))items.push(r);
+  for(const r of reps)if(!items.some(it=>it.key===r.key))items.push({...r,own:true});
   items.sort((a,b)=>a.key===b.key?((a.file||'')<(b.file||'')?-1:1):(a.key<b.key?-1:1));
   tl.items=items;
   tl.base=st.baseline?{...st.baseline,...(items.find(it=>it.pdf&&st.baseline.pdf&&it.pdf===st.baseline.pdf)||{})}:items[0];
@@ -1213,6 +1217,12 @@ async function tlLoad(idArg,quiet){
   tlThumbs();
 }
 $('tlShow').onclick=()=>tlLoad();
+// タイムラインの「このPDFで評価し直す」：患者PDFのファイルを読み込み直して数値を作る（PDFは二重に保存しない）
+document.addEventListener('click',async e=>{const b=e.target.closest('.tlReeval');if(!b)return;b.disabled=true;b.textContent='評価中…';
+  const f=await fileFromPath(b.dataset.pdf);if(!f){b.textContent='PDFが見つかりません';return;}
+  const keep={id:tl.id,idx:tl.idx,top:tl.top};reloadArchived=b.dataset.pdf;
+  try{await loadPDF(f,{forceEval:true});}finally{reloadArchived=null;}
+  await tlLoad(keep.id);await tlTop(keep.top);await tlGo(keep.idx);});
 // 評価が終わったら、その患者のタイムラインを自動で表示（たたんであれば中身だけ準備）
 function tlAuto(id){if(id)tlLoad(id,true).catch(()=>{});}
 try{const v=localStorage.getItem('pg_lat_tlopen');if(v)$('tlCard').open=v==='1';}catch(_){}
@@ -1305,9 +1315,12 @@ async function runEval(mode){
   let nowPdf=null; // 患者PDFフォルダに整理したこのPDFの場所（基準・前回のPDFを後で表示するために記録）
   const saveStore=async(histEntry)=>{
     nowPdf=await archivePdf(id,now);
+    // PDF1枚ごとの記録（照会日が同じ別のイベント記録でも上書きしない）
+    const saves=((store&&store.saves)||[]).filter(x=>!(nowPdf&&x.pdf===nowPdf));
+    saves.push({pdf:nowPdf,date:now.date,key:curKey,feat:poolSave,ts:now.ts,level:histEntry&&histEntry.level!=null?histEntry.level:null,causes:histEntry&&histEntry.causes||null,ref:histEntry&&histEntry.ref||null,mode:histEntry&&histEntry.mode||null});
     const rs=reports.filter(r=>!(curKey&&r.key===curKey));rs.push({date:now.date,key:curKey,feat:poolSave,ts:now.ts,pdf:nowPdf});rs.sort((a,b)=>a.key<b.key?-1:1);
     const hist=((store&&store.history)||[]).filter(h=>!(curKey&&dateKey(h.date)===curKey));if(histEntry)hist.push(histEntry);
-    await writeBaseline(id,{...now,reports:rs,history:hist,baseline:baseRep||{date:now.date,key:curKey,feat:poolSave,ts:now.ts,pdf:nowPdf}});
+    await writeBaseline(id,{...now,reports:rs,history:hist,saves,baseline:baseRep||{date:now.date,key:curKey,feat:poolSave,ts:now.ts,pdf:nowPdf}});
   };
   // 段ごとの一覧（使った段・除外した段と理由）
   const ic=l=>l===2?'⚠️':l===1?'🟡':'✅';
