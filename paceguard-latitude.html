@@ -222,6 +222,7 @@
         <div class="field"><label>照会日</label><input id="fDate" placeholder="自動抽出"></div>
         <div class="field"><label>デバイス</label><input id="fDev" placeholder="自動抽出"></div>
       </div>
+      <div class="hint" id="fMeta" style="margin-top:6px"></div>
       <div class="row" style="margin-top:12px">
         <button class="primary" id="evalBtn">🔍 前回と比較</button>
         <button class="primary" id="evalBaseBtn" style="background:linear-gradient(135deg,#a78bfa,#38bdf8)">📌 基準と比較</button>
@@ -650,7 +651,13 @@ function extractFields(items, annotStrs, rawPdfText){
   const bad=/ふりがな|フリガナ|レポート|ページ|波形|ゲイン|センシング|プログラム|バージョン|Boston|LATITUDE|Scientific|reserved|©|MRI|S-ICD|S-ECG|センス|ペース|Noise|検出|充電|結果|イベント|病院|施設|患者管理/i;
   const nameCand=nameParen||(annotStrs.concat(lines).find(l=>/[぀-ヿ一-鿿]/.test(l)&&l.length<=16&&!/^\d+$/.test(l)&&!/年|月|日/.test(l)&&!bad.test(l))||'').replace(/[（(].*?[）)]/g,'').trim();
   $('fId').value=idCand||''; $('fName').value=nameCand; $('fDate').value=interro; $('fDev').value=dev;
-  meta={id:idCand||'',name:nameCand,date:interro,device:dev};
+  // 右上の日付：前回のデバイスからの送信／前回の診察室での情報読込み／植込み日（ラベルが読めた時）
+  const lab=re=>{const m=t.match(re);return m?`${m[1]}年${m[2].padStart(2,'0')}月${m[3].padStart(2,'0')}日${m[4]?' '+m[4]:''}`:'';};
+  const tx=lab(/デバイスからの送信[:：]?(\d{4})年(\d{1,2})月(\d{1,2})日(\d{1,2}:\d{2})?/)||(wt?interro:'');
+  const clinic=lab(/診察室での情報読込み?[:：]?(\d{4})年(\d{1,2})月(\d{1,2})日(\d{1,2}:\d{2})?/);
+  const implant=lab(/植込み日[:：]?(\d{4})年(\d{1,2})月(\d{1,2})日/);
+  meta={id:idCand||'',name:nameCand,date:interro,device:dev,tx,clinic,implant};
+  if($('fMeta'))$('fMeta').innerHTML=[tx&&`📡 前回のデバイスからの送信：<b>${tx}</b>`,clinic&&`🏥 前回の診察室での情報読込み：<b>${clinic}</b>`,implant&&`🫀 植込み日：<b>${implant}</b>`].filter(Boolean).join('　')||'';
   // デバッグ：文字項目数＋注釈数＋抽出テキスト先頭を表示
   const dbg=$('dbg');
   if(dbg) dbg.innerHTML = `文字項目：<b>${items.length}</b>／注釈：<b>${annotStrs.length}</b>／自前抽出：<b>${rawPdfText.length}</b>字（stream ${rawDiag.streams}／展開 ${rawDiag.inflated}）`
@@ -1203,7 +1210,9 @@ function tlWhy(h){ // その日に評価した時の判定の理由と、比較�
 }
 async function tlPanel(box,rep,title){
   const need=rep.file&&!rep.own;
-  box.innerHTML=`<div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap"><b>${escH(title)}</b>${tlPill(rep.lv)}<span class="hint">${tlNums(rep.feat)}</span>${rep.file?`<button class="tlDel ghost" data-pdf="${escH(rep.pdf)}" title="このPDFを削除（_削除済みフォルダへ移す）" style="padding:2px 9px;font-size:12px;margin-left:auto">🗑 削除</button>`:''}${need?`<button class="tlReeval" data-pdf="${escH(rep.pdf)}" style="padding:3px 10px;font-size:12px">📥 このPDFで評価し直す（数値を作る）</button><span class="hint warn-t">このPDFの数値はまだありません</span>`:''}</div>${rep.lv?tlWhy(rep.h):''}<div class="hint">読み込み中…</div>`;
+  const sent=rep.tx||rep.date||'',fmt=d=>String(d).replace(/(\d{4})年(\d{2})月(\d{2})日\s*/,'$1/$2/$3 ').replace(/\s*JST/,'');
+  const txLine=`<div class="hint" style="margin-top:2px">📡 デバイスからの送信 <b style="color:var(--tx)">${escH(fmt(sent)||'—')}</b>${rep.clinic?`　🏥 診察室での読込み ${escH(fmt(rep.clinic))}`:''}${rep.saved?`　💾 ${escH(rep.saved)}`:''}</div>`;
+  box.innerHTML=`<div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap"><b>${escH(title)}</b>${tlPill(rep.lv)}<span class="hint">${tlNums(rep.feat)}</span>${rep.file?`<button class="tlDel ghost" data-pdf="${escH(rep.pdf)}" title="このPDFを削除（_削除済みフォルダへ移す）" style="padding:2px 9px;font-size:12px;margin-left:auto">🗑 削除</button>`:''}${need?`<button class="tlReeval" data-pdf="${escH(rep.pdf)}" style="padding:3px 10px;font-size:12px">📥 このPDFで評価し直す（数値を作る）</button><span class="hint warn-t">このPDFの数値はまだありません</span>`:''}</div>${txLine}${rep.lv?tlWhy(rep.h):''}<div class="hint">読み込み中…</div>`;
   const url=await tlImage(rep);
   setTimeout(tlRenderOverlay,0);
   box.lastElementChild.outerHTML=url?`<img src="${url}" style="width:100%;background:#fff;border-radius:6px;display:block;margin-top:4px">`:'<div class="hint warn-t">この日のPDFが「'+escH(PDF_DIR)+'」に見つかりません（このツールで整理する前のレポート）。</div>';
@@ -1220,7 +1229,7 @@ async function tlGo(i){
   const it=tl.items[i];tlVs();
   [...$('tlStrip').children].forEach((c,k)=>c.style.outline=k===i?'3px solid var(--accent)':'none');
   const th=$('tlStrip').children[i];if(th){const sp=$('tlStrip');sp.scrollLeft=th.offsetLeft-sp.clientWidth/2+th.clientWidth/2;}
-  await tlPanel($('tlCur'),it,`${i+1}/${tl.items.length}　${it.date||'?'}${it.saved?'（'+it.saved+'）':''}`);
+  await tlPanel($('tlCur'),it,`${i+1}/${tl.items.length}　${(it.tx||it.date||'?').replace(/\s*JST/,'')}`);
 }
 async function tlLoad(idArg,quiet){
   if(!dirHandle)await ensureDir();if(!dirHandle){$('tlMsg').innerHTML='<span class="warn-t">データフォルダに接続できません。📁で選んでください。</span>';return;}
@@ -1300,7 +1309,7 @@ async function tlThumbs(){ // サムネイルは後から順番に読み込む
 async function tlTop(i){
   if(!tl.items.length)return;
   if(i>=0){i=Math.max(0,Math.min(tl.items.length-1,i));tl.top=i;$('tlTSlider').value=i;$('tlTSlider').style.opacity=1;
-    const it=tl.items[i];tlVs();await tlPanel($('tlBase'),it,`⬆ ${i+1}/${tl.items.length}　${it.date||'?'}${it.saved?'（'+it.saved+'）':''}`);}
+    const it=tl.items[i];tlVs();await tlPanel($('tlBase'),it,`⬆ ${i+1}/${tl.items.length}　${(it.tx||it.date||'?').replace(/\s*JST/,'')}`);}
   else{tl.top=-1;const bi=tl.items.findIndex(it=>it.key===tl.base.key);$('tlTSlider').value=bi>=0?bi:0;$('tlTSlider').style.opacity=.5;
     tlVs();await tlPanel($('tlBase'),{...tl.base,lv:null},`📌 基準：${tl.base.date||'?'}`);}
 }
@@ -1376,13 +1385,13 @@ async function runEval(mode){
   const bp=ref?pooledOf(ref.feat):null;
   const rowsSave=curFeat.map((f,k)=>{const u=curPool&&curPool.rowInfo[k]||{};return f&&!f.error?{hr:f.hr,amp:f.amp,width:f.width,nBeats:f.nBeats,noise:curNoise[k].max,used:!!u.used,reason:u.reason||'',corr:u.corr??null}:{error:true};});
   const poolSave=pool?{tpl:pool.tpl,amp:pool.amp,ampVar:pool.ampVar,width:pool.width,on:pool.on,off:pool.off,pol:pool.pol,hr:pool.hr,nBeats:pool.nBeats,rows:rowsSave,rh:(r0=>r0&&r0.enough?{cv:r0.cv,madsd:r0.madsd,irr:r0.irr,af:r0.af,bigem:r0.bigem,hr:r0.hr}:null)(curPool&&curPool.rhythm)}:null;
-  const now={id,name:$('fName').value,date:$('fDate').value,device:$('fDev').value,ts:Date.now()};
+  const now={id,name:$('fName').value,date:$('fDate').value,device:$('fDev').value,ts:Date.now(),tx:meta.tx||'',clinic:meta.clinic||''};
   let nowPdf=null; // 患者PDFフォルダに整理したこのPDFの場所（基準・前回のPDFを後で表示するために記録）
   const saveStore=async(histEntry)=>{
     nowPdf=await archivePdf(id,now);
     // PDF1枚ごとの記録（照会日が同じ別のイベント記録でも上書きしない）
     const saves=((store&&store.saves)||[]).filter(x=>!(nowPdf&&x.pdf===nowPdf));
-    saves.push({pdf:nowPdf,page:curPageNo,date:now.date,key:curKey,feat:poolSave,ts:now.ts,level:histEntry&&histEntry.level!=null?histEntry.level:null,causes:histEntry&&histEntry.causes||null,ref:histEntry&&histEntry.ref||null,mode:histEntry&&histEntry.mode||null});
+    saves.push({pdf:nowPdf,page:curPageNo,date:now.date,tx:now.tx,clinic:now.clinic,key:curKey,feat:poolSave,ts:now.ts,level:histEntry&&histEntry.level!=null?histEntry.level:null,causes:histEntry&&histEntry.causes||null,ref:histEntry&&histEntry.ref||null,mode:histEntry&&histEntry.mode||null});
     const rs=reports.filter(r=>!(curKey&&r.key===curKey));rs.push({date:now.date,key:curKey,feat:poolSave,ts:now.ts,pdf:nowPdf});rs.sort((a,b)=>a.key<b.key?-1:1);
     const hist=((store&&store.history)||[]).filter(h=>!(curKey&&dateKey(h.date)===curKey));if(histEntry)hist.push(histEntry);
     await writeBaseline(id,{...now,reports:rs,history:hist,saves,baseline:baseRep||{date:now.date,key:curKey,feat:poolSave,ts:now.ts,pdf:nowPdf}});
