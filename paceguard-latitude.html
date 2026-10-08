@@ -555,11 +555,18 @@ function ecgScore(x,W,H){
 }
 async function pickEcgPage(pdf){
   const n=Math.min(pdf.numPages||1,30);pageScores=[];if(n<=1){pageScores=[1];return 1;}
-  let best=1,bestS=-1;const c=document.createElement('canvas'),x=c.getContext('2d',{willReadFrequently:true});
-  for(let i=1;i<=n;i++){let sc=0;try{const pg=await pdf.getPage(i),vp=pg.getViewport({scale:1});c.width=Math.round(vp.width);c.height=Math.round(vp.height);x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);
-    await pg.render({canvasContext:x,viewport:vp}).promise;sc=ecgScore(x,c.width,c.height);}catch(_){}
-    pageScores.push(sc);if(sc>bestS){bestS=sc;best=i;}}
-  return best;
+  // 本物のPDFの波形の線はとても細いので、2倍で描いて調べる（低い倍率だと色が薄まって見つからない）
+  let best=1,bestS=0,best2=1,bestT=-1;const c=document.createElement('canvas'),x=c.getContext('2d',{willReadFrequently:true});
+  for(let i=1;i<=n;i++){let sc=0,thin=0;try{const pg=await pdf.getPage(i),vp=pg.getViewport({scale:2});c.width=Math.round(vp.width);c.height=Math.round(vp.height);x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);
+    await pg.render({canvasContext:x,viewport:vp}).promise;sc=ecgScore(x,c.width,c.height);thin=thinGreen(x,c.width,c.height);}catch(_){}
+    pageScores.push(sc);if(sc>bestS){bestS=sc;best=i;}if(thin>bestT){bestT=thin;best2=i;}}
+  return bestS>0?best:best2; // 波形らしい段が見つからない時は、太い緑の塊（電池マークなど）を除いた緑の量で選ぶ
+}
+// 縦に細い緑だけを数える（電池マークや緑の帯のような太い塗りは数えない）
+function thinGreen(x,W,H){
+  const d=x.getImageData(0,0,W,H).data;let cnt=0;
+  for(let xx=0;xx<W;xx+=2){let run=0;for(let y=0;y<=H;y++){const g=y<H&&(()=>{const i=(y*W+xx)*4;return d[i+1]-Math.max(d[i],d[i+2])>18;})();if(g)run++;else{if(run>0&&run<=8)cnt+=run;run=0;}}}
+  return cnt;
 }
 async function loadPDF(file,{forceEval=false,pageNo=0}={}){
   try{
@@ -1155,10 +1162,10 @@ async function tlSetMode(full){tlFull=full;try{localStorage.setItem('pg_lat_tlmo
   if(!tl.items.length)return;await tlTop(tl.top);await tlGo(tl.idx);tlThumbs();}
 $('tlModeFull').onclick=()=>tlSetMode(true);$('tlModeCrop').onclick=()=>tlSetMode(false);
 async function tlImage(rep){
-  const k=(tlFull?'F|':'C|')+(rep.pdf||'')+'|'+(rep.key||rep.date);if(tl.cache.has(k))return tl.cache.get(k);
+  const k=(tlFull?'F|':'C|')+(rep.pdf||'')+'|'+(rep.key||rep.date)+'|'+(rep.page||0);if(tl.cache.has(k))return tl.cache.get(k);
   let url=null;
   try{const f=await findRefPdf(rep,tl.id,tl.obj);
-    if(f){const lib=await ensurePdfjs();const doc=await lib.getDocument({data:new Uint8Array(await f.arrayBuffer())}).promise;url=(await ecgImage(doc,0,tlFull)).toDataURL('image/png');}}catch(_){}
+    if(f){const lib=await ensurePdfjs();const doc=await lib.getDocument({data:new Uint8Array(await f.arrayBuffer())}).promise;url=(await ecgImage(doc,rep.page||0,tlFull)).toDataURL('image/png');}}catch(_){}
   tl.cache.set(k,url);return url;
 }
 const tlPill=lv=>lv==null?'':`<span class="${['ok-t','warn-t','bad-t'][lv]}" style="font-weight:700">${['✅ 変化なし','🟡 注意','⚠️ 要確認'][lv]}</span>`;
@@ -1329,7 +1336,7 @@ async function runEval(mode){
     nowPdf=await archivePdf(id,now);
     // PDF1枚ごとの記録（照会日が同じ別のイベント記録でも上書きしない）
     const saves=((store&&store.saves)||[]).filter(x=>!(nowPdf&&x.pdf===nowPdf));
-    saves.push({pdf:nowPdf,date:now.date,key:curKey,feat:poolSave,ts:now.ts,level:histEntry&&histEntry.level!=null?histEntry.level:null,causes:histEntry&&histEntry.causes||null,ref:histEntry&&histEntry.ref||null,mode:histEntry&&histEntry.mode||null});
+    saves.push({pdf:nowPdf,page:curPageNo,date:now.date,key:curKey,feat:poolSave,ts:now.ts,level:histEntry&&histEntry.level!=null?histEntry.level:null,causes:histEntry&&histEntry.causes||null,ref:histEntry&&histEntry.ref||null,mode:histEntry&&histEntry.mode||null});
     const rs=reports.filter(r=>!(curKey&&r.key===curKey));rs.push({date:now.date,key:curKey,feat:poolSave,ts:now.ts,pdf:nowPdf});rs.sort((a,b)=>a.key<b.key?-1:1);
     const hist=((store&&store.history)||[]).filter(h=>!(curKey&&dateKey(h.date)===curKey));if(histEntry)hist.push(histEntry);
     await writeBaseline(id,{...now,reports:rs,history:hist,saves,baseline:baseRep||{date:now.date,key:curKey,feat:poolSave,ts:now.ts,pdf:nowPdf}});
