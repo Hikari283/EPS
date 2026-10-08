@@ -161,6 +161,18 @@
   html[data-theme=light] .drop{background:repeating-linear-gradient(135deg,transparent 0 10px,rgba(15,23,42,.02) 10px 20px)}
   html[data-theme=light] body.dragging::after{background:rgba(255,255,255,.9)}
   html[data-theme=light] .brand svg{filter:none}
+  #startScreen{position:fixed;inset:0;z-index:400;display:grid;place-items:center;background:rgba(245,247,250,.94);backdrop-filter:blur(8px)}
+  html[data-theme=dark] #startScreen{background:rgba(6,10,17,.92)}
+  #startScreen[hidden]{display:none}
+  .ss-box{text-align:center;display:grid;gap:14px;justify-items:center;padding:24px}
+  .ss-title{font-size:22px;font-weight:800;letter-spacing:.04em}
+  .ss-date{color:var(--sub);font-size:15px}
+  #ssStart{font-size:26px;font-weight:900;padding:26px 54px;border-radius:22px;border:0;color:#fff;background:linear-gradient(135deg,#10b981,#0ea5e9);
+    box-shadow:0 20px 50px -18px rgba(16,185,129,.9);animation:ssPulse 2.2s ease-in-out infinite}
+  #ssStart:hover{transform:translateY(-2px)}
+  @keyframes ssPulse{0%,100%{box-shadow:0 20px 50px -18px rgba(16,185,129,.9),0 0 0 0 rgba(16,185,129,.35)}50%{box-shadow:0 20px 50px -18px rgba(16,185,129,.9),0 0 0 16px rgba(16,185,129,0)}}
+  .ss-note{color:var(--sub);font-size:13px;line-height:1.7}
+  .ss-later{background:transparent!important;border:0!important;color:var(--sub)!important;font-size:12px!important;text-decoration:underline;box-shadow:none!important}
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
   #printArea{display:none}
   .prbtns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
@@ -345,6 +357,17 @@
   </footer>
 </main>
 <div id="lightbox"></div>
+<div id="startScreen" hidden>
+  <div class="ss-box">
+    <svg viewBox="0 0 40 40" aria-hidden="true" style="width:72px;height:72px"><path d="M4 22h8l3-5 4 13 4-21 3 13h10" fill="none" stroke="#10b981" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <div class="ss-title">PaceGuard LATITUDE</div>
+    <div class="ss-date" id="ssDate"></div>
+    <button id="ssStart">▶ 今日の見張りを開始</button>
+    <div class="ss-note">押したあと、許可の画面が出たら「許可する」を押してください。<br>初めての時は、LATITUDEのPDFが入るフォルダ（波形認識\LATITUDE）を選びます。</div>
+    <div class="ss-note" id="ssNote2" style="color:var(--accent);font-weight:700"></div>
+    <button id="ssLater" class="ss-later">あとで（見張りなしで使う）</button>
+  </div>
+</div>
 
 <script type="module">
 const PDFJS_URL='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs';
@@ -1455,7 +1478,7 @@ const WSEEN='pg_lat_watch_seen';
 try{for(const [k,v] of JSON.parse(localStorage.getItem(WSEEN)||'[]'))watchSeen.set(k,v);}catch(_){}
 const wkey=f=>f.name+'|'+f.size+'|'+f.lastModified;
 function saveSeen(){try{localStorage.setItem(WSEEN,JSON.stringify([...watchSeen].slice(-500)));}catch(_){}}
-function setWatchStatus(h){$('watchStatus').innerHTML=h;const on=!!watchDir;if(on)$('startBanner').hidden=true;$('liveDot').classList.toggle('on',on);$('liveTxt').textContent=on?'見張り中：'+watchDir.name:'見張り停止中';}
+function setWatchStatus(h){$('watchStatus').innerHTML=h;const on=!!watchDir;if(on){$('startBanner').hidden=true;$('startScreen').hidden=true;}$('liveDot').classList.toggle('on',on);$('liveTxt').textContent=on?'見張り中：'+watchDir.name:'見張り停止中';}
 // ☀／🌙：白と黒の切り替え（覚えておく）。波形の図も描き直す
 function themeBtnLabel(){$('themeBtn').textContent=document.documentElement.dataset.theme==='dark'?'☀':'🌙';}
 themeBtnLabel();
@@ -1577,20 +1600,24 @@ $('watchStart').onclick=async()=>{
 };
 $('watchStop').onclick=()=>{clearInterval(watchTimer);watchDir=null;$('watchStop').disabled=true;setWatchStatus('停止中');};
 // 見張りの自動開始：前回のフォルダの許可が残っていれば、開いただけで始める。
-// 残っていなければ（Chromeの決まりで許可はクリックの時しか聞けない）、画面のどこかを1回クリックした時に始める。
+// 残っていなければ（Chromeの決まりで許可はクリックの時しか聞けない）、スタート画面を出して1回押してもらう。
+function showStartScreen(){const d=new Date();$('ssDate').textContent=`${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${'日月火水木金土'[d.getDay()]}）`;$('startScreen').hidden=false;$('ssStart').focus();}
+$('ssStart').onclick=async()=>{
+  if(!dirHandle&&!savedHandle){ // 初めての時：先にデータフォルダ（波形認識）を選ぶ → もう一度押して見張りフォルダ
+    await $('pickFolder').onclick();
+    if(dirHandle){$('ssStart').textContent='▶ 見張りフォルダ（LATITUDE）を選んで開始';$('ssNote2').textContent='データフォルダを選びました。もう一度押して、LATITUDEのPDFが入るフォルダを選んでください。';}
+    return;}
+  $('startScreen').hidden=true;$('watchStart').click();};
+$('ssLater').onclick=()=>{$('startScreen').hidden=true;$('startBanner').hidden=false;};
+$('startBanner').onclick=()=>$('watchStart').click();
 (async()=>{
   let w=null,d=null;try{w=await idb('readonly',st=>st.get('watch'));d=await idb('readonly',st=>st.get('dir'));}catch(_){}
-  if(!w)return;
   const granted=async h=>{try{return (await h.queryPermission({mode:'readwrite'}))==='granted';}catch(_){return false;}};
-  if(d&&await granted(d)&&await granted(w)){
+  if(w&&d&&await granted(d)&&await granted(w)){
     dirHandle=d;savedHandle=d;setFolderStatus('<span class="ok-t">フォルダ接続済み：'+escH(d.name)+'（自動）</span>');
     await startWatch(w);return;
   }
-  setWatchStatus(`<span class="warn-t">👆 画面のどこかを1回クリックすると、見張り（${escH(w.name)}）を始めます。</span><br><span class="hint">許可を聞かれたら「<b>訪問時に毎回許可</b>」を選ぶと、次からは開いただけで自動で始まります。</span>`);
-  $('startBanner').hidden=false;
-  const done=()=>{document.removeEventListener('pointerdown',once,true);document.removeEventListener('keydown',once,true);};
-  const once=e=>{done();if(watchDir||(e.target&&e.target.closest&&e.target.closest('#watchStart,#watchStop,#pickFolder')))return;$('watchStart').click();};
-  document.addEventListener('pointerdown',once,true);document.addEventListener('keydown',once,true);
+  if(!watchDir)showStartScreen();
 })();
 renderWatchLog();
 </script>
