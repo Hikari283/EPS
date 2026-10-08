@@ -673,7 +673,9 @@ function drawSigPreview(cv,sig,feat,nz){
   if(nz&&nz.bad.length){for(const b of nz.bad){const P=pal(),g=c.createLinearGradient(0,0,0,H);g.addColorStop(0,`rgba(${P.bad},.30)`);g.addColorStop(1,`rgba(${P.bad},.06)`);c.fillStyle=g;c.fillRect(b.st*sx,0,nz.W*sx,H);}}
   const z=normalize(Array.from(sig));const mx=Math.max(1,...z.map(Math.abs));
   if(feat&&feat.peaks){const P=pal();c.strokeStyle=P.peakLine;c.lineWidth=1;c.beginPath();for(const p of feat.peaks){const x=Math.round(p*sx)+.5;c.moveTo(x,10);c.lineTo(x,H);}c.stroke();
-    c.fillStyle=P.peak;for(const p of feat.peaks){const x=p*sx;c.beginPath();c.moveTo(x-4.5,2);c.lineTo(x+4.5,2);c.lineTo(x,9);c.closePath();c.fill();}}
+    const ev=new Set((feat.ect||[]).map(e=>e.r));
+    for(const p of feat.peaks){const x=p*sx,isV=ev.has(p);c.fillStyle=isV?`rgb(${P.bad})`:P.peak;c.beginPath();c.moveTo(x-4.5,2);c.lineTo(x+4.5,2);c.lineTo(x,9);c.closePath();c.fill();
+      if(isV){c.font='bold 11px "Segoe UI",sans-serif';c.fillText('V',x+5,11);}}}
   glowLine(c,cx=>{for(let i=0;i<n;i++){const x=i*sx,y=H/2+4-z[i]/mx*(H/2-12);i?cx.lineTo(x,y):cx.moveTo(x,y);}},pal().trace,1.5);
 }
 function rowStatusText(k){const f=curFeat[k],u=curPool&&curPool.rowInfo[k];
@@ -685,7 +687,7 @@ function showSigPreview(){
   curSigs.forEach((sg,k)=>{const d=document.createElement('div');d.className='hint';d.style.marginTop='6px';d.innerHTML=`<b>${k+1}段目</b>　${rowStatusText(k)}`;const cv=document.createElement('canvas');cv.style.width='100%';d.appendChild(cv);box.appendChild(d);drawSigPreview(cv,sg,curFeat[k],curNoise[k]);});
   const p=curPool;
   $('traceMsg').innerHTML=`<span class="ok-t">✅ ${curSigs.length}段を読み取りました。</span>`+(p&&!p.error?`　代表拍：${p.usedRows.length}段・${p.nBeats}拍から作成（心拍 ${p.hr??'—'}bpm・波高 ${p.amp.toFixed(2)}mV・QRS ${p.width}ms）`:p&&p.error?`<br><span class="warn-t">${p.error}</span>`:'')
-    +'<br><span class="hint">▼＝見つけたR波。赤い帯＝ノイズ疑い。心拍数がレポートの値と大きく違う場合は教えてください（換算の確認用）。</span>';
+    +'<br><span class="hint">▼＝見つけたR波（赤い▼V＝心室性期外収縮の疑い）。赤い帯＝ノイズ疑い。心拍数がレポートの値と大きく違う場合は教えてください（換算の確認用）。</span>';
 }
 
 // クロップのドラッグ
@@ -869,7 +871,14 @@ function analyzeRow(sig){
   // 枠の細い線（線が数px消えるだけ）はまたいでもよい。約40ms以上線が消えている所（コマのすき間）をまたぐRRは使わない
   const rrs=[],rrSeq=[];for(let k=1;k<peaks.length;k++){let gap=false,run=0;for(let i=peaks[k-1];i<peaks[k];i++){run=valid[i]?0:run+1;if(run>12){gap=true;break;}}const ms=(peaks[k]-peaks[k-1])*MS_PER_PX;const ok=!gap&&ms>250&&ms<2400;if(ok)rrs.push(ms);rrSeq.push(ok?ms:null);}
   const hr=rrs.length?60000/median2(rrs):null;
-  return {...sum,hr:hr&&Math.round(hr),peaks,dbg,rrSeq};
+  // 心室性期外収縮の疑い：代表拍と形が違い（相関<0.85 か QRSが30ms以上広い）、かつ早く来る（直前のRRがいつもの85%未満）拍。
+  // 形がかなり違う（相関<0.7）拍は、RRが測れなくても数える。直後に長い間（代償性休止）があれば記録する
+  const medRR=rrs.length?median2(rrs):null,qa=idxOf(QRS_A),qb=idxOf(QRS_B),ect=[];
+  for(const q of sum.beats){const k=peaks.indexOf(q.r),pre=k>0?rrSeq[k-1]:null,post=k>=0&&k<rrSeq.length?rrSeq[k]:null;
+    const c=pearson(sum.tpl.slice(qa,qb+1),Array.from(q.b.slice(qa,qb+1))),w=qrsSpan(q.b).width;
+    const odd=c<0.85||w>sum.width+30,prem=!!(medRR&&pre!=null&&pre<0.85*medRR),pause=!!(medRR&&post!=null&&post>1.1*medRR);
+    if(odd&&(prem||c<0.7))ect.push({r:q.r,corr:+c.toFixed(2),width:w,prem,pause});}
+  return {...sum,hr:hr&&Math.round(hr),peaks,dbg,rrSeq,ect};
 }
 // QRS幅：代表拍の傾きが「最大傾きの12%」と「基線部分（−100〜−60ms）のノイズの傾きの3倍」の大きい方を超えている範囲。
 // ノイズが多い記録でQRSの始まり・終わりが外側に伸びて、幅が長く測られるのを防ぐ
@@ -929,6 +938,9 @@ function poolRows(feats,noises){
   if(hrsAll.length>=2){const mh=median2(hrsAll);feats.forEach((f,k)=>{if(rowInfo[k].used&&f.hr&&f.hr>mh*1.35){rowInfo[k]={used:false,reason:`他の段より心拍が速い（${f.hr}bpm、他は${Math.round(mh)}bpm：ノイズ・T波の二重カウント・頻拍の可能性）`,fast:true};}});}
   let use=feats.map((f,k)=>rowInfo[k].used?k:-1).filter(k=>k>=0);
   const rhythm=rhythmOf(feats,noises);
+  // 期外収縮（心室性）の疑い：ノイズのない段から数える
+  const ectopy={n:0,rows:[]};feats.forEach((f,k)=>{if(!f||f.error||!f.ect||(noises[k]&&noises[k].bad.length))return;ectopy.n+=f.ect.length;if(f.ect.length)ectopy.rows.push(k+1);});
+  rhythm.pvc=ectopy.n;rhythm.pvcRows=ectopy.rows;
   if(!use.length)return {error:'代表拍に使える段がありません（全段が頻拍・ノイズ・検出不能）',rowInfo,usedRows:[],rhythm};
   let pooled=summarizeBeats(use.flatMap(k=>feats[k].beats));
   // 代表拍と形が大きく違う段（イベント中など）は除いて作り直す
@@ -1330,6 +1342,7 @@ async function runEval(mode){
     else if(u.outlier)rowNotes.push({lv:1,row:`${k+1}段目`,why:u.reason});
     else if(u.reason==='ノイズ疑い')rowNotes.push({lv:1,row:`${k+1}段目`,why:`ノイズ疑い（${curNoise[k].max}／閾値 ${curNoise[k].thr}）`});});
   const rh=curPool&&curPool.rhythm;
+  if(rh&&rh.pvc)rowNotes.unshift({lv:1,row:'期外収縮',why:`心室性期外収縮の疑い ${rh.pvc}拍（形が違って早く来る拍：${rh.pvcRows.map(n=>n+'段目').join('・')}）`});
   if(rh&&rh.af)rowNotes.unshift({lv:1,row:'リズム',why:`RR間隔が不規則（心房細動の疑い：RRのばらつき ${Math.round(rh.cv*100)}%・連続する差 ${Math.round(rh.madsd*100)}%）`});
   else if(rh&&rh.bigem)rowNotes.push({lv:1,row:'リズム',why:'RRが規則的に長短を繰り返す（二段脈などの可能性）'});
   const rowTable=`<div style="margin-top:12px"><b>段ごとの記録</b>（${curSigs.length}段）</div>
@@ -1444,9 +1457,9 @@ $('themeBtn').onclick=()=>{const t=document.documentElement.dataset.theme==='dar
 function showRhythm(){
   const rh=curPool&&curPool.rhythm;if(!rh||!$('result'))return;
   const box=document.createElement('div');box.style.marginTop='12px';
-  if(!rh.enough){box.innerHTML=`<b>リズム（RR間隔）</b>　<span class="hint">RR間隔が少ないため判定できません（${rh.n}個）</span>`;$('result').appendChild(box);return;}
+  if(!rh.enough){box.innerHTML=`<b>リズム（RR間隔）</b>　<span class="hint">RR間隔が少ないため判定できません（${rh.n}個）</span>${rh.pvc?`　<span class="warn-t" style="font-weight:800">🟡 心室性期外収縮の疑い ${rh.pvc}拍</span>`:''}`;$('result').appendChild(box);return;}
   const verdict=rh.af?'<span class="warn-t" style="font-weight:800">🟡 不規則（心房細動の疑い）</span>':rh.bigem?'<span class="warn-t" style="font-weight:800">🟡 規則的な長短の繰り返し（二段脈などの可能性）</span>':'<span class="ok-t" style="font-weight:800">✅ 規則的</span>';
-  box.innerHTML=`<b>リズム（RR間隔）</b>　${verdict}<div class="hint">RR 中央値 ${Math.round(rh.med)} ms（${rh.hr} bpm）・ばらつき ${Math.round(rh.cv*100)}%・連続するRRの差 ${Math.round(rh.madsd*100)}%・大きく変わった割合 ${Math.round(rh.irr*100)}%（${rh.n}個）　<span title="心房細動の疑い：ばらつき8%以上 かつ 連続する差6%以上 かつ 大きく変わった割合50%以上（二段脈のような規則的な交互は除く）">ⓘ判定の目安</span></div><canvas class="rrcv"></canvas>`;
+  box.innerHTML=`<b>リズム（RR間隔）</b>　${verdict}${rh.pvc?`　<span class="warn-t" style="font-weight:800">🟡 心室性期外収縮の疑い ${rh.pvc}拍</span>`:''}<div class="hint">RR 中央値 ${Math.round(rh.med)} ms（${rh.hr} bpm）・ばらつき ${Math.round(rh.cv*100)}%・連続するRRの差 ${Math.round(rh.madsd*100)}%・大きく変わった割合 ${Math.round(rh.irr*100)}%（${rh.n}個）　<span title="心房細動の疑い：ばらつき8%以上 かつ 連続する差6%以上 かつ 大きく変わった割合50%以上（二段脈のような規則的な交互は除く）">ⓘ判定の目安</span></div><canvas class="rrcv"></canvas>`;
   $('result').appendChild(box);
   const cv=box.querySelector('canvas'),W=Math.max(320,box.clientWidth||600),H=130,c=hiDPI(cv,W,H),P=pal();
   c.fillStyle=P.bg;c.fillRect(0,0,W,H);
