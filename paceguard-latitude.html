@@ -659,16 +659,23 @@ function extractFields(items, annotStrs, rawPdfText){
   // イベント記録の見出し：「002: 2025年10月13日 23:41 JST, AF」（番号・発生日時・種類）
   const events=[...t.matchAll(/(?:^|[^\d])(\d{3})[:：](\d{4})年(\d{1,2})月(\d{1,2})日(\d{1,2}:\d{2})(?:JST)?[,，、]?\s*([A-Za-z][A-Za-z/\-]{0,11}|[一-龯ぁ-んァ-ヶー]{1,8}?(?=頻拍治療|頻拍検出|デバイス|前回|治療設定|\d|$))?/g)]
     .map(m=>({no:m[1],dt:`${m[2]}年${m[3].padStart(2,'0')}月${m[4].padStart(2,'0')}日 ${m[5]}`,type:(m[6]||'').trim()}));
+  if(!events.length)for(const m of t.matchAll(/(?:^|[^\d])(\d{3})[:：]\s*(\\d{4})\\D{1,4}?(\\d{1,2})\\D{1,4}?(\\d{1,2})\\D{0,6}?(\\d{1,2}:\\d{2})\D{0,6}?([A-Za-z]{2,5})?/g))
+    events.push({no:m[1],dt:`${m[2]}年${m[3].padStart(2,'0')}月${m[4].padStart(2,'0')}日 ${m[5]}`,type:m[6]||''}); // 漢字が読めない時
   const evs=[...new Map(events.map(e=>[e.no+e.dt,e])).values()];
+  // 確認用：PDFの中で見つけた「日付＋時刻」を全部
+  const allDT=[...new Set([...t.matchAll(/(\\d{4})\\D{1,4}?(\\d{1,2})\\D{1,4}?(\\d{1,2})\\D{0,6}?(\\d{1,2}:\\d{2})/g)].map(m=>`${m[1]}/${m[2].padStart(2,'0')}/${m[3].padStart(2,'0')} ${m[4]}`))];
   // S-ECGの記録日時：「S-ECG表示(2026年09月28日 06:50 JST)」
-  const secg=lab(/S-?ECG表示[(（](\d{4})年(\d{1,2})月(\d{1,2})日(\d{1,2}:\d{2})/);
-  meta={id:idCand||'',name:nameCand,date:interro,device:dev,tx,clinic,implant,events:evs,secg};
+  // 漢字（表示・年月日）が文字化けしていても読めるよう、「ECG」の直後の日時を探す（ハイフンの種類も問わない）
+  const secg=lab(/S.?ECG表示[(（](\d{4})年(\d{1,2})月(\d{1,2})日(\d{1,2}:\d{2})/)||lab(/ECG[^\d]{0,12}?(\\d{4})\\D{1,4}?(\\d{1,2})\\D{1,4}?(\\d{1,2})\\D{0,6}?(\\d{1,2}:\\d{2})/);
+  meta={id:idCand||'',name:nameCand,date:interro,device:dev,tx,clinic,implant,events:evs,secg,allDT};
   if($('fMeta'))$('fMeta').innerHTML=[secg&&`〰 S-ECG記録：<b>${secg}</b>`,evs.length&&`⚡ イベント ${evs.map(e=>`<b>${e.no}：${e.dt}${e.type?'（'+e.type+'）':''}</b>`).join('、')}`,tx&&`📡 前回のデバイスからの送信：<b>${tx}</b>`,clinic&&`🏥 前回の診察室での情報読込み：<b>${clinic}</b>`,implant&&`🫀 植込み日：<b>${implant}</b>`].filter(Boolean).join('　')||'';
   // デバッグ：文字項目数＋注釈数＋抽出テキスト先頭を表示
   const dbg=$('dbg');
   if(dbg) dbg.innerHTML = `文字項目：<b>${items.length}</b>／注釈：<b>${annotStrs.length}</b>／自前抽出：<b>${rawPdfText.length}</b>字（stream ${rawDiag.streams}／展開 ${rawDiag.inflated}）`
     + (idCand?'':(idOpts.length?`<br><span class="warn-t">IDを自動で決められませんでした。候補：</span>${idOpts.map(n=>`<button class="idopt" data-id="${n}" style="padding:1px 8px;margin:2px">${n}</button>`).join('')}（押すと入ります）`:'<br><span class="warn-t">IDらしい数字が見つかりませんでした。手で入力するか「🔢 IDの位置を教える」を使ってください。</span>'))
-    + `<br>ID:<b>${idCand||'—'}</b> 氏名:<b>${nameCand||'—'}</b> 照会:<b>${interro||'—'}</b> 機種:<b>${dev||'—'}</b>`;
+    + `<br>ID:<b>${idCand||'—'}</b> 氏名:<b>${nameCand||'—'}</b> 照会:<b>${interro||'—'}</b> 機種:<b>${dev||'—'}</b>`
+    + `<br>見つけた日時：${allDT.length?allDT.map(x=>'<b>'+x+'</b>').join('、'):'なし'}`
+    + (()=>{const k=t.search(/ECG/);return k>=0?`<br>「ECG」の周り：<code>${escH(t.slice(Math.max(0,k-6),k+40))}</code>`:'<br>「ECG」という文字は見つかりませんでした';})();
   updateCropHint();
 }
 function autoTrace(){
