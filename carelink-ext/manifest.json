@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "CareLink 遠隔データ抽出 (院内用)",
+  "version": "0.1.0",
+  "description": "CareLinkにログインした状態で、貼り付けた患者IDの最新データ（閾値・波高値など）を抽出して一覧化します。完全ローカル・PHIは端末外に出しません。",
+  "permissions": ["activeTab", "scripting", "storage", "downloads"],
+  "host_permissions": [
+    "https://*.carelink.medtronic.com/*",
+    "https://carelink.medtronic.com/*",
+    "https://*.medtronic.com/*"
+  ],
+  "action": { "default_popup": "popup.html", "default_title": "CareLink抽出" },
+  "content_scripts": [
+    {
+      "matches": ["https://*.medtronic.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
