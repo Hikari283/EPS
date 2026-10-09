@@ -1260,11 +1260,11 @@ async function tlPanel(box,rep,title){
   box.lastElementChild.outerHTML=url?`<img src="${url}" style="width:100%;background:#fff;border-radius:6px;display:block;margin-top:4px">`:'<div class="hint warn-t">この日のPDFが「'+escH(PDF_DIR)+'」に見つかりません（このツールで整理する前のレポート）。</div>';
 }
 // 左右に並べた時、見出しの高さをそろえて、波形が同じ高さから始まるようにする
-// サムネイルの日付：イベント（番号・日時・種類）→ S-ECGの記録日時 → 照会日
+// サムネイルの日付：S-ECGの記録日時 → イベント（番号・日時・種類）→ 照会日
 function tlThumbLabel(it){
   const f=d=>escH(String(d||'').replace(/(\d{4})年(\d{2})月(\d{2})日\s*/,'$1/$2/$3 ').replace(/\s*JST/,''));const ev=(it.events||[])[0];
+  if(it.secg)return `〰 ${f(it.secg)}`; // S-ECGのレポート（サマリに過去のイベント一覧があっても、波形はS-ECG）
   if(ev)return `⚡${escH(ev.no)} ${f(ev.dt)}${ev.type?` <b style="color:var(--warn)">${escH(ev.type)}</b>`:''}`;
-  if(it.secg)return `〰 ${f(it.secg)}`;
   return f(it.date||'?');
 }
 function tlEqualize(){
@@ -1315,9 +1315,9 @@ async function tlLoad(idArg,quiet){
   for(const it of items){if(!it.pdf||(it.secg&&it.tx))continue;
     try{const f=await fileFromPath(it.pdf);if(!f)continue;const h=headerInfo((await extractRawPdfText(await f.arrayBuffer())).replace(/\s+/g,''),false,'');
       if(!it.secg&&h.secg)it.secg=h.secg;if(!it.tx&&h.tx)it.tx=h.tx;if(!(it.events||[]).length&&h.events.length)it.events=h.events;}catch(_){}}
-  // 並び順：イベントの日時 → S-ECGの記録日時 → 照会日 の順に使える日時で
+  // 並び順（左が古い）：S-ECGの記録日時 → イベントの日時 → 照会日 の順に使える日時で
   const dk=d=>{const m=String(d||'').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})(?:\D+(\d{1,2}):(\d{2}))?/);return m?m[1]+m[2].padStart(2,'0')+m[3].padStart(2,'0')+(m[4]||'00').padStart(2,'0')+(m[5]||'00'):'';};
-  items.forEach(it=>{const ev=(it.events||[])[0];it.when=ev?ev.dt:(it.secg||'');it.sk=dk(it.when)||it.key||'';});
+  items.forEach(it=>{const ev=(it.events||[])[0];it.when=it.secg||(ev?ev.dt:'');it.sk=dk(it.when)||it.key||'';}); // 記録された日時（S-ECG記録 → イベント）。送信日は使わない
   items.sort((a,b)=>a.sk===b.sk?((a.file||'')<(b.file||'')?-1:1):(a.sk<b.sk?-1:1));
   tl.items=items;
   tl.base=st.baseline?{...st.baseline,...(items.find(it=>it.pdf&&st.baseline.pdf&&it.pdf===st.baseline.pdf)||{})}:items[0];
