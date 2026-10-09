@@ -1241,6 +1241,16 @@ tlModeBtns();
 async function tlSetMode(full){tlFull=full;try{localStorage.setItem('pg_lat_tlmode',full?'full':'crop');}catch(_){}tlModeBtns();
   if(!tl.items.length)return;await tlTop(tl.top);await tlGo(tl.idx);tlThumbs();}
 $('tlModeFull').onclick=()=>tlSetMode(true);$('tlModeCrop').onclick=()=>tlSetMode(false);
+// 複数のイベントがまとまったPDF：ページごとに左上のイベント見出し（例 035: 2025年02月09日 12:44 JST, AF）を読み、イベントとページの対応を返す
+const tlEvPages=new Map();
+async function eventPages(path){
+  if(tlEvPages.has(path))return tlEvPages.get(path);
+  let out=[];
+  try{const f=await fileFromPath(path);if(f){const lib=await ensurePdfjs();const doc=await lib.getDocument({data:new Uint8Array(await f.arrayBuffer()),isEvalSupported:false}).promise;
+    for(let pg=1;pg<=doc.numPages;pg++){const tc=await (await doc.getPage(pg)).getTextContent();const t=tc.items.map(x=>x.str).join('').replace(/\s+/g,'');
+      const ev=headerInfo(t,false,'').events[0];if(ev&&!out.some(e=>e.no===ev.no&&e.dt===ev.dt))out.push({...ev,page:pg});}}}catch(_){}
+  tlEvPages.set(path,out);return out;
+}
 async function tlImage(rep){
   const k=(tlFull?'F|':'C|')+(rep.pdf||'')+'|'+(rep.key||rep.date)+'|'+(rep.page||0);if(tl.cache.has(k))return tl.cache.get(k);
   let url=null;
@@ -1273,7 +1283,7 @@ async function tlPanel(box,rep,title){
 // 左右に並べた時、見出しの高さをそろえて、波形が同じ高さから始まるようにする
 // サムネイルの日付：S-ECGの記録日時 → イベント（番号・日時・種類）→ 照会日
 function tlThumbLabel(it){
-  const f=d=>escH(String(d||'').replace(/(\d{4})年(\d{2})月(\d{2})日\s*/,'$1/$2/$3 ').replace(/\s*JST/,''));const ev=(it.events||[])[0];
+  const f=d=>escH(String(d||'').replace(/(\d{4})年(\d{2})月(\d{2})日\s*/,'$1/$2/$3 ').replace(/\s*(JST|ＪＳＴ)/g,''));const ev=(it.events||[])[0];
   if(it.secg)return `〰 ${f(it.secg)}`; // S-ECGのレポート（サマリに過去のイベント一覧があっても、波形はS-ECG）
   if(ev)return `⚡${escH(ev.no)} ${f(ev.dt)}${ev.type?` <b style="color:var(--warn)">${escH(ev.type)}</b>`:''}`;
   return f(it.date||'?');
@@ -1326,6 +1336,15 @@ async function tlLoad(idArg,quiet){
   for(const it of items){if(!it.pdf||(it.secg&&it.tx))continue;
     try{const f=await fileFromPath(it.pdf);if(!f)continue;const h=headerInfo((await extractRawPdfText(await f.arrayBuffer())).replace(/\s+/g,''),false,'');
       if(!it.secg&&h.secg)it.secg=h.secg;if(!it.tx&&h.tx)it.tx=h.tx;if(!(it.events||[]).length&&h.events.length)it.events=h.events;}catch(_){}}
+  // まとめて作ったイベントのPDFは、イベントごとの項目に分ける（同じイベントが複数のPDFにあれば1つだけ）
+  {const out=[],seenEv=new Set();
+    for(const it of items){
+      if(it.pdf&&!it.secg&&(it.events||[]).length){const pages=await eventPages(it.pdf);
+        if(pages.length>1){for(const ev of pages){const k=ev.no+'|'+ev.dt;if(seenEv.has(k))continue;seenEv.add(k);
+          out.push({...it,events:[ev],page:ev.page,lv:null,h:null,feat:null,split:true});}continue;}}
+      const ev=!it.secg&&(it.events||[])[0];if(ev){const k=ev.no+'|'+ev.dt;if(seenEv.has(k))continue;seenEv.add(k);}
+      out.push(it);}
+    items.length=0;items.push(...out);}
   // 並び順（左が古い）：S-ECGの記録日時 → イベントの日時 → 照会日 の順に使える日時で
   const dk=d=>{const m=String(d||'').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})(?:\D+(\d{1,2}):(\d{2}))?/);return m?m[1]+m[2].padStart(2,'0')+m[3].padStart(2,'0')+(m[4]||'00').padStart(2,'0')+(m[5]||'00'):'';};
   items.forEach(it=>{const ev=(it.events||[])[0];it.when=it.secg||(ev?ev.dt:'');it.sk=dk(it.when)||it.key||'';}); // 記録された日時（S-ECG記録 → イベント）。送信日は使わない
