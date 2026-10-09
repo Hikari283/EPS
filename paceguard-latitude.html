@@ -1029,6 +1029,17 @@ function poolRows(feats,noises){
   return {...pooled,hr:hrs.length?Math.round(median2(hrs)):null,rowInfo,usedRows:use,rhythm};
 }
 // 前回と今回の比較 → 3段階の判定と理由
+// 評価と同じ基準で判定だけを出す（タイムラインで、今の基準とその場で比べ直すため）
+function featLevel(b,c){
+  if(!b||!c||!b.tpl||!c.tpl)return null;
+  const r=compareFeat(b,c),ar=r.ampRatio,hiT=1+r.tol*1.6,hiY=1+r.tol;
+  const lv=[r.corr<0.80?2:r.corr<0.90?1:0,(ar>hiT||ar<1/hiT)?2:(ar>hiY||ar<1/hiY)?1:0,
+    (r.dW>=30||(r.c.width>=120&&r.dW>=20))?2:r.dW>=20?1:0,r.polFlip?2:0];
+  const why=[...(r.red||[]),...(r.yel||[])];
+  (c.rows||[]).forEach((x,k)=>{if(x&&!x.error&&x.used===false){lv.push(1);why.push(`${k+1}段目：${String(x.reason||'除外').replace(/（.*$/,'')}`);}}); // 頻拍・ノイズ・形の違う段
+  if(c.rh&&c.rh.af){lv.push(1);why.push('RR不規則（心房細動の疑い）');}else if(c.rh&&c.rh.bigem&&!c.rh.pvc){lv.push(1);why.push('二段脈の可能性');}
+  return {level:Math.max(...lv),causes:why};
+}
 function compareFeat(b,c){
   const qa=idxOf(QRS_A),qb=idxOf(QRS_B);
   const {corr,lag}=shiftCorr(b.tpl,c.tpl,qa,qb,10);
@@ -1239,13 +1250,13 @@ async function tlImage(rep){
 }
 const tlPill=lv=>lv==null?'':`<span class="${['ok-t','warn-t','bad-t'][lv]}" style="font-weight:700">${['✅ 変化なし','🟡 注意','⚠️ 要確認'][lv]}</span>`;
 const tlNums=f=>f?`波高 ${(+f.amp).toFixed(2)} mV・QRS幅 ${f.width} ms・心拍 ${f.hr??'—'} bpm`:'';
-function tlWhy(h){ // その日に評価した時の判定の理由と、比較相手
+function tlWhy(h){ // 今の基準と比べた時の判定の理由
   if(!h)return '';
   let c=h.causes;
   if(!c){c=[];if(h.dW>=20)c.push(`QRS幅 +${h.dW}ms`);if(h.corr!=null&&h.corr<0.9)c.push(`形 相関${(+h.corr).toFixed(2)}`);
     if(h.ampRatio&&(h.ampRatio<0.77||h.ampRatio>1.3))c.push(`波高 ${Math.round(h.ampRatio*100)}%`);
     (h.rows||[]).forEach((r,k)=>{if(r&&!r.used&&r.reason)c.push(`${k+1}段目：${r.reason.replace(/（.*$/,'')}`);});}
-  return `<div class="hint">評価した時の比較相手：${escH(h.ref||'?')}（${h.mode==='base'?'基準':'前回'}）${c.length?'　理由：'+escH(c.join('／')):''}</div>`;
+  return `<div class="hint">比較相手：${escH(String(h.ref||'?').replace(/\s*JST/,''))}（${h.mode==='base'?'基準':'前回'}）${c.length?'　理由：'+escH(c.join('／')):''}</div>`;
 }
 async function tlPanel(box,rep,title){
   const need=rep.file&&!rep.own;
@@ -1289,11 +1300,11 @@ async function tlGo(i){
 async function tlLoad(idArg,quiet){
   if(!dirHandle)await ensureDir();if(!dirHandle){$('tlMsg').innerHTML='<span class="warn-t">データフォルダに接続できません。📁で選んでください。</span>';return;}
   const id=idArg||$('tlId').value.trim()||$('fId').value.trim();if(!id){$('tlMsg').innerHTML='<span class="warn-t">患者IDを入れてください。</span>';return;}
-  const st=await readBaseline(id);if(!st||!(st.reports||[]).length){tlReset(id,'記録がありません');return;}
+  const st=await readBaseline(id);if(!st||!((st.reports||[]).length||(st.saves||[]).length)){tlReset(id,'記録がありません');return;}
   tl.id=id;tl.obj={name:st.name,device:st.device};tl.cache.clear();
   const lvOf=r=>{const h=(st.history||[]).filter(x=>x.date===r.date&&x.level!=null).pop();return h?h.level:null;};
   const hOf=r=>(st.history||[]).filter(x=>x.date===r.date&&x.level!=null).pop()||null;
-  const reps=[...st.reports].sort((a,b)=>a.key<b.key?-1:1).map(r=>({...r,lv:lvOf(r),h:hOf(r)}));
+  const reps=[...(st.reports||[])].sort((a,b)=>a.key<b.key?-1:1).map(r=>({...r,lv:lvOf(r),h:hOf(r)}));
   // 患者PDFフォルダのPDFを全部並べる（同じ照会日に何度保存したPDFも1枚ずつ）。判定・数値は同じ照会日の記録から付ける
   const files=[];
   try{const top=await dirHandle.getDirectoryHandle(PDF_DIR);
@@ -1321,6 +1332,10 @@ async function tlLoad(idArg,quiet){
   items.sort((a,b)=>a.sk===b.sk?((a.file||'')<(b.file||'')?-1:1):(a.sk<b.sk?-1:1));
   tl.items=items;
   tl.base=st.baseline?{...st.baseline,...(items.find(it=>it.pdf&&st.baseline.pdf&&it.pdf===st.baseline.pdf)||{})}:items[0];
+  // 判定マークは保存した時のものではなく、今の基準とその場で比べ直したもの（基準を変えても画面の評価とそろう）
+  const bf=tl.base&&tl.base.feat;
+  for(const it of items){const l=bf?featLevel(bf,it.feat):null;if(!l)continue;const self=it.pdf&&tl.base.pdf===it.pdf;
+    it.lv=self?0:l.level;it.h=self?null:{ref:tl.base.secg||tl.base.date,mode:'base',causes:l.causes};}
   const nPdf=items.filter(it=>it.file).length;
   $('tlMsg').textContent=`ID ${id}：PDF ${nPdf}枚・評価の記録 ${reps.length}日分`;$('tlSum').textContent=`ID ${id}・${items.length}枚`;$('tlBody').hidden=false;$('tlId').value=id;
   $('tlSlider').max=tl.items.length-1;
@@ -1451,15 +1466,17 @@ async function runEval(mode){
   const rowsSave=curFeat.map((f,k)=>{const u=curPool&&curPool.rowInfo[k]||{};return f&&!f.error?{hr:f.hr,amp:f.amp,width:f.width,nBeats:f.nBeats,noise:curNoise[k].max,used:!!u.used,reason:u.reason||'',corr:u.corr??null}:{error:true};});
   const poolSave=pool?{tpl:pool.tpl,amp:pool.amp,ampVar:pool.ampVar,width:pool.width,on:pool.on,off:pool.off,pol:pool.pol,hr:pool.hr,nBeats:pool.nBeats,rows:rowsSave,rh:(r0=>r0&&r0.enough?{cv:r0.cv,madsd:r0.madsd,irr:r0.irr,af:r0.af,bigem:r0.bigem,hr:r0.hr}:null)(curPool&&curPool.rhythm)}:null;
   const now={id,name:$('fName').value,date:$('fDate').value,device:$('fDev').value,ts:Date.now(),tx:meta.tx||'',clinic:meta.clinic||'',events:meta.events||[],secg:meta.secg||''};
+  const isEvent=!now.secg&&(now.events||[]).length>0; // イベントのPDF：その日の比較相手（前回・基準）にはしない
   let nowPdf=null; // 患者PDFフォルダに整理したこのPDFの場所（基準・前回のPDFを後で表示するために記録）
   const saveStore=async(histEntry)=>{
     nowPdf=await archivePdf(id,now);
     // PDF1枚ごとの記録（照会日が同じ別のイベント記録でも上書きしない）
     const saves=((store&&store.saves)||[]).filter(x=>!(nowPdf&&x.pdf===nowPdf));
     saves.push({pdf:nowPdf,page:curPageNo,date:now.date,tx:now.tx,clinic:now.clinic,events:now.events,secg:now.secg,key:curKey,feat:poolSave,ts:now.ts,level:histEntry&&histEntry.level!=null?histEntry.level:null,causes:histEntry&&histEntry.causes||null,ref:histEntry&&histEntry.ref||null,mode:histEntry&&histEntry.mode||null});
-    const rs=reports.filter(r=>!(curKey&&r.key===curKey));rs.push({date:now.date,key:curKey,feat:poolSave,ts:now.ts,pdf:nowPdf});rs.sort((a,b)=>a.key<b.key?-1:1);
+    // イベントのPDF（S-ECGの記録日時がなくイベントの見出しがある）は、その日の比較相手（前回・基準）にしない。PDFごとの記録（saves）にだけ残す
+    const rs=isEvent?[...reports]:reports.filter(r=>!(curKey&&r.key===curKey));if(!isEvent)rs.push({date:now.date,key:curKey,feat:poolSave,ts:now.ts,pdf:nowPdf});rs.sort((a,b)=>a.key<b.key?-1:1);
     const hist=((store&&store.history)||[]).filter(h=>!(curKey&&dateKey(h.date)===curKey));if(histEntry)hist.push(histEntry);
-    await writeBaseline(id,{...now,reports:rs,history:hist,saves,baseline:baseRep||{date:now.date,key:curKey,feat:poolSave,ts:now.ts,pdf:nowPdf}});
+    await writeBaseline(id,{...now,reports:rs,history:hist,saves,baseline:baseRep||(isEvent?null:{date:now.date,key:curKey,feat:poolSave,ts:now.ts,pdf:nowPdf})});
   };
   // 段ごとの一覧（使った段・除外した段と理由）
   const ic=l=>l===2?'⚠️':l===1?'🟡':'✅';
@@ -1483,7 +1500,7 @@ async function runEval(mode){
   if(!bp||!bp.tpl){
     await saveStore({date:now.date,note:'登録'});
     const first=!baseRep;
-    const why=first?((store&&store.feat&&!store.reports)?'新しい計測方式で登録しました（この波形が基準になります）':'初回登録しました（この波形が基準になります）'):'比較できる前の日付のレポートがありません';
+    const why=isEvent?'イベントの記録として保存しました（基準・前回にはS-ECGのレポートを使います）':first?((store&&store.feat&&!store.reports)?'新しい計測方式で登録しました（この波形が基準になります）':'初回登録しました（この波形が基準になります）'):'比較できる前の日付のレポートがありません';
     $('result').innerHTML=`<div class="verdict info"><h2>${why}</h2>この患者（ID:${id}）の${now.date||'今回'}のレポートとして保存しました。${first?'次から「📌 基準と比較」で、同じ日付のレポートでも比べられます。':'同じ日付どうしを比べるときは「📌 基準と比較」を使ってください。'}${curKey?'':'<br><b>※照会日が読み取れていません。照会日を入力すると前後関係で正しく比較できます。</b>'}${dirHandle?'':'<br><b>※フォルダ未選択のため保存できていません。</b>'}
       <div class="hint" style="margin-top:6px">${measure(pool)}</div>${rowNotes.length?`<div class="cause">記録の中の所見：${rowNotes.map(x=>`${x.info?'ℹ️':ic(x.lv)} ${x.row}：${x.why}`).join('　')}</div>`:''}</div>${rowTable}`;
     $('overlayCard').hidden=true; showRhythm(); tlAuto(id); return;
