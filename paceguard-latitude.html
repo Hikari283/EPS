@@ -201,6 +201,7 @@
   <div class="chips">
     <button class="chip" id="lastChip" title="最新の結果（押すとその場所へ）" hidden style="cursor:pointer"></button>
     <span class="chip" title="自動比較の状態"><span class="live" id="liveDot"></span><span id="liveTxt">自動比較 停止中</span></span>
+    <span class="chip" id="netChip" hidden></span>
     <span class="chip" id="folderStatus">フォルダ未選択（比較結果の保存に必要）</span>
     <button id="pickFolder" class="iconbtn" title="データフォルダを選ぶ">📁 フォルダ</button>
     <button id="themeBtn" class="iconbtn ghost" title="白／黒の切り替え">🌙</button>
@@ -374,10 +375,18 @@
 const PDFJS_URL='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs';
 const PDFJS_WORKER='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs';
 let pdfjsLib=null;
+// 同じフォルダの「pdfjs」フォルダに pdf.js 3.11.174（pdf.min.js / pdf.worker.min.js）があれば、それを使う＝インターネットに一切つながない（オフライン版）
+// file:// ではモジュールやWorkerを読めないため、通常のscriptで読み込み、PDFの処理は画面と同じスレッドで行う
+let PDFJS_LOCAL=false;
+const loadScript=src=>new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>rej(new Error(src));document.head.appendChild(s);});
 async function ensurePdfjs(){
   if(pdfjsLib)return pdfjsLib;
-  pdfjsLib=await import(PDFJS_URL);
-  pdfjsLib.GlobalWorkerOptions.workerSrc=PDFJS_WORKER;
+  try{
+    await loadScript('pdfjs/pdf.min.js');await loadScript('pdfjs/pdf.worker.min.js');
+    if(window.pdfjsLib&&window.pdfjsWorker){pdfjsLib=window.pdfjsLib;pdfjsLib.GlobalWorkerOptions.workerSrc='pdfjs/pdf.worker.min.js';PDFJS_LOCAL=true;}
+  }catch(_){}
+  if(!pdfjsLib){pdfjsLib=await import(PDFJS_URL);pdfjsLib.GlobalWorkerOptions.workerSrc=PDFJS_WORKER;}
+  const c=document.getElementById('netChip');if(c){c.hidden=false;c.textContent=PDFJS_LOCAL?'🔒 オフライン':'🌐 pdf.jsをネットから読込';c.title=PDFJS_LOCAL?'pdf.jsを同じフォルダから読み込みました。インターネットには一切つないでいません。':'pdf.jsをcdnjsから読み込みました（患者データは送っていません）。pdfjsフォルダを置くとオフラインになります。';}
   return pdfjsLib;
 }
 const $=id=>document.getElementById(id);
@@ -533,6 +542,7 @@ let drawMode='crop'; // 'crop' | 'id'
 // ---- 数字OCR（Tesseract.js を遅延読み込み。院内実データで完結・PHIは端末外に出ません）----
 let _tess=null;
 function ensureTesseract(){
+  if(PDFJS_LOCAL)return Promise.reject(new Error('オフライン版では文字認識（OCR）は使えません。患者IDは欄に手で入力してください'));
   if(window.Tesseract)return Promise.resolve(window.Tesseract);
   if(_tess)return _tess;
   _tess=new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.0/tesseract.min.js';s.onload=()=>res(window.Tesseract);s.onerror=()=>rej(new Error('Tesseract読込失敗'));document.head.appendChild(s);});
