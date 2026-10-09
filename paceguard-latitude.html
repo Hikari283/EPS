@@ -620,6 +620,12 @@ async function loadPDF(file,{forceEval=false,pageNo=0}={}){
     let annotStrs=[];
     try{ const ans=await page.getAnnotations(); annotStrs=ans.map(a=>(a.contentsObj&&a.contentsObj.str)||a.contents||'').filter(s=>s&&s.trim()); }catch(_){}
     extractFields(tc.items.map(it=>({s:it.str,x:it.transform[4],y:it.transform[5]})), annotStrs, rawPdfText); // ID・日付は先に読む
+    {const nid=$('fId').value.trim();if(tl.id&&nid&&tl.id!==nid)tlReset(nid,'読み込み中…');} // 別の患者になったら前の患者のタイムラインを消す
+    curNonSicd=nonSicdOf(tc.items.map(it=>it.str).join(' ')+' '+annotStrs.join(' ')+' '+rawPdfText,$('fDev').value.trim());
+    if(curNonSicd){ // S-ICD以外：波形の比較・保存はしない
+      curSigs=[];curFeat=[];curNoise=[];curPool=null;$('overlayCard').hidden=true;$('traceMsg').textContent='';
+      $('result').innerHTML=`<div class="verdict info"><h2>S-ICD以外のPDFです（対象外）</h2>機種：${escH(curNonSicd)}　患者ID：${escH($('fId').value||'—')}<br><span class="hint">このツールはS-ICDのS-ECGだけを比較します。このPDFは比較・保存しません。</span></div>`;
+      tlReset($('fId').value.trim(),'S-ICD以外のため対象外');return;}
     // 計測用に高解像度でも描く（1px≒3.5ms）。時間がかかっても他の処理を止めないよう、最大15秒で打ち切る
     try{const vh=page.getViewport({scale:HI});hiCanvas.width=vh.width;hiCanvas.height=vh.height;
       await Promise.race([page.render({canvasContext:hctx,viewport:vh}).promise,new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),15000))]);hiReady=true;}
@@ -847,7 +853,14 @@ $('pdfDirName').value=PDF_DIR;
 $('pdfDirSave').onclick=()=>{const v=safeName($('pdfDirName').value);if(!v){$('pdfDirMsg').innerHTML='<span class="warn-t">名前を入れてください</span>';return;}PDF_DIR=v;$('pdfDirName').value=v;try{localStorage.setItem('pg_lat_pdfdir',v);}catch(_){}$('pdfDirMsg').innerHTML='<span class="ok-t">保存しました</span>';};
 try{const v=localStorage.getItem('pg_lat_watchmove');if(v)$('watchMove').checked=v==='1';}catch(_){}
 $('watchMove').addEventListener('change',()=>{try{localStorage.setItem('pg_lat_watchmove',$('watchMove').checked?'1':'0');}catch(_){}});
-let lastPdfFile=null,lastPdfBytes=null,lastArchive=null;
+let lastPdfFile=null,lastPdfBytes=null,lastArchive=null,curNonSicd=null;
+// S-ICD以外（ペースメーカー・ICDなど）のPDFは比較しない。文字が読めない時は判断しない（S-ICDとして扱う）
+function nonSicdOf(text,dev){const t=String(text||'');if(t.replace(/\s+/g,'').length<200)return null;
+  return /S-?ICD|S-?ECG|EMBLEM|SQ-?RX|A209|A219/i.test(t)?null:(dev||'機種不明');}
+// S-ICD以外のPDFを、患者PDF\_対象外 に移す（元の名前のまま）
+async function archiveNonSicd(file){if(!dirHandle||!file)return null;
+  try{const top=await dirHandle.getDirectoryHandle(PDF_DIR,{create:true}),od=await top.getDirectoryHandle('_対象外',{create:true});
+    const fh=await od.getFileHandle(safeName(file.name),{create:true}),w=await fh.createWritable();await w.write(await file.arrayBuffer());await w.close();return `${PDF_DIR}/_対象外/${safeName(file.name)}`;}catch(_){return null;}}
 const pdfKey=f=>f?`${f.name}|${f.size}|${f.lastModified}`:''; // 読み込んだPDF／最後に整理したPDF
 let reloadArchived=null; // タイムラインから「評価し直す」で読み込んだ時：すでに患者PDFにあるので保存し直さない
 async function archivePdf(id,obj,tag){
@@ -1276,7 +1289,7 @@ async function tlGo(i){
 async function tlLoad(idArg,quiet){
   if(!dirHandle)await ensureDir();if(!dirHandle){$('tlMsg').innerHTML='<span class="warn-t">データフォルダに接続できません。📁で選んでください。</span>';return;}
   const id=idArg||$('tlId').value.trim()||$('fId').value.trim();if(!id){$('tlMsg').innerHTML='<span class="warn-t">患者IDを入れてください。</span>';return;}
-  const st=await readBaseline(id);if(!st||!(st.reports||[]).length){$('tlMsg').innerHTML=`<span class="warn-t">ID ${escH(id)} の記録がありません。</span>`;$('tlBody').hidden=true;return;}
+  const st=await readBaseline(id);if(!st||!(st.reports||[]).length){tlReset(id,'記録がありません');return;}
   tl.id=id;tl.obj={name:st.name,device:st.device};tl.cache.clear();
   const lvOf=r=>{const h=(st.history||[]).filter(x=>x.date===r.date&&x.level!=null).pop();return h?h.level:null;};
   const hOf=r=>(st.history||[]).filter(x=>x.date===r.date&&x.level!=null).pop()||null;
@@ -1349,6 +1362,8 @@ document.addEventListener('click',async e=>{const b=e.target.closest('.tlReeval'
   await tlLoad(keep.id);await tlTop(keep.top);await tlGo(keep.idx);});
 // 評価が終わったら、その患者のタイムラインを自動で表示（たたんであれば中身だけ準備）
 function tlAuto(id){if(id)tlLoad(id,true).catch(()=>{});}
+// タイムラインを別の患者に切り替える時、前の患者の表示を残さない
+function tlReset(id,msg){tl.id=id||'';tl.items=[];tl.cache.clear();$('tlId').value=id||'';$('tlSum').textContent=id?`ID ${id}・${msg}`:'';$('tlMsg').textContent=id?`ID ${id}：${msg}`:'';$('tlBody').hidden=true;}
 try{const v=localStorage.getItem('pg_lat_tlopen');if(v)$('tlCard').open=v==='1';}catch(_){}
 $('tlCard').addEventListener('toggle',()=>{try{localStorage.setItem('pg_lat_tlopen',$('tlCard').open?'1':'0');}catch(_){}});
 async function tlThumbs(){ // サムネイルは後から順番に読み込む
@@ -1651,6 +1666,10 @@ async function pollWatch(){
       const prevRes=$('result').innerHTML,prevOv=$('overlayCard').hidden;
       $('result').innerHTML='';
       await loadPDF(f,{forceEval:true});
+      if(curNonSicd){ // S-ICD以外：_対象外 フォルダへ移して、通知は出さない
+        const to=await archiveNonSicd(f);let moved=to?'コピー：'+to:'';
+        if(to&&$('watchMove').checked){try{await watchDir.removeEntry(f.name);moved='→ '+to;}catch(_){}}
+        watchLog.unshift({t:new Date().toLocaleTimeString('ja-JP'),file:f.name,moved,id:$('fId').value,date:$('fDate').value,verdict:'S-ICD以外（対象外）',cause:curNonSicd,lv:0});renderWatchLog();continue;}
       const isEcg=curSigs.length>0;
       if(!isEcg){ // 波形のない書類（一緒に印刷した他のPDF）：IDが読めれば患者フォルダへ一緒に整理し、画面の結果は前の波形のものに戻す
         const id=$('fId').value.trim();if(id&&dirHandle)await archivePdf(id,{name:$('fName').value,date:$('fDate').value,device:$('fDev').value},'書類');
