@@ -251,6 +251,7 @@
       <input id="tlId" placeholder="空なら今の患者" class="inp" style="width:170px">
       <button class="primary" id="tlShow">🎞 表示</button>
       <span class="seg" title="表示のしかた"><button id="tlModeFull">📄 ページそのまま</button><button id="tlModeCrop">〰 波形の部分だけ</button></span>
+      <span class="seg" title="表示するPDF"><button id="tlFAll">すべて</button><button id="tlFSecg">〰 S-ECGだけ</button><button id="tlFEv">⚡ イベントだけ</button></span>
       <span class="hint" id="tlMsg">「患者PDF」に整理したPDFを、加工せずにそのまま表示し、日付順にめくって見られます。</span>
     </div>
     <div id="tlBody" hidden>
@@ -1235,6 +1236,12 @@ function tlOvA(){
   x.putImageData(img,0,0);
 }
 let ovT=0;$('tlOvA').oninput=()=>{clearTimeout(ovT);ovT=setTimeout(tlOvA,30);};
+// 表示するPDFの絞り込み：すべて／S-ECGだけ（イベントなし）／イベントだけ
+const tlIsEv=it=>!!(it.split||(!it.secg&&(it.events||[]).length));
+let tlFilt='all';try{tlFilt=localStorage.getItem('pg_lat_tlfilt')||'all';}catch(_){}
+function tlFiltBtns(){$('tlFAll').classList.toggle('on',tlFilt==='all');$('tlFSecg').classList.toggle('on',tlFilt==='secg');$('tlFEv').classList.toggle('on',tlFilt==='ev');}
+tlFiltBtns();
+for(const [b,v] of [['tlFAll','all'],['tlFSecg','secg'],['tlFEv','ev']])$(b).onclick=()=>{tlFilt=v;try{localStorage.setItem('pg_lat_tlfilt',v);}catch(_){}tlFiltBtns();if(tl.id)tlLoad(tl.id);};
 let tlFull=true;try{tlFull=localStorage.getItem('pg_lat_tlmode')!=='crop';}catch(_){}
 function tlModeBtns(){$('tlModeFull').classList.toggle('on',tlFull);$('tlModeCrop').classList.toggle('on',!tlFull);}
 tlModeBtns();
@@ -1349,14 +1356,15 @@ async function tlLoad(idArg,quiet){
   const dk=d=>{const m=String(d||'').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})(?:\D+(\d{1,2}):(\d{2}))?/);return m?m[1]+m[2].padStart(2,'0')+m[3].padStart(2,'0')+(m[4]||'00').padStart(2,'0')+(m[5]||'00'):'';};
   items.forEach(it=>{const ev=(it.events||[])[0];it.when=it.secg||(ev?ev.dt:'');it.sk=dk(it.when)||it.key||'';}); // 記録された日時（S-ECG記録 → イベント）。送信日は使わない
   items.sort((a,b)=>a.sk===b.sk?((a.file||'')<(b.file||'')?-1:1):(a.sk<b.sk?-1:1));
-  tl.items=items;
+  tl.all=items;tl.items=items.filter(it=>tlFilt==='all'||(tlIsEv(it)?tlFilt==='ev':tlFilt==='secg'));
+  tl.fb=!tl.items.length&&items.length>0;if(tl.fb)tl.items=items; // 該当なしの時は全部を出す
   tl.base=st.baseline?{...st.baseline,...(items.find(it=>it.pdf&&st.baseline.pdf&&it.pdf===st.baseline.pdf)||{})}:items[0];
   // 判定マークは保存した時のものではなく、今の基準とその場で比べ直したもの（基準を変えても画面の評価とそろう）
   const bf=tl.base&&tl.base.feat;
   for(const it of items){const l=bf?featLevel(bf,it.feat):null;if(!l)continue;const self=it.pdf&&tl.base.pdf===it.pdf;
     it.lv=self?0:l.level;it.h=self?null:{ref:tl.base.secg||tl.base.date,mode:'base',causes:l.causes};}
   const nPdf=items.filter(it=>it.file).length;
-  $('tlMsg').textContent=`ID ${id}：PDF ${nPdf}枚・評価の記録 ${reps.length}日分`;$('tlSum').textContent=`ID ${id}・${items.length}枚`;$('tlBody').hidden=false;$('tlId').value=id;
+  $('tlMsg').textContent=`ID ${id}：PDF ${nPdf}枚・評価の記録 ${reps.length}日分`+(tlFilt==='all'?'':tl.fb?`（${tlFilt==='secg'?'S-ECG':'イベント'}のPDFが無いので、すべて表示）`:`（${tlFilt==='secg'?'S-ECGだけ':'イベントだけ'} ${tl.items.length}件を表示）`);$('tlSum').textContent=`ID ${id}・${items.length}枚`;$('tlBody').hidden=false;$('tlId').value=id;
   $('tlSlider').max=tl.items.length-1;
   $('tlStrip').innerHTML=tl.items.map((it,k)=>`<button class="tlTh" data-k="${k}" style="flex:0 0 auto;padding:4px;width:150px;text-align:left"><div style="font-size:11px;line-height:1.35">${tlThumbLabel(it)} ${it.lv==null?'':['✅','🟡','⚠️'][it.lv]}</div><div class="tlImg" style="height:46px;background:#fff;border-radius:4px;overflow:hidden"></div></button>`).join('');
   $('tlTSlider').max=tl.items.length-1;
