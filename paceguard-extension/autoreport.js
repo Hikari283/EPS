@@ -4,7 +4,7 @@
 // 進み具合はタブごとの sessionStorage に持つ（画面が切り替わっても続きから動く）。設定でオフなら何もしない。
 (() => {
   if (window.__pgAuto) return; window.__pgAuto = true;
-  const KEY = 'pgAutoRun', STEP_MAX = 90000, MAX_EVENTS = 50;
+  const KEY = 'pgAutoRun', MAX_EVENTS = 50;
   const LBL = {
     menu: 'レポートメニュー', create: 'レポートを作成',
     summary: 'Quick Notesレポート/S-ICDサマリレポート', secg: '最新のEGM/S-ECG表示レポート', secgMark: 'S-ECG表示レポート',
@@ -74,53 +74,73 @@
   }
   async function start(byHand) {
     const pid = patientId();
-    setRun({ step: 'menu', pid, t: Date.now(), byHand: !!byHand, made: 0 });
+    setRun({ step: 'menu', pid, t0: Date.now(), byHand: !!byHand, made: 0 });
     chrome.runtime.sendMessage({ type: 'autoWindow', on: true }).catch(() => {});
     if (pid) chrome.storage.local.get({ autoLastRun: {} }).then(c => { c.autoLastRun[pid] = new Date().toLocaleDateString('ja-JP'); chrome.storage.local.set({ autoLastRun: c.autoLastRun }); });
     tick();
   }
 
-  // PDFが保存されたら background から知らせが来る
-  let savedAt = 0;
-  chrome.runtime.onMessage.addListener(m => { if (m && m.type === 'pgSaved') savedAt = Date.now(); });
-  async function waitSaved(since, ms) { const end = Date.now() + ms; while (Date.now() < end) { if (savedAt > since) return true; await sleep(500); } return false; }
+  // PDFが保存されたかは、background が記録する時刻（lastSavedAt）で確かめる。画面が切り替わっても続きから判断できる
+  const lastSaved = async () => (await chrome.storage.local.get({ lastSavedAt: 0 })).lastSavedAt;
+  const WAIT_MENU = 180000, WAIT_EVENT = 300000;
 
   let busy = false;
   async function tick() {
     const run = getRun(); if (!run || busy) return;
-    if (Date.now() - run.t > STEP_MAX * 6) return stop('時間がかかりすぎたので止めました', 1);
+    if (Date.now() - run.t0 > 20 * 60000) return stop('時間がかかりすぎたので止めました', 1);
     busy = true;
     try {
+      // 作成ボタンを押したあと：PDFが保存されるのを待つ（経過秒を表示）
+      if (run.step === 'waitMenuPdf' || run.step === 'waitEventPdf') {
+        const ev = run.step === 'waitEventPdf', sec = Math.round((Date.now() - run.since) / 1000);
+        if ((await lastSaved()) > run.since) {
+          if (ev) {
+            const seenAll = (await chrome.storage.local.get({ autoSeen: {} })).autoSeen, key = run.pid || 'unknown';
+            seenAll[key] = [...new Set([...(seenAll[key] || []), ...(run.todo || [])])]; await chrome.storage.local.set({ autoSeen: seenAll });
+            setRun({ ...run, step: 'events', made: run.made + 1, evDone: (run.evDone || 0) + (run.todo || []).length, todo: null });
+            ui(`② イベント ${(run.todo || []).length} 件を保存しました（${sec}秒）。残りを確認します…`);
+          } else {
+            setRun({ ...run, step: 'events', made: run.made + 1 });
+            ui(`① 保存しました（${sec}秒）。イベントを確認します…`);
+          }
+          return;
+        }
+        if (Date.now() - run.since > (ev ? WAIT_EVENT : WAIT_MENU)) {
+          if (ev) return stop(`イベントのPDFが ${sec} 秒たっても保存されませんでした（PDF ${run.made} 件）`, 1);
+          setRun({ ...run, step: 'events' }); ui('① PDFの保存を確認できませんでした。イベントへ進みます…', 1);
+          return;
+        }
+        ui(ev ? `② イベント ${(run.todo || []).length} 件のレポートを作成中…（${sec}秒）` : `① サマリとS-ECGのレポートを作成中…（${sec}秒）`);
+        return;
+      }
       // ① レポートメニュー画面：S-ICDかを確かめて、2つにチェック → レポートを作成
       if (findCheckbox(LBL.secg) || findCheckbox(LBL.summary)) {
-        if (run.step !== 'menu' && run.step !== 'menuCheck') return;
+        if (run.step === 'events') { // サマリ作成後もこの画面のまま → 患者画面へ戻る
+          if (!run.backAt || Date.now() - run.backAt > 8000) { setRun({ ...run, backAt: Date.now() }); history.back(); }
+          return;
+        }
+        if (run.step !== 'menu') return;
         const sum = findCheckbox(LBL.summary), sec = findCheckbox(LBL.secg);
         if (!sum || !sec || sum.disabled || sec.disabled) return stop('S-ICD以外の患者のため、何もしませんでした');
         for (const cb of document.querySelectorAll('input[type=checkbox]')) if (cb !== sum && cb !== sec) setChecked(cb, false);
         setChecked(sum, true); setChecked(sec, true); await sleep(300);
         const go = findClickable(LBL.create); if (!go) return stop('「レポートを作成」ボタンが見つかりません', 2);
-        ui('① サマリとS-ECGのレポートを作成中…');
-        const since = Date.now(); setRun({ ...run, step: 'waitMenuPdf', t: Date.now() });
-        go.click();
-        const ok = await waitSaved(since, STEP_MAX);
-        const r2 = getRun(); if (!r2) return;
-        setRun({ ...r2, step: 'events', made: r2.made + (ok ? 1 : 0), t: Date.now() });
-        ui(ok ? '① 保存しました。イベントを確認します…' : '① PDFの保存を確認できませんでした。イベントへ進みます…', ok ? 0 : 1);
-        await sleep(800);
-        if (!findClickable(LBL.evTab)) history.back();
+        setRun({ ...run, step: 'waitMenuPdf', since: Date.now() });
+        ui('① サマリとS-ECGのレポートを作成中…'); go.click();
         return;
       }
       // ② イベント一覧（不整脈ログブック）：表示範囲を「植込み」に → まだのイベントに☑ → 作成
       if (run.step === 'events' && norm(bodyText()).includes(norm(LBL.logbook)) && document.querySelector('select')) {
         const sel = [...document.querySelectorAll('select')].find(s => [...s.options].some(o => norm(o.text) === norm(LBL.range)));
         if (sel && norm(sel.options[sel.selectedIndex] && sel.options[sel.selectedIndex].text) !== norm(LBL.range)) {
+          if (run.rangeTried && Date.now() - run.rangeTried < 15000) return; // 表示が切り替わるのを待つ
           if (run.rangeTried) return stop('表示範囲を「植込み」に変えられませんでした', 2);
-          setRun({ ...run, rangeTried: true, t: Date.now() });
+          setRun({ ...run, rangeTried: Date.now() });
           sel.value = [...sel.options].find(o => norm(o.text) === norm(LBL.range)).value;
           sel.dispatchEvent(new Event('change', { bubbles: true }));
-          ui('② 表示範囲を「植込み」にしました…'); await sleep(2500); busy = false; return tick();
+          ui('② 表示範囲を「植込み」にしました…'); return;
         }
-        const seenAll = (await chrome.storage.local.get({ autoSeen: {} })).autoSeen, key = run.pid || 'unknown', seen = new Set(seenAll[key] || []);
+        const seenAll = (await chrome.storage.local.get({ autoSeen: {} })).autoSeen, seen = new Set(seenAll[run.pid || 'unknown'] || []);
         const rows = [];
         for (const tr of document.querySelectorAll('tr')) {
           const cb = tr.querySelector('input[type=checkbox]'); if (!cb || cb.disabled) continue;
@@ -129,20 +149,13 @@
           rows.push({ cb, id: no + ' ' + norm(dt) });
         }
         const todo = rows.filter(r => !seen.has(r.id)).slice(0, MAX_EVENTS);
-        if (!todo.length) return stop(`完了しました（PDF ${run.made} 件）\n新しいイベントはありません`);
+        if (!todo.length) return stop(run.evDone ? `完了しました（PDF ${run.made} 件・イベント ${run.evDone} 件）` : `完了しました（PDF ${run.made} 件）\n新しいイベントはありません`);
         for (const r of rows) setChecked(r.cb, todo.includes(r));
         await sleep(300);
         const go = findClickable(LBL.evCreate); if (!go || go.disabled) return stop('「選択したイベントのレポートを作成」が押せません', 2);
-        ui(`② 新しいイベント ${todo.length} 件のレポートを作成中…`);
-        const since = Date.now(); setRun({ ...run, step: 'waitEventPdf', t: Date.now() });
-        go.click();
-        const ok = await waitSaved(since, STEP_MAX * 2);
-        if (ok) { for (const r of todo) seen.add(r.id); seenAll[key] = [...seen]; await chrome.storage.local.set({ autoSeen: seenAll }); }
-        const r2 = getRun(); if (!r2) return;
-        if (!ok) return stop(`イベントのPDFの保存を確認できませんでした（PDF ${r2.made} 件）`, 1);
-        const rest = rows.length - rows.filter(r => seen.has(r.id)).length;
-        if (rest > 0) { setRun({ ...r2, step: 'events', made: r2.made + 1, t: Date.now() }); ui(`残り ${rest} 件を続けて作成します…`); await sleep(1500); busy = false; return tick(); }
-        return stop(`完了しました（PDF ${r2.made + 1} 件・イベント ${todo.length} 件）`);
+        setRun({ ...run, step: 'waitEventPdf', since: Date.now(), todo: todo.map(r => r.id) });
+        ui(`② イベント ${todo.length} 件のレポートを作成中…`); go.click();
+        return;
       }
       // 患者画面：手順に応じてボタンやタブを押す
       if (run.step === 'menu') { const b = findClickable(LBL.menu); if (b) { ui('① レポートメニューを開きます…'); b.click(); } return; }
@@ -167,6 +180,6 @@
   function hookPrint(on) { document.documentElement.dataset.pgAutoReport = on ? '1' : ''; }
 
   let tries = 0;
-  const loop = setInterval(() => { tries++; if (getRun()) tick(); else if (!panel && tries < 20) boot(); if (tries > 2000) clearInterval(loop); }, 1500);
+  const loop = setInterval(() => { tries++; if (getRun()) tick(); else if (!panel && tries < 20) boot(); if (tries > 5000) clearInterval(loop); }, 1000);
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();

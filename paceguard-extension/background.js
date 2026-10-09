@@ -20,7 +20,7 @@ async function save(opts, key) {
     // 件数：今日の件数（日付が変わると0から）と、これまでの合計
     const today = new Date().toLocaleDateString('ja-JP'), st = await chrome.storage.local.get({ todayDate: '', todayCount: 0 });
     const todayCount = (st.todayDate === today ? st.todayCount : 0) + 1, count = (cfg.count || 0) + 1;
-    await chrome.storage.local.set({ count, todayDate: today, todayCount, last: new Date().toLocaleString('ja-JP') });
+    await chrome.storage.local.set({ count, todayDate: today, todayCount, last: new Date().toLocaleString('ja-JP'), lastSavedAt: Date.now() });
     chrome.action.setBadgeBackgroundColor({ color: '#2563eb' }); chrome.action.setBadgeText({ text: String(todayCount) }); // 判定が出たら OK／!／!! に変わる
     try { for (const t of await chrome.tabs.query({ url: cfg.hosts.flatMap(h => [`https://${h}/*`, `https://*.${h}/*`]) })) chrome.tabs.sendMessage(t.id, { type: 'pgSaved' }).catch(() => {}); } catch (_) {}
   } catch (e) { chrome.storage.local.set({ lastError: String(e && e.message || e) }); }
