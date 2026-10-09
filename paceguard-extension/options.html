@@ -11,6 +11,15 @@ button{padding:4px 10px;border:1px solid #94a3b8;border-radius:6px;background:#f
 <label><input type="checkbox" id="enabled"> LATITUDEで開いたPDFを自動で保存する</label>
 <label><input type="checkbox" id="autoArrange"> 開いた時に左右に並べる（左：ツール／右：LATITUDE）</label>
 <div><button id="arrangeNow">🪟 今すぐ左右に並べる</button> <span id="arrMsg" class="hint"></span></div>
+<fieldset style="border:1px solid #fcd34d;background:#fffbeb;border-radius:8px;padding:4px 10px;margin:8px 0">
+<legend style="font-weight:bold">🧪 自動レポート作成（試験中）</legend>
+<label><input type="checkbox" id="autoReport"> 使う（患者画面に「📄 自動作成」ボタンを出す）</label>
+<label><input type="checkbox" id="autoStart"> 患者を開いたら自動で始める（1人1日1回）</label>
+<label><input type="checkbox" id="saveManual"> 手で作ったPDFも保存する</label>
+<div class="hint">「使う」をオフにすれば、今までと同じ動きに戻ります。</div>
+<div><button id="resetSeen">イベントの記録を消す</button> <span id="seenMsg" class="hint"></span></div>
+<div class="hint" id="autoLast"></div>
+</fieldset>
 <label>保存先：ダウンロード\<input type="text" id="folder"></label>
 <div class="hint">PaceGuardの「👀 自動比較を始める」では、このフォルダ（ダウンロードの中）を選んでください。</div>
 <label>対象サイト：<input type="text" id="hosts"></label>

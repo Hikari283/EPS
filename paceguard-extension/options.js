@@ -21,5 +21,17 @@ chrome.storage.local.get({ autoArrange: true }).then(c => { $('autoArrange').che
 $('autoArrange').onchange = () => chrome.storage.local.set({ autoArrange: $('autoArrange').checked });
 $('arrangeNow').onclick = async () => { const r = await chrome.runtime.sendMessage({ type: 'arrange' }); $('arrMsg').textContent = r === 'OK' ? '並べました' : (r || ''); };
 
+// 自動レポート（試験中）
+chrome.storage.local.get({ autoReport: false, autoStart: false, saveManual: false, autoSeen: {}, autoLast: '' }).then(c => {
+  $('autoReport').checked = c.autoReport; $('autoStart').checked = c.autoStart; $('saveManual').checked = c.saveManual;
+  const n = Object.keys(c.autoSeen).length; $('seenMsg').textContent = n ? `記録済みの患者 ${n} 人` : '';
+  $('autoLast').textContent = c.autoLast ? '最後の自動作成：' + c.autoLast : '';
+});
+for (const k of ['autoReport', 'autoStart', 'saveManual']) $(k).onchange = () => chrome.storage.local.set({ [k]: $(k).checked });
+$('resetSeen').onclick = async () => {
+  if (!confirm('どのイベントを保存したかの記録を消します。次回は全部のイベントを作り直します。よろしいですか？')) return;
+  await chrome.storage.local.set({ autoSeen: {}, autoLastRun: {} }); $('seenMsg').textContent = '消しました';
+};
+
 document.addEventListener('click', async e => { if (e.target.id !== 'resetCnt') return;
   await chrome.storage.local.set({ count: 0, todayCount: 0 }); chrome.action.setBadgeText({ text: '' }); load(); });

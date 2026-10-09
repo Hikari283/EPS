@@ -11,6 +11,9 @@ async function save(opts, key) {
   for (const [k, t] of recent) if (now - t > 20000) recent.delete(k);
   if (recent.has(key)) return; recent.set(key, now);
   const cfg = await getCfg(); if (!cfg.enabled) return;
+  // 自動レポート（試験中）を使っていて「手動のPDFは保存しない」設定なら、自動作成中のPDFだけ保存する
+  const ac = await chrome.storage.local.get({ autoReport: false, saveManual: false });
+  if (ac.autoReport && !ac.saveManual) { const s = await chrome.storage.session.get({ autoUntil: 0 }); if (Date.now() > s.autoUntil) return; }
   const filename = `${safe(cfg.folder) || 'LATITUDE'}/LATITUDE_${stamp()}_${Math.random().toString(36).slice(2, 6)}.pdf`;
   try {
     await chrome.downloads.download({ ...opts, filename, conflictAction: 'uniquify', saveAs: false });
@@ -19,6 +22,7 @@ async function save(opts, key) {
     const todayCount = (st.todayDate === today ? st.todayCount : 0) + 1, count = (cfg.count || 0) + 1;
     await chrome.storage.local.set({ count, todayDate: today, todayCount, last: new Date().toLocaleString('ja-JP') });
     chrome.action.setBadgeBackgroundColor({ color: '#2563eb' }); chrome.action.setBadgeText({ text: String(todayCount) }); // 判定が出たら OK／!／!! に変わる
+    try { for (const t of await chrome.tabs.query({ url: cfg.hosts.flatMap(h => [`https://${h}/*`, `https://*.${h}/*`]) })) chrome.tabs.sendMessage(t.id, { type: 'pgSaved' }).catch(() => {}); } catch (_) {}
   } catch (e) { chrome.storage.local.set({ lastError: String(e && e.message || e) }); }
 }
 
@@ -121,4 +125,11 @@ chrome.runtime.onMessage.addListener((m, sender, reply) => {
     })();
   }
   if (m.type === 'arrange') { arrange().then(r => reply && reply(r)); return true; }
+});
+
+// ⑤ 自動レポート（試験中）：作成中の時間帯を覚える（この間に届いたPDFだけを「自動」として保存）
+chrome.runtime.onMessage.addListener(m => {
+  if (!m) return;
+  if (m.type === 'autoWindow') chrome.storage.session.set({ autoUntil: m.on ? Date.now() + 10 * 60000 : Date.now() + 15000 });
+  if (m.type === 'autoLog') chrome.storage.local.set({ autoLast: new Date().toLocaleString('ja-JP') + '　' + String(m.msg || '').slice(0, 200) });
 });
