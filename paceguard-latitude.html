@@ -283,7 +283,10 @@
       </div>
       <div id="tlOverlay" hidden style="position:relative;margin-top:8px;background:#fff;border:1px solid #cbd5e1;border-radius:6px;overflow:hidden"></div>
       <div class="hint" style="margin-top:8px">全部の日付（クリックで下の波形をその日に。キーボードの ← → で下、Shift＋← → で上をめくれます）</div>
-      <div id="tlStrip" style="display:flex;gap:6px;overflow-x:auto;padding:6px 0"></div>
+      <div style="display:flex;gap:8px;align-items:stretch">
+        <button id="tlBaseTh" class="tlTh" title="基準の波形（押すと上に基準を表示）" style="flex:0 0 auto;padding:4px;width:150px;text-align:left;margin:6px 0;border:2px solid var(--accent)!important;box-shadow:4px 0 0 -1px var(--line)" hidden><div style="font-size:11px;line-height:1.35"></div><div class="tlImg" style="height:46px;background:#fff;border-radius:4px;overflow:hidden"></div></button>
+        <div id="tlStrip" style="display:flex;gap:6px;overflow-x:auto;padding:6px 0;flex:1;min-width:0"></div>
+      </div>
     </div>
   </details>
 
@@ -1366,7 +1369,8 @@ async function tlLoad(idArg,quiet){
   const nPdf=items.filter(it=>it.file).length;
   $('tlMsg').textContent=`ID ${id}：PDF ${nPdf}枚・評価の記録 ${reps.length}日分`+(tlFilt==='all'?'':tl.fb?`（${tlFilt==='secg'?'S-ECG':'イベント'}のPDFが無いので、すべて表示）`:`（${tlFilt==='secg'?'S-ECGだけ':'イベントだけ'} ${tl.items.length}件を表示）`);$('tlSum').textContent=`ID ${id}・${items.length}枚`;$('tlBody').hidden=false;$('tlId').value=id;
   $('tlSlider').max=tl.items.length-1;
-  $('tlStrip').innerHTML=tl.items.map((it,k)=>`<button class="tlTh" data-k="${k}" style="flex:0 0 auto;padding:4px;width:150px;text-align:left"><div style="font-size:11px;line-height:1.35">${tlThumbLabel(it)} ${it.lv==null?'':['✅','🟡','⚠️'][it.lv]}</div><div class="tlImg" style="height:46px;background:#fff;border-radius:4px;overflow:hidden"></div></button>`).join('');
+  const isBase=it=>!!(tl.base&&it.pdf&&tl.base.pdf===it.pdf);
+  $('tlStrip').innerHTML=tl.items.map((it,k)=>`<button class="tlTh" data-k="${k}" style="flex:0 0 auto;padding:4px;width:150px;text-align:left${isBase(it)?';border:2px solid var(--accent)!important':''}"><div style="font-size:11px;line-height:1.35">${isBase(it)?'<b style="color:var(--accent)">📌基準</b> ':''}${tlThumbLabel(it)} ${it.lv==null?'':['✅','🟡','⚠️'][it.lv]}</div><div class="tlImg" style="height:46px;background:#fff;border-radius:4px;overflow:hidden"></div></button>`).join('');
   $('tlTSlider').max=tl.items.length-1;
   await tlTop(-1);
   await tlGo(tl.items.length-1);
@@ -1409,7 +1413,10 @@ function tlReset(id,msg){tl.id=id||'';tl.items=[];tl.cache.clear();$('tlId').val
 try{const v=localStorage.getItem('pg_lat_tlopen');if(v)$('tlCard').open=v==='1';}catch(_){}
 $('tlCard').addEventListener('toggle',()=>{try{localStorage.setItem('pg_lat_tlopen',$('tlCard').open?'1':'0');}catch(_){}});
 async function tlThumbs(){ // サムネイルは後から順番に読み込む
-  const id=tl.id,mode=tlFull;
+  const id=tl.id,mode=tlFull,bt=$('tlBaseTh');
+  // 一番左に固定：基準の波形（時系列の中にも📌付きで入る）
+  bt.hidden=!tl.base;if(tl.base){bt.querySelector('div').innerHTML=`<b style="color:var(--accent)">📌 基準</b><br>${tlThumbLabel(tl.base)}`;bt.querySelector('.tlImg').innerHTML='';
+    tlImage(tl.base).then(url=>{if(url&&tl.id===id)bt.querySelector('.tlImg').innerHTML=`<img src="${url}" style="width:100%;height:100%;object-fit:cover;object-position:left top">`;});}
   for(let k=0;k<tl.items.length;k++){if(tl.id!==id||tlFull!==mode)return;const url=await tlImage(tl.items[k]);const c=$('tlStrip').children[k];if(c&&url)c.querySelector('.tlImg').innerHTML=`<img src="${url}" style="width:100%;height:100%;object-fit:cover;object-position:left top">`;}
 }
 // 上の波形：基準（-1）か、スライドバーで選んだ日付
@@ -1426,7 +1433,7 @@ $('tlTNext').onclick=()=>tlTop((tl.top<0?+$('tlTSlider').value:tl.top)+1);
 $('tlTBase').onclick=()=>tlTop(-1);
 $('tlSlider').oninput=e=>tlGo(+e.target.value);
 $('tlPrev').onclick=()=>tlGo(tl.idx-1);$('tlNext').onclick=()=>tlGo(tl.idx+1);
-document.addEventListener('click',e=>{const b=e.target.closest('.tlTh');if(b)tlGo(+b.dataset.k);});
+document.addEventListener('click',e=>{const b=e.target.closest('.tlTh');if(!b)return;if(b.id==='tlBaseTh'){tlTop(-1);$('tlBase').scrollIntoView({block:'nearest'});}else tlGo(+b.dataset.k);});
 document.addEventListener('keydown',e=>{if($('tlBody').hidden||/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))return; // スライドバー自体は矢印キーで動く
   const d=e.key==='ArrowLeft'?-1:e.key==='ArrowRight'?1:0;if(!d)return;e.preventDefault();
   if(e.shiftKey)tlTop((tl.top<0?+$('tlTSlider').value:tl.top)+d);else tlGo(tl.idx+d);});
