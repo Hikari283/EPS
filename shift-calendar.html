@@ -75,6 +75,13 @@ td input[type=text]{width:7em} td input[type=time]{width:6.6em}
 .glinks a{color:var(--accent)}
 details summary{cursor:pointer;color:var(--accent);font-weight:500}
 .hint{font-size:.8rem;color:var(--muted)}
+.readonly .edit-only{display:none!important}
+.readonly .cell{cursor:default}
+.today-card{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.today-card .t-lbl{font-size:.78rem;color:var(--muted);letter-spacing:.06em}
+.today-card .t-date{font-size:.85rem;font-variant-numeric:tabular-nums}
+.today-card .t-code{font-family:var(--font-code);font-weight:600;font-size:1.6rem;padding:4px 12px;border-radius:6px;display:inline-block;min-width:2.2em;text-align:center;background:var(--bg);border:1px solid var(--line);margin-top:4px}
+.today-card .t-sub{font-size:.85rem;color:var(--muted);margin-top:4px}
 @media (max-width:480px){.cell{min-height:60px;padding:3px}.cell .c{font-size:.88rem}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
@@ -85,6 +92,8 @@ details summary{cursor:pointer;color:var(--accent);font-weight:500}
     <p class="sub">臨床工学科 勤務表 → スマホのカレンダーへ</p>
   </header>
 
+  <section class="panel today-card" id="todayCard" aria-live="polite"></section>
+
   <section class="panel">
     <div class="monthbar">
       <button id="prevM" aria-label="前の月">‹</button>
@@ -94,7 +103,8 @@ details summary{cursor:pointer;color:var(--accent);font-weight:500}
     <p class="hint" id="srcNote"></p>
     <div class="cal" id="cal" style="margin-top:8px"></div>
     <div class="summary" id="summary" style="margin-top:10px"></div>
-    <p class="hint">日付をタップすると勤務記号とメモを修正できます。</p>
+    <p class="hint edit-only">日付をタップすると勤務記号とメモを修正できます。</p>
+    <p class="hint" id="syncNote"></p>
   </section>
 
   <section class="panel">
@@ -129,7 +139,7 @@ details summary{cursor:pointer;color:var(--accent);font-weight:500}
     </details>
   </section>
 
-  <section class="panel" id="myRowPanel">
+  <section class="panel edit-only" id="myRowPanel">
     <h2>自分の行</h2>
     <div class="row">
       <span>勤務表の上から</span>
@@ -146,7 +156,7 @@ details summary{cursor:pointer;color:var(--accent);font-weight:500}
     <p class="status" id="rowStatus"></p>
   </section>
 
-  <section class="panel">
+  <section class="panel edit-only" id="readPanel">
     <h2>新しい月を読み込む</h2>
     <p class="hint" id="rowSummary"></p>
     <div class="row" id="photoRow">
@@ -167,7 +177,7 @@ details summary{cursor:pointer;color:var(--accent);font-weight:500}
     </details>
   </section>
 
-  <section class="panel">
+  <section class="panel edit-only" id="codePanel">
     <h2>勤務記号の設定</h2>
     <p class="hint">記号ごとに予定名と時間を決めます。終了が開始より前なら翌日終了（夜勤など）として扱います。</p>
     <div class="tablewrap">
@@ -231,13 +241,26 @@ function load(){
   if(!s||typeof s!=="object") s={};
   s.months = Object.assign({}, SEED, s.months||{});
   s.codes = Object.assign({}, DEFAULT_CODES, s.codes||{});
-  s.current = s.current || "2026-10";
+  const nd=new Date(); s.current = `${nd.getFullYear()}-${String(nd.getMonth()+1).padStart(2,"0")}`;
   s.myRow = Number.isInteger(s.myRow) && s.myRow>0 ? s.myRow : 15;
   if(typeof s.countBlank!=="boolean") s.countBlank = true;
   return s;
 }
 let state = load();
 function save(){ try{ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }catch(e){} }
+// Cloud sync (db capability): months/<YYYY-MM> and settings/main. Only the owner writes.
+let db=null, canWrite=true;
+const writeChains={};
+function cloudWrite(path, data){
+  if(!db||!canWrite) return;
+  const prev=writeChains[path]||Promise.resolve();
+  writeChains[path]=prev.then(()=>db.doc(path).set(data)).catch(e=>{
+    $("syncNote").textContent = e&&e.code==="quota_exceeded" ? "保存容量がいっぱいで、クラウドに保存できませんでした。" : "クラウドへの保存に失敗しました。通信状況を確認して、もう一度変更してください。";
+  });
+}
+function saveMonth(ym){ save(); const mo=state.months[ym]; if(mo) cloudWrite(`months/${ym}`, {codes:mo.codes, notes:mo.notes, source:mo.source||""}); }
+let settingsTimer=null;
+function saveSettings(){ save(); clearTimeout(settingsTimer); settingsTimer=setTimeout(()=>cloudWrite("settings/main",{codes:state.codes,myRow:state.myRow,countBlank:state.countBlank}),800); }
 
 const $ = id => document.getElementById(id);
 const pad = n => String(n).padStart(2,"0");
@@ -281,7 +304,7 @@ function render(){
     const cc=document.createElement("span"); cc.className="c "+chipClass(code); cc.textContent=code||"–";
     const nn=document.createElement("span"); nn.className="n"; nn.textContent=note;
     b.append(dd,cc,nn);
-    b.onclick=()=>openSheet(d);
+    b.onclick=()=>{ if(canWrite) openSheet(d); };
     cal.appendChild(b);
   }
   // summary
@@ -290,7 +313,31 @@ function render(){
     const cnt={}; mo.codes.forEach(c=>{ if(c) cnt[c]=(cnt[c]||0)+1; });
     Object.keys(cnt).sort().forEach(c=>{ const s=document.createElement("span"); s.innerHTML=`<span class="chip ${chipClass(c)}"></span> ×${cnt[c]}`; s.firstChild.textContent=c; sum.appendChild(s); });
   }
-  renderCodes(); renderLinks();
+  renderCodes(); renderLinks(); renderToday();
+}
+function dayInfo(dt){
+  const ym=`${dt.getFullYear()}-${pad(dt.getMonth()+1)}`, mo=state.months[ym], i=dt.getDate()-1;
+  return {code: mo?(mo.codes[i]||""):"", note: mo?(mo.notes[i]||""):"", has: !!mo};
+}
+function renderToday(){
+  const box=$("todayCard"); box.textContent="";
+  const t=new Date(); t.setHours(0,0,0,0);
+  [["今日",0],["明日",1]].forEach(([lbl,off])=>{
+    const dt=new Date(t); dt.setDate(t.getDate()+off);
+    const info=dayInfo(dt);
+    const div=document.createElement("div");
+    const L=document.createElement("div"); L.className="t-lbl"; L.textContent=lbl;
+    const D=document.createElement("div"); D.className="t-date"; D.textContent=`${dt.getMonth()+1}月${dt.getDate()}日（${DOW[dt.getDay()]}）`;
+    const C=document.createElement("div"); C.className="t-code "+chipClass(info.code); C.textContent=info.code||"–";
+    const S=document.createElement("div"); S.className="t-sub";
+    if(!info.has) S.textContent="この月のデータなし";
+    else if(info.code){ const c=state.codes[info.code]; const parts=[];
+      if(c&&c.label&&c.label!==info.code) parts.push(c.label);
+      if(c&&!c.allDay&&c.start&&c.end) parts.push(`${c.start}〜${c.end}`);
+      if(info.note) parts.push(info.note);
+      S.textContent=parts.join("・"); }
+    div.append(L,D,C,S); box.appendChild(div);
+  });
 }
 $("prevM").onclick=()=>shiftMonth(-1);
 $("nextM").onclick=()=>shiftMonth(1);
@@ -320,7 +367,7 @@ $("sheetSave").onclick=()=>{
   if(!mo){ mo=state.months[state.current]={codes:Array(n).fill(""),notes:Array(n).fill(""),source:"手入力"}; }
   mo.codes[editDay-1]=$("sheetCode").value.trim();
   mo.notes[editDay-1]=$("sheetNote").value.trim();
-  save(); closeSheet(); render();
+  saveMonth(state.current); closeSheet(); render();
 };
 document.addEventListener("keydown",e=>{ if(e.key==="Escape" && !$("sheetBg").hidden) closeSheet(); });
 
@@ -346,15 +393,15 @@ function renderCodes(){
     const [l,r,a,s,e]=tr.querySelectorAll("input");
     l.value=c.label; r.checked=!c.skip; a.checked=c.allDay; s.value=c.start||""; e.value=c.end||"";
     s.disabled=e.disabled=c.allDay;
-    l.oninput=()=>{c.label=l.value; save(); renderLinks();};
-    r.onchange=()=>{c.skip=!r.checked; save(); renderLinks();};
-    a.onchange=()=>{c.allDay=a.checked; if(!a.checked&&!c.start){c.start="08:30";c.end="17:15";s.value=c.start;e.value=c.end;} s.disabled=e.disabled=c.allDay; save(); renderLinks();};
-    s.onchange=()=>{c.start=s.value; save(); renderLinks();};
-    e.onchange=()=>{c.end=e.value; save(); renderLinks();};
+    l.oninput=()=>{c.label=l.value; saveSettings(); renderLinks();};
+    r.onchange=()=>{c.skip=!r.checked; saveSettings(); renderLinks();};
+    a.onchange=()=>{c.allDay=a.checked; if(!a.checked&&!c.start){c.start="08:30";c.end="17:15";s.value=c.start;e.value=c.end;} s.disabled=e.disabled=c.allDay; saveSettings(); renderLinks();};
+    s.onchange=()=>{c.start=s.value; saveSettings(); renderLinks();};
+    e.onchange=()=>{c.end=e.value; saveSettings(); renderLinks();};
     tb.appendChild(tr);
   });
 }
-$("btnAddCode").onclick=()=>{ const v=$("newCode").value.trim(); if(!v) return; codeCfg(v); $("newCode").value=""; save(); renderCodes(); };
+$("btnAddCode").onclick=()=>{ const v=$("newCode").value.trim(); if(!v) return; codeCfg(v); $("newCode").value=""; saveSettings(); renderCodes(); };
 
 /* ---------- events ---------- */
 function events(){
@@ -473,7 +520,7 @@ $("btnTT").onclick=async()=>{
 
 /* ---------- export ---------- */
 let downloads=null, sample=null;
-function setStatus(id,msg,err){ const e=$(id); e.textContent=msg; e.classList.toggle("err",!!err); }
+function setStatus(id,msg,err){ const e=$(id); if(!e) return; e.textContent=msg; e.classList.toggle("err",!!err); }
 async function offerFile(filename, data, mime){
   if(!events().length){ setStatus("exportStatus","登録する予定がありません。",true); return; }
   if(downloads){
@@ -506,7 +553,7 @@ function applyMonth(y,m,codes,notes,source){
   const fit=a=>{ const r=(a||[]).slice(0,n).map(x=>String(x||"").trim()); while(r.length<n) r.push(""); return r; };
   state.current=`${y}-${pad(m)}`;
   state.months[state.current]={codes:fit(codes),notes:fit(notes),source};
-  save(); render();
+  saveMonth(state.current); render();
 }
 (function initPaste(){ const [y,m]=ymParts(state.current); let ny=y, nm=m+1; if(nm>12){nm=1;ny++;} $("pasteY").value=ny; $("pasteM").value=nm; })();
 $("btnPaste").onclick=()=>{
@@ -559,19 +606,49 @@ function renderRow(){
 function setRow(n, msg){
   if(!Number.isFinite(n)) n = state.myRow;
   state.myRow = Math.min(60, Math.max(1, Math.round(n)));
-  save(); renderRow();
+  saveSettings(); renderRow();
   setStatus("rowStatus", msg || `上から${state.myRow}番目に設定しました。`);
 }
 $("rowMinus").onclick=()=>setRow(state.myRow-1);
 $("rowPlus").onclick=()=>setRow(state.myRow+1);
 $("rowNo").onchange=()=>setRow(parseInt($("rowNo").value,10));
-$("countBlank").onchange=()=>{ state.countBlank=$("countBlank").checked; save(); renderRow();
+$("countBlank").onchange=()=>{ state.countBlank=$("countBlank").checked; saveSettings(); renderRow();
   setStatus("rowStatus", state.countBlank?"「週」「休」だけの行も数えます。":"「週」「休」だけの行は飛ばして数えます。"); };
 
 renderRow();
 render();
 
+function applyRemoteSettings(d){
+  if(!d) return;
+  if(d.codes&&typeof d.codes==="object") state.codes=Object.assign({}, DEFAULT_CODES, d.codes);
+  if(Number.isInteger(d.myRow)&&d.myRow>0) state.myRow=d.myRow;
+  if(typeof d.countBlank==="boolean") state.countBlank=d.countBlank;
+}
+async function initCloud(){
+  const cdb = await window.claude.use("db");
+  if(!cdb){ $("syncNote").textContent="この画面ではクラウド保存が使えないため、この端末のブラウザにだけ保存しています。"; return; }
+  db=cdb;
+  const user = await window.claude.use("user");
+  const owner = user ? await user.isOwner() : true;
+  canWrite = !!owner;
+  if(!canWrite){ document.body.classList.add("readonly"); $("syncNote").textContent="共有された勤務カレンダーを表示しています（閲覧のみ）。"; }
+  else $("syncNote").textContent="クラウドに保存しています。スマホでもPCでも同じ内容が見られます。";
+  let gotMonths=false;
+  db.collection("months").onSnapshot(qs=>{
+    const fresh={};
+    qs.docs.forEach(d=>{ const v=d.data(); if(v&&Array.isArray(v.codes)) fresh[d.id]={codes:[...v.codes],notes:Array.isArray(v.notes)?[...v.notes]:[],source:v.source||""}; });
+    // First sync from a browser that only has local data: upload it once.
+    if(!gotMonths && canWrite){ Object.keys(state.months).forEach(k=>{ if(!fresh[k]) { fresh[k]=state.months[k]; cloudWrite(`months/${k}`, state.months[k]); } }); }
+    gotMonths=true;
+    state.months=fresh; save(); render();
+  }, ()=>{ $("syncNote").textContent="クラウドから読み込めませんでした。この端末に保存されている内容を表示しています。"; });
+  db.doc("settings/main").onSnapshot(snap=>{
+    if(snap.exists){ applyRemoteSettings(snap.data()); save(); renderRow(); render(); }
+  }, ()=>{});
+}
+
 if(window.claude && typeof window.claude.use==="function"){
+  initCloud().catch(()=>{});
   window.claude.use("downloads").then(d=>{ downloads=d; }).catch(()=>{});
   window.claude.use("sample").then(s=>{ sample=s; }).catch(()=>{});
 }
