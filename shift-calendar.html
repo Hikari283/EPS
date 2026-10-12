@@ -53,6 +53,8 @@ input{background:var(--bg);border:1px solid var(--line);border-radius:6px;paddin
 .cell.empty{visibility:hidden}
 .cell .d{font-size:.7rem;font-variant-numeric:tabular-nums;color:var(--muted);text-align:left}
 .cell.sat .d{color:var(--sat)} .cell.sun .d,.cell.hol .d{color:var(--sun)}
+.cell{cursor:pointer}
+.cell:hover{filter:brightness(.97)}
 .cell .c{text-align:center;font-family:var(--font-code);font-weight:600;font-size:.95rem;border-radius:4px;padding:1px 0}
 .cell.today{outline:2px solid var(--accent);outline-offset:-2px}
 .cell .dot{height:4px;width:4px;border-radius:50%;background:var(--muted);align-self:center;opacity:.7}
@@ -96,6 +98,7 @@ details summary{cursor:pointer;color:var(--muted);font-size:.9rem}
       <button id="nextM" aria-label="次の月">›</button>
     </div>
     <div class="cal" id="cal"></div>
+    <p class="hint edit-only" style="margin-top:8px;text-align:center">日付をタップすると勤務を変更できます</p>
   </section>
 
   <section class="panel edit-only">
@@ -170,8 +173,9 @@ let db=null, canWrite=true, sample=null;
 const chains={};
 function cloudWrite(path, data){
   if(!db||!canWrite) return;
-  chains[path]=(chains[path]||Promise.resolve()).then(()=>db.doc(path).set(data)).catch(()=>{
-    $("syncNote").textContent="クラウドに保存できませんでした。通信状況を確認して、もう一度変更してください。";
+  chains[path]=(chains[path]||Promise.resolve()).then(()=>db.doc(path).set(data)).catch(e=>{
+    if(e&&e.code==="invalid_argument"){ canWrite=false; document.body.classList.add("readonly"); return; }
+    setStatus("readStatus","クラウドに保存できませんでした。通信状況を確認して、もう一度変更してください。",true);
   });
 }
 function saveMonth(ym){ saveLocal(); const mo=state.months[ym]; if(mo) cloudWrite(`months/${ym}`,{codes:mo.codes,notes:mo.notes,source:mo.source||""}); }
@@ -337,7 +341,10 @@ async function initCloud(){
   if(!cdb){ $("syncNote").textContent="この画面ではこの端末にだけ保存しています。"; return; }
   db=cdb;
   const user=await window.claude.use("user");
-  canWrite = user ? !!(await user.isOwner()) : true;
+  // Owner always edits; otherwise follow the platform's answer (null = unknown → allow, a refused write decides).
+  const owner = user ? await user.isOwner() : true;
+  const may = owner ? true : (user ? await user.can("data.write") : null);
+  canWrite = owner || may !== false;
   if(!canWrite) document.body.classList.add("readonly");
   $("syncNote").textContent="クラウドに保存しています。スマホでもPCでも同じ内容が見られます。";
   db.collection("months").onSnapshot(qs=>{
