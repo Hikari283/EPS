@@ -1,0 +1,473 @@
+<title>勤務カレンダー</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: one column — month header, roster-style calendar grid, code settings, export. Mirrors the printed 勤務表 colors. */
+:root{
+  --bg:#f3f5f4; --surface:#ffffff; --fg:#1d2624; --muted:#5f6d69; --line:#d5dcd9;
+  --accent:#0f6e64; --accent-fg:#ffffff; --weekoff:#e3e7e6; --sat:#2f5fb3; --sun:#c2364b;
+  --e1:#2f7d46; --e1-fg:#fff; --e2:#9cc66a; --e2-fg:#1d2624; --e3:#e98fa0; --e3-fg:#1d2624; --e4:#f6cdd4; --e4-fg:#1d2624;
+  --nen:#f2a3b3; --nen-fg:#1d2624; --nichi:#4b7fd6; --nichi-fg:#fff; --g:#111; --g-fg:#fff; --star:#f4c430;
+  --font-body:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic",system-ui,sans-serif;
+  --font-code:"IBM Plex Mono",ui-monospace,"SFMono-Regular",monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141a19; --surface:#1d2523; --fg:#e6ecea; --muted:#9aa8a4; --line:#33403d;
+  --accent:#4fbfb0; --accent-fg:#0b1312; --weekoff:#2a3331; --sat:#86a9ec; --sun:#f08a9b;
+  --e1:#3c9a59; --e2:#7fa851; --e3:#c46a7c; --e4:#7d4b55; --e4-fg:#fff; --e3-fg:#fff; --nen:#b96777; --nen-fg:#fff;
+  --nichi:#5b8de0; --g:#000; --star:#d9ac22; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141a19; --surface:#1d2523; --fg:#e6ecea; --muted:#9aa8a4; --line:#33403d;
+  --accent:#4fbfb0; --accent-fg:#0b1312; --weekoff:#2a3331; --sat:#86a9ec; --sun:#f08a9b;
+  --e1:#3c9a59; --e2:#7fa851; --e3:#c46a7c; --e4:#7d4b55; --e4-fg:#fff; --e3-fg:#fff; --nen:#b96777; --nen-fg:#fff;
+  --nichi:#5b8de0; --g:#000; --star:#d9ac22; color-scheme:dark}
+html,body{background:var(--bg);color:var(--fg)}
+body{font-family:var(--font-body);font-size:15px;line-height:1.6;padding-inline:16px;padding-block:20px 48px}
+.wrap{max-width:860px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+h1{font-size:1.5rem;margin:0;text-wrap:balance;font-weight:700}
+h2{font-size:1.05rem;margin:0 0 10px;font-weight:700}
+.sub{color:var(--muted);font-size:.85rem;margin:0}
+section.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+button,select,input,textarea{font:inherit;color:inherit}
+button{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 12px;cursor:pointer}
+button.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent);font-weight:700}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button:disabled{opacity:.5;cursor:default}
+input,select,textarea{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+textarea{width:100%;box-sizing:border-box;min-height:64px;font-family:var(--font-code);font-size:.9rem}
+.monthbar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.monthbar .ym{font-family:var(--font-code);font-size:1.3rem;font-weight:600;font-variant-numeric:tabular-nums}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.dow{text-align:center;font-size:.75rem;color:var(--muted);letter-spacing:.05em;padding-bottom:2px}
+.dow.sat{color:var(--sat)} .dow.sun{color:var(--sun)}
+.cell{border:1px solid var(--line);border-radius:6px;background:var(--bg);min-height:72px;padding:4px;display:flex;flex-direction:column;gap:2px;cursor:pointer;text-align:left;min-width:0}
+.cell.empty{visibility:hidden;cursor:default}
+.cell .d{font-size:.72rem;font-variant-numeric:tabular-nums;color:var(--muted)}
+.cell.sat .d{color:var(--sat)} .cell.sun .d,.cell.hol .d{color:var(--sun)}
+.cell .c{align-self:stretch;text-align:center;font-family:var(--font-code);font-weight:600;font-size:1rem;border-radius:4px;padding:2px 0}
+.cell .n{font-size:.68rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cell.today{outline:2px solid var(--accent);outline-offset:-1px}
+.chip{display:inline-block;font-family:var(--font-code);font-weight:600;min-width:2.4em;text-align:center;border-radius:4px;padding:1px 6px;background:var(--surface);border:1px solid var(--line)}
+.k-week{background:var(--weekoff)!important;color:var(--muted)!important;border-color:transparent!important}
+.k-E1{background:var(--e1)!important;color:var(--e1-fg)!important;border-color:transparent!important}
+.k-E2{background:var(--e2)!important;color:var(--e2-fg)!important;border-color:transparent!important}
+.k-E3{background:var(--e3)!important;color:var(--e3-fg)!important;border-color:transparent!important}
+.k-E4{background:var(--e4)!important;color:var(--e4-fg)!important;border-color:transparent!important}
+.k-nen{background:var(--nen)!important;color:var(--nen-fg)!important;border-color:transparent!important}
+.k-nichi{background:var(--nichi)!important;color:var(--nichi-fg)!important;border-color:transparent!important}
+.k-G{background:var(--g)!important;color:var(--g-fg)!important;border-color:transparent!important}
+.summary{display:flex;flex-wrap:wrap;gap:6px;font-size:.85rem;color:var(--muted)}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.9rem}
+th,td{border-bottom:1px solid var(--line);padding:6px 6px;text-align:left;white-space:nowrap}
+th{font-size:.75rem;color:var(--muted);font-weight:500;letter-spacing:.04em}
+td input[type=text]{width:7em} td input[type=time]{width:6.6em}
+.status{font-size:.85rem;color:var(--muted);min-height:1.4em}
+.status.err{color:var(--sun)}
+.sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:flex-end;justify-content:center;z-index:10}
+.sheet{background:var(--surface);border-radius:14px 14px 0 0;width:100%;max-width:560px;padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:12px;max-height:85vh;overflow:auto;box-sizing:border-box}
+.codes{display:flex;flex-wrap:wrap;gap:6px}
+.codes button{font-family:var(--font-code);font-weight:600;min-width:3.2em;padding:6px 8px}
+.codes button.sel{outline:2px solid var(--accent);outline-offset:1px}
+.glinks{display:flex;flex-direction:column;gap:4px;font-size:.85rem;max-height:260px;overflow:auto}
+.glinks a{color:var(--accent)}
+details summary{cursor:pointer;color:var(--accent);font-weight:500}
+.hint{font-size:.8rem;color:var(--muted)}
+@media (max-width:480px){.cell{min-height:60px;padding:3px}.cell .c{font-size:.88rem}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>勤務カレンダー</h1>
+    <p class="sub">臨床工学科 勤務表 → スマホのカレンダーへ</p>
+  </header>
+
+  <section class="panel">
+    <div class="monthbar">
+      <button id="prevM" aria-label="前の月">‹</button>
+      <span class="ym" id="ymLabel">2026年10月</span>
+      <button id="nextM" aria-label="次の月">›</button>
+    </div>
+    <p class="hint" id="srcNote"></p>
+    <div class="cal" id="cal" style="margin-top:8px"></div>
+    <div class="summary" id="summary" style="margin-top:10px"></div>
+    <p class="hint">日付をタップすると勤務記号とメモを修正できます。</p>
+  </section>
+
+  <section class="panel">
+    <h2>カレンダーに追加</h2>
+    <div class="row">
+      <button class="primary" id="btnIcs">iPhone / Outlook 用 (.ics)</button>
+      <button id="btnCsv">Google カレンダー用 (.csv)</button>
+      <button id="btnCopyIcs">.ics の中身をコピー</button>
+    </div>
+    <p class="status" id="exportStatus"></p>
+    <details>
+      <summary>1件ずつ Google カレンダーに追加するリンク</summary>
+      <div class="glinks" id="glinks" style="margin-top:8px"></div>
+    </details>
+    <p class="hint">「設定」で「登録しない」にした記号（週・休など）は書き出しません。同じ月を書き出し直すと、.ics は同じ予定として上書きされます（Google の CSV 取り込みは重複します）。</p>
+  </section>
+
+  <section class="panel">
+    <h2>新しい月を読み込む</h2>
+    <div class="row" id="photoRow">
+      <label for="rowNo">上から</label>
+      <input id="rowNo" type="number" min="1" max="40" value="15" style="width:4em">
+      <span>番目の人</span>
+      <input id="photo" type="file" accept="image/*">
+      <button class="primary" id="btnRead">写真から読み取る</button>
+    </div>
+    <p class="status" id="readStatus"></p>
+    <details style="margin-top:6px">
+      <summary>文字で貼り付ける</summary>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+        <div class="row">
+          <label for="pasteY">年</label><input id="pasteY" type="number" style="width:5.5em">
+          <label for="pasteM">月</label><input id="pasteM" type="number" min="1" max="12" style="width:4em">
+        </div>
+        <textarea id="pasteText" placeholder="1日から順に空白区切り　例：年 HA 週 週 C2 O1 …"></textarea>
+        <div><button id="btnPaste">この内容で反映</button></div>
+      </div>
+    </details>
+  </section>
+
+  <section class="panel">
+    <h2>勤務記号の設定</h2>
+    <p class="hint">記号ごとに予定名と時間を決めます。終了が開始より前なら翌日終了（夜勤など）として扱います。</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>記号</th><th>予定名</th><th>登録</th><th>終日</th><th>開始</th><th>終了</th></tr></thead>
+        <tbody id="codeRows"></tbody>
+      </table>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <input id="newCode" type="text" placeholder="記号を追加" style="width:8em">
+      <button id="btnAddCode">追加</button>
+    </div>
+  </section>
+</div>
+
+<div class="sheet-bg" id="sheetBg" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <strong id="sheetTitle"></strong>
+    <div class="codes" id="sheetCodes"></div>
+    <div class="row"><label for="sheetCode">記号</label><input id="sheetCode" type="text" style="width:6em"></div>
+    <div class="row"><label for="sheetNote">メモ</label><input id="sheetNote" type="text" style="flex:1;min-width:0"></div>
+    <div class="row" style="justify-content:flex-end">
+      <button id="sheetCancel">やめる</button>
+      <button class="primary" id="sheetSave">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+const STORE_KEY = "shiftcal.v1";
+const DOW = ["日","月","火","水","木","金","土"];
+// Japanese public holidays relevant to the roster months (extend as needed).
+const HOLIDAYS = new Set(["2026-09-21","2026-09-22","2026-09-23","2026-10-12","2026-11-03","2026-11-23","2026-12-23",
+  "2027-01-01","2027-01-11","2027-02-11","2027-02-23","2027-03-21","2027-03-22"]);
+
+// 2026年10月：勤務表の上から15番目の行（写真から読み取り）
+const SEED = {
+  "2026-10": {
+    codes: ["年","HA","週","週","C2","O1","C2","S","E1","E2","週","休","M","HA","週","O1","E3","E4","G","S","CA","週","CA","週","週","週","S","C2","O1","O1","H1"],
+    notes: ["休希望","","","","","","","","","セミナー","★","","","","10","","★","","","","","18","","×","","31","","☆","","(S)",""],
+    source: "勤務表の写真（上から15番目の行）から読み取り"
+  }
+};
+const DEFAULT_CODES = {
+  "週":{label:"週休",skip:true,allDay:true,start:"",end:""},
+  "休":{label:"休日",skip:true,allDay:true,start:"",end:""},
+  "年":{label:"年休",skip:false,allDay:true,start:"",end:""},
+  "日":{label:"日直",skip:false,allDay:true,start:"",end:""},
+  "E1":{label:"E1",skip:false,allDay:true,start:"",end:""},
+  "E2":{label:"E2",skip:false,allDay:true,start:"",end:""},
+  "E3":{label:"E3",skip:false,allDay:true,start:"",end:""},
+  "E4":{label:"E4",skip:false,allDay:true,start:"",end:""},
+  "G":{label:"G",skip:false,allDay:true,start:"",end:""}
+};
+const COMMON = ["A","M","S","HA","HU","H1","H2","H3","C1","C2","C3","CA","O1","OA","VA","E1","E2","E3","E4","G","日","年","週","休","出"];
+
+function load(){
+  let s=null;
+  try{ s=JSON.parse(localStorage.getItem(STORE_KEY)||"null"); }catch(e){}
+  if(!s||typeof s!=="object") s={};
+  s.months = Object.assign({}, SEED, s.months||{});
+  s.codes = Object.assign({}, DEFAULT_CODES, s.codes||{});
+  s.current = s.current || "2026-10";
+  return s;
+}
+let state = load();
+function save(){ try{ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }catch(e){} }
+
+const $ = id => document.getElementById(id);
+const pad = n => String(n).padStart(2,"0");
+const ymParts = ym => ym.split("-").map(Number);
+const daysIn = (y,m) => new Date(y,m,0).getDate();
+
+function codeCfg(code){
+  if(!state.codes[code]) state.codes[code]={label:code,skip:false,allDay:true,start:"",end:""};
+  return state.codes[code];
+}
+function chipClass(code){
+  if(code==="週"||code==="休") return "k-week";
+  if(/^E[1-4]$/.test(code)) return "k-"+code;
+  if(code==="年") return "k-nen";
+  if(code==="日") return "k-nichi";
+  if(code==="G") return "k-G";
+  return "";
+}
+
+/* ---------- calendar ---------- */
+function render(){
+  const [y,m] = ymParts(state.current);
+  $("ymLabel").textContent = `${y}年${m}月`;
+  const mo = state.months[state.current];
+  $("srcNote").textContent = mo ? (mo.source||"") : "この月のデータはまだありません。下の「新しい月を読み込む」から追加できます。";
+  const cal = $("cal"); cal.textContent="";
+  DOW.forEach((d,i)=>{ const e=document.createElement("div"); e.className="dow"+(i===0?" sun":i===6?" sat":""); e.textContent=d; cal.appendChild(e); });
+  const first = new Date(y,m-1,1).getDay();
+  for(let i=0;i<first;i++){ const e=document.createElement("div"); e.className="cell empty"; cal.appendChild(e); }
+  const now=new Date(); const todayKey=`${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+  const n = daysIn(y,m);
+  for(let d=1; d<=n; d++){
+    const dow = new Date(y,m-1,d).getDay();
+    const key = `${y}-${pad(m)}-${pad(d)}`;
+    const b=document.createElement("button");
+    b.className="cell"+(dow===0?" sun":dow===6?" sat":"")+(HOLIDAYS.has(key)?" hol":"")+(key===todayKey?" today":"");
+    const code = mo ? (mo.codes[d-1]||"") : "";
+    const note = mo ? (mo.notes[d-1]||"") : "";
+    b.setAttribute("aria-label",`${m}月${d}日 ${code||"未入力"} ${note}`);
+    const dd=document.createElement("span"); dd.className="d"; dd.textContent=d;
+    const cc=document.createElement("span"); cc.className="c "+chipClass(code); cc.textContent=code||"–";
+    const nn=document.createElement("span"); nn.className="n"; nn.textContent=note;
+    b.append(dd,cc,nn);
+    b.onclick=()=>openSheet(d);
+    cal.appendChild(b);
+  }
+  // summary
+  const sum=$("summary"); sum.textContent="";
+  if(mo){
+    const cnt={}; mo.codes.forEach(c=>{ if(c) cnt[c]=(cnt[c]||0)+1; });
+    Object.keys(cnt).sort().forEach(c=>{ const s=document.createElement("span"); s.innerHTML=`<span class="chip ${chipClass(c)}"></span> ×${cnt[c]}`; s.firstChild.textContent=c; sum.appendChild(s); });
+  }
+  renderCodes(); renderLinks();
+}
+$("prevM").onclick=()=>shiftMonth(-1);
+$("nextM").onclick=()=>shiftMonth(1);
+function shiftMonth(k){ let [y,m]=ymParts(state.current); m+=k; if(m<1){m=12;y--;} if(m>12){m=1;y++;} state.current=`${y}-${pad(m)}`; save(); render(); }
+
+/* ---------- edit sheet ---------- */
+let editDay=null;
+function openSheet(d){
+  const [y,m]=ymParts(state.current);
+  editDay=d;
+  const mo=state.months[state.current];
+  $("sheetTitle").textContent=`${m}月${d}日（${DOW[new Date(y,m-1,d).getDay()]}）`;
+  $("sheetCode").value = mo? (mo.codes[d-1]||"") : "";
+  $("sheetNote").value = mo? (mo.notes[d-1]||"") : "";
+  const box=$("sheetCodes"); box.textContent="";
+  const all=[...new Set([...COMMON, ...Object.keys(state.codes)])];
+  all.forEach(c=>{ const b=document.createElement("button"); b.textContent=c; b.className=chipClass(c)+($("sheetCode").value===c?" sel":"");
+    b.onclick=()=>{ $("sheetCode").value=c; [...box.children].forEach(x=>x.classList.toggle("sel",x===b)); }; box.appendChild(b); });
+  $("sheetBg").hidden=false; $("sheetCode").focus();
+}
+function closeSheet(){ $("sheetBg").hidden=true; editDay=null; }
+$("sheetCancel").onclick=closeSheet;
+$("sheetBg").onclick=e=>{ if(e.target===$("sheetBg")) closeSheet(); };
+$("sheetSave").onclick=()=>{
+  const [y,m]=ymParts(state.current); const n=daysIn(y,m);
+  let mo=state.months[state.current];
+  if(!mo){ mo=state.months[state.current]={codes:Array(n).fill(""),notes:Array(n).fill(""),source:"手入力"}; }
+  mo.codes[editDay-1]=$("sheetCode").value.trim();
+  mo.notes[editDay-1]=$("sheetNote").value.trim();
+  save(); closeSheet(); render();
+};
+document.addEventListener("keydown",e=>{ if(e.key==="Escape" && !$("sheetBg").hidden) closeSheet(); });
+
+/* ---------- code settings ---------- */
+function usedCodes(){
+  const set=new Set(Object.keys(state.codes));
+  Object.values(state.months).forEach(mo=>mo.codes.forEach(c=>c&&set.add(c)));
+  return [...set].sort((a,b)=>a.localeCompare(b,"ja"));
+}
+function renderCodes(){
+  const tb=$("codeRows"); tb.textContent="";
+  usedCodes().forEach(code=>{
+    const c=codeCfg(code);
+    const tr=document.createElement("tr");
+    const id=s=>`cfg-${s}-${encodeURIComponent(code).replace(/%/g,"_")}`;
+    tr.innerHTML=`<td><span class="chip ${chipClass(code)}"></span></td>
+      <td><input type="text" id="${id("l")}"></td>
+      <td><input type="checkbox" id="${id("r")}"></td>
+      <td><input type="checkbox" id="${id("a")}"></td>
+      <td><input type="time" id="${id("s")}"></td>
+      <td><input type="time" id="${id("e")}"></td>`;
+    tr.querySelector(".chip").textContent=code;
+    const [l,r,a,s,e]=tr.querySelectorAll("input");
+    l.value=c.label; r.checked=!c.skip; a.checked=c.allDay; s.value=c.start||""; e.value=c.end||"";
+    s.disabled=e.disabled=c.allDay;
+    l.oninput=()=>{c.label=l.value; save(); renderLinks();};
+    r.onchange=()=>{c.skip=!r.checked; save(); renderLinks();};
+    a.onchange=()=>{c.allDay=a.checked; if(!a.checked&&!c.start){c.start="08:30";c.end="17:15";s.value=c.start;e.value=c.end;} s.disabled=e.disabled=c.allDay; save(); renderLinks();};
+    s.onchange=()=>{c.start=s.value; save(); renderLinks();};
+    e.onchange=()=>{c.end=e.value; save(); renderLinks();};
+    tb.appendChild(tr);
+  });
+}
+$("btnAddCode").onclick=()=>{ const v=$("newCode").value.trim(); if(!v) return; codeCfg(v); $("newCode").value=""; save(); renderCodes(); };
+
+/* ---------- events ---------- */
+function events(){
+  const mo=state.months[state.current]; if(!mo) return [];
+  const [y,m]=ymParts(state.current); const out=[];
+  mo.codes.forEach((code,i)=>{
+    if(!code) return; const c=codeCfg(code); if(c.skip) return;
+    const d=i+1; const ev={code,title:c.label||code,note:mo.notes[i]||"",y,m,d,allDay:c.allDay||!c.start||!c.end};
+    if(!ev.allDay){
+      const st=new Date(y,m-1,d,...c.start.split(":").map(Number));
+      const en=new Date(y,m-1,d,...c.end.split(":").map(Number));
+      if(en<=st) en.setDate(en.getDate()+1);
+      ev.start=st; ev.end=en;
+    }
+    out.push(ev);
+  });
+  return out;
+}
+const ymd = dt => `${dt.getFullYear()}${pad(dt.getMonth()+1)}${pad(dt.getDate())}`;
+const hms = dt => `T${pad(dt.getHours())}${pad(dt.getMinutes())}00`;
+const icsEsc = s => String(s).replace(/\\/g,"\\\\").replace(/;/g,"\\;").replace(/,/g,"\\,").replace(/\n/g,"\\n");
+function buildIcs(){
+  const now=new Date(); const stamp=`${now.getUTCFullYear()}${pad(now.getUTCMonth()+1)}${pad(now.getUTCDate())}T${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}00Z`;
+  const L=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//shift-calendar//JP","CALSCALE:GREGORIAN","METHOD:PUBLISH",
+    "BEGIN:VTIMEZONE","TZID:Asia/Tokyo","BEGIN:STANDARD","DTSTART:19700101T000000","TZOFFSETFROM:+0900","TZOFFSETTO:+0900","TZNAME:JST","END:STANDARD","END:VTIMEZONE"];
+  events().forEach(ev=>{
+    L.push("BEGIN:VEVENT",`UID:shift-${ev.y}${pad(ev.m)}${pad(ev.d)}@shift-calendar`,`DTSTAMP:${stamp}`);
+    if(ev.allDay){ const s=new Date(ev.y,ev.m-1,ev.d), e=new Date(ev.y,ev.m-1,ev.d+1);
+      L.push(`DTSTART;VALUE=DATE:${ymd(s)}`,`DTEND;VALUE=DATE:${ymd(e)}`,"TRANSP:TRANSPARENT"); }
+    else L.push(`DTSTART;TZID=Asia/Tokyo:${ymd(ev.start)}${hms(ev.start)}`,`DTEND;TZID=Asia/Tokyo:${ymd(ev.end)}${hms(ev.end)}`);
+    L.push(`SUMMARY:${icsEsc(ev.title)}`);
+    const desc=`勤務記号: ${ev.code}`+(ev.note?`\nメモ: ${ev.note}`:"");
+    L.push(`DESCRIPTION:${icsEsc(desc)}`,"END:VEVENT");
+  });
+  L.push("END:VCALENDAR");
+  return L.join("\r\n")+"\r\n";
+}
+function buildCsv(){
+  const q=s=>`"${String(s).replace(/"/g,'""')}"`;
+  const md=dt=>`${pad(dt.getMonth()+1)}/${pad(dt.getDate())}/${dt.getFullYear()}`;
+  const t12=dt=>{let h=dt.getHours(); const ap=h>=12?"PM":"AM"; h=h%12||12; return `${h}:${pad(dt.getMinutes())} ${ap}`;};
+  const rows=[["Subject","Start Date","Start Time","End Date","End Time","All Day Event","Description"]];
+  events().forEach(ev=>{
+    const desc=`勤務記号: ${ev.code}`+(ev.note?` / メモ: ${ev.note}`:"");
+    if(ev.allDay){ const d=new Date(ev.y,ev.m-1,ev.d); rows.push([ev.title,md(d),"",md(d),"","True",desc]); }
+    else rows.push([ev.title,md(ev.start),t12(ev.start),md(ev.end),t12(ev.end),"False",desc]);
+  });
+  return "\uFEFF"+rows.map(r=>r.map(q).join(",")).join("\r\n")+"\r\n";
+}
+function renderLinks(){
+  const box=$("glinks"); box.textContent="";
+  const evs=events();
+  if(!evs.length){ box.textContent="登録する予定がありません。"; return; }
+  evs.forEach(ev=>{
+    let dates;
+    if(ev.allDay){ dates=`${ymd(new Date(ev.y,ev.m-1,ev.d))}/${ymd(new Date(ev.y,ev.m-1,ev.d+1))}`; }
+    else dates=`${ymd(ev.start)}${hms(ev.start)}/${ymd(ev.end)}${hms(ev.end)}`;
+    const p=new URLSearchParams({action:"TEMPLATE",text:ev.title,dates,ctz:"Asia/Tokyo",details:`勤務記号: ${ev.code}`+(ev.note?` / メモ: ${ev.note}`:"")});
+    const a=document.createElement("a"); a.href="https://calendar.google.com/calendar/render?"+p.toString(); a.target="_blank"; a.rel="noopener";
+    a.textContent=`${ev.m}/${ev.d}（${DOW[new Date(ev.y,ev.m-1,ev.d).getDay()]}） ${ev.title}`;
+    box.appendChild(a);
+  });
+}
+
+/* ---------- export ---------- */
+let downloads=null, sample=null;
+function setStatus(id,msg,err){ const e=$(id); e.textContent=msg; e.classList.toggle("err",!!err); }
+async function offerFile(filename, data, mime){
+  if(!events().length){ setStatus("exportStatus","登録する予定がありません。",true); return; }
+  if(downloads){
+    try{ await downloads.save({filename,data}); setStatus("exportStatus",`${filename} を保存しました。`); }
+    catch(e){
+      if(e&&e.code==="declined") setStatus("exportStatus","保存をやめました。");
+      else if(e&&e.code==="rejected_extension") setStatus("exportStatus","このページでは .ics を直接保存できません。「.ics の中身をコピー」か Google 用 CSV を使ってください。",true);
+      else setStatus("exportStatus","保存できませんでした。少し待ってからもう一度押してください。",true);
+    }
+    return;
+  }
+  // Opened as a normal web page / local file
+  const url=URL.createObjectURL(new Blob([data],{type:mime}));
+  const a=document.createElement("a"); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),2000);
+  setStatus("exportStatus",`${filename} をダウンロードしました。`);
+}
+$("btnIcs").onclick=()=>offerFile(`勤務_${state.current}.ics`, buildIcs(), "text/calendar");
+$("btnCsv").onclick=()=>offerFile(`勤務_${state.current}.csv`, buildCsv(), "text/csv");
+$("btnCopyIcs").onclick=()=>{
+  const t=buildIcs();
+  const fallback=()=>{ const ta=document.createElement("textarea"); ta.value=t; ta.style.position="fixed"; ta.style.opacity="0"; document.body.appendChild(ta); ta.select();
+    let ok=false; try{ ok=document.execCommand("copy"); }catch(e){} ta.remove(); setStatus("exportStatus", ok?"コピーしました。":"コピーできませんでした。",!ok); };
+  try{ navigator.clipboard.writeText(t).then(()=>setStatus("exportStatus","コピーしました。メモ帳などに貼って「.ics」で保存すると取り込めます。"),fallback); }catch(e){ fallback(); }
+};
+
+/* ---------- paste text ---------- */
+function applyMonth(y,m,codes,notes,source){
+  const n=daysIn(y,m);
+  const fit=a=>{ const r=(a||[]).slice(0,n).map(x=>String(x||"").trim()); while(r.length<n) r.push(""); return r; };
+  state.current=`${y}-${pad(m)}`;
+  state.months[state.current]={codes:fit(codes),notes:fit(notes),source};
+  save(); render();
+}
+(function initPaste(){ const [y,m]=ymParts(state.current); let ny=y, nm=m+1; if(nm>12){nm=1;ny++;} $("pasteY").value=ny; $("pasteM").value=nm; })();
+$("btnPaste").onclick=()=>{
+  const y=+$("pasteY").value, m=+$("pasteM").value;
+  const codes=$("pasteText").value.trim().split(/[\s,、]+/).filter(Boolean);
+  if(!y||!m||m<1||m>12){ setStatus("readStatus","年と月を入れてください。",true); return; }
+  if(!codes.length){ setStatus("readStatus","勤務記号を貼り付けてください。",true); return; }
+  const n=daysIn(y,m);
+  applyMonth(y,m,codes,[],"貼り付けから入力");
+  setStatus("readStatus", codes.length===n?`${y}年${m}月に反映しました。`:`${codes.length}日分を反映しました（この月は${n}日あります）。カレンダーで確認してください。`, codes.length!==n);
+};
+
+/* ---------- photo reading (Claude) ---------- */
+$("btnRead").onclick=async()=>{
+  const f=$("photo").files[0];
+  if(!f){ setStatus("readStatus","勤務表の写真を選んでください。",true); return; }
+  if(!sample){ setStatus("readStatus","この画面では写真の読み取りが使えません。「文字で貼り付ける」を使ってください。",true); return; }
+  const row=Math.max(1,parseInt($("rowNo").value,10)||15);
+  $("btnRead").disabled=true; setStatus("readStatus","読み取り中…（1分ほどかかることがあります）");
+  const prompt=`この画像は病院の臨床工学科の月間勤務表（タイトル例「2026年10月 臨床工学科勤務表」）の写真です。
+表の上部に「月」「日」「曜日」の見出し行があり、その下に職員が縦に並んでいます。各職員は2行で1人分です：
+上の行が勤務記号（例: A, M, S, HA, HU, H1, H2, H3, C1, C2, C3, CA, O1, OA, VA, E1, E2, E3, E4, G, K, 週, 休, 年, 日, 出, 事, 病, リ）、
+下の行が備考（例: ★, ☆, ×, セミナー, 休希望, 数字, (S) など。空欄が多い）。
+勤務記号の行だけを数えて、上から${row}番目の職員について、1日から月末までの各日の勤務記号と備考を読み取ってください。
+勤務記号の行が「週」「休」だけでほとんど空欄の職員も1人として数えます。
+読めない日は推測で埋めず空文字にしてください。
+次のJSONだけを返してください:
+{"year":数値,"month":数値,"codes":["1日の記号",...],"notes":["1日の備考",...],"rowPreview":"その職員の1日〜5日の記号を空白区切り"}`;
+  try{
+    const r=await sample.json(prompt,{images:[f],modelTier:"complex"});
+    if(!r||!Array.isArray(r.codes)||!r.year||!r.month) throw {code:"parse"};
+    applyMonth(+r.year,+r.month,r.codes,r.notes||[],`勤務表の写真（上から${row}番目の行）から読み取り`);
+    setStatus("readStatus",`${r.year}年${r.month}月を読み取りました（1〜5日：${r.rowPreview||r.codes.slice(0,5).join(" ")}）。写真と見比べて、違う日はタップして直してください。`);
+  }catch(e){
+    const code=e&&e.code;
+    const msg = code==="not_granted"?"読み取りが許可されませんでした。「文字で貼り付ける」を使ってください。"
+      : code==="rate_limited"?"混み合っています。少し待ってからもう一度押してください。"
+      : code==="images_unavailable"?"この画面では写真を送れません。「文字で貼り付ける」を使ってください。"
+      : "うまく読み取れませんでした。明るく正面から撮った写真で試すか、「文字で貼り付ける」を使ってください。";
+    setStatus("readStatus",msg,true);
+  }finally{ $("btnRead").disabled=false; }
+};
+
+render();
+
+if(window.claude && typeof window.claude.use==="function"){
+  window.claude.use("downloads").then(d=>{ downloads=d; }).catch(()=>{});
+  window.claude.use("sample").then(s=>{ sample=s; }).catch(()=>{});
+}
+})();
+</script>
