@@ -111,12 +111,27 @@ details summary{cursor:pointer;color:var(--accent);font-weight:500}
     <p class="hint">「設定」で「登録しない」にした記号（週・休など）は書き出しません。同じ月を書き出し直すと、.ics は同じ予定として上書きされます（Google の CSV 取り込みは重複します）。</p>
   </section>
 
+  <section class="panel" id="myRowPanel">
+    <h2>自分の行</h2>
+    <div class="row">
+      <span>勤務表の上から</span>
+      <button id="rowMinus" aria-label="1つ上の行">−</button>
+      <input id="rowNo" type="number" min="1" max="60" value="15" style="width:4em;text-align:center;font-family:var(--font-code);font-weight:600">
+      <button id="rowPlus" aria-label="1つ下の行">＋</button>
+      <span>番目</span>
+    </div>
+    <label class="row" style="margin-top:8px;gap:6px">
+      <input id="countBlank" type="checkbox" checked>
+      <span>「週」「休」だけの行も1人として数える</span>
+    </label>
+    <p class="hint">日付・曜日の見出しは数えません。勤務記号の行を1人として数え、その下の備考行（★・×など）は数えません。この設定は次に開いたときも残ります。</p>
+    <p class="status" id="rowStatus"></p>
+  </section>
+
   <section class="panel">
     <h2>新しい月を読み込む</h2>
+    <p class="hint" id="rowSummary"></p>
     <div class="row" id="photoRow">
-      <label for="rowNo">上から</label>
-      <input id="rowNo" type="number" min="1" max="40" value="15" style="width:4em">
-      <span>番目の人</span>
       <input id="photo" type="file" accept="image/*">
       <button class="primary" id="btnRead">写真から読み取る</button>
     </div>
@@ -199,6 +214,8 @@ function load(){
   s.months = Object.assign({}, SEED, s.months||{});
   s.codes = Object.assign({}, DEFAULT_CODES, s.codes||{});
   s.current = s.current || "2026-10";
+  s.myRow = Number.isInteger(s.myRow) && s.myRow>0 ? s.myRow : 15;
+  if(typeof s.countBlank!=="boolean") s.countBlank = true;
   return s;
 }
 let state = load();
@@ -437,14 +454,14 @@ $("btnRead").onclick=async()=>{
   const f=$("photo").files[0];
   if(!f){ setStatus("readStatus","勤務表の写真を選んでください。",true); return; }
   if(!sample){ setStatus("readStatus","この画面では写真の読み取りが使えません。「文字で貼り付ける」を使ってください。",true); return; }
-  const row=Math.max(1,parseInt($("rowNo").value,10)||15);
+  const row=state.myRow, countBlank=state.countBlank;
   $("btnRead").disabled=true; setStatus("readStatus","読み取り中…（1分ほどかかることがあります）");
   const prompt=`この画像は病院の臨床工学科の月間勤務表（タイトル例「2026年10月 臨床工学科勤務表」）の写真です。
 表の上部に「月」「日」「曜日」の見出し行があり、その下に職員が縦に並んでいます。各職員は2行で1人分です：
 上の行が勤務記号（例: A, M, S, HA, HU, H1, H2, H3, C1, C2, C3, CA, O1, OA, VA, E1, E2, E3, E4, G, K, 週, 休, 年, 日, 出, 事, 病, リ）、
 下の行が備考（例: ★, ☆, ×, セミナー, 休希望, 数字, (S) など。空欄が多い）。
 勤務記号の行だけを数えて、上から${row}番目の職員について、1日から月末までの各日の勤務記号と備考を読み取ってください。
-勤務記号の行が「週」「休」だけでほとんど空欄の職員も1人として数えます。
+${countBlank?"勤務記号の行が「週」「休」だけでほとんど空欄の職員も1人として数えます。":"勤務記号の行が「週」「休」だけでほとんど空欄の職員は数えずに飛ばします。"}
 読めない日は推測で埋めず空文字にしてください。
 次のJSONだけを返してください:
 {"year":数値,"month":数値,"codes":["1日の記号",...],"notes":["1日の備考",...],"rowPreview":"その職員の1日〜5日の記号を空白区切り"}`;
@@ -463,6 +480,25 @@ $("btnRead").onclick=async()=>{
   }finally{ $("btnRead").disabled=false; }
 };
 
+/* ---------- my row setting ---------- */
+function renderRow(){
+  $("rowNo").value = state.myRow;
+  $("countBlank").checked = state.countBlank;
+  $("rowSummary").textContent = `上から${state.myRow}番目の人として読み取ります（${state.countBlank?"「週」「休」だけの行も数える":"「週」「休」だけの行は飛ばす"}）。変えるときは「自分の行」で。`;
+}
+function setRow(n, msg){
+  if(!Number.isFinite(n)) n = state.myRow;
+  state.myRow = Math.min(60, Math.max(1, Math.round(n)));
+  save(); renderRow();
+  setStatus("rowStatus", msg || `上から${state.myRow}番目に設定しました。`);
+}
+$("rowMinus").onclick=()=>setRow(state.myRow-1);
+$("rowPlus").onclick=()=>setRow(state.myRow+1);
+$("rowNo").onchange=()=>setRow(parseInt($("rowNo").value,10));
+$("countBlank").onchange=()=>{ state.countBlank=$("countBlank").checked; save(); renderRow();
+  setStatus("rowStatus", state.countBlank?"「週」「休」だけの行も数えます。":"「週」「休」だけの行は飛ばして数えます。"); };
+
+renderRow();
 render();
 
 if(window.claude && typeof window.claude.use==="function"){
