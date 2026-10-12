@@ -101,6 +101,17 @@ details summary{cursor:pointer;color:var(--muted);font-size:.9rem}
 .pick button{font-family:var(--font-code);font-weight:700;padding:10px 4px}
 .pick button.sel{outline:2px solid var(--accent);outline-offset:1px}
 .bulk-now{font-size:1.1rem;font-weight:700}
+.bulk-photo{display:flex;align-items:center;gap:10px}
+.bulk-photo img{height:44px;max-width:60%;border:1px solid var(--line);border-radius:4px;image-rendering:auto;background:#fff}
+.bulk-photo .guess{font-size:.85rem;color:var(--muted)}
+.full{position:fixed;inset:0;background:var(--bg);z-index:20;display:flex;flex-direction:column}
+.full-head{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 16px;padding-top:calc(12px + env(safe-area-inset-top,0px));background:var(--surface);border-bottom:1px solid var(--line)}
+.full-step{padding:10px 16px;font-size:.9rem;min-height:3.2em;box-sizing:content-box}
+.full-step b{color:var(--accent)}
+.photo-wrap{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;background:#222;min-height:0}
+.photo-wrap canvas{display:block;touch-action:pan-x pan-y}
+.full-foot{display:flex;flex-direction:column;gap:8px;padding:10px 16px calc(12px + env(safe-area-inset-bottom,0px));background:var(--surface);border-top:1px solid var(--line)}
+.full-foot .row button{padding:6px 10px}
 </style>
 </head>
 <body>
@@ -116,7 +127,11 @@ details summary{cursor:pointer;color:var(--muted);font-size:.9rem}
     <div class="cal" id="cal"></div>
     <div class="calfoot">
       <span class="hint">日付をタップすると変更できます</span>
-      <button id="btnBulk">この月をまとめて入力</button>
+      <div class="row">
+        <button id="btnPhoto">写真から入力</button>
+        <button id="btnBulk">まとめて入力</button>
+      </div>
+      <input id="photoInput" type="file" accept="image/*" hidden>
     </div>
   </section>
 
@@ -169,15 +184,40 @@ details summary{cursor:pointer;color:var(--muted);font-size:.9rem}
       <strong id="bulkTitle"></strong>
       <span class="bulk-now" id="bulkNow"></span>
     </div>
-    <p class="hint">記号をタップすると、その日に入って次の日に進みます。</p>
+    <div class="bulk-photo" id="bulkPhoto" hidden>
+      <img id="bulkImg" alt="写真のこの日のマス">
+      <span class="guess" id="bulkGuess"></span>
+    </div>
+    <p class="hint" id="bulkHint">記号をタップすると、その日に入って次の日に進みます。</p>
     <div class="pick" id="bulkCodes"></div>
     <div class="row" style="justify-content:space-between">
       <div class="row">
         <button id="bulkBack">← 1日戻る</button>
         <button id="bulkSkip">空欄にする</button>
+        <button id="bulkKeep" hidden>このままでOK →</button>
       </div>
       <button class="primary" id="bulkDone">完了</button>
     </div>
+  </div>
+</div>
+
+<!-- photo: pick your row -->
+<div class="full" id="photoBg" hidden role="dialog" aria-modal="true" aria-labelledby="photoTitle">
+  <div class="full-head">
+    <strong id="photoTitle">写真から入力</strong>
+    <button id="photoClose">閉じる</button>
+  </div>
+  <div class="full-step" id="photoStep"></div>
+  <div class="photo-wrap" id="photoWrap"><canvas id="photoCanvas"></canvas></div>
+  <div class="full-foot">
+    <div class="row">
+      <span class="hint">拡大</span><button id="zoomOut" aria-label="縮小">−</button><button id="zoomIn" aria-label="拡大">＋</button>
+      <span class="hint" style="margin-left:6px">位置</span><button id="moveUp" aria-label="枠を上へ">↑</button><button id="moveDown" aria-label="枠を下へ">↓</button>
+      <span class="hint" style="margin-left:6px">高さ</span><button id="hLess" aria-label="枠を低く">−</button><button id="hMore" aria-label="枠を高く">＋</button>
+      <button id="photoRedo">タップし直す</button>
+    </div>
+    <p class="status" id="photoStatus"></p>
+    <button class="primary" id="photoRead" disabled>この枠で読み取る</button>
   </div>
 </div>
 
@@ -339,11 +379,21 @@ $("sheetSave").onclick=()=>{
 };
 
 /* whole month */
+let bulkCells=null; // per-day crops from a photo while reviewing
 function renderBulk(){
   const [y,m]=ymParts(state.current);
-  $("bulkTitle").textContent=`${m}月をまとめて入力`;
+  $("bulkTitle").textContent= bulkCells ? `${m}月を写真で確認` : `${m}月をまとめて入力`;
   $("bulkNow").textContent = bulkDay ? `${m}/${bulkDay}（${DOW[new Date(y,m-1,bulkDay).getDay()]}）` : "";
   $("bulkBack").disabled = bulkDay<=1;
+  const photo=!!(bulkCells&&bulkDay);
+  $("bulkPhoto").hidden=!photo; $("bulkKeep").hidden=!photo;
+  $("bulkHint").textContent = photo ? "写真のマスと同じなら「このままでOK」、違えば正しい記号をタップ。" : "記号をタップすると、その日に入って次の日に進みます。";
+  if(photo){
+    const cell=bulkCells[bulkDay-1]; $("bulkImg").src=cell?cell.url:"";
+    const mo=state.months[state.current], cur=mo?(mo.codes[bulkDay-1]||""):"";
+    $("bulkGuess").textContent = cur ? `いまの記号：${cur}` : "読み取れませんでした";
+    $("bulkKeep").disabled = !cur;
+  }
 }
 function bulkPut(code){
   const [y,m]=ymParts(state.current), n=daysIn(y,m);
@@ -352,14 +402,16 @@ function bulkPut(code){
   if(bulkDay<n) bulkDay++; else { closeBulk(); return; }
   renderBulk(); render(); renderCodes();
 }
-function closeBulk(){ bulkDay=null; $("bulkBg").hidden=true; document.body.style.paddingBottom=""; render(); renderCodes(); }
-$("btnBulk").onclick=()=>{
+function closeBulk(){ bulkDay=null; bulkCells=null; $("bulkBg").hidden=true; document.body.style.paddingBottom=""; render(); renderCodes(); }
+function openBulk(startDay){
   const mo=state.months[state.current];
-  bulkDay = mo ? Math.max(1, mo.codes.findIndex(c=>!c)+1 || 1) : 1;
+  bulkDay = startDay || (mo ? Math.max(1, mo.codes.findIndex(c=>!c)+1 || 1) : 1);
   const box=$("bulkCodes"); box.textContent="";
   allCodes().forEach(c=>{ const b=document.createElement("button"); b.textContent=c; b.className=chipClass(c); b.onclick=()=>bulkPut(c); box.appendChild(b); });
   $("bulkBg").hidden=false; renderBulk(); render();
-};
+}
+$("btnBulk").onclick=()=>{ bulkCells=null; openBulk(); };
+$("bulkKeep").onclick=()=>{ const mo=state.months[state.current]; bulkPut(mo?(mo.codes[bulkDay-1]||""):""); };
 $("bulkBack").onclick=()=>{ if(bulkDay>1){ bulkDay--; renderBulk(); render(); } };
 $("bulkSkip").onclick=()=>bulkPut("");
 $("bulkDone").onclick=closeBulk;
@@ -368,6 +420,183 @@ $("bulkBg").style.background="transparent";
 $("bulkBg").style.pointerEvents="none";
 document.querySelector("#bulkBg .sheet").style.pointerEvents="auto";
 document.querySelector("#bulkBg .sheet").style.boxShadow="0 -6px 24px rgba(0,0,0,.18)";
+
+/* photo → codes (no server: tap your row, crop each day, guess by color + on-device OCR) */
+const KNOWN = new Set([...COMMON,"K","事","病","リ"]);
+const ph = { src:null, W:0, H:0, zoom:1, p1:null, p2:null, off:0, hRatio:0.42 };
+function photoDays(){ const [y,m]=ymParts(state.current); return daysIn(y,m); }
+$("btnPhoto").onclick=()=>{ $("photoInput").value=""; $("photoInput").click(); };
+$("photoInput").onchange=async()=>{
+  const f=$("photoInput").files[0]; if(!f) return;
+  let bmp;
+  try{ bmp = await createImageBitmap(f); }
+  catch(e){ bmp = await new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=rej; im.src=URL.createObjectURL(f); }); }
+  const max=2400, k=Math.min(1, max/Math.max(bmp.width,bmp.height));
+  const c=document.createElement("canvas"); c.width=Math.round(bmp.width*k); c.height=Math.round(bmp.height*k);
+  c.getContext("2d").drawImage(bmp,0,0,c.width,c.height);
+  Object.assign(ph,{src:c,W:c.width,H:c.height,zoom:1,p1:null,p2:null,off:0,hRatio:0.42});
+  const [, m]=ymParts(state.current);
+  $("photoTitle").textContent=`${m}月の勤務表の写真`;
+  setStatus("photoStatus","");
+  $("photoBg").hidden=false; document.body.style.overflow="hidden";
+  drawPhoto();
+};
+function closePhoto(){ $("photoBg").hidden=true; document.body.style.overflow=""; ph.src=null; }
+$("photoClose").onclick=closePhoto;
+function geom(){
+  const n=photoDays(), dx=(ph.p2.x-ph.p1.x)/(n-1), dy=(ph.p2.y-ph.p1.y)/(n-1);
+  const w=Math.hypot(dx,dy), ang=Math.atan2(dy,dx), nx=-Math.sin(ang), ny=Math.cos(ang);
+  const h=w*ph.hRatio, centers=[];
+  for(let i=0;i<n;i++) centers.push({x:ph.p1.x+dx*i+nx*ph.off, y:ph.p1.y+dy*i+ny*ph.off});
+  return {n,w,h,ang,centers};
+}
+function drawPhoto(){
+  const cv=$("photoCanvas"), wrap=$("photoWrap");
+  const cssW=Math.round(wrap.clientWidth*ph.zoom), cssH=Math.round(cssW*ph.H/ph.W);
+  const dpr=Math.min(2, window.devicePixelRatio||1);
+  cv.style.width=cssW+"px"; cv.style.height=cssH+"px";
+  cv.width=Math.round(cssW*dpr); cv.height=Math.round(cssH*dpr);
+  const g=cv.getContext("2d"), s=cv.width/ph.W;
+  g.drawImage(ph.src,0,0,cv.width,cv.height);
+  g.save(); g.scale(s,s);
+  const lw=2/s*dpr;
+  if(ph.p1&&ph.p2){
+    const G=geom();
+    G.centers.forEach((c,i)=>{
+      g.save(); g.translate(c.x,c.y); g.rotate(G.ang);
+      g.strokeStyle= i===0||i===G.n-1 ? "#ff3b30" : "#00c7be"; g.lineWidth=lw;
+      g.strokeRect(-G.w*0.46,-G.h/2,G.w*0.92,G.h); g.restore();
+    });
+  }
+  [ph.p1,ph.p2].forEach(p=>{ if(!p) return; g.fillStyle="#ff3b30"; g.beginPath(); g.arc(p.x,p.y,5/s*dpr,0,Math.PI*2); g.fill(); });
+  g.restore();
+  const n=photoDays();
+  $("photoStep").innerHTML = !ph.p1 ? "① 自分の行の <b>1日</b> のマスをタップ（＋で拡大できます）"
+    : !ph.p2 ? `② 自分の行の <b>${n}日</b>（最終日）のマスをタップ`
+    : "③ 枠が自分の行の各マスに重なっているか確認。ずれていれば ↑↓・高さで調整するか「タップし直す」";
+  $("photoRead").disabled=!(ph.p1&&ph.p2);
+}
+$("photoCanvas").addEventListener("click",e=>{
+  if(!ph.src||(ph.p1&&ph.p2)) return;
+  const r=e.currentTarget.getBoundingClientRect();
+  const pt={x:(e.clientX-r.left)/r.width*ph.W, y:(e.clientY-r.top)/r.height*ph.H};
+  if(!ph.p1) ph.p1=pt; else ph.p2=pt;
+  drawPhoto();
+});
+function zoomTo(z){
+  const wrap=$("photoWrap"), cx=(wrap.scrollLeft+wrap.clientWidth/2)/wrap.scrollWidth, cy=(wrap.scrollTop+wrap.clientHeight/2)/wrap.scrollHeight;
+  ph.zoom=Math.max(1,Math.min(6,z)); drawPhoto();
+  wrap.scrollLeft=cx*wrap.scrollWidth-wrap.clientWidth/2; wrap.scrollTop=cy*wrap.scrollHeight-wrap.clientHeight/2;
+}
+$("zoomIn").onclick=()=>zoomTo(ph.zoom*1.6);
+$("zoomOut").onclick=()=>zoomTo(ph.zoom/1.6);
+const stepPx=()=> ph.p1&&ph.p2 ? geom().w*0.06 : 0;
+$("moveUp").onclick=()=>{ ph.off-=stepPx(); drawPhoto(); };
+$("moveDown").onclick=()=>{ ph.off+=stepPx(); drawPhoto(); };
+$("hLess").onclick=()=>{ ph.hRatio=Math.max(0.2,ph.hRatio-0.04); drawPhoto(); };
+$("hMore").onclick=()=>{ ph.hRatio=Math.min(0.9,ph.hRatio+0.04); drawPhoto(); };
+$("photoRedo").onclick=()=>{ ph.p1=ph.p2=null; ph.off=0; drawPhoto(); };
+
+function cropCell(G,i,targetW,shift){
+  const c0=G.centers[i], sh=(shift||0)*G.h, c={x:c0.x-Math.sin(G.ang)*sh, y:c0.y+Math.cos(G.ang)*sh};
+  const cw=G.w*0.9, ch=G.h*0.86, k=targetW/cw;
+  const cv=document.createElement("canvas"); cv.width=Math.round(cw*k); cv.height=Math.max(8,Math.round(ch*k));
+  const g=cv.getContext("2d"); g.fillStyle="#fff"; g.fillRect(0,0,cv.width,cv.height);
+  g.translate(cv.width/2,cv.height/2); g.scale(k,k); g.rotate(-G.ang); g.translate(-c.x,-c.y);
+  g.imageSmoothingQuality="high"; g.drawImage(ph.src,0,0);
+  return cv;
+}
+function rgb2hsv(r,g,b){ r/=255; g/=255; b/=255; const mx=Math.max(r,g,b), mn=Math.min(r,g,b), d=mx-mn;
+  let h=0; if(d){ if(mx===r) h=((g-b)/d)%6; else if(mx===g) h=(b-r)/d+2; else h=(r-g)/d+4; h*=60; if(h<0) h+=360; }
+  return {h, s: mx? d/mx : 0, v: mx}; }
+function cellColor(cv){
+  const g=cv.getContext("2d"), {width:W,height:H}=cv;
+  const d=g.getImageData(Math.round(W*.12),Math.round(H*.15),Math.round(W*.76),Math.round(H*.7)).data;
+  const R=[],Gc=[],B=[];
+  for(let i=0;i<d.length;i+=4){ R.push(d[i]); Gc.push(d[i+1]); B.push(d[i+2]); }
+  const med=a=>{ a.sort((x,y)=>x-y); return a[a.length>>1]; };
+  return rgb2hsv(med(R),med(Gc),med(B));
+}
+function colorGuess(hsv, refV){
+  const {h,s,v}=hsv;
+  if(s>=0.3&&h>=60&&h<170) return v/refV<0.6 ? "E1" : "E2";
+  if(v<0.18) return "G";
+  if(s<0.15) return v < refV*0.88 ? "grey" : "white";
+  if(h>=70&&h<170) return v<0.6 ? "E1" : "E2";
+  if(h>=190&&h<255) return "日";
+  if(h>=255&&h<320) return "出";
+  if(h>=320||h<25) return s<0.28 ? "lightpink" : "pink";
+  return "white"; // yellowish paper or star row bleed
+}
+function binarize(cv){
+  // grayscale → invert dark cells → Otsu threshold, padded, black text on white
+  const W=cv.width,H=cv.height,g=cv.getContext("2d"),img=g.getImageData(0,0,W,H),d=img.data,L=new Uint8Array(W*H);
+  let sum=0; for(let i=0,j=0;i<d.length;i+=4,j++){ L[j]=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2]; sum+=L[j]; }
+  const dark = sum/(W*H) < 110; if(dark) for(let j=0;j<L.length;j++) L[j]=255-L[j];
+  const hist=new Array(256).fill(0); L.forEach(x=>hist[x]++);
+  let tot=L.length,sumAll=0; for(let t=0;t<256;t++) sumAll+=t*hist[t];
+  let sB=0,wB=0,best=0,th=128; for(let t=0;t<256;t++){ wB+=hist[t]; if(!wB) continue; const wF=tot-wB; if(!wF) break; sB+=t*hist[t];
+    const mB=sB/wB, mF=(sumAll-sB)/wF, between=wB*wF*(mB-mF)*(mB-mF); if(between>best){best=between; th=t;} }
+  const pad=Math.round(H*0.4), out=document.createElement("canvas"); out.width=W+pad*2; out.height=H+pad*2;
+  const og=out.getContext("2d"); og.fillStyle="#fff"; og.fillRect(0,0,out.width,out.height);
+  const oi=og.createImageData(W,H); for(let j=0;j<L.length;j++){ const v=L[j]>th?255:0; oi.data[j*4]=oi.data[j*4+1]=oi.data[j*4+2]=v; oi.data[j*4+3]=255; }
+  og.putImageData(oi,pad,pad); return out;
+}
+function lev(a,b){ const m=a.length,n=b.length,dp=Array.from({length:m+1},(_,i)=>[i,...Array(n).fill(0)]); for(let j=1;j<=n;j++) dp[0][j]=j;
+  for(let i=1;i<=m;i++) for(let j=1;j<=n;j++) dp[i][j]=Math.min(dp[i-1][j]+1,dp[i][j-1]+1,dp[i-1][j-1]+(a[i-1]===b[j-1]?0:1)); return dp[m][n]; }
+function normalizeOcr(t){
+  t=(t||"").replace(/[\s|_\-—.。、,'"`]/g,"").toUpperCase();
+  if(!t) return "";
+  t=t.replace(/^0/,"O").replace(/^(O)[IL]$/,"O1").replace(/^([HCE])[IL]$/,"$11").replace(/^([HCE])Z$/,"$12");
+  if(KNOWN.has(t)) return t;
+  let best="",bd=9; KNOWN.forEach(k=>{ const d=lev(t,k); if(d<bd){bd=d;best=k;} });
+  return bd<=1 && t.length>=1 ? best : "";
+}
+let ocrWorker=null;
+async function getOcr(){
+  if(ocrWorker) return ocrWorker;
+  if(!window.Tesseract){
+    await new Promise((res,rej)=>{ const sc=document.createElement("script"); sc.src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"; sc.onload=res; sc.onerror=rej; document.head.appendChild(sc); });
+  }
+  ocrWorker = await Tesseract.createWorker("jpn+eng", 1);
+  await ocrWorker.setParameters({ tessedit_pageseg_mode:"7", tessedit_char_whitelist:"ACEGHKMOSUV0123456789週休年日出事病リ" });
+  return ocrWorker;
+}
+$("photoRead").onclick=async()=>{
+  const G=geom(), [y,m]=ymParts(state.current);
+  $("photoRead").disabled=true;
+  const crops=G.centers.map((_,i)=>cropCell(G,i,120));
+  const hsv=crops.map(cellColor);
+  // Paper white next to each cell (the note rows just above and below) — photos are often lit unevenly.
+  const refs=G.centers.map((_,i)=>{ const v=[-1.05,1.05].map(o=>cellColor(cropCell(G,i,60,o))).filter(c=>c.s<0.2).map(c=>c.v); return v.length?Math.max(...v):null; });
+  const refV=refs.map((r,i)=>{ if(r!=null) return r; for(let d=1;d<G.n;d++){ if(refs[i-d]!=null) return refs[i-d]; if(refs[i+d]!=null) return refs[i+d]; } return 0.9; });
+  const kinds=hsv.map((c,i)=>colorGuess(c,refV[i]));
+  // E3 is followed by E4 (light pink); a strong pink without that is usually 年.
+  let worker=null;
+  setStatus("photoStatus","文字を読む準備をしています…（初回は数十秒かかります）");
+  try{ worker=await getOcr(); }catch(e){ worker=null; }
+  const codes=[];
+  for(let i=0;i<G.n;i++){
+    const k=kinds[i], key=`${y}-${pad(m)}-${pad(i+1)}`;
+    if(["G","E1","E2","日","出"].includes(k)){ codes.push(k); continue; }
+    let t="";
+    if(worker){
+      setStatus("photoStatus",`読み取り中… ${i+1} / ${G.n}`);
+      try{ const r=await worker.recognize(binarize(crops[i])); t=normalizeOcr(r.data.text); }catch(e){}
+    }
+    if(k==="grey") codes.push(["週","休"].includes(t)? t : (HOLIDAYS.has(key)?"休":"週"));
+    else if(k==="lightpink") codes.push(["E4","年","リ"].includes(t)? t : "E4");
+    else if(k==="pink") codes.push(["年","E3","リ"].includes(t)? t : (kinds[i+1]==="lightpink"?"E3":"年"));
+    else codes.push(t==="週"||t==="休" ? "" : t);
+  }
+  const mo=ensureMonth(state.current);
+  codes.forEach((c,i)=>{ mo.codes[i]=c; });
+  save();
+  bulkCells=crops.map(cv=>({url:cv.toDataURL("image/jpeg",0.85)}));
+  const cells=bulkCells; closePhoto(); bulkCells=cells;
+  openBulk(1);
+  if(!worker) setStatus("photoStatus","");
+};
 
 /* settings */
 function usedCodes(){
