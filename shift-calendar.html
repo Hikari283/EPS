@@ -21,6 +21,7 @@
   --accent:#4fbfb0; --accent-fg:#0b1312; --weekoff:#2a3331; --sat:#86a9ec; --sun:#f08a9b;
   --e1:#3c9a59; --e2:#7fa851; --e3:#c46a7c; --e4:#7d4b55; --e4-fg:#fff; --e3-fg:#fff; --nen:#b96777; --nen-fg:#fff;
   --nichi:#5b8de0; --g:#000; --star:#d9ac22; color-scheme:dark}
+[hidden]{display:none!important}
 html,body{background:var(--bg);color:var(--fg)}
 body{font-family:var(--font-body);font-size:15px;line-height:1.6;padding-inline:16px;padding-block:20px 48px}
 .wrap{max-width:860px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
@@ -109,6 +110,23 @@ details summary{cursor:pointer;color:var(--accent);font-weight:500}
       <div class="glinks" id="glinks" style="margin-top:8px"></div>
     </details>
     <p class="hint">「設定」で「登録しない」にした記号（週・休など）は書き出しません。同じ月を書き出し直すと、.ics は同じ予定として上書きされます（Google の CSV 取り込みは重複します）。</p>
+  </section>
+
+  <section class="panel" id="ttPanel">
+    <h2>TimeTree に入れる（共有カレンダー用）</h2>
+    <p class="hint">TimeTree の「予定スキャン」は画像1枚につき予定を10件まで読み取ります。予定を10件ずつ1枚の画像にまとめるので、1枚ずつスキャンしてください。</p>
+    <div class="row"><button class="primary" id="btnTT">TimeTree 用の画像を作る</button></div>
+    <p class="status" id="ttStatus"></p>
+    <div id="ttImages" style="display:flex;flex-direction:column;gap:14px"></div>
+    <details style="margin-top:8px">
+      <summary>TimeTree での入れ方</summary>
+      <ol class="hint" style="margin:8px 0 0;padding-left:1.4em">
+        <li>「写真に保存」を押して、画像を iPhone に保存します（共有メニューが開いたら「画像を保存」）。保存できないときは、画像を長押しして「"写真"に保存」を選びます。</li>
+        <li>TimeTree で共有カレンダーを開き、予定の追加から「予定スキャン」を選んで、保存した画像を読み込みます。</li>
+        <li>読み取られた予定と日付・時間が合っているか確認してから登録します。</li>
+        <li>画像が2枚以上あるときは、残りの画像でも同じように登録します。</li>
+      </ol>
+    </details>
   </section>
 
   <section class="panel" id="myRowPanel">
@@ -400,6 +418,58 @@ function renderLinks(){
     box.appendChild(a);
   });
 }
+
+/* ---------- TimeTree scan images ---------- */
+const hm = dt => `${dt.getHours()}:${pad(dt.getMinutes())}`;
+function ttLine(ev){
+  const dow=DOW[new Date(ev.y,ev.m-1,ev.d).getDay()];
+  const when = ev.allDay ? "終日" : `${hm(ev.start)}〜${ev.end.getDate()!==ev.start.getDate()?"翌":""}${hm(ev.end)}`;
+  return {date:`${ev.m}月${ev.d}日（${dow}）`, when, title:ev.title};
+}
+function drawTT(evs, page, pages){
+  const W=1080, top=190, lh=118, bottom=90;
+  const c=document.createElement("canvas"); c.width=W; c.height=top+lh*evs.length+bottom;
+  const g=c.getContext("2d");
+  const font="'Zen Kaku Gothic New','Hiragino Sans','Yu Gothic',sans-serif";
+  g.fillStyle="#ffffff"; g.fillRect(0,0,W,c.height);
+  g.fillStyle="#111111"; g.font=`700 54px ${font}`; g.textBaseline="middle";
+  const [y,m]=ymParts(state.current);
+  g.fillText(`${y}年${m}月 勤務予定`,60,80);
+  g.font=`400 32px ${font}`; g.fillStyle="#555555";
+  g.fillText(pages>1?`${page} / ${pages}枚目`:"",60,140);
+  evs.forEach((ev,i)=>{
+    const L=ttLine(ev), yy=top+lh*i+lh/2;
+    g.strokeStyle="#dddddd"; g.lineWidth=2; g.beginPath(); g.moveTo(60,top+lh*i); g.lineTo(W-60,top+lh*i); g.stroke();
+    g.fillStyle="#111111"; g.font=`500 44px ${font}`; g.fillText(L.date,60,yy);
+    g.font=`400 40px ${font}`; g.fillText(L.when,560,yy);
+    g.font=`700 44px ${font}`; g.textAlign="right"; g.fillText(L.title,W-60,yy); g.textAlign="left";
+  });
+  return c;
+}
+$("btnTT").onclick=async()=>{
+  const evs=events(); const box=$("ttImages"); box.textContent="";
+  if(!evs.length){ setStatus("ttStatus","登録する予定がありません。",true); return; }
+  try{ await document.fonts.ready; }catch(e){}
+  const pages=Math.ceil(evs.length/10);
+  for(let p=0;p<pages;p++){
+    const c=drawTT(evs.slice(p*10,p*10+10),p+1,pages);
+    const fig=document.createElement("div"); fig.style.cssText="display:flex;flex-direction:column;gap:6px";
+    const img=document.createElement("img"); img.src=c.toDataURL("image/png"); img.alt=`TimeTree 用 ${p+1}枚目`;
+    img.style.cssText="width:100%;max-width:420px;border:1px solid var(--line);border-radius:6px";
+    const b=document.createElement("button"); b.textContent=`写真に保存（${p+1}枚目）`; b.style.alignSelf="flex-start";
+    const fname=`TimeTree_${state.current}_${p+1}.png`;
+    b.onclick=()=>c.toBlob(async blob=>{
+      if(downloads){
+        try{ await downloads.save({filename:fname,data:blob}); setStatus("ttStatus",`${p+1}枚目を保存しました。`); }
+        catch(e){ setStatus("ttStatus", e&&e.code==="declined"?"保存をやめました。":"保存できませんでした。画像を長押しして保存してください。", !(e&&e.code==="declined")); }
+      }else{
+        const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=fname; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),2000);
+      }
+    },"image/png");
+    fig.append(img,b); box.appendChild(fig);
+  }
+  setStatus("ttStatus",`予定${evs.length}件を画像${pages}枚にしました。`);
+};
 
 /* ---------- export ---------- */
 let downloads=null, sample=null;
