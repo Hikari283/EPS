@@ -71,6 +71,14 @@ input{background:var(--bg);border:1px solid var(--line);border-radius:6px;paddin
 .k-nichi{background:var(--nichi)!important;color:var(--nichi-fg)!important}
 .k-G{background:var(--g)!important;color:var(--g-fg)!important}
 
+.counts-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.counts{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:6px}
+.counts .ct{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:6px;background:var(--bg);border-radius:6px;padding:4px 6px}
+.counts .chip{font-family:var(--font-code);font-weight:600;text-align:center;border-radius:4px;padding:1px 4px;min-width:2.2em;background:var(--surface)}
+.counts .num{text-align:right;font-variant-numeric:tabular-nums;line-height:1.2}
+.counts .num b{font-size:1.05rem}
+.counts .num small{display:block;color:var(--muted);font-size:.72rem}
+.counts-empty{color:var(--muted);font-size:.85rem}
 details summary{cursor:pointer;color:var(--muted);font-size:.9rem}
 .settings{display:flex;flex-direction:column;gap:12px;margin-top:10px}
 .codes-list{display:flex;flex-direction:column;gap:6px}
@@ -99,6 +107,11 @@ details summary{cursor:pointer;color:var(--muted);font-size:.9rem}
     </div>
     <div class="cal" id="cal"></div>
     <p class="hint edit-only" style="margin-top:8px;text-align:center">日付をタップすると勤務を変更できます</p>
+  </section>
+
+  <section class="panel">
+    <div class="counts-head"><strong id="countTitle">記号の回数</strong><span class="hint" id="countRange"></span></div>
+    <div class="counts" id="counts"></div>
   </section>
 
   <section class="panel edit-only">
@@ -238,7 +251,30 @@ function render(){
     b.onclick=()=>{ if(canWrite) openSheet(d); };
     cal.appendChild(b);
   }
-  renderToday();
+  renderToday(); renderCounts();
+}
+function renderCounts(){
+  const box=$("counts"); box.textContent="";
+  const mo=state.months[state.current], month={}, total={};
+  if(mo) mo.codes.forEach(c=>{ if(c) month[c]=(month[c]||0)+1; });
+  const keys=Object.keys(state.months).sort();
+  keys.forEach(k=>state.months[k].codes.forEach(c=>{ if(c) total[c]=(total[c]||0)+1; }));
+  if(keys.length){ const f=ymParts(keys[0]), l=ymParts(keys[keys.length-1]);
+    $("countRange").textContent = keys.length>1 ? `合計は${f[0]}年${f[1]}月〜${l[0]}年${l[1]}月の${keys.length}か月分` : `合計は${f[1]}月の1か月分`; }
+  else $("countRange").textContent="";
+  $("countTitle").textContent=`${ymParts(state.current)[1]}月の回数`;
+  const codes=Object.keys(total).sort((a,b)=>(month[b]||0)-(month[a]||0)||total[b]-total[a]||a.localeCompare(b,"ja"));
+  if(!codes.length){ const e=document.createElement("div"); e.className="counts-empty"; e.textContent="まだ勤務が入っていません"; box.appendChild(e); return; }
+  codes.forEach(c=>{
+    const it=document.createElement("div"); it.className="ct";
+    const ch=document.createElement("span"); ch.className="chip "+chipClass(c); ch.textContent=c;
+    const n=document.createElement("span"); n.className="num";
+    const b=document.createElement("b"); b.textContent=month[c]||0;
+    const sm=document.createElement("small"); sm.textContent=`合計 ${total[c]}`;
+    n.append(b,sm); it.append(ch,n);
+    it.setAttribute("aria-label",`${c} 今月${month[c]||0}回 合計${total[c]}回`);
+    box.appendChild(it);
+  });
 }
 function shiftMonth(k){ let [y,m]=ymParts(state.current); m+=k; if(m<1){m=12;y--;} if(m>12){m=1;y++;} state.current=`${y}-${pad(m)}`; render(); }
 $("prevM").onclick=()=>shiftMonth(-1);
