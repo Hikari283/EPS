@@ -204,7 +204,11 @@ details summary{cursor:pointer;color:var(--muted);font-size:.9rem}
 <!-- photo: pick your row -->
 <div class="full" id="photoBg" hidden role="dialog" aria-modal="true" aria-labelledby="photoTitle">
   <div class="full-head">
-    <strong id="photoTitle">写真から入力</strong>
+    <div class="row" style="gap:4px">
+      <button id="phPrev" aria-label="前の月">‹</button>
+      <strong id="photoTitle">写真から入力</strong>
+      <button id="phNext" aria-label="次の月">›</button>
+    </div>
     <button id="photoClose">閉じる</button>
   </div>
   <div class="full-step" id="photoStep"></div>
@@ -423,7 +427,9 @@ document.querySelector("#bulkBg .sheet").style.boxShadow="0 -6px 24px rgba(0,0,0
 
 /* photo → codes (no server: tap your row, crop each day, guess by color + on-device OCR) */
 const KNOWN = new Set([...COMMON,"K","事","病","リ"]);
-const ph = { src:null, W:0, H:0, zoom:1, p1:null, p2:null, off:0, hRatio:0.42 };
+// anchors: day index → tapped point. 1日 and 最終日 first; any other day tapped later re-aligns locally.
+const ph = { src:null, W:0, H:0, zoom:1, anchors:{}, off:0, hRatio:0.42 };
+const hasEnds=()=>{ const n=photoDays(); return ph.anchors[0]&&ph.anchors[n-1]; };
 function photoDays(){ const [y,m]=ymParts(state.current); return daysIn(y,m); }
 $("btnPhoto").onclick=()=>{ $("photoInput").value=""; $("photoInput").click(); };
 $("photoInput").onchange=async()=>{
@@ -434,9 +440,11 @@ $("photoInput").onchange=async()=>{
   const max=2400, k=Math.min(1, max/Math.max(bmp.width,bmp.height));
   const c=document.createElement("canvas"); c.width=Math.round(bmp.width*k); c.height=Math.round(bmp.height*k);
   c.getContext("2d").drawImage(bmp,0,0,c.width,c.height);
-  Object.assign(ph,{src:c,W:c.width,H:c.height,zoom:1,p1:null,p2:null,off:0,hRatio:0.42});
-  const [, m]=ymParts(state.current);
-  $("photoTitle").textContent=`${m}月の勤務表の写真`;
+  Object.assign(ph,{src:c,W:c.width,H:c.height,zoom:1,anchors:{},off:0,hRatio:0.42});
+  // A roster photo is usually for next month once this month is already entered.
+  const now=new Date(), next=ymOf(new Date(now.getFullYear(),now.getMonth()+1,1));
+  if(state.current===ymOf(now) && state.months[state.current] && !state.months[next]) state.current=next;
+  render();
   setStatus("photoStatus","");
   $("photoBg").hidden=false; document.body.style.overflow="hidden";
   drawPhoto();
@@ -444,11 +452,16 @@ $("photoInput").onchange=async()=>{
 function closePhoto(){ $("photoBg").hidden=true; document.body.style.overflow=""; ph.src=null; }
 $("photoClose").onclick=closePhoto;
 function geom(){
-  const n=photoDays(), dx=(ph.p2.x-ph.p1.x)/(n-1), dy=(ph.p2.y-ph.p1.y)/(n-1);
-  const w=Math.hypot(dx,dy), ang=Math.atan2(dy,dx), nx=-Math.sin(ang), ny=Math.cos(ang);
-  const h=w*ph.hRatio, centers=[];
-  for(let i=0;i<n;i++) centers.push({x:ph.p1.x+dx*i+nx*ph.off, y:ph.p1.y+dy*i+ny*ph.off});
-  return {n,w,h,ang,centers};
+  const n=photoDays(), idx=Object.keys(ph.anchors).map(Number).filter(i=>i<n).sort((a,b)=>a-b), centers=[];
+  for(let i=0;i<n;i++){
+    let a=idx[0], b=idx[idx.length-1];
+    for(let k=0;k<idx.length-1;k++) if(i>=idx[k]&&i<=idx[k+1]){ a=idx[k]; b=idx[k+1]; break; }
+    const A=ph.anchors[a], B=ph.anchors[b], dx=(B.x-A.x)/(b-a), dy=(B.y-A.y)/(b-a);
+    const w=Math.hypot(dx,dy), ang=Math.atan2(dy,dx), t=i-a;
+    centers.push({x:A.x+dx*t-Math.sin(ang)*ph.off, y:A.y+dy*t+Math.cos(ang)*ph.off, w, ang, h:w*ph.hRatio});
+  }
+  const w=centers.reduce((s,c)=>s+c.w,0)/n;
+  return {n,w,centers};
 }
 function drawPhoto(){
   const cv=$("photoCanvas"), wrap=$("photoWrap");
@@ -460,29 +473,40 @@ function drawPhoto(){
   g.drawImage(ph.src,0,0,cv.width,cv.height);
   g.save(); g.scale(s,s);
   const lw=2/s*dpr;
-  if(ph.p1&&ph.p2){
+  if(hasEnds()){
     const G=geom();
     G.centers.forEach((c,i)=>{
-      g.save(); g.translate(c.x,c.y); g.rotate(G.ang);
-      g.strokeStyle= i===0||i===G.n-1 ? "#ff3b30" : "#00c7be"; g.lineWidth=lw;
-      g.strokeRect(-G.w*0.46,-G.h/2,G.w*0.92,G.h); g.restore();
+      g.save(); g.translate(c.x,c.y); g.rotate(c.ang);
+      g.strokeStyle= ph.anchors[i] ? "#ff3b30" : "#00c7be"; g.lineWidth=lw;
+      g.strokeRect(-c.w*0.46,-c.h/2,c.w*0.92,c.h); g.restore();
     });
   }
-  [ph.p1,ph.p2].forEach(p=>{ if(!p) return; g.fillStyle="#ff3b30"; g.beginPath(); g.arc(p.x,p.y,5/s*dpr,0,Math.PI*2); g.fill(); });
+  Object.values(ph.anchors).forEach(p=>{ g.fillStyle="#ff3b30"; g.beginPath(); g.arc(p.x,p.y,5/s*dpr,0,Math.PI*2); g.fill(); });
   g.restore();
-  const n=photoDays();
-  $("photoStep").innerHTML = !ph.p1 ? "① 自分の行の <b>1日</b> のマスをタップ（＋で拡大できます）"
-    : !ph.p2 ? `② 自分の行の <b>${n}日</b>（最終日）のマスをタップ`
-    : "③ 枠が自分の行の各マスに重なっているか確認。ずれていれば ↑↓・高さで調整するか「タップし直す」";
-  $("photoRead").disabled=!(ph.p1&&ph.p2);
+  const n=photoDays(), [, m]=ymParts(state.current);
+  $("photoTitle").textContent=`${m}月（${n}日まで）`;
+  $("photoStep").innerHTML = !ph.anchors[0] ? `① 自分の行の <b>${m}月1日</b> のマスをタップ（＋で拡大）。月が違うときは上の ‹ › で合わせてください`
+    : !ph.anchors[n-1] ? `② 自分の行の <b>${n}日</b>（最終日）のマスをタップ`
+    : "③ 枠がマスに重なっているか確認。途中でずれている日があれば、<b>その日の本当のマスをタップ</b>すると合わせ直します";
+  $("photoRead").disabled=!hasEnds();
 }
 $("photoCanvas").addEventListener("click",e=>{
-  if(!ph.src||(ph.p1&&ph.p2)) return;
-  const r=e.currentTarget.getBoundingClientRect();
+  if(!ph.src) return;
+  const r=e.currentTarget.getBoundingClientRect(), n=photoDays();
   const pt={x:(e.clientX-r.left)/r.width*ph.W, y:(e.clientY-r.top)/r.height*ph.H};
-  if(!ph.p1) ph.p1=pt; else ph.p2=pt;
+  if(!ph.anchors[0]) ph.anchors[0]=pt;
+  else if(!ph.anchors[n-1]) ph.anchors[n-1]=pt;
+  else {
+    // Snap the tap to the nearest day (along the row) and pin that day there.
+    const G=geom(); let best=-1, bd=Infinity;
+    G.centers.forEach((c,i)=>{ const d=Math.hypot(c.x-pt.x,c.y-pt.y); if(d<bd){bd=d;best=i;} });
+    if(best>0&&best<n-1&&bd<G.w*3) ph.anchors[best]={x:pt.x+Math.sin(G.centers[best].ang)*ph.off, y:pt.y-Math.cos(G.centers[best].ang)*ph.off};
+  }
   drawPhoto();
 });
+function photoMonth(k){ shiftMonth(k); ph.anchors={}; ph.off=0; drawPhoto(); }
+$("phPrev").onclick=()=>photoMonth(-1);
+$("phNext").onclick=()=>photoMonth(1);
 function zoomTo(z){
   const wrap=$("photoWrap"), cx=(wrap.scrollLeft+wrap.clientWidth/2)/wrap.scrollWidth, cy=(wrap.scrollTop+wrap.clientHeight/2)/wrap.scrollHeight;
   ph.zoom=Math.max(1,Math.min(6,z)); drawPhoto();
@@ -490,19 +514,19 @@ function zoomTo(z){
 }
 $("zoomIn").onclick=()=>zoomTo(ph.zoom*1.6);
 $("zoomOut").onclick=()=>zoomTo(ph.zoom/1.6);
-const stepPx=()=> ph.p1&&ph.p2 ? geom().w*0.06 : 0;
+const stepPx=()=> hasEnds() ? geom().w*0.06 : 0;
 $("moveUp").onclick=()=>{ ph.off-=stepPx(); drawPhoto(); };
 $("moveDown").onclick=()=>{ ph.off+=stepPx(); drawPhoto(); };
 $("hLess").onclick=()=>{ ph.hRatio=Math.max(0.2,ph.hRatio-0.04); drawPhoto(); };
 $("hMore").onclick=()=>{ ph.hRatio=Math.min(0.9,ph.hRatio+0.04); drawPhoto(); };
-$("photoRedo").onclick=()=>{ ph.p1=ph.p2=null; ph.off=0; drawPhoto(); };
+$("photoRedo").onclick=()=>{ ph.anchors={}; ph.off=0; drawPhoto(); };
 
 function cropCell(G,i,targetW,shift){
-  const c0=G.centers[i], sh=(shift||0)*G.h, c={x:c0.x-Math.sin(G.ang)*sh, y:c0.y+Math.cos(G.ang)*sh};
-  const cw=G.w*0.9, ch=G.h*0.86, k=targetW/cw;
+  const c0=G.centers[i], sh=(shift||0)*c0.h, c={x:c0.x-Math.sin(c0.ang)*sh, y:c0.y+Math.cos(c0.ang)*sh};
+  const cw=c0.w*0.9, ch=c0.h*0.86, k=targetW/cw;
   const cv=document.createElement("canvas"); cv.width=Math.round(cw*k); cv.height=Math.max(8,Math.round(ch*k));
   const g=cv.getContext("2d"); g.fillStyle="#fff"; g.fillRect(0,0,cv.width,cv.height);
-  g.translate(cv.width/2,cv.height/2); g.scale(k,k); g.rotate(-G.ang); g.translate(-c.x,-c.y);
+  g.translate(cv.width/2,cv.height/2); g.scale(k,k); g.rotate(-c0.ang); g.translate(-c.x,-c.y);
   g.imageSmoothingQuality="high"; g.drawImage(ph.src,0,0);
   return cv;
 }
