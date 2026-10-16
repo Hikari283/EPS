@@ -1,0 +1,675 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>勤務カレンダー</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="勤務">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#0f6e64">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+/* Layout: one column — today/tomorrow, month calendar, counts, folded settings. Colors follow the printed 勤務表. */
+:root{
+  color-scheme:light;
+  --bg:#f3f5f4; --surface:#ffffff; --fg:#1d2624; --muted:#5f6d69; --line:#d5dcd9;
+  --accent:#0f6e64; --accent-fg:#ffffff; --weekoff:#e3e7e6; --sat:#2f5fb3; --sun:#c2364b;
+  --e1:#2f7d46; --e1-fg:#fff; --e2:#9cc66a; --e2-fg:#1d2624; --e3:#e98fa0; --e3-fg:#1d2624; --e4:#f6cdd4; --e4-fg:#1d2624;
+  --nen:#f2a3b3; --nen-fg:#1d2624; --nichi:#4b7fd6; --nichi-fg:#fff; --g:#111; --g-fg:#fff;
+  --font-body:"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic",system-ui,sans-serif;
+  --font-code:ui-monospace,"SF Mono","SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#141a19; --surface:#1d2523; --fg:#e6ecea; --muted:#9aa8a4; --line:#33403d;
+  --accent:#4fbfb0; --accent-fg:#0b1312; --weekoff:#2a3331; --sat:#86a9ec; --sun:#f08a9b;
+  --e1:#3c9a59; --e2:#7fa851; --e3:#c46a7c; --e4:#7d4b55; --e4-fg:#fff; --e3-fg:#fff; --nen:#b96777; --nen-fg:#fff;
+  --nichi:#5b8de0; --g:#000; color-scheme:dark}}
+*{-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+html,body{background:var(--bg);color:var(--fg);margin:0}
+body{font-family:var(--font-body);font-size:15px;line-height:1.6;padding-inline:16px;padding-block:16px 40px}
+.wrap{max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+button,input,textarea{font:inherit;color:inherit}
+button{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 12px;cursor:pointer}
+button.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent);font-weight:700}
+button:focus-visible,input:focus-visible,summary:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button:disabled{opacity:.45;cursor:default}
+input,textarea{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+textarea{width:100%;box-sizing:border-box;min-height:70px;font-size:.8rem;font-family:var(--font-code)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.hint{font-size:.8rem;color:var(--muted);margin:0}
+.status{font-size:.85rem;color:var(--muted);margin:0}
+.status:empty{display:none}
+.status.err{color:var(--sun)}
+
+.today{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.today .lbl{font-size:.8rem;color:var(--muted)}
+.today .code{font-family:var(--font-code);font-weight:700;font-size:1.8rem;line-height:1.2;padding:4px 0;border-radius:6px;display:block;text-align:center;background:var(--bg);border:1px solid var(--line);margin-top:4px}
+.today .sub{font-size:.82rem;color:var(--muted);margin-top:4px;min-height:1.3em}
+
+.monthbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.monthbar .ym{font-weight:700;font-size:1.15rem;font-variant-numeric:tabular-nums}
+.monthbar button{border:none;background:none;font-size:1.4rem;padding:2px 12px;color:var(--accent)}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px}
+.dow{text-align:center;font-size:.72rem;color:var(--muted)}
+.dow.sat{color:var(--sat)} .dow.sun{color:var(--sun)}
+.cell{border:none;border-radius:6px;background:var(--bg);min-height:56px;padding:3px;display:flex;flex-direction:column;align-items:stretch;gap:2px;min-width:0;cursor:pointer}
+.cell.empty{visibility:hidden}
+.cell .d{font-size:.7rem;font-variant-numeric:tabular-nums;color:var(--muted);text-align:left}
+.cell.sat .d{color:var(--sat)} .cell.sun .d,.cell.hol .d{color:var(--sun)}
+.cell .c{text-align:center;font-family:var(--font-code);font-weight:700;font-size:.95rem;border-radius:4px;padding:1px 0;min-height:1.4em}
+.cell.today{outline:2px solid var(--accent);outline-offset:-2px}
+.cell.cursor{outline:3px solid var(--accent);outline-offset:-3px}
+.cell .dot{height:4px;width:4px;border-radius:50%;background:var(--muted);align-self:center;opacity:.7}
+.cell .dot.none{visibility:hidden}
+.calfoot{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap}
+
+.k-week{background:var(--weekoff)!important;color:var(--muted)!important}
+.k-E1{background:var(--e1)!important;color:var(--e1-fg)!important}
+.k-E2{background:var(--e2)!important;color:var(--e2-fg)!important}
+.k-E3{background:var(--e3)!important;color:var(--e3-fg)!important}
+.k-E4{background:var(--e4)!important;color:var(--e4-fg)!important}
+.k-nen{background:var(--nen)!important;color:var(--nen-fg)!important}
+.k-nichi{background:var(--nichi)!important;color:var(--nichi-fg)!important}
+.k-G{background:var(--g)!important;color:var(--g-fg)!important}
+
+.counts-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.counts{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:6px}
+.counts .ct{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:6px;background:var(--bg);border-radius:6px;padding:4px 6px}
+.counts .chip{font-family:var(--font-code);font-weight:700;text-align:center;border-radius:4px;padding:1px 4px;min-width:2.2em;background:var(--surface)}
+.counts .num{text-align:right;font-variant-numeric:tabular-nums;line-height:1.2}
+.counts .num b{font-size:1.05rem}
+.counts .num small{display:block;color:var(--muted);font-size:.72rem}
+.counts-empty{color:var(--muted);font-size:.85rem}
+
+details summary{cursor:pointer;color:var(--muted);font-size:.9rem}
+.settings{display:flex;flex-direction:column;gap:14px;margin-top:10px}
+.codes-list{display:flex;flex-direction:column;gap:6px}
+.codes-list .item{display:grid;grid-template-columns:3.2em minmax(0,1fr) auto;gap:8px;align-items:center}
+.codes-list .chip{font-family:var(--font-code);font-weight:700;text-align:center;border-radius:4px;padding:2px 0;background:var(--bg)}
+.codes-list input[type=text]{width:100%;box-sizing:border-box;min-width:0}
+.codes-list .times{display:flex;gap:4px;align-items:center}
+.codes-list input[type=time]{width:6.4em}
+
+.sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:flex-end;justify-content:center;z-index:10}
+.sheet{background:var(--surface);border-radius:14px 14px 0 0;width:100%;max-width:560px;padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:12px;max-height:85vh;overflow:auto;box-sizing:border-box}
+.pick{display:grid;grid-template-columns:repeat(auto-fill,minmax(52px,1fr));gap:6px}
+.pick button{font-family:var(--font-code);font-weight:700;padding:10px 4px}
+.pick button.sel{outline:2px solid var(--accent);outline-offset:1px}
+.bulk-now{font-size:1.1rem;font-weight:700}
+.bulk-photo{display:flex;align-items:center;gap:10px}
+.bulk-photo img{height:44px;max-width:60%;border:1px solid var(--line);border-radius:4px;image-rendering:auto;background:#fff}
+.bulk-photo .guess{font-size:.85rem;color:var(--muted)}
+.full{position:fixed;inset:0;background:var(--bg);z-index:20;display:flex;flex-direction:column}
+.full-head{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 16px;padding-top:calc(12px + env(safe-area-inset-top,0px));background:var(--surface);border-bottom:1px solid var(--line)}
+.full-step{padding:10px 16px;font-size:.9rem;min-height:3.2em;box-sizing:content-box}
+.full-step b{color:var(--accent)}
+.photo-wrap{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;background:#222;min-height:0}
+.photo-wrap canvas{display:block;touch-action:pan-x pan-y}
+.full-foot{display:flex;flex-direction:column;gap:8px;padding:10px 16px calc(12px + env(safe-area-inset-bottom,0px));background:var(--surface);border-top:1px solid var(--line)}
+.full-foot .row button{padding:6px 10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section class="panel today" id="today" aria-live="polite"></section>
+
+  <section class="panel">
+    <div class="monthbar">
+      <button id="prevM" aria-label="前の月">‹</button>
+      <span class="ym" id="ymLabel"></span>
+      <button id="nextM" aria-label="次の月">›</button>
+    </div>
+    <div class="cal" id="cal"></div>
+    <div class="calfoot">
+      <span class="hint">日付をタップすると変更できます</span>
+      <div class="row">
+        <button id="btnPhoto">写真から入力</button>
+        <button id="btnBulk">まとめて入力</button>
+      </div>
+      <input id="photoInput" type="file" accept="image/*" hidden>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="counts-head"><strong id="countTitle">記号の回数</strong><span class="hint" id="countRange"></span></div>
+    <div class="counts" id="counts"></div>
+  </section>
+
+  <details>
+    <summary>設定</summary>
+    <div class="settings panel">
+      <div>
+        <p class="hint" style="margin-bottom:6px">勤務記号の名前と時間（今日・明日の欄に表示されます）</p>
+        <div class="codes-list" id="codeList"></div>
+      </div>
+      <div>
+        <p class="hint" style="margin-bottom:6px">データはこのiPhoneの中に保存されます。機種変更などに備えて、ときどきバックアップをメモ帳などに貼っておいてください。</p>
+        <div class="row">
+          <button id="btnBackup">バックアップをコピー</button>
+          <button id="btnRestoreOpen">バックアップから戻す</button>
+        </div>
+        <div id="restoreBox" hidden style="margin-top:8px;display:flex;flex-direction:column;gap:6px">
+          <textarea id="restoreText" placeholder="コピーしておいたバックアップを貼り付け"></textarea>
+          <div class="row"><button class="primary" id="btnRestore">この内容で戻す</button></div>
+        </div>
+        <p class="status" id="backupStatus" style="margin-top:6px"></p>
+      </div>
+    </div>
+  </details>
+</div>
+
+<!-- one day -->
+<div class="sheet-bg" id="sheetBg" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <strong id="sheetTitle"></strong>
+    <div class="pick" id="sheetCodes"></div>
+    <div class="row"><label for="sheetCode">記号</label><input id="sheetCode" type="text" style="width:6em" autocomplete="off"></div>
+    <div class="row"><label for="sheetNote">メモ</label><input id="sheetNote" type="text" style="flex:1;min-width:0" autocomplete="off"></div>
+    <div class="row" style="justify-content:flex-end">
+      <button id="sheetCancel">やめる</button>
+      <button class="primary" id="sheetSave">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- whole month, one day after another -->
+<div class="sheet-bg" id="bulkBg" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="bulkTitle">
+    <div class="row" style="justify-content:space-between">
+      <strong id="bulkTitle"></strong>
+      <span class="bulk-now" id="bulkNow"></span>
+    </div>
+    <div class="bulk-photo" id="bulkPhoto" hidden>
+      <img id="bulkImg" alt="写真のこの日のマス">
+      <span class="guess" id="bulkGuess"></span>
+    </div>
+    <p class="hint" id="bulkHint">記号をタップすると、その日に入って次の日に進みます。</p>
+    <div class="pick" id="bulkCodes"></div>
+    <div class="row" style="justify-content:space-between">
+      <div class="row">
+        <button id="bulkBack">← 1日戻る</button>
+        <button id="bulkSkip">空欄にする</button>
+        <button id="bulkKeep" hidden>このままでOK →</button>
+      </div>
+      <button class="primary" id="bulkDone">完了</button>
+    </div>
+  </div>
+</div>
+
+<!-- photo: pick your row -->
+<div class="full" id="photoBg" hidden role="dialog" aria-modal="true" aria-labelledby="photoTitle">
+  <div class="full-head">
+    <div class="row" style="gap:4px">
+      <button id="phPrev" aria-label="前の月">‹</button>
+      <strong id="photoTitle">写真から入力</strong>
+      <button id="phNext" aria-label="次の月">›</button>
+    </div>
+    <button id="photoClose">閉じる</button>
+  </div>
+  <div class="full-step" id="photoStep"></div>
+  <div class="photo-wrap" id="photoWrap"><canvas id="photoCanvas"></canvas></div>
+  <div class="full-foot">
+    <div class="row">
+      <span class="hint">拡大</span><button id="zoomOut" aria-label="縮小">−</button><button id="zoomIn" aria-label="拡大">＋</button>
+      <span class="hint" style="margin-left:6px">位置</span><button id="moveUp" aria-label="枠を上へ">↑</button><button id="moveDown" aria-label="枠を下へ">↓</button>
+      <span class="hint" style="margin-left:6px">高さ</span><button id="hLess" aria-label="枠を低く">−</button><button id="hMore" aria-label="枠を高く">＋</button>
+      <button id="photoRedo">タップし直す</button>
+    </div>
+    <p class="status" id="photoStatus"></p>
+    <button class="primary" id="photoRead" disabled>この枠で読み取る</button>
+  </div>
+</div>
+
+<script>
+(function(){
+const STORE_KEY = "kinmu.v1";
+const DOW = ["日","月","火","水","木","金","土"];
+const HOLIDAYS = new Set(["2026-09-21","2026-09-22","2026-09-23","2026-10-12","2026-11-03","2026-11-23","2026-12-23",
+  "2027-01-01","2027-01-11","2027-02-11","2027-02-23","2027-03-21","2027-03-22","2027-04-29","2027-05-03","2027-05-04","2027-05-05"]);
+const DEFAULT_CODES = { "週":{label:"週休"}, "休":{label:"休日"}, "年":{label:"年休"}, "日":{label:"日直"} };
+const COMMON = ["A","M","S","HA","HU","H1","H2","H3","C1","C2","C3","CA","O1","OA","VA","E1","E2","E3","E4","G","日","年","週","休","出"];
+// 2026年10月（勤務表の上から15番目の行）
+const SEED = { "2026-10": {
+  codes:["年","HA","週","週","C2","O1","C2","S","E1","E2","週","休","M","HA","週","O1","E3","E4","G","S","CA","週","CA","週","週","週","S","C2","O1","O1","H1"],
+  notes:["休希望","","","","","","","","","セミナー","★","","","","10","","★","","","","","18","","×","","31","","☆","","(S)",""] } };
+
+const $ = id => document.getElementById(id);
+const pad = n => String(n).padStart(2,"0");
+const ymParts = ym => ym.split("-").map(Number);
+const daysIn = (y,m) => new Date(y,m,0).getDate();
+const ymOf = dt => `${dt.getFullYear()}-${pad(dt.getMonth()+1)}`;
+
+function load(){
+  let s=null;
+  try{ s=JSON.parse(localStorage.getItem(STORE_KEY)||"null"); }catch(e){}
+  if(!s||typeof s!=="object") s={ months: JSON.parse(JSON.stringify(SEED)) };
+  s.months = s.months||{};
+  s.codes = Object.assign({}, DEFAULT_CODES, s.codes||{});
+  s.current = ymOf(new Date());
+  return s;
+}
+let state = load();
+function save(){ try{ localStorage.setItem(STORE_KEY, JSON.stringify({months:state.months,codes:state.codes})); }catch(e){} }
+
+function cfg(code){ return state.codes[code]||{label:code}; }
+function chipClass(code){
+  if(code==="週"||code==="休") return "k-week";
+  if(/^E[1-4]$/.test(code)) return "k-"+code;
+  if(code==="年") return "k-nen";
+  if(code==="日") return "k-nichi";
+  if(code==="G") return "k-G";
+  return "";
+}
+function setStatus(id,msg,err){ const e=$(id); e.textContent=msg; e.classList.toggle("err",!!err); }
+function ensureMonth(ym){
+  if(!state.months[ym]){ const [y,m]=ymParts(ym), n=daysIn(y,m); state.months[ym]={codes:Array(n).fill(""),notes:Array(n).fill("")}; }
+  return state.months[ym];
+}
+function allCodes(){ return [...new Set([...COMMON,...Object.keys(state.codes)])]; }
+
+/* today / tomorrow */
+function renderToday(){
+  const box=$("today"); box.textContent="";
+  const t=new Date(); t.setHours(0,0,0,0);
+  [["今日",0],["明日",1]].forEach(([lbl,off])=>{
+    const dt=new Date(t); dt.setDate(t.getDate()+off);
+    const mo=state.months[ymOf(dt)], i=dt.getDate()-1;
+    const code=mo?(mo.codes[i]||""):"", note=mo?(mo.notes[i]||""):"";
+    const div=document.createElement("div");
+    const L=document.createElement("div"); L.className="lbl"; L.textContent=`${lbl}　${dt.getMonth()+1}/${dt.getDate()}（${DOW[dt.getDay()]}）`;
+    const C=document.createElement("div"); C.className="code "+chipClass(code); C.textContent=code||"–";
+    const S=document.createElement("div"); S.className="sub";
+    if(!mo) S.textContent="まだ入力していません";
+    else { const c=cfg(code), p=[];
+      if(code && c.label && c.label!==code) p.push(c.label);
+      if(code && c.start && c.end) p.push(`${c.start}〜${c.end}`);
+      if(note) p.push(note);
+      S.textContent=p.join("・"); }
+    div.append(L,C,S); box.appendChild(div);
+  });
+}
+
+/* calendar */
+let bulkDay=null;
+function render(){
+  const [y,m]=ymParts(state.current);
+  $("ymLabel").textContent=`${y}年${m}月`;
+  const mo=state.months[state.current];
+  const cal=$("cal"); cal.textContent="";
+  DOW.forEach((d,i)=>{ const e=document.createElement("div"); e.className="dow"+(i===0?" sun":i===6?" sat":""); e.textContent=d; cal.appendChild(e); });
+  for(let i=0,f=new Date(y,m-1,1).getDay();i<f;i++){ const e=document.createElement("div"); e.className="cell empty"; cal.appendChild(e); }
+  const todayKey=`${ymOf(new Date())}-${pad(new Date().getDate())}`;
+  for(let d=1; d<=daysIn(y,m); d++){
+    const dow=new Date(y,m-1,d).getDay(), key=`${y}-${pad(m)}-${pad(d)}`;
+    const code=mo?(mo.codes[d-1]||""):"", note=mo?(mo.notes[d-1]||""):"";
+    const b=document.createElement("button");
+    b.className="cell"+(dow===0?" sun":dow===6?" sat":"")+(HOLIDAYS.has(key)?" hol":"")+(key===todayKey?" today":"")+(bulkDay===d?" cursor":"");
+    b.setAttribute("aria-label",`${m}月${d}日 ${code||"未入力"} ${note}`);
+    const dd=document.createElement("span"); dd.className="d"; dd.textContent=d;
+    const cc=document.createElement("span"); cc.className="c "+chipClass(code); cc.textContent=code;
+    const dot=document.createElement("span"); dot.className="dot"+(note?"":" none");
+    b.append(dd,cc,dot);
+    b.onclick=()=>{ if(bulkDay!==null){ bulkDay=d; renderBulk(); render(); } else openSheet(d); };
+    cal.appendChild(b);
+  }
+  renderToday(); renderCounts();
+  if(bulkDay!==null) keepCursorVisible();
+}
+function keepCursorVisible(){
+  const sheet=document.querySelector("#bulkBg .sheet"), cur=document.querySelector(".cell.cursor");
+  if(!sheet||!cur) return;
+  const sh=sheet.getBoundingClientRect().height;
+  document.body.style.paddingBottom=(sh+24)+"px";
+  const r=cur.getBoundingClientRect(), limit=window.innerHeight-sh-12;
+  if(r.bottom>limit) window.scrollBy({top:r.bottom-limit,behavior:"smooth"});
+  else if(r.top<8) window.scrollBy({top:r.top-8,behavior:"smooth"});
+}
+function renderCounts(){
+  const box=$("counts"); box.textContent="";
+  const mo=state.months[state.current], month={}, total={};
+  if(mo) mo.codes.forEach(c=>{ if(c) month[c]=(month[c]||0)+1; });
+  const keys=Object.keys(state.months).filter(k=>state.months[k].codes.some(Boolean)).sort();
+  keys.forEach(k=>state.months[k].codes.forEach(c=>{ if(c) total[c]=(total[c]||0)+1; }));
+  $("countTitle").textContent=`${ymParts(state.current)[1]}月の回数`;
+  if(keys.length){ const f=ymParts(keys[0]), l=ymParts(keys[keys.length-1]);
+    $("countRange").textContent = keys.length>1 ? `合計は${f[0]}年${f[1]}月〜${l[0]}年${l[1]}月の${keys.length}か月分` : `合計は${f[1]}月の1か月分`; }
+  else $("countRange").textContent="";
+  const codes=Object.keys(total).sort((a,b)=>(month[b]||0)-(month[a]||0)||total[b]-total[a]||a.localeCompare(b,"ja"));
+  if(!codes.length){ const e=document.createElement("div"); e.className="counts-empty"; e.textContent="まだ勤務が入っていません"; box.appendChild(e); return; }
+  codes.forEach(c=>{
+    const it=document.createElement("div"); it.className="ct";
+    const ch=document.createElement("span"); ch.className="chip "+chipClass(c); ch.textContent=c;
+    const n=document.createElement("span"); n.className="num";
+    const b=document.createElement("b"); b.textContent=month[c]||0;
+    const sm=document.createElement("small"); sm.textContent=`合計 ${total[c]}`;
+    n.append(b,sm); it.append(ch,n);
+    it.setAttribute("aria-label",`${c} この月${month[c]||0}回 合計${total[c]}回`);
+    box.appendChild(it);
+  });
+}
+function shiftMonth(k){ let [y,m]=ymParts(state.current); m+=k; if(m<1){m=12;y--;} if(m>12){m=1;y++;} state.current=`${y}-${pad(m)}`; render(); }
+$("prevM").onclick=()=>shiftMonth(-1);
+$("nextM").onclick=()=>shiftMonth(1);
+
+/* one day */
+let editDay=null;
+function openSheet(d){
+  const [y,m]=ymParts(state.current), mo=state.months[state.current];
+  editDay=d;
+  $("sheetTitle").textContent=`${m}月${d}日（${DOW[new Date(y,m-1,d).getDay()]}）`;
+  $("sheetCode").value=mo?(mo.codes[d-1]||""):"";
+  $("sheetNote").value=mo?(mo.notes[d-1]||""):"";
+  const box=$("sheetCodes"); box.textContent="";
+  allCodes().forEach(c=>{
+    const b=document.createElement("button"); b.textContent=c; b.className=chipClass(c)+($("sheetCode").value===c?" sel":"");
+    b.onclick=()=>{ $("sheetCode").value=c; [...box.children].forEach(x=>x.classList.toggle("sel",x===b)); };
+    box.appendChild(b);
+  });
+  $("sheetBg").hidden=false;
+}
+function closeSheet(){ $("sheetBg").hidden=true; editDay=null; }
+$("sheetCancel").onclick=closeSheet;
+$("sheetBg").onclick=e=>{ if(e.target===$("sheetBg")) closeSheet(); };
+$("sheetSave").onclick=()=>{
+  const mo=ensureMonth(state.current);
+  mo.codes[editDay-1]=$("sheetCode").value.trim();
+  mo.notes[editDay-1]=$("sheetNote").value.trim();
+  save(); closeSheet(); render(); renderCodes();
+};
+
+/* whole month */
+let bulkCells=null; // per-day crops from a photo while reviewing
+function renderBulk(){
+  const [y,m]=ymParts(state.current);
+  $("bulkTitle").textContent= bulkCells ? `${m}月を写真で確認` : `${m}月をまとめて入力`;
+  $("bulkNow").textContent = bulkDay ? `${m}/${bulkDay}（${DOW[new Date(y,m-1,bulkDay).getDay()]}）` : "";
+  $("bulkBack").disabled = bulkDay<=1;
+  const photo=!!(bulkCells&&bulkDay);
+  $("bulkPhoto").hidden=!photo; $("bulkKeep").hidden=!photo;
+  $("bulkHint").textContent = photo ? "写真のマスと同じなら「このままでOK」、違えば正しい記号をタップ。" : "記号をタップすると、その日に入って次の日に進みます。";
+  if(photo){
+    const cell=bulkCells[bulkDay-1]; $("bulkImg").src=cell?cell.url:"";
+    const mo=state.months[state.current], cur=mo?(mo.codes[bulkDay-1]||""):"";
+    $("bulkGuess").textContent = cur ? `いまの記号：${cur}` : "読み取れませんでした";
+    $("bulkKeep").disabled = !cur;
+  }
+}
+function bulkPut(code){
+  const [y,m]=ymParts(state.current), n=daysIn(y,m);
+  const mo=ensureMonth(state.current);
+  mo.codes[bulkDay-1]=code; save();
+  if(bulkDay<n) bulkDay++; else { closeBulk(); return; }
+  renderBulk(); render(); renderCodes();
+}
+function closeBulk(){ bulkDay=null; bulkCells=null; $("bulkBg").hidden=true; document.body.style.paddingBottom=""; render(); renderCodes(); }
+function openBulk(startDay){
+  const mo=state.months[state.current];
+  bulkDay = startDay || (mo ? Math.max(1, mo.codes.findIndex(c=>!c)+1 || 1) : 1);
+  const box=$("bulkCodes"); box.textContent="";
+  allCodes().forEach(c=>{ const b=document.createElement("button"); b.textContent=c; b.className=chipClass(c); b.onclick=()=>bulkPut(c); box.appendChild(b); });
+  $("bulkBg").hidden=false; renderBulk(); render();
+}
+$("btnBulk").onclick=()=>{ bulkCells=null; openBulk(); };
+$("bulkKeep").onclick=()=>{ const mo=state.months[state.current]; bulkPut(mo?(mo.codes[bulkDay-1]||""):""); };
+$("bulkBack").onclick=()=>{ if(bulkDay>1){ bulkDay--; renderBulk(); render(); } };
+$("bulkSkip").onclick=()=>bulkPut("");
+$("bulkDone").onclick=closeBulk;
+// Let the calendar stay visible above the bulk keypad.
+$("bulkBg").style.background="transparent";
+$("bulkBg").style.pointerEvents="none";
+document.querySelector("#bulkBg .sheet").style.pointerEvents="auto";
+document.querySelector("#bulkBg .sheet").style.boxShadow="0 -6px 24px rgba(0,0,0,.18)";
+
+/* photo → codes (no server: tap your row, crop each day, guess by color + on-device OCR) */
+const KNOWN = new Set([...COMMON,"K","事","病","リ"]);
+// anchors: day index → tapped point. 1日 and 最終日 first; any other day tapped later re-aligns locally.
+const ph = { src:null, W:0, H:0, zoom:1, anchors:{}, off:0, hRatio:0.42 };
+const hasEnds=()=>{ const n=photoDays(); return ph.anchors[0]&&ph.anchors[n-1]; };
+function photoDays(){ const [y,m]=ymParts(state.current); return daysIn(y,m); }
+$("btnPhoto").onclick=()=>{ $("photoInput").value=""; $("photoInput").click(); };
+$("photoInput").onchange=async()=>{
+  const f=$("photoInput").files[0]; if(!f) return;
+  let bmp;
+  try{ bmp = await createImageBitmap(f); }
+  catch(e){ bmp = await new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=rej; im.src=URL.createObjectURL(f); }); }
+  const max=2400, k=Math.min(1, max/Math.max(bmp.width,bmp.height));
+  const c=document.createElement("canvas"); c.width=Math.round(bmp.width*k); c.height=Math.round(bmp.height*k);
+  c.getContext("2d").drawImage(bmp,0,0,c.width,c.height);
+  Object.assign(ph,{src:c,W:c.width,H:c.height,zoom:1,anchors:{},off:0,hRatio:0.42});
+  // A roster photo is usually for next month once this month is already entered.
+  const now=new Date(), next=ymOf(new Date(now.getFullYear(),now.getMonth()+1,1));
+  if(state.current===ymOf(now) && state.months[state.current] && !state.months[next]) state.current=next;
+  render();
+  setStatus("photoStatus","");
+  $("photoBg").hidden=false; document.body.style.overflow="hidden";
+  drawPhoto();
+};
+function closePhoto(){ $("photoBg").hidden=true; document.body.style.overflow=""; ph.src=null; }
+$("photoClose").onclick=closePhoto;
+function geom(){
+  const n=photoDays(), idx=Object.keys(ph.anchors).map(Number).filter(i=>i<n).sort((a,b)=>a-b), centers=[];
+  for(let i=0;i<n;i++){
+    let a=idx[0], b=idx[idx.length-1];
+    for(let k=0;k<idx.length-1;k++) if(i>=idx[k]&&i<=idx[k+1]){ a=idx[k]; b=idx[k+1]; break; }
+    const A=ph.anchors[a], B=ph.anchors[b], dx=(B.x-A.x)/(b-a), dy=(B.y-A.y)/(b-a);
+    const w=Math.hypot(dx,dy), ang=Math.atan2(dy,dx), t=i-a;
+    centers.push({x:A.x+dx*t-Math.sin(ang)*ph.off, y:A.y+dy*t+Math.cos(ang)*ph.off, w, ang, h:w*ph.hRatio});
+  }
+  const w=centers.reduce((s,c)=>s+c.w,0)/n;
+  return {n,w,centers};
+}
+function drawPhoto(){
+  const cv=$("photoCanvas"), wrap=$("photoWrap");
+  const cssW=Math.round(wrap.clientWidth*ph.zoom), cssH=Math.round(cssW*ph.H/ph.W);
+  const dpr=Math.min(2, window.devicePixelRatio||1);
+  cv.style.width=cssW+"px"; cv.style.height=cssH+"px";
+  cv.width=Math.round(cssW*dpr); cv.height=Math.round(cssH*dpr);
+  const g=cv.getContext("2d"), s=cv.width/ph.W;
+  g.drawImage(ph.src,0,0,cv.width,cv.height);
+  g.save(); g.scale(s,s);
+  const lw=2/s*dpr;
+  if(hasEnds()){
+    const G=geom();
+    G.centers.forEach((c,i)=>{
+      g.save(); g.translate(c.x,c.y); g.rotate(c.ang);
+      g.strokeStyle= ph.anchors[i] ? "#ff3b30" : "#00c7be"; g.lineWidth=lw;
+      g.strokeRect(-c.w*0.46,-c.h/2,c.w*0.92,c.h); g.restore();
+    });
+  }
+  Object.values(ph.anchors).forEach(p=>{ g.fillStyle="#ff3b30"; g.beginPath(); g.arc(p.x,p.y,5/s*dpr,0,Math.PI*2); g.fill(); });
+  g.restore();
+  const n=photoDays(), [, m]=ymParts(state.current);
+  $("photoTitle").textContent=`${m}月（${n}日まで）`;
+  $("photoStep").innerHTML = !ph.anchors[0] ? `① 自分の行の <b>${m}月1日</b> のマスをタップ（＋で拡大）。月が違うときは上の ‹ › で合わせてください`
+    : !ph.anchors[n-1] ? `② 自分の行の <b>${n}日</b>（最終日）のマスをタップ`
+    : "③ 枠がマスに重なっているか確認。途中でずれている日があれば、<b>その日の本当のマスをタップ</b>すると合わせ直します";
+  $("photoRead").disabled=!hasEnds();
+}
+$("photoCanvas").addEventListener("click",e=>{
+  if(!ph.src) return;
+  const r=e.currentTarget.getBoundingClientRect(), n=photoDays();
+  const pt={x:(e.clientX-r.left)/r.width*ph.W, y:(e.clientY-r.top)/r.height*ph.H};
+  if(!ph.anchors[0]) ph.anchors[0]=pt;
+  else if(!ph.anchors[n-1]) ph.anchors[n-1]=pt;
+  else {
+    // Snap the tap to the nearest day (along the row) and pin that day there.
+    const G=geom(); let best=-1, bd=Infinity;
+    G.centers.forEach((c,i)=>{ const d=Math.hypot(c.x-pt.x,c.y-pt.y); if(d<bd){bd=d;best=i;} });
+    if(best>0&&best<n-1&&bd<G.w*3) ph.anchors[best]={x:pt.x+Math.sin(G.centers[best].ang)*ph.off, y:pt.y-Math.cos(G.centers[best].ang)*ph.off};
+  }
+  drawPhoto();
+});
+function photoMonth(k){ shiftMonth(k); ph.anchors={}; ph.off=0; drawPhoto(); }
+$("phPrev").onclick=()=>photoMonth(-1);
+$("phNext").onclick=()=>photoMonth(1);
+function zoomTo(z){
+  const wrap=$("photoWrap"), cx=(wrap.scrollLeft+wrap.clientWidth/2)/wrap.scrollWidth, cy=(wrap.scrollTop+wrap.clientHeight/2)/wrap.scrollHeight;
+  ph.zoom=Math.max(1,Math.min(6,z)); drawPhoto();
+  wrap.scrollLeft=cx*wrap.scrollWidth-wrap.clientWidth/2; wrap.scrollTop=cy*wrap.scrollHeight-wrap.clientHeight/2;
+}
+$("zoomIn").onclick=()=>zoomTo(ph.zoom*1.6);
+$("zoomOut").onclick=()=>zoomTo(ph.zoom/1.6);
+const stepPx=()=> hasEnds() ? geom().w*0.06 : 0;
+$("moveUp").onclick=()=>{ ph.off-=stepPx(); drawPhoto(); };
+$("moveDown").onclick=()=>{ ph.off+=stepPx(); drawPhoto(); };
+$("hLess").onclick=()=>{ ph.hRatio=Math.max(0.2,ph.hRatio-0.04); drawPhoto(); };
+$("hMore").onclick=()=>{ ph.hRatio=Math.min(0.9,ph.hRatio+0.04); drawPhoto(); };
+$("photoRedo").onclick=()=>{ ph.anchors={}; ph.off=0; drawPhoto(); };
+
+function cropCell(G,i,targetW,shift){
+  const c0=G.centers[i], sh=(shift||0)*c0.h, c={x:c0.x-Math.sin(c0.ang)*sh, y:c0.y+Math.cos(c0.ang)*sh};
+  const cw=c0.w*0.9, ch=c0.h*0.86, k=targetW/cw;
+  const cv=document.createElement("canvas"); cv.width=Math.round(cw*k); cv.height=Math.max(8,Math.round(ch*k));
+  const g=cv.getContext("2d"); g.fillStyle="#fff"; g.fillRect(0,0,cv.width,cv.height);
+  g.translate(cv.width/2,cv.height/2); g.scale(k,k); g.rotate(-c0.ang); g.translate(-c.x,-c.y);
+  g.imageSmoothingQuality="high"; g.drawImage(ph.src,0,0);
+  return cv;
+}
+function rgb2hsv(r,g,b){ r/=255; g/=255; b/=255; const mx=Math.max(r,g,b), mn=Math.min(r,g,b), d=mx-mn;
+  let h=0; if(d){ if(mx===r) h=((g-b)/d)%6; else if(mx===g) h=(b-r)/d+2; else h=(r-g)/d+4; h*=60; if(h<0) h+=360; }
+  return {h, s: mx? d/mx : 0, v: mx}; }
+function cellColor(cv){
+  const g=cv.getContext("2d"), {width:W,height:H}=cv;
+  const d=g.getImageData(Math.round(W*.12),Math.round(H*.15),Math.round(W*.76),Math.round(H*.7)).data;
+  const R=[],Gc=[],B=[];
+  for(let i=0;i<d.length;i+=4){ R.push(d[i]); Gc.push(d[i+1]); B.push(d[i+2]); }
+  const med=a=>{ a.sort((x,y)=>x-y); return a[a.length>>1]; };
+  return rgb2hsv(med(R),med(Gc),med(B));
+}
+function colorGuess(hsv, refV){
+  const {h,s,v}=hsv;
+  if(s>=0.3&&h>=60&&h<170) return v/refV<0.6 ? "E1" : "E2";
+  if(v<0.18) return "G";
+  if(s<0.15) return v < refV*0.88 ? "grey" : "white";
+  if(h>=70&&h<170) return v<0.6 ? "E1" : "E2";
+  if(h>=190&&h<255) return "日";
+  if(h>=255&&h<320) return "出";
+  if(h>=320||h<25) return s<0.28 ? "lightpink" : "pink";
+  return "white"; // yellowish paper or star row bleed
+}
+function binarize(cv){
+  // grayscale → invert dark cells → Otsu threshold, padded, black text on white
+  const W=cv.width,H=cv.height,g=cv.getContext("2d"),img=g.getImageData(0,0,W,H),d=img.data,L=new Uint8Array(W*H);
+  let sum=0; for(let i=0,j=0;i<d.length;i+=4,j++){ L[j]=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2]; sum+=L[j]; }
+  const dark = sum/(W*H) < 110; if(dark) for(let j=0;j<L.length;j++) L[j]=255-L[j];
+  const hist=new Array(256).fill(0); L.forEach(x=>hist[x]++);
+  let tot=L.length,sumAll=0; for(let t=0;t<256;t++) sumAll+=t*hist[t];
+  let sB=0,wB=0,best=0,th=128; for(let t=0;t<256;t++){ wB+=hist[t]; if(!wB) continue; const wF=tot-wB; if(!wF) break; sB+=t*hist[t];
+    const mB=sB/wB, mF=(sumAll-sB)/wF, between=wB*wF*(mB-mF)*(mB-mF); if(between>best){best=between; th=t;} }
+  const pad=Math.round(H*0.4), out=document.createElement("canvas"); out.width=W+pad*2; out.height=H+pad*2;
+  const og=out.getContext("2d"); og.fillStyle="#fff"; og.fillRect(0,0,out.width,out.height);
+  const oi=og.createImageData(W,H); for(let j=0;j<L.length;j++){ const v=L[j]>th?255:0; oi.data[j*4]=oi.data[j*4+1]=oi.data[j*4+2]=v; oi.data[j*4+3]=255; }
+  og.putImageData(oi,pad,pad); return out;
+}
+function lev(a,b){ const m=a.length,n=b.length,dp=Array.from({length:m+1},(_,i)=>[i,...Array(n).fill(0)]); for(let j=1;j<=n;j++) dp[0][j]=j;
+  for(let i=1;i<=m;i++) for(let j=1;j<=n;j++) dp[i][j]=Math.min(dp[i-1][j]+1,dp[i][j-1]+1,dp[i-1][j-1]+(a[i-1]===b[j-1]?0:1)); return dp[m][n]; }
+function normalizeOcr(t){
+  t=(t||"").replace(/[\s|_\-—.。、,'"`]/g,"").toUpperCase();
+  if(!t) return "";
+  t=t.replace(/^0/,"O").replace(/^(O)[IL]$/,"O1").replace(/^([HCE])[IL]$/,"$11").replace(/^([HCE])Z$/,"$12");
+  if(KNOWN.has(t)) return t;
+  let best="",bd=9; KNOWN.forEach(k=>{ const d=lev(t,k); if(d<bd){bd=d;best=k;} });
+  return bd<=1 && t.length>=1 ? best : "";
+}
+let ocrWorker=null;
+async function getOcr(){
+  if(ocrWorker) return ocrWorker;
+  if(!window.Tesseract){
+    await new Promise((res,rej)=>{ const sc=document.createElement("script"); sc.src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"; sc.onload=res; sc.onerror=rej; document.head.appendChild(sc); });
+  }
+  ocrWorker = await Tesseract.createWorker("jpn+eng", 1);
+  await ocrWorker.setParameters({ tessedit_pageseg_mode:"7", tessedit_char_whitelist:"ACEGHKMOSUV0123456789週休年日出事病リ" });
+  return ocrWorker;
+}
+$("photoRead").onclick=async()=>{
+  const G=geom(), [y,m]=ymParts(state.current);
+  $("photoRead").disabled=true;
+  const crops=G.centers.map((_,i)=>cropCell(G,i,120));
+  const hsv=crops.map(cellColor);
+  // Paper white next to each cell (the note rows just above and below) — photos are often lit unevenly.
+  const refs=G.centers.map((_,i)=>{ const v=[-1.05,1.05].map(o=>cellColor(cropCell(G,i,60,o))).filter(c=>c.s<0.2).map(c=>c.v); return v.length?Math.max(...v):null; });
+  const refV=refs.map((r,i)=>{ if(r!=null) return r; for(let d=1;d<G.n;d++){ if(refs[i-d]!=null) return refs[i-d]; if(refs[i+d]!=null) return refs[i+d]; } return 0.9; });
+  const kinds=hsv.map((c,i)=>colorGuess(c,refV[i]));
+  // E3 is followed by E4 (light pink); a strong pink without that is usually 年.
+  let worker=null;
+  setStatus("photoStatus","文字を読む準備をしています…（初回は数十秒かかります）");
+  try{ worker=await getOcr(); }catch(e){ worker=null; }
+  const codes=[];
+  for(let i=0;i<G.n;i++){
+    const k=kinds[i], key=`${y}-${pad(m)}-${pad(i+1)}`;
+    if(["G","E1","E2","日","出"].includes(k)){ codes.push(k); continue; }
+    let t="";
+    if(worker){
+      setStatus("photoStatus",`読み取り中… ${i+1} / ${G.n}`);
+      try{ const r=await worker.recognize(binarize(crops[i])); t=normalizeOcr(r.data.text); }catch(e){}
+    }
+    if(k==="grey") codes.push(["週","休"].includes(t)? t : (HOLIDAYS.has(key)?"休":"週"));
+    else if(k==="lightpink") codes.push(["E4","年","リ"].includes(t)? t : "E4");
+    else if(k==="pink") codes.push(["年","E3","リ"].includes(t)? t : (kinds[i+1]==="lightpink"?"E3":"年"));
+    else codes.push(t==="週"||t==="休" ? "" : t);
+  }
+  const mo=ensureMonth(state.current);
+  codes.forEach((c,i)=>{ mo.codes[i]=c; });
+  save();
+  bulkCells=crops.map(cv=>({url:cv.toDataURL("image/jpeg",0.85)}));
+  const cells=bulkCells; closePhoto(); bulkCells=cells;
+  openBulk(1);
+  if(!worker) setStatus("photoStatus","");
+};
+
+/* settings */
+function usedCodes(){
+  const set=new Set();
+  Object.values(state.months).forEach(mo=>mo.codes.forEach(c=>c&&set.add(c)));
+  return [...set].sort((a,b)=>a.localeCompare(b,"ja"));
+}
+function renderCodes(){
+  const box=$("codeList"); box.textContent="";
+  usedCodes().forEach(code=>{
+    if(!state.codes[code]) state.codes[code]={label:code};
+    const c=state.codes[code], key=encodeURIComponent(code).replace(/%/g,"_");
+    const it=document.createElement("div"); it.className="item";
+    it.innerHTML=`<span class="chip"></span><input type="text" id="lbl-${key}" aria-label="名前"><span class="times"><input type="time" id="st-${key}" aria-label="開始"><span>〜</span><input type="time" id="en-${key}" aria-label="終了"></span>`;
+    const chip=it.querySelector(".chip"); chip.textContent=code; chip.className="chip "+chipClass(code);
+    const [l,s,e]=it.querySelectorAll("input");
+    l.value=c.label||""; s.value=c.start||""; e.value=c.end||"";
+    l.oninput=()=>{ c.label=l.value; save(); renderToday(); };
+    s.onchange=()=>{ c.start=s.value; save(); renderToday(); };
+    e.onchange=()=>{ c.end=e.value; save(); renderToday(); };
+    box.appendChild(it);
+  });
+}
+
+/* backup */
+$("btnBackup").onclick=()=>{
+  const text=JSON.stringify({app:"kinmu",v:1,months:state.months,codes:state.codes});
+  const done=ok=>setStatus("backupStatus", ok?"コピーしました。メモ帳などに貼って保存してください。":"コピーできませんでした。", !ok);
+  const fallback=()=>{ const ta=document.createElement("textarea"); ta.value=text; document.body.appendChild(ta); ta.select(); let ok=false; try{ ok=document.execCommand("copy"); }catch(e){} ta.remove(); done(ok); };
+  if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(()=>done(true),fallback); else fallback();
+};
+$("btnRestoreOpen").onclick=()=>{ $("restoreBox").hidden=!$("restoreBox").hidden; };
+$("btnRestore").onclick=()=>{
+  try{
+    const d=JSON.parse($("restoreText").value.trim());
+    if(!d||typeof d.months!=="object") throw 0;
+    state.months=d.months; state.codes=Object.assign({},DEFAULT_CODES,d.codes||{});
+    save(); render(); renderCodes(); $("restoreText").value=""; $("restoreBox").hidden=true;
+    setStatus("backupStatus","バックアップから戻しました。");
+  }catch(e){ setStatus("backupStatus","バックアップの形式が正しくありません。コピーした文字をそのまま貼り付けてください。",true); }
+};
+
+document.addEventListener("keydown",e=>{ if(e.key!=="Escape") return; if(!$("sheetBg").hidden) closeSheet(); else if(!$("bulkBg").hidden) closeBulk(); });
+// Coming back to the app on a new day: refresh today/tomorrow.
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden) renderToday(); });
+
+render(); renderCodes();
+if("serviceWorker" in navigator && location.protocol==="https:") navigator.serviceWorker.register("sw.js").catch(()=>{});
+})();
+</script>
+</body>
+</html>

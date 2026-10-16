@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>アプリ棚</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="アプリ棚">
+<meta name="theme-color" content="#0f6e64">
+<style>
+:root{color-scheme:light;--bg:#f3f5f4;--surface:#fff;--fg:#1d2624;--muted:#5f6d69;--line:#d5dcd9;--accent:#0f6e64;--new:#c2364b;
+  --font:"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic",system-ui,sans-serif}
+@media (prefers-color-scheme:dark){:root{color-scheme:dark;--bg:#141a19;--surface:#1d2523;--fg:#e6ecea;--muted:#9aa8a4;--line:#33403d;--accent:#4fbfb0;--new:#f08a9b}}
+html,body{background:var(--bg);color:var(--fg);margin:0}
+body{font-family:var(--font);font-size:15px;line-height:1.6;padding-inline:16px;padding-block:20px 40px}
+.wrap{max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+h1{font-size:1.4rem;margin:0}
+.sub{color:var(--muted);font-size:.85rem;margin:0}
+.filters{display:flex;gap:6px;flex-wrap:wrap}
+.filters button{font:inherit;font-size:.85rem;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:999px;padding:4px 12px;cursor:pointer}
+.filters button[aria-pressed="true"]{background:var(--accent);color:var(--surface);border-color:var(--accent)}
+.list{display:flex;flex-direction:column;gap:10px}
+a.card{display:block;text-decoration:none;color:inherit;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+a.card:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.card .top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.card .title{font-weight:700}
+.card .date{font-size:.75rem;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.card .desc{font-size:.88rem;color:var(--muted);margin-top:2px}
+.card .tags{display:flex;gap:6px;margin-top:6px;font-size:.72rem}
+.tag{border:1px solid var(--line);border-radius:4px;padding:0 6px;color:var(--muted)}
+.tag.new{border-color:var(--new);color:var(--new)}
+.empty{color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>アプリ棚</h1>
+    <p class="sub">開発チームが毎日1つずつ作って並べています。使うかどうかはお好みで。</p>
+  </header>
+  <div class="filters" id="filters"></div>
+  <div class="list" id="list"><p class="empty">読み込み中…</p></div>
+</div>
+<script>
+(async function(){
+  const list=document.getElementById("list"), filters=document.getElementById("filters");
+  let apps=[];
+  try{ apps=await (await fetch("apps.json",{cache:"no-store"})).json(); }
+  catch(e){ list.innerHTML='<p class="empty">一覧を読み込めませんでした。通信状況を確認して開き直してください。</p>'; return; }
+  apps.sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  const cats=["すべて",...new Set(apps.map(a=>a.category).filter(Boolean))];
+  let cur="すべて";
+  const now=Date.now();
+  function render(){
+    list.textContent="";
+    const shown=apps.filter(a=>cur==="すべて"||a.category===cur);
+    if(!shown.length){ list.innerHTML='<p class="empty">まだありません。</p>'; return; }
+    shown.forEach(a=>{
+      const el=document.createElement("a"); el.className="card"; el.href=a.slug.replace(/\/?$/,"/");
+      const top=document.createElement("div"); top.className="top";
+      const t=document.createElement("span"); t.className="title"; t.textContent=a.title;
+      const d=document.createElement("span"); d.className="date"; d.textContent=a.date;
+      top.append(t,d);
+      const desc=document.createElement("div"); desc.className="desc"; desc.textContent=a.description||"";
+      const tags=document.createElement("div"); tags.className="tags";
+      if(now-new Date(a.date).getTime()<3*864e5){ const n=document.createElement("span"); n.className="tag new"; n.textContent="NEW"; tags.append(n); }
+      if(a.category){ const c=document.createElement("span"); c.className="tag"; c.textContent=a.category; tags.append(c); }
+      el.append(top,desc,tags); list.appendChild(el);
+    });
+  }
+  cats.forEach(c=>{ const b=document.createElement("button"); b.textContent=c; b.setAttribute("aria-pressed",String(c===cur));
+    b.onclick=()=>{ cur=c; [...filters.children].forEach(x=>x.setAttribute("aria-pressed",String(x===b))); render(); }; filters.appendChild(b); });
+  render();
+})();
+</script>
+</body>
+</html>

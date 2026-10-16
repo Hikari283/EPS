@@ -1,0 +1,405 @@
+<title>勤務カレンダー</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: one column — today/tomorrow, month calendar, load button, folded settings. Colors follow the printed 勤務表. */
+:root{
+  --bg:#f3f5f4; --surface:#ffffff; --fg:#1d2624; --muted:#5f6d69; --line:#d5dcd9;
+  --accent:#0f6e64; --accent-fg:#ffffff; --weekoff:#e3e7e6; --sat:#2f5fb3; --sun:#c2364b;
+  --e1:#2f7d46; --e1-fg:#fff; --e2:#9cc66a; --e2-fg:#1d2624; --e3:#e98fa0; --e3-fg:#1d2624; --e4:#f6cdd4; --e4-fg:#1d2624;
+  --nen:#f2a3b3; --nen-fg:#1d2624; --nichi:#4b7fd6; --nichi-fg:#fff; --g:#111; --g-fg:#fff;
+  --font-body:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic",system-ui,sans-serif;
+  --font-code:"IBM Plex Mono",ui-monospace,"SFMono-Regular",monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141a19; --surface:#1d2523; --fg:#e6ecea; --muted:#9aa8a4; --line:#33403d;
+  --accent:#4fbfb0; --accent-fg:#0b1312; --weekoff:#2a3331; --sat:#86a9ec; --sun:#f08a9b;
+  --e1:#3c9a59; --e2:#7fa851; --e3:#c46a7c; --e4:#7d4b55; --e4-fg:#fff; --e3-fg:#fff; --nen:#b96777; --nen-fg:#fff;
+  --nichi:#5b8de0; --g:#000; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141a19; --surface:#1d2523; --fg:#e6ecea; --muted:#9aa8a4; --line:#33403d;
+  --accent:#4fbfb0; --accent-fg:#0b1312; --weekoff:#2a3331; --sat:#86a9ec; --sun:#f08a9b;
+  --e1:#3c9a59; --e2:#7fa851; --e3:#c46a7c; --e4:#7d4b55; --e4-fg:#fff; --e3-fg:#fff; --nen:#b96777; --nen-fg:#fff;
+  --nichi:#5b8de0; --g:#000; color-scheme:dark}
+[hidden]{display:none!important}
+html,body{background:var(--bg);color:var(--fg)}
+body{font-family:var(--font-body);font-size:15px;line-height:1.6;padding-inline:16px;padding-block:16px 40px}
+.wrap{max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+button,input{font:inherit;color:inherit}
+button{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 12px;cursor:pointer}
+button.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent);font-weight:700}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button:disabled{opacity:.5;cursor:default}
+input{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.hint{font-size:.8rem;color:var(--muted);margin:0}
+.status{font-size:.85rem;color:var(--muted);margin:0}
+.status:empty{display:none}
+.status.err{color:var(--sun)}
+
+.today{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.today .lbl{font-size:.8rem;color:var(--muted)}
+.today .code{font-family:var(--font-code);font-weight:600;font-size:1.8rem;line-height:1.2;padding:4px 0;border-radius:6px;display:block;text-align:center;background:var(--bg);border:1px solid var(--line);margin-top:4px}
+.today .sub{font-size:.82rem;color:var(--muted);margin-top:4px;min-height:1.3em}
+
+.monthbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.monthbar .ym{font-weight:700;font-size:1.15rem;font-variant-numeric:tabular-nums}
+.monthbar button{border:none;background:none;font-size:1.4rem;padding:2px 12px;color:var(--accent)}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px}
+.dow{text-align:center;font-size:.72rem;color:var(--muted)}
+.dow.sat{color:var(--sat)} .dow.sun{color:var(--sun)}
+.cell{border:none;border-radius:6px;background:var(--bg);min-height:56px;padding:3px;display:flex;flex-direction:column;align-items:stretch;gap:2px;min-width:0}
+.cell.empty{visibility:hidden}
+.cell .d{font-size:.7rem;font-variant-numeric:tabular-nums;color:var(--muted);text-align:left}
+.cell.sat .d{color:var(--sat)} .cell.sun .d,.cell.hol .d{color:var(--sun)}
+.cell{cursor:pointer}
+.cell:hover{filter:brightness(.97)}
+.cell .c{text-align:center;font-family:var(--font-code);font-weight:600;font-size:.95rem;border-radius:4px;padding:1px 0}
+.cell.today{outline:2px solid var(--accent);outline-offset:-2px}
+.cell .dot{height:4px;width:4px;border-radius:50%;background:var(--muted);align-self:center;opacity:.7}
+.cell .dot.none{visibility:hidden}
+.readonly .cell{cursor:default}
+.readonly .edit-only{display:none!important}
+
+.k-week{background:var(--weekoff)!important;color:var(--muted)!important}
+.k-E1{background:var(--e1)!important;color:var(--e1-fg)!important}
+.k-E2{background:var(--e2)!important;color:var(--e2-fg)!important}
+.k-E3{background:var(--e3)!important;color:var(--e3-fg)!important}
+.k-E4{background:var(--e4)!important;color:var(--e4-fg)!important}
+.k-nen{background:var(--nen)!important;color:var(--nen-fg)!important}
+.k-nichi{background:var(--nichi)!important;color:var(--nichi-fg)!important}
+.k-G{background:var(--g)!important;color:var(--g-fg)!important}
+
+.counts-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.counts{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:6px}
+.counts .ct{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:6px;background:var(--bg);border-radius:6px;padding:4px 6px}
+.counts .chip{font-family:var(--font-code);font-weight:600;text-align:center;border-radius:4px;padding:1px 4px;min-width:2.2em;background:var(--surface)}
+.counts .num{text-align:right;font-variant-numeric:tabular-nums;line-height:1.2}
+.counts .num b{font-size:1.05rem}
+.counts .num small{display:block;color:var(--muted);font-size:.72rem}
+.counts-empty{color:var(--muted);font-size:.85rem}
+details summary{cursor:pointer;color:var(--muted);font-size:.9rem}
+.settings{display:flex;flex-direction:column;gap:12px;margin-top:10px}
+.codes-list{display:flex;flex-direction:column;gap:6px}
+.codes-list .item{display:grid;grid-template-columns:3.2em minmax(0,1fr) auto;gap:8px;align-items:center}
+.codes-list .chip{font-family:var(--font-code);font-weight:600;text-align:center;border-radius:4px;padding:2px 0;background:var(--bg)}
+.codes-list input[type=text]{width:100%;box-sizing:border-box;min-width:0}
+.codes-list .times{display:flex;gap:4px;align-items:center}
+.codes-list input[type=time]{width:6.4em}
+
+.sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:flex-end;justify-content:center;z-index:10}
+.sheet{background:var(--surface);border-radius:14px 14px 0 0;width:100%;max-width:560px;padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:12px;max-height:85vh;overflow:auto;box-sizing:border-box}
+.pick{display:flex;flex-wrap:wrap;gap:6px}
+.pick button{font-family:var(--font-code);font-weight:600;min-width:3em;padding:6px 8px}
+.pick button.sel{outline:2px solid var(--accent);outline-offset:1px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <section class="panel today" id="today" aria-live="polite"></section>
+
+  <section class="panel">
+    <div class="monthbar">
+      <button id="prevM" aria-label="前の月">‹</button>
+      <span class="ym" id="ymLabel"></span>
+      <button id="nextM" aria-label="次の月">›</button>
+    </div>
+    <div class="cal" id="cal"></div>
+    <p class="hint edit-only" style="margin-top:8px;text-align:center">日付をタップすると勤務を変更できます</p>
+  </section>
+
+  <section class="panel">
+    <div class="counts-head"><strong id="countTitle">記号の回数</strong><span class="hint" id="countRange"></span></div>
+    <div class="counts" id="counts"></div>
+  </section>
+
+  <section class="panel edit-only">
+    <div class="row">
+      <button class="primary" id="btnPick">勤務表の写真を読み込む</button>
+      <input id="photo" type="file" accept="image/*" hidden>
+    </div>
+    <p class="status" id="readStatus" style="margin-top:8px"></p>
+  </section>
+
+  <details class="edit-only">
+    <summary>設定</summary>
+    <div class="settings panel">
+      <div class="row">
+        <label for="rowNo">自分の行：上から</label>
+        <input id="rowNo" type="number" min="1" max="60" style="width:4em;text-align:center">
+        <span>番目</span>
+      </div>
+      <div>
+        <p class="hint" style="margin-bottom:6px">勤務記号の名前と時間（今日・明日の欄に表示されます）</p>
+        <div class="codes-list" id="codeList"></div>
+      </div>
+      <p class="hint" id="syncNote"></p>
+    </div>
+  </details>
+</div>
+
+<div class="sheet-bg" id="sheetBg" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <strong id="sheetTitle"></strong>
+    <div class="pick" id="sheetCodes"></div>
+    <div class="row"><label for="sheetCode">記号</label><input id="sheetCode" type="text" style="width:6em"></div>
+    <div class="row"><label for="sheetNote">メモ</label><input id="sheetNote" type="text" style="flex:1;min-width:0"></div>
+    <div class="row" style="justify-content:flex-end">
+      <button id="sheetCancel">やめる</button>
+      <button class="primary" id="sheetSave">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+const STORE_KEY = "shiftcal.v1";
+const DOW = ["日","月","火","水","木","金","土"];
+const HOLIDAYS = new Set(["2026-09-21","2026-09-22","2026-09-23","2026-10-12","2026-11-03","2026-11-23","2026-12-23",
+  "2027-01-01","2027-01-11","2027-02-11","2027-02-23","2027-03-21","2027-03-22"]);
+const DEFAULT_CODES = { "週":{label:"週休"}, "休":{label:"休日"}, "年":{label:"年休"}, "日":{label:"日直"} };
+const COMMON = ["A","M","S","HA","HU","H1","H2","H3","C1","C2","C3","CA","O1","OA","VA","E1","E2","E3","E4","G","日","年","週","休","出"];
+
+const $ = id => document.getElementById(id);
+const pad = n => String(n).padStart(2,"0");
+const ymParts = ym => ym.split("-").map(Number);
+const daysIn = (y,m) => new Date(y,m,0).getDate();
+const ymOf = dt => `${dt.getFullYear()}-${pad(dt.getMonth()+1)}`;
+
+function load(){
+  let s=null;
+  try{ s=JSON.parse(localStorage.getItem(STORE_KEY)||"null"); }catch(e){}
+  if(!s||typeof s!=="object") s={};
+  s.months = s.months||{};
+  s.codes = Object.assign({}, DEFAULT_CODES, s.codes||{});
+  s.myRow = Number.isInteger(s.myRow)&&s.myRow>0 ? s.myRow : 15;
+  if(typeof s.countBlank!=="boolean") s.countBlank=true;
+  s.current = ymOf(new Date());
+  return s;
+}
+let state = load();
+function saveLocal(){ try{ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }catch(e){} }
+
+/* cloud (db): months/<YYYY-MM>, settings/main — owner writes, shared viewers read */
+let db=null, canWrite=true, sample=null;
+const chains={};
+function cloudWrite(path, data){
+  if(!db||!canWrite) return;
+  chains[path]=(chains[path]||Promise.resolve()).then(()=>db.doc(path).set(data)).catch(e=>{
+    if(e&&e.code==="invalid_argument"){ canWrite=false; document.body.classList.add("readonly"); return; }
+    setStatus("readStatus","クラウドに保存できませんでした。通信状況を確認して、もう一度変更してください。",true);
+  });
+}
+function saveMonth(ym){ saveLocal(); const mo=state.months[ym]; if(mo) cloudWrite(`months/${ym}`,{codes:mo.codes,notes:mo.notes,source:mo.source||""}); }
+let setTimer=null;
+function saveSettings(){ saveLocal(); clearTimeout(setTimer); setTimer=setTimeout(()=>cloudWrite("settings/main",{codes:state.codes,myRow:state.myRow,countBlank:state.countBlank}),800); }
+
+function cfg(code){ return state.codes[code]||{label:code}; }
+function chipClass(code){
+  if(code==="週"||code==="休") return "k-week";
+  if(/^E[1-4]$/.test(code)) return "k-"+code;
+  if(code==="年") return "k-nen";
+  if(code==="日") return "k-nichi";
+  if(code==="G") return "k-G";
+  return "";
+}
+function setStatus(id,msg,err){ const e=$(id); e.textContent=msg; e.classList.toggle("err",!!err); }
+
+/* today / tomorrow */
+function renderToday(){
+  const box=$("today"); box.textContent="";
+  const t=new Date(); t.setHours(0,0,0,0);
+  [["今日",0],["明日",1]].forEach(([lbl,off])=>{
+    const dt=new Date(t); dt.setDate(t.getDate()+off);
+    const mo=state.months[ymOf(dt)], i=dt.getDate()-1;
+    const code=mo?(mo.codes[i]||""):"", note=mo?(mo.notes[i]||""):"";
+    const div=document.createElement("div");
+    const L=document.createElement("div"); L.className="lbl"; L.textContent=`${lbl}　${dt.getMonth()+1}/${dt.getDate()}（${DOW[dt.getDay()]}）`;
+    const C=document.createElement("div"); C.className="code "+chipClass(code); C.textContent=code||"–";
+    const S=document.createElement("div"); S.className="sub";
+    if(!mo) S.textContent="まだ読み込んでいません";
+    else { const c=cfg(code), p=[];
+      if(code && c.label && c.label!==code) p.push(c.label);
+      if(c.start&&c.end) p.push(`${c.start}〜${c.end}`);
+      if(note) p.push(note);
+      S.textContent=p.join("・"); }
+    div.append(L,C,S); box.appendChild(div);
+  });
+}
+
+/* calendar */
+function render(){
+  const [y,m]=ymParts(state.current);
+  $("ymLabel").textContent=`${y}年${m}月`;
+  const mo=state.months[state.current];
+  const cal=$("cal"); cal.textContent="";
+  DOW.forEach((d,i)=>{ const e=document.createElement("div"); e.className="dow"+(i===0?" sun":i===6?" sat":""); e.textContent=d; cal.appendChild(e); });
+  for(let i=0,f=new Date(y,m-1,1).getDay();i<f;i++){ const e=document.createElement("div"); e.className="cell empty"; cal.appendChild(e); }
+  const todayKey=`${ymOf(new Date())}-${pad(new Date().getDate())}`;
+  for(let d=1; d<=daysIn(y,m); d++){
+    const dow=new Date(y,m-1,d).getDay(), key=`${y}-${pad(m)}-${pad(d)}`;
+    const code=mo?(mo.codes[d-1]||""):"", note=mo?(mo.notes[d-1]||""):"";
+    const b=document.createElement("button");
+    b.className="cell"+(dow===0?" sun":dow===6?" sat":"")+(HOLIDAYS.has(key)?" hol":"")+(key===todayKey?" today":"");
+    b.setAttribute("aria-label",`${m}月${d}日 ${code||"未入力"} ${note}`);
+    if(note) b.title=note;
+    const dd=document.createElement("span"); dd.className="d"; dd.textContent=d;
+    const cc=document.createElement("span"); cc.className="c "+chipClass(code); cc.textContent=code||"";
+    const dot=document.createElement("span"); dot.className="dot"+(note?"":" none");
+    b.append(dd,cc,dot);
+    b.onclick=()=>{ if(canWrite) openSheet(d); };
+    cal.appendChild(b);
+  }
+  renderToday(); renderCounts();
+}
+function renderCounts(){
+  const box=$("counts"); box.textContent="";
+  const mo=state.months[state.current], month={}, total={};
+  if(mo) mo.codes.forEach(c=>{ if(c) month[c]=(month[c]||0)+1; });
+  const keys=Object.keys(state.months).sort();
+  keys.forEach(k=>state.months[k].codes.forEach(c=>{ if(c) total[c]=(total[c]||0)+1; }));
+  if(keys.length){ const f=ymParts(keys[0]), l=ymParts(keys[keys.length-1]);
+    $("countRange").textContent = keys.length>1 ? `合計は${f[0]}年${f[1]}月〜${l[0]}年${l[1]}月の${keys.length}か月分` : `合計は${f[1]}月の1か月分`; }
+  else $("countRange").textContent="";
+  $("countTitle").textContent=`${ymParts(state.current)[1]}月の回数`;
+  const codes=Object.keys(total).sort((a,b)=>(month[b]||0)-(month[a]||0)||total[b]-total[a]||a.localeCompare(b,"ja"));
+  if(!codes.length){ const e=document.createElement("div"); e.className="counts-empty"; e.textContent="まだ勤務が入っていません"; box.appendChild(e); return; }
+  codes.forEach(c=>{
+    const it=document.createElement("div"); it.className="ct";
+    const ch=document.createElement("span"); ch.className="chip "+chipClass(c); ch.textContent=c;
+    const n=document.createElement("span"); n.className="num";
+    const b=document.createElement("b"); b.textContent=month[c]||0;
+    const sm=document.createElement("small"); sm.textContent=`合計 ${total[c]}`;
+    n.append(b,sm); it.append(ch,n);
+    it.setAttribute("aria-label",`${c} 今月${month[c]||0}回 合計${total[c]}回`);
+    box.appendChild(it);
+  });
+}
+function shiftMonth(k){ let [y,m]=ymParts(state.current); m+=k; if(m<1){m=12;y--;} if(m>12){m=1;y++;} state.current=`${y}-${pad(m)}`; render(); }
+$("prevM").onclick=()=>shiftMonth(-1);
+$("nextM").onclick=()=>shiftMonth(1);
+
+/* edit one day */
+let editDay=null;
+function openSheet(d){
+  const [y,m]=ymParts(state.current), mo=state.months[state.current];
+  editDay=d;
+  $("sheetTitle").textContent=`${m}月${d}日（${DOW[new Date(y,m-1,d).getDay()]}）`;
+  $("sheetCode").value=mo?(mo.codes[d-1]||""):"";
+  $("sheetNote").value=mo?(mo.notes[d-1]||""):"";
+  const box=$("sheetCodes"); box.textContent="";
+  [...new Set([...COMMON,...Object.keys(state.codes)])].forEach(c=>{
+    const b=document.createElement("button"); b.textContent=c; b.className=chipClass(c)+($("sheetCode").value===c?" sel":"");
+    b.onclick=()=>{ $("sheetCode").value=c; [...box.children].forEach(x=>x.classList.toggle("sel",x===b)); };
+    box.appendChild(b);
+  });
+  $("sheetBg").hidden=false;
+}
+function closeSheet(){ $("sheetBg").hidden=true; editDay=null; }
+$("sheetCancel").onclick=closeSheet;
+$("sheetBg").onclick=e=>{ if(e.target===$("sheetBg")) closeSheet(); };
+document.addEventListener("keydown",e=>{ if(e.key==="Escape"&&!$("sheetBg").hidden) closeSheet(); });
+$("sheetSave").onclick=()=>{
+  const [y,m]=ymParts(state.current), n=daysIn(y,m);
+  let mo=state.months[state.current];
+  if(!mo) mo=state.months[state.current]={codes:Array(n).fill(""),notes:Array(n).fill(""),source:"手入力"};
+  mo.codes[editDay-1]=$("sheetCode").value.trim();
+  mo.notes[editDay-1]=$("sheetNote").value.trim();
+  saveMonth(state.current); closeSheet(); render(); renderCodes();
+};
+
+/* settings */
+function usedCodes(){
+  const set=new Set();
+  Object.values(state.months).forEach(mo=>mo.codes.forEach(c=>c&&set.add(c)));
+  return [...set].sort((a,b)=>a.localeCompare(b,"ja"));
+}
+function renderCodes(){
+  const box=$("codeList"); box.textContent="";
+  usedCodes().forEach(code=>{
+    if(!state.codes[code]) state.codes[code]={label:code};
+    const c=state.codes[code], key=encodeURIComponent(code).replace(/%/g,"_");
+    const it=document.createElement("div"); it.className="item";
+    it.innerHTML=`<span class="chip"></span><input type="text" id="lbl-${key}" aria-label="名前"><span class="times"><input type="time" id="st-${key}" aria-label="開始"><span>〜</span><input type="time" id="en-${key}" aria-label="終了"></span>`;
+    const chip=it.querySelector(".chip"); chip.textContent=code; chip.className="chip "+chipClass(code);
+    const [l,s,e]=it.querySelectorAll("input");
+    l.value=c.label||""; s.value=c.start||""; e.value=c.end||"";
+    l.oninput=()=>{ c.label=l.value; saveSettings(); renderToday(); };
+    s.onchange=()=>{ c.start=s.value; saveSettings(); renderToday(); };
+    e.onchange=()=>{ c.end=e.value; saveSettings(); renderToday(); };
+    box.appendChild(it);
+  });
+}
+$("rowNo").onchange=()=>{ const n=parseInt($("rowNo").value,10); if(n>0){ state.myRow=Math.min(60,n); saveSettings(); } $("rowNo").value=state.myRow; };
+
+/* photo reading */
+$("btnPick").onclick=()=>{
+  if(!sample){ setStatus("readStatus","この画面では写真の読み取りが使えません。写真をClaudeのチャットに送ってください。",true); return; }
+  $("photo").click();
+};
+$("photo").onchange=async()=>{
+  const f=$("photo").files[0]; if(!f) return;
+  const row=state.myRow;
+  $("btnPick").disabled=true; setStatus("readStatus","読み取り中…（1分ほどかかります）");
+  const prompt=`この画像は病院の臨床工学科の月間勤務表の写真です。
+表の上部に「月」「日」「曜日」の見出し行があり、その下に職員が縦に並んでいます。各職員は2行で1人分です：
+上の行が勤務記号（例: A, M, S, HA, HU, H1, H2, H3, C1, C2, C3, CA, O1, OA, VA, E1, E2, E3, E4, G, K, 週, 休, 年, 日, 出, 事, 病, リ）、
+下の行が備考（例: ★, ☆, ×, セミナー, 休希望, 数字, (S) など。空欄が多い）。
+勤務記号の行だけを数えて、上から${row}番目の職員について、1日から月末までの各日の勤務記号と備考を読み取ってください。
+${state.countBlank?"勤務記号の行が「週」「休」だけでほとんど空欄の職員も1人として数えます。":"勤務記号の行が「週」「休」だけでほとんど空欄の職員は数えずに飛ばします。"}
+読めない日は推測で埋めず空文字にしてください。
+次のJSONだけを返してください:
+{"year":数値,"month":数値,"codes":["1日の記号",...],"notes":["1日の備考",...]}`;
+  try{
+    const r=await sample.json(prompt,{images:[f],modelTier:"complex"});
+    if(!r||!Array.isArray(r.codes)||!r.year||!r.month) throw {code:"parse"};
+    const y=+r.year, m=+r.month, n=daysIn(y,m);
+    const fit=a=>{ const x=(a||[]).slice(0,n).map(v=>String(v||"").trim()); while(x.length<n) x.push(""); return x; };
+    state.current=`${y}-${pad(m)}`;
+    state.months[state.current]={codes:fit(r.codes),notes:fit(r.notes),source:`写真から読み取り（上から${row}番目）`};
+    saveMonth(state.current); render(); renderCodes();
+    setStatus("readStatus",`${y}年${m}月を読み込みました。写真と見比べて、違う日はタップして直してください。`);
+  }catch(e){
+    const c=e&&e.code;
+    setStatus("readStatus", c==="not_granted"?"読み取りが許可されませんでした。"
+      : c==="rate_limited"?"混み合っています。少し待ってからもう一度試してください。"
+      : "うまく読み取れませんでした。表全体を正面から明るく撮った写真で試してください。", true);
+  }finally{ $("btnPick").disabled=false; $("photo").value=""; }
+};
+
+/* boot */
+$("rowNo").value=state.myRow;
+render(); renderCodes();
+
+async function initCloud(){
+  const cdb=await window.claude.use("db");
+  if(!cdb){ $("syncNote").textContent="この画面ではこの端末にだけ保存しています。"; return; }
+  db=cdb;
+  const user=await window.claude.use("user");
+  // Owner always edits; otherwise follow the platform's answer (null = unknown → allow, a refused write decides).
+  const owner = user ? await user.isOwner() : true;
+  const may = owner ? true : (user ? await user.can("data.write") : null);
+  canWrite = owner || may !== false;
+  if(!canWrite) document.body.classList.add("readonly");
+  $("syncNote").textContent="クラウドに保存しています。スマホでもPCでも同じ内容が見られます。";
+  db.collection("months").onSnapshot(qs=>{
+    const fresh={};
+    qs.docs.forEach(d=>{ const v=d.data(); if(v&&Array.isArray(v.codes)) fresh[d.id]={codes:[...v.codes],notes:Array.isArray(v.notes)?[...v.notes]:[],source:v.source||""}; });
+    state.months=fresh; saveLocal(); render(); renderCodes();
+  },()=>{});
+  db.doc("settings/main").onSnapshot(snap=>{
+    if(!snap.exists) return;
+    const d=snap.data();
+    if(d.codes&&typeof d.codes==="object") state.codes=Object.assign({},DEFAULT_CODES,JSON.parse(JSON.stringify(d.codes)));
+    if(Number.isInteger(d.myRow)&&d.myRow>0) state.myRow=d.myRow;
+    if(typeof d.countBlank==="boolean") state.countBlank=d.countBlank;
+    $("rowNo").value=state.myRow; saveLocal(); renderToday(); renderCodes();
+  },()=>{});
+}
+if(window.claude&&typeof window.claude.use==="function"){
+  initCloud().catch(()=>{});
+  window.claude.use("sample").then(s=>{ sample=s; }).catch(()=>{});
+}
+})();
+</script>
