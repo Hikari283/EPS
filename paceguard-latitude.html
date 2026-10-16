@@ -1408,6 +1408,18 @@ document.addEventListener('click',async e=>{const b=e.target.closest('.tlReeval'
   await tlLoad(keep.id);await tlTop(keep.top);await tlGo(keep.idx);});
 // 評価が終わったら、その患者のタイムラインを自動で表示（たたんであれば中身だけ準備）
 function tlAuto(id){if(id)tlLoad(id,true).catch(()=>{});}
+// 拡張機能（自動レポート）から「この患者で保存済みのイベントは？」と聞かれたら、基準フォルダの記録から答える
+// （イベントのPDFの記録だけを数える。サマリのPDFに載っているイベント一覧は「保存済み」にしない）
+window.addEventListener('message',async e=>{
+  if(e.source!==window||!e.data||!e.data.__pgAskSeen)return;const req=e.data.__pgAskSeen,pid=String(e.data.pid||'').trim();
+  const send=o=>window.postMessage({__pgSeenReply:req,...o},'*');
+  if(!dirHandle){send({ok:false,msg:'ツールがデータフォルダに接続していないため、保存済みのイベントが分かりません。\nツールで「今日の波形比較を開始」を押してから、もう一度押してください。'});return;}
+  if(!pid){send({ok:false,msg:'患者IDが読み取れないため、保存済みのイベントが分かりません。'});return;}
+  try{const st=await readBaseline(pid),ids=new Set();
+    const key=ev=>{const m=String(ev.dt||'').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})\D+(\d{1,2}):(\d{2})/);return m?`${ev.no}|${m[1]}${m[2].padStart(2,'0')}${m[3].padStart(2,'0')}${m[4].padStart(2,'0')}${m[5]}`:'';};
+    for(const sv of (st&&st.saves)||[])if(!sv.secg)for(const ev of sv.events||[]){const k=key(ev);if(k)ids.add(k);}
+    send({ok:true,ids:[...ids]});}catch(err){send({ok:false,msg:'保存済みのイベントを読めませんでした：'+(err&&err.message||err)});}
+});
 // タイムラインを別の患者に切り替える時、前の患者の表示を残さない
 function tlReset(id,msg){tl.id=id||'';tl.items=[];tl.cache.clear();$('tlId').value=id||'';$('tlSum').textContent=id?`ID ${id}・${msg}`:'';$('tlMsg').textContent=id?`ID ${id}：${msg}`:'';$('tlBody').hidden=true;}
 try{const v=localStorage.getItem('pg_lat_tlopen');if(v)$('tlCard').open=v==='1';}catch(_){}

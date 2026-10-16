@@ -133,3 +133,21 @@ chrome.runtime.onMessage.addListener(m => {
   if (m.type === 'autoWindow') chrome.storage.session.set({ autoUntil: m.on ? Date.now() + 10 * 60000 : Date.now() + 15000 });
   if (m.type === 'autoLog') chrome.storage.local.set({ autoLast: new Date().toLocaleString('ja-JP') + '　' + String(m.msg || '').slice(0, 200) });
 });
+
+// ⑥ 自動レポート：保存済みのイベントは、開いているツールのタブに聞く（拡張機能には患者IDを残さない）
+chrome.runtime.onMessage.addListener((m, sender, reply) => {
+  if (!m) return;
+  if (m.type === 'askSeen') {
+    (async () => {
+      const tool = (await chrome.tabs.query({})).find(t => t.url && t.url.startsWith('file:') && /paceguard-latitude/i.test(t.url));
+      if (!tool) return reply({ ok: false });
+      try { reply(await chrome.tabs.sendMessage(tool.id, { type: 'askSeen', pid: m.pid })); } catch (_) { reply({ ok: false }); }
+    })();
+    return true;
+  }
+  // 「1人1日1回」の記録は、Chromeを閉じると消える場所（session）に置く
+  if (m.type === 'ranToday') { chrome.storage.session.get({ ran: {} }).then(c => { c.ran[m.pid] = new Date().toLocaleDateString('ja-JP'); chrome.storage.session.set({ ran: c.ran }); }); }
+  if (m.type === 'ranTodayGet') { chrome.storage.session.get({ ran: {} }).then(c => reply(c.ran[m.pid] === new Date().toLocaleDateString('ja-JP'))); return true; }
+});
+// 前の版で拡張機能に残していた患者IDの記録を消す
+chrome.runtime.onInstalled.addListener(() => chrome.storage.local.remove(['autoSeen', 'autoLastRun']));

@@ -48,6 +48,8 @@
     cb.click(); // ページ側の処理も動くように、クリックで切り替える
     if (cb.checked !== on) { cb.checked = on; cb.dispatchEvent(new Event('change', { bubbles: true })); }
   }
+  // イベントの目印：番号＋日時の数字（ツールの記録と同じ形にそろえる）
+  const evKey = (no, dt) => { const m = String(dt || '').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})\D+(\d{1,2}):(\d{2})/); return m ? `${no}|${m[1]}${m[2].padStart(2, '0')}${m[3].padStart(2, '0')}${m[4].padStart(2, '0')}${m[5]}` : ''; };
   const patientId = () => (bodyText().match(/[（(](\d{8})[）)]/) || [])[1] || '';
 
   // 画面右下の小さなパネル（状態表示と開始ボタン）
@@ -74,9 +76,13 @@
   }
   async function start(byHand) {
     const pid = patientId();
-    setRun({ step: 'menu', pid, t0: Date.now(), byHand: !!byHand, made: 0 });
+    // 始める前に、ツールが開いていて保存済みのイベントを答えられるかを確かめる（途中で止まらないように）
+    setRun({ step: 'check', pid, t0: Date.now() }); ui('ツールの記録を確認しています…');
+    const r = await chrome.runtime.sendMessage({ type: 'askSeen', pid }).catch(() => null);
+    if (!r || !r.ok) return stop((r && r.msg) || 'ツールの画面が開いていないため、始められません。\nツール（PaceGuard LATITUDE）を開いてから、もう一度押してください。', 1);
+    setRun({ step: 'menu', pid, t0: Date.now(), byHand: !!byHand, made: 0, toolSeen: r.ids || [] });
     chrome.runtime.sendMessage({ type: 'autoWindow', on: true }).catch(() => {});
-    if (pid) chrome.storage.local.get({ autoLastRun: {} }).then(c => { c.autoLastRun[pid] = new Date().toLocaleDateString('ja-JP'); chrome.storage.local.set({ autoLastRun: c.autoLastRun }); });
+    if (pid) chrome.runtime.sendMessage({ type: 'ranToday', pid }).catch(() => {}); // Chromeを閉じると消える記録（1人1日1回の判断用）
     tick();
   }
 
@@ -95,9 +101,7 @@
         const ev = run.step === 'waitEventPdf', sec = Math.round((Date.now() - run.since) / 1000);
         if ((await lastSaved()) > run.since) {
           if (ev) {
-            const seenAll = (await chrome.storage.local.get({ autoSeen: {} })).autoSeen, key = run.pid || 'unknown';
-            seenAll[key] = [...new Set([...(seenAll[key] || []), ...(run.todo || [])])]; await chrome.storage.local.set({ autoSeen: seenAll });
-            setRun({ ...run, step: 'events', made: run.made + 1, evDone: (run.evDone || 0) + (run.todo || []).length, todo: null });
+            setRun({ ...run, step: 'events', made: run.made + 1, evDone: (run.evDone || 0) + (run.todo || []).length, done: [...(run.done || []), ...(run.todo || [])], todo: null });
             ui(`② イベント ${(run.todo || []).length} 件を保存しました（${sec}秒）。残りを確認します…`);
           } else {
             setRun({ ...run, step: 'events', made: run.made + 1 });
@@ -140,13 +144,20 @@
           sel.dispatchEvent(new Event('change', { bubbles: true }));
           ui('② 表示範囲を「植込み」にしました…'); return;
         }
-        const seenAll = (await chrome.storage.local.get({ autoSeen: {} })).autoSeen, seen = new Set(seenAll[run.pid || 'unknown'] || []);
+        // 保存済みのイベントは、拡張機能では覚えずにツール（基準フォルダの記録）に聞く。この回で作った分は run.done で足す
+        if (!run.toolSeen) {
+          ui('② 保存済みのイベントをツールに確認しています…');
+          const r = await chrome.runtime.sendMessage({ type: 'askSeen', pid: run.pid }).catch(() => null);
+          if (!r || !r.ok) return stop((r && r.msg) || 'ツールの画面が開いていないため、保存済みのイベントが分かりません。\nツール（PaceGuard LATITUDE）を開いてから、もう一度押してください。', 1);
+          setRun({ ...getRun(), toolSeen: r.ids || [] }); busy = false; return tick();
+        }
+        const seen = new Set([...(run.toolSeen || []), ...(run.done || [])]);
         const rows = [];
         for (const tr of document.querySelectorAll('tr')) {
           const cb = tr.querySelector('input[type=checkbox]'); if (!cb || cb.disabled) continue;
           const t = tr.innerText || '', no = (t.match(/(?:^|\s)(\d{3})(?:\s|$)/) || [])[1], dt = (t.match(/(\d{4})年(\d{1,2})月(\d{1,2})日\s*(\d{1,2}:\d{2})/) || [])[0];
           if (!no || !dt) continue;
-          rows.push({ cb, id: no + ' ' + norm(dt) });
+          rows.push({ cb, id: evKey(no, dt) });
         }
         const todo = rows.filter(r => !seen.has(r.id)).slice(0, MAX_EVENTS);
         if (!todo.length) return stop(run.evDone ? `完了しました（PDF ${run.made} 件・イベント ${run.evDone} 件）` : `完了しました（PDF ${run.made} 件）\n新しいイベントはありません`);
@@ -166,14 +177,14 @@
 
   // 起動：設定がオンのときだけ
   async function boot() {
-    const cfg = await chrome.storage.local.get({ autoReport: false, autoStart: false, autoLastRun: {} });
+    const cfg = await chrome.storage.local.get({ autoReport: false, autoStart: false });
     if (!cfg.autoReport) { setRun(null); return; }
     hookPrint(true);
     if (getRun()) { ui('続きを実行中…'); tick(); }
     else if (findClickable(LBL.menu)) {
-      const pid = patientId();
-      if (cfg.autoStart && pid && cfg.autoLastRun[pid] !== new Date().toLocaleDateString('ja-JP')) { ui('S-ICDレポートの自動作成を始めます…'); start(false); }
-      else ui(pid && cfg.autoLastRun[pid] === new Date().toLocaleDateString('ja-JP') ? '今日はこの患者のレポートを作成済みです' : 'ボタンを押すと、S-ICDのレポートを自動で作成します');
+      const pid = patientId(), ran = pid ? await chrome.runtime.sendMessage({ type: 'ranTodayGet', pid }).catch(() => false) : false;
+      if (cfg.autoStart && pid && !ran) { ui('S-ICDレポートの自動作成を始めます…'); start(false); }
+      else ui(ran ? '今日はこの患者のレポートを作成済みです' : 'ボタンを押すと、S-ICDのレポートを自動で作成します');
     }
   }
   // 自動作成中は印刷画面を出さない（ページの世界の hook.js に合図する）
