@@ -1496,7 +1496,7 @@ $('keepPdfYes').onchange=()=>{if(!confirm('元のPDF（氏名などが入って�
 let purgeBusy=false,purgeAutoDone=false;
 async function purgePdfs(auto){
   if(!dirHandle||purgeBusy)return;
-  purgeBusy=true;try{await purgeRun(auto);}finally{purgeBusy=false;}
+  purgeBusy=true;try{await purgeRun(auto);}catch(e){if(!auto)$('purgeMsg').textContent='置き換えできませんでした：'+(e&&e.message||e);}finally{purgeBusy=false;}
 }
 $('purgePdf').onclick=async()=>{
   if(!dirHandle){$('purgeMsg').textContent='先にデータフォルダに接続してください。';return;}
