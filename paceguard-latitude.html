@@ -1409,11 +1409,13 @@ async function tlLoad(idArg,quiet){
     try{const f=await fileFromPath(it.pdf);if(!f)continue;const h=headerInfo((await extractRawPdfText(await f.arrayBuffer())).replace(/\s+/g,''),false,'');
       if(!it.secg&&h.secg)it.secg=h.secg;if(!it.tx&&h.tx)it.tx=h.tx;if(!(it.events||[]).length&&h.events.length)it.events=h.events;}catch(_){}}
   // まとめて作ったイベントのPDFは、イベントごとの項目に分ける（同じイベントが複数のPDFにあれば1つだけ）
-  {const out=[],seenEv=new Set();
+  {const out=[],seenEv=new Set(),pickS=new Map(),bp=st.baseline&&st.baseline.pdf;
+    for(const it of items){if(!it.secg)continue;const o=pickS.get(it.secg);if(!o||(it.pdf&&it.pdf===bp)||(o.pdf!==bp&&(it.ts||0)>(o.ts||0)))pickS.set(it.secg,it);}
     for(const it of items){
       if(it.pdf&&!it.secg&&(it.events||[]).length){const pages=await eventPages(it.pdf);
         if(pages.length>1){for(const ev of pages){const k=ev.no+'|'+ev.dt;if(seenEv.has(k))continue;seenEv.add(k);
           out.push({...it,events:[ev],page:ev.page,lv:null,h:null,feat:null,split:true});}continue;}}
+      if(it.secg&&pickS.get(it.secg)!==it)continue; // 同じS-ECG記録の重複
       const ev=!it.secg&&(it.events||[])[0];if(ev){const k=ev.no+'|'+ev.dt;if(seenEv.has(k))continue;seenEv.add(k);}
       out.push(it);}
     items.length=0;items.push(...out);}
@@ -1526,12 +1528,24 @@ async function purgeRun(auto){
         for(const r of refs)r.J.dirty=true;
         toDel.push([pd,n]);
       }catch(e){fail++;}}}
+  // 同じS-ECG記録（記録日時が同じ）が重なって保存されていたら、1つにまとめる（基準のもの→新しいもの を残し、最初の判定・医師の判断は引き継ぐ）
+  let dup=0;const dupFiles=[];
+  for(const J of jsons){const sv=J.j.saves||[],bp=J.j.baseline&&J.j.baseline.pdf,groups=new Map();
+    for(const x of sv)if(x.secg)(groups.get(x.secg)||groups.set(x.secg,[]).get(x.secg)).push(x);
+    for(const g of groups.values()){if(g.length<2)continue;
+      const keep=g.find(x=>x.pdf===bp)||[...g].sort((a,b)=>(b.ts||0)-(a.ts||0))[0];
+      for(const o of g){if(o===keep)continue;
+        if(o.first&&(!keep.first||(o.first.ts||0)<(keep.first.ts||0)))keep.first=o.first;if(o.review&&!keep.review)keep.review=o.review;if(o.rvHidden)keep.rvHidden=true;
+        sv.splice(sv.indexOf(o),1);(J.j.reports||[]).forEach(r=>{if(r.pdf===o.pdf)r.pdf=keep.pdf;});
+        if(o.pdf&&o.pdf!==keep.pdf)dupFiles.push(o.pdf);dup++;J.dirty=true;}}}
   // 記録を書き直してから、元のPDFを消す（途中で失敗しても記録とファイルが食い違わないように）
   for(const J of jsons)if(J.dirty){try{const w=await (await bd.getFileHandle(J.n,{create:true})).createWritable();await w.write(JSON.stringify(J.j));await w.close();}catch(_){msg('記録を書き直せなかったので、元のPDFは消していません。');return;}}
   for(const [pd,n] of toDel){try{await pd.removeEntry(n);del++;}catch(_){}}
+  for(const pth of dupFiles){try{const d=await dirOfPath(pth);if(d)await d.removeEntry(pth.split('/').pop());}catch(_){}}
   tl.cache.clear();tlEvPages.clear();idIndex=null;
-  const done=`波形の画像 ${conv}枚を作り、元のPDF ${del}個を消しました${fail?`（読めなかったPDF ${fail}個は残しています）`:''}。`;
-  if(!(auto&&!conv&&!del))msg((auto?'自動で置き換え：':'完了：')+done);
+  const done=`波形の画像 ${conv}枚を作り、元のPDF ${del}個を消しました${fail?`（読めなかったPDF ${fail}個は残しています）`:''}${dup?`。重なっていた同じ記録 ${dup}件を1つにまとめました`:''}。`;
+  if(!(auto&&!conv&&!del&&!dup))msg((auto?'自動で置き換え：':'完了：')+done);
+  if(auto&&dup&&!conv&&!del)setFolderStatus(`<span class="ok-t">フォルダ接続済み：${escH(dirHandle.name)}</span>　重なっていた同じ記録 ${dup}件を1つにまとめました`);
   if(auto&&(conv||del))setFolderStatus(`<span class="ok-t">フォルダ接続済み：${escH(dirHandle.name)}</span>　🔒 元のPDFを画像に置き換えました（${del}個）`);
   if(tl.id)tlLoad(tl.id);rvLoad();
 }
@@ -1548,9 +1562,13 @@ async function rvLoad(){
       if(!sv.secg&&(sv.events||[]).length)continue; // イベントのPDFは比較の対象外
       const f=sv.first||(sv.level!=null?{level:sv.level,causes:sv.causes||null,ref:sv.ref||null,mode:sv.mode||null,ts:sv.ts}:null);
       if(!f||!(f.level>=1))continue;
-      rows.push({id:String(j.id||name.replace(/\.json$/i,'')),pdf:sv.pdf,when:String(sv.secg||sv.date||'').replace(/\s*JST/,''),key:sv.key||'',first:f,now:sv.level,review:sv.review||{judge:'',memo:''},hid:!!sv.rvHidden});}}}catch(_){}
+      rows.push({secg:sv.secg||'',ts:sv.ts||0,id:String(j.id||name.replace(/\.json$/i,'')),pdf:sv.pdf,when:String(sv.secg||sv.date||'').replace(/\s*JST/,''),key:sv.key||'',first:f,now:sv.level,review:sv.review||{judge:'',memo:''},hid:!!sv.rvHidden});}}}catch(_){}
   rows.sort((a,b)=>(b.key||b.when)<(a.key||a.when)?-1:1); // 新しい順
-  rvRows=rows;rvRender();
+  // 同じ患者・同じS-ECG記録が重なっていたら1行にまとめる（医師の判断があるもの→新しいもの を残す）
+  const uniq=new Map();
+  for(const r of rows){const k=r.id+'|'+(r.secg||r.when);const o=uniq.get(k);
+    if(!o||(!o.review.judge&&r.review.judge)||(!!o.review.judge===!!r.review.judge&&r.ts>o.ts))uniq.set(k,r);}
+  rvRows=rows.filter(r=>uniq.get(r.id+'|'+(r.secg||r.when))===r);rvRender();
 }
 function rvRender(){
   const live=rvRows.filter(r=>!r.hid),n=live.filter(r=>!r.review.judge).length;
@@ -1735,7 +1753,14 @@ async function runEval(mode){
     // イベントのPDF（S-ECGの記録日時がなくイベントの見出しがある）は、その日の比較相手（前回・基準）にしない。PDFごとの記録（saves）にだけ残す
     const rs=isEvent?[...reports]:reports.filter(r=>!(curKey&&r.key===curKey));if(!isEvent)rs.push({date:now.date,key:curKey,feat:poolSave,ts:now.ts,pdf:nowPdf});rs.sort((a,b)=>a.key<b.key?-1:1);
     const hist=((store&&store.history)||[]).filter(h=>!(curKey&&dateKey(h.date)===curKey));if(histEntry)hist.push(histEntry);
-    await writeBaseline(id,{...now,reports:rs,history:hist,saves,baseline:baseRep||(isEvent?null:{date:now.date,key:curKey,feat:poolSave,ts:now.ts,pdf:nowPdf})});
+    // 同じS-ECGの記録（記録日時が同じ）を何度も保存した時は、新しい1つだけ残す（最初の判定・医師の判断は引き継ぎ、古いファイルは消す）
+    let baseOut=baseRep?{...baseRep}:null;
+    if(!isEvent&&now.secg&&nowPdf){const mine=saves.find(x=>x.pdf===nowPdf);
+      for(const o of saves.filter(x=>x.pdf!==nowPdf&&x.secg===now.secg)){
+        if(mine){if(o.first&&(!mine.first||(o.first.ts||0)<(mine.first.ts||0)))mine.first=o.first;if(o.review&&!mine.review)mine.review=o.review;if(o.rvHidden)mine.rvHidden=true;}
+        saves.splice(saves.indexOf(o),1);rs.forEach(r=>{if(r.pdf===o.pdf)r.pdf=nowPdf;});if(baseOut&&baseOut.pdf===o.pdf)baseOut.pdf=nowPdf;
+        try{const d=await dirOfPath(o.pdf);if(d)await d.removeEntry(o.pdf.split('/').pop());}catch(_){}}}
+    await writeBaseline(id,{...now,reports:rs,history:hist,saves,baseline:baseOut||(isEvent?null:{date:now.date,key:curKey,feat:poolSave,ts:now.ts,pdf:nowPdf})});
   };
   // 段ごとの一覧（使った段・除外した段と理由）
   const ic=l=>l===2?'⚠️':l===1?'🟡':'✅';
