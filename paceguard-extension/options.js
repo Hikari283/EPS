@@ -21,12 +21,5 @@ chrome.storage.local.get({ autoArrange: true }).then(c => { $('autoArrange').che
 $('autoArrange').onchange = () => chrome.storage.local.set({ autoArrange: $('autoArrange').checked });
 $('arrangeNow').onclick = async () => { const r = await chrome.runtime.sendMessage({ type: 'arrange' }); $('arrMsg').textContent = r === 'OK' ? '並べました' : (r || ''); };
 
-// 自動レポート（試験中）
-chrome.storage.local.get({ autoReport: false, autoStart: false, saveManual: false, autoLast: '' }).then(c => {
-  $('autoReport').checked = c.autoReport; $('autoStart').checked = c.autoStart; $('saveManual').checked = c.saveManual;
-  $('autoLast').textContent = c.autoLast ? '最後の自動作成：' + c.autoLast : '';
-});
-for (const k of ['autoReport', 'autoStart', 'saveManual']) $(k).onchange = () => chrome.storage.local.set({ [k]: $(k).checked });
-
 document.addEventListener('click', async e => { if (e.target.id !== 'resetCnt') return;
   await chrome.storage.local.set({ count: 0, todayCount: 0 }); chrome.action.setBadgeText({ text: '' }); load(); });

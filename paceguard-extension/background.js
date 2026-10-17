@@ -11,18 +11,14 @@ async function save(opts, key) {
   for (const [k, t] of recent) if (now - t > 20000) recent.delete(k);
   if (recent.has(key)) return; recent.set(key, now);
   const cfg = await getCfg(); if (!cfg.enabled) return;
-  // 自動レポート（試験中）を使っていて「手動のPDFは保存しない」設定なら、自動作成中のPDFだけ保存する
-  const ac = await chrome.storage.local.get({ autoReport: false, saveManual: false });
-  if (ac.autoReport && !ac.saveManual) { const s = await chrome.storage.session.get({ autoUntil: 0 }); if (Date.now() > s.autoUntil) return; }
   const filename = `${safe(cfg.folder) || 'LATITUDE'}/LATITUDE_${stamp()}_${Math.random().toString(36).slice(2, 6)}.pdf`;
   try {
     await chrome.downloads.download({ ...opts, filename, conflictAction: 'uniquify', saveAs: false });
     // 件数：今日の件数（日付が変わると0から）と、これまでの合計
     const today = new Date().toLocaleDateString('ja-JP'), st = await chrome.storage.local.get({ todayDate: '', todayCount: 0 });
     const todayCount = (st.todayDate === today ? st.todayCount : 0) + 1, count = (cfg.count || 0) + 1;
-    await chrome.storage.local.set({ count, todayDate: today, todayCount, last: new Date().toLocaleString('ja-JP'), lastSavedAt: Date.now() });
+    await chrome.storage.local.set({ count, todayDate: today, todayCount, last: new Date().toLocaleString('ja-JP') });
     chrome.action.setBadgeBackgroundColor({ color: '#2563eb' }); chrome.action.setBadgeText({ text: String(todayCount) }); // 判定が出たら OK／!／!! に変わる
-    try { for (const t of await chrome.tabs.query({ url: cfg.hosts.flatMap(h => [`https://${h}/*`, `https://*.${h}/*`]) })) chrome.tabs.sendMessage(t.id, { type: 'pgSaved' }).catch(() => {}); } catch (_) {}
   } catch (e) { chrome.storage.local.set({ lastError: String(e && e.message || e) }); }
 }
 
@@ -127,27 +123,8 @@ chrome.runtime.onMessage.addListener((m, sender, reply) => {
   if (m.type === 'arrange') { arrange().then(r => reply && reply(r)); return true; }
 });
 
-// ⑤ 自動レポート（試験中）：作成中の時間帯を覚える（この間に届いたPDFだけを「自動」として保存）
-chrome.runtime.onMessage.addListener(m => {
-  if (!m) return;
-  if (m.type === 'autoWindow') chrome.storage.session.set({ autoUntil: m.on ? Date.now() + 10 * 60000 : Date.now() + 15000 });
-  if (m.type === 'autoLog') chrome.storage.local.set({ autoLast: new Date().toLocaleString('ja-JP') + '　' + String(m.msg || '').slice(0, 200) });
+// v0.6.0：自動レポート作成（試験中）はやめた。前の版が残した設定・記録（患者IDを含むものもある）を消す
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.storage.local.remove(['autoReport', 'autoStart', 'saveManual', 'autoSeen', 'autoLastRun', 'autoLast', 'lastSavedAt']);
+  try { chrome.storage.session.clear(); } catch (_) {}
 });
-
-// ⑥ 自動レポート：保存済みのイベントは、開いているツールのタブに聞く（拡張機能には患者IDを残さない）
-chrome.runtime.onMessage.addListener((m, sender, reply) => {
-  if (!m) return;
-  if (m.type === 'askSeen') {
-    (async () => {
-      const tool = (await chrome.tabs.query({})).find(t => t.url && t.url.startsWith('file:') && /paceguard-latitude/i.test(t.url));
-      if (!tool) return reply({ ok: false });
-      try { reply(await chrome.tabs.sendMessage(tool.id, { type: 'askSeen', pid: m.pid })); } catch (_) { reply({ ok: false }); }
-    })();
-    return true;
-  }
-  // 「1人1日1回」の記録は、Chromeを閉じると消える場所（session）に置く
-  if (m.type === 'ranToday') { chrome.storage.session.get({ ran: {} }).then(c => { c.ran[m.pid] = new Date().toLocaleDateString('ja-JP'); chrome.storage.session.set({ ran: c.ran }); }); }
-  if (m.type === 'ranTodayGet') { chrome.storage.session.get({ ran: {} }).then(c => reply(c.ran[m.pid] === new Date().toLocaleDateString('ja-JP'))); return true; }
-});
-// 前の版で拡張機能に残していた患者IDの記録を消す
-chrome.runtime.onInstalled.addListener(() => chrome.storage.local.remove(['autoSeen', 'autoLastRun']));
