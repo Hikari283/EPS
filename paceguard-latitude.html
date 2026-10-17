@@ -886,10 +886,40 @@ async function archiveNonSicd(file){if(!dirHandle||!file)return null;
     const fh=await od.getFileHandle(safeName(file.name),{create:true}),w=await fh.createWritable();await w.write(await file.arrayBuffer());await w.close();return `${PDF_DIR}/_対象外/${safeName(file.name)}`;}catch(_){return null;}}
 const pdfKey=f=>f?`${f.name}|${f.size}|${f.lastModified}`:''; // 読み込んだPDF／最後に整理したPDF
 let reloadArchived=null; // タイムラインから「評価し直す」で読み込んだ時：すでに患者PDFにあるので保存し直さない
-// 波形の部分だけ（緑の線の範囲）を画像にして保存する。ページの見出し（氏名などがある所）は入らない
+// 波形のページのうち、ページ上部の枠（Boston Scientificのロゴと患者情報の欄）より下だけを、解析と同じ倍率（HI）で画像にする。
+// 枠の下には患者情報は入っていない（設定・凡例・S-ECG表示の見出し・波形）。念のため、範囲の中に患者IDやふりがなの文字があれば、その下から切り出す
+async function regionImage(doc,pageNo){
+  const pno=pageNo||await pickEcgPage(doc),pg=await doc.getPage(pno),v1=pg.getViewport({scale:1});
+  // 緑の線の範囲（pt）
+  const s1=1.5,va=pg.getViewport({scale:s1}),c=document.createElement('canvas');c.width=Math.round(va.width);c.height=Math.round(va.height);
+  const x=c.getContext('2d',{willReadFrequently:true});x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);await pg.render({canvasContext:x,viewport:va}).promise;
+  const d=x.getImageData(0,0,c.width,c.height).data;let gy0=c.height,gy1=0;
+  for(let yy=0;yy<c.height;yy++)for(let xx=0;xx<c.width;xx+=2){const i=(yy*c.width+xx)*4;if(d[i+1]-Math.max(d[i],d[i+2])>18){if(yy<gy0)gy0=yy;if(yy>gy1)gy1=yy;}}
+  if(gy1<=gy0){gy0=0;gy1=c.height;}
+  gy0/=s1;gy1/=s1;
+  // ページ上部の枠：上から30%までにある、横幅の6割以上に伸びる濃い横線のうち、いちばん下の線を枠の下端とみなす
+  let frameBottom=-1;
+  for(let yy=0;yy<Math.min(c.height*0.3,gy0*s1);yy++){let run=0,best=0;for(let xx=0;xx<c.width;xx++){const i=(yy*c.width+xx)*4;if(d[i]<110&&d[i+1]<110&&d[i+2]<110){run++;if(run>best)best=run;}else run=0;}
+    if(best>c.width*0.6)frameBottom=yy;}
+  // 見出しの文字の位置（pt）
+  let top=gy0-45,items=[];
+  try{const tc=await pg.getTextContent();items=tc.items.map(it=>{const [px,py]=v1.convertToViewportPoint(it.transform[4],it.transform[5]);return {s:String(it.str||'').replace(/\s+/g,''),y:py,h:Math.abs(it.transform[3])||10};}).filter(it=>it.s);}catch(_){}
+  const anchors=items.filter(it=>/ゲイン設定|センシング構成|S-?ECG表示|^\d{3}[:：]\d{4}年/.test(it.s)&&it.y<gy0+5);
+  if(frameBottom>=0)top=frameBottom/s1+3;                       // 枠が見つかった：枠のすぐ下から
+  else if(anchors.length)top=Math.min(...anchors.map(a=>a.y-a.h))-6; // 枠が見つからない：設定・S-ECG表示などの見出しの上から
+  const bottom=Math.min(v1.height,gy1+30);top=Math.max(0,top);
+  for(const it of items)if(it.y>top&&it.y-it.h<bottom&&(/\d{8}|[（(][ぁ-ゟ]/.test(it.s)))top=Math.max(top,it.y+4); // 患者ID・ふりがなは入れない
+  const o=document.createElement('canvas');o.width=Math.round(v1.width*HI);o.height=Math.max(1,Math.round((bottom-top)*HI));
+  const ox=o.getContext('2d');ox.fillStyle='#fff';ox.fillRect(0,0,o.width,o.height);
+  await pg.render({canvasContext:ox,viewport:pg.getViewport({scale:HI,offsetY:-top*HI})}).promise;
+  return {canvas:o,meta:{imgScale:HI,imgTop:Math.round(top*10)/10,page:pno}};
+}
+// 上の範囲を画像にして保存する（元のPDFを残さない設定）。倍率も返すので、あとからこの画像で評価し直せる
+let lastImgMeta=null;
 async function saveWaveImg(dir,fname,doc,pageNo){
-  const c=await ecgImage(doc,pageNo||0,false),blob=await new Promise(r=>c.toBlob(r,'image/png'));
+  const {canvas,meta}=await regionImage(doc,pageNo),blob=await new Promise(r=>canvas.toBlob(r,'image/png'));
   const w=await (await dir.getFileHandle(fname,{create:true})).createWritable();await w.write(blob);await w.close();
+  lastImgMeta=meta;return meta;
 }
 async function archivePdf(id,obj,tag){
   if(reloadArchived&&!tag)return reloadArchived;
@@ -1434,10 +1464,27 @@ async function tlDelete(path){
 document.addEventListener('click',e=>{const b=e.target.closest('.tlDel');if(b)tlDelete(b.dataset.pdf);});
 // タイムラインの「このPDFで評価し直す」：患者PDFのファイルを読み込み直して数値を作る（PDFは二重に保存しない）
 document.addEventListener('click',async e=>{const b=e.target.closest('.tlReeval');if(!b)return;b.disabled=true;b.textContent='評価中…';
+  const keep0={id:tl.id,idx:tl.idx,top:tl.top};
+  if(/\.png$/i.test(b.dataset.pdf)){const err=await loadImageRecord(b.dataset.pdf,tl.id);if(err){b.textContent=err;return;}await tlLoad(keep0.id);await tlTop(keep0.top);await tlGo(keep0.idx);return;}
   const f=await fileFromPath(b.dataset.pdf);if(!f){b.textContent='PDFが見つかりません';return;}
   const keep={id:tl.id,idx:tl.idx,top:tl.top};reloadArchived=b.dataset.pdf;
   try{await loadPDF(f,{forceEval:true});}finally{reloadArchived=null;}
   await tlLoad(keep.id);await tlTop(keep.top);await tlGo(keep.idx);});
+// 保存した波形の画像（元のPDFを残さない設定）で評価し直す：数値は画像から測り直し、ID・日時は記録から使う
+async function loadImageRecord(path,id){
+  const st=await readBaseline(id),sv=st&&(st.saves||[]).find(x=>x.pdf===path),f=await fileFromPath(path);
+  if(!sv||!f)return 'PDF・画像が見つかりません';
+  if(!sv.imgScale)return 'この画像は倍率の記録がないため、評価し直せません（LATITUDEからPDFを開き直してください）';
+  const img=await createImageBitmap(f),k=sv.imgScale/HI; // 解析用の倍率（HI）にそろえる
+  hiCanvas.width=Math.round(img.width/k);hiCanvas.height=Math.round(img.height/k);hctx.fillStyle='#fff';hctx.fillRect(0,0,hiCanvas.width,hiCanvas.height);hctx.drawImage(img,0,0,hiCanvas.width,hiCanvas.height);hiReady=true;
+  const r=renderScale/HI;pageCanvas.width=Math.round(hiCanvas.width*r);pageCanvas.height=Math.round(hiCanvas.height*r);pctx.fillStyle='#fff';pctx.fillRect(0,0,pageCanvas.width,pageCanvas.height);pctx.drawImage(hiCanvas,0,0,pageCanvas.width,pageCanvas.height);
+  savePageBackup();pdfLoaded=true;lastPdfFile=f;lastPdfDoc=null;curPageNo=sv.page||0;curNonSicd=null;renderPageBtns(1,1,false);
+  $('fId').value=id;$('fName').value='';$('fDate').value=sv.date||'';$('fDev').value=(st&&st.device)||'';
+  meta={id,name:'',date:sv.date||'',device:(st&&st.device)||'',tx:sv.tx||'',clinic:sv.clinic||'',implant:'',events:sv.events||[],secg:sv.secg||'',allDT:[]};
+  autoTrace();
+  reloadArchived=path;try{await runEval('auto');}finally{reloadArchived=null;}
+  return '';
+}
 // ===== 元のPDFの保存：残す／残さない =====
 function keepPdfUi(){$('keepPdfYes').checked=KEEP_PDF;$('keepPdfNo').checked=!KEEP_PDF;$('purgePdf').disabled=KEEP_PDF;}
 keepPdfUi();
@@ -1463,9 +1510,9 @@ $('purgePdf').onclick=async()=>{
         if(sv0&&!sv0.secg&&(sv0.events||[]).length>1&&(doc.numPages||1)>1){ // まとめたイベントのPDF：ページごとに分ける
           const pages=await eventPagesDoc(doc);
           if(pages.length>1){const mine=pages.find(x=>x.page===page)||pages[0];page=mine.page;sv0.events=[{no:mine.no,dt:mine.dt,type:mine.type}];
-            for(const ev of pages){if(ev===mine)continue;const fn=`${png.replace(/\.png$/i,'')}_イベント${ev.no}.png`;await saveWaveImg(pd,fn,doc,ev.page);
-              refs[0].J.j.saves.push({pdf:`${PDF_DIR}/${folder}/${fn}`,page:0,date:sv0.date,tx:sv0.tx,clinic:sv0.clinic,events:[{no:ev.no,dt:ev.dt,type:ev.type}],secg:'',key:sv0.key,feat:null,ts:sv0.ts,level:null});conv++;}}}
-        await saveWaveImg(pd,png,doc,page);conv++;
+            for(const ev of pages){if(ev===mine)continue;const fn=`${png.replace(/\.png$/i,'')}_イベント${ev.no}.png`;const mt=await saveWaveImg(pd,fn,doc,ev.page);
+              refs[0].J.j.saves.push({imgScale:mt.imgScale,pdf:`${PDF_DIR}/${folder}/${fn}`,page:0,date:sv0.date,tx:sv0.tx,clinic:sv0.clinic,events:[{no:ev.no,dt:ev.dt,type:ev.type}],secg:'',key:sv0.key,feat:null,ts:sv0.ts,level:null});conv++;}}}
+        const mt=await saveWaveImg(pd,png,doc,page);conv++;for(const r of refs)r.sv.imgScale=mt.imgScale;
         for(const J of jsons){const t=JSON.stringify(J.j);if(t.includes(JSON.stringify(path))){J.j=JSON.parse(t.split(JSON.stringify(path)).join(JSON.stringify(newPath)));J.dirty=true;}}
         for(const r of refs)r.J.dirty=true;
         toDel.push([pd,n]);
@@ -1540,7 +1587,7 @@ document.addEventListener('click',async e=>{const tr=e.target.closest('#rvTable 
   if(e.target.closest('.rvView'))return rvOpen(r);
   if(e.target.closest('.rvHide'))return rvHide(+tr.dataset.i);
   if(e.target.closest('.rvDeep')){const b=e.target.closest('.rvDeep');b.disabled=true;b.textContent='評価中…';
-    if(!/\.pdf$/i.test(r.pdf||'')){b.disabled=false;b.textContent='🔬 詳しく';$('rvMsg').textContent='元のPDFを残さない設定のため、評価し直せません。LATITUDEからPDFを開き直すと、もう一度評価できます。';return;}
+    if(/\.png$/i.test(r.pdf||'')){const err=await loadImageRecord(r.pdf,r.id);b.disabled=false;b.textContent='🔬 詳しく';if(err){$('rvMsg').textContent=err;return;}$('result').scrollIntoView({block:'start'});rvLoad();return;}
     const f=await fileFromPath(r.pdf);if(!f){b.textContent='PDFが見つかりません';return;}
     reloadArchived=r.pdf;try{await loadPDF(f,{forceEval:true});}finally{reloadArchived=null;}
     $('result').scrollIntoView({block:'start'});}});
@@ -1663,8 +1710,8 @@ async function runEval(mode){
       try{const pages=await eventPagesDoc(lastPdfDoc);
         if(pages.length>1){const mine=pages.find(x=>x.page===curPageNo)||pages[0],dir=await dirOfPath(nowPdf),stem=nowPdf.split('/').pop().replace(/\.png$/i,''),folderPath=nowPdf.split('/').slice(0,-1).join('/');
           now.events=[{no:mine.no,dt:mine.dt,type:mine.type}];
-          for(const ev of pages){if(ev===mine||!dir)continue;const fn=`${stem}_イベント${ev.no}.png`;await saveWaveImg(dir,fn,lastPdfDoc,ev.page);
-            extra.push({pdf:`${folderPath}/${fn}`,page:0,date:now.date,tx:now.tx,clinic:now.clinic,events:[{no:ev.no,dt:ev.dt,type:ev.type}],secg:'',key:curKey,feat:null,ts:now.ts,level:null});}}}catch(_){}
+          for(const ev of pages){if(ev===mine||!dir)continue;const fn=`${stem}_イベント${ev.no}.png`;const mt=await saveWaveImg(dir,fn,lastPdfDoc,ev.page);
+            extra.push({imgScale:mt.imgScale,pdf:`${folderPath}/${fn}`,page:0,date:now.date,tx:now.tx,clinic:now.clinic,events:[{no:ev.no,dt:ev.dt,type:ev.type}],secg:'',key:curKey,feat:null,ts:now.ts,level:null});}}}catch(_){}
     }
     // PDF1枚ごとの記録（照会日が同じ別のイベント記録でも上書きしない）
     const old=((store&&store.saves)||[]).find(x=>nowPdf&&x.pdf===nowPdf)||null;
@@ -1672,7 +1719,7 @@ async function runEval(mode){
     // 最初の判定（評価し直しても消さない）と、医師の判断（要確認リストで入力）は引き継ぐ
     const lvNow=histEntry&&histEntry.level!=null?histEntry.level:null;
     const first=old?(old.first||(old.level!=null?{level:old.level,causes:old.causes||null,ref:old.ref||null,mode:old.mode||null,ts:old.ts}:null)):null;
-    saves.push({first:first||(lvNow!=null?{level:lvNow,causes:histEntry.causes||null,ref:histEntry.ref||null,mode:histEntry.mode||null,ts:now.ts}:null),review:old&&old.review||null,...(old&&old.rvHidden?{rvHidden:true}:{}),pdf:nowPdf,page:curPageNo,date:now.date,tx:now.tx,clinic:now.clinic,events:now.events,secg:now.secg,key:curKey,feat:poolSave,ts:now.ts,level:histEntry&&histEntry.level!=null?histEntry.level:null,causes:histEntry&&histEntry.causes||null,ref:histEntry&&histEntry.ref||null,mode:histEntry&&histEntry.mode||null});
+    saves.push({...(/\.png$/i.test(nowPdf||'')&&lastImgMeta?{imgScale:lastImgMeta.imgScale}:{}),first:first||(lvNow!=null?{level:lvNow,causes:histEntry.causes||null,ref:histEntry.ref||null,mode:histEntry.mode||null,ts:now.ts}:null),review:old&&old.review||null,...(old&&old.rvHidden?{rvHidden:true}:{}),pdf:nowPdf,page:curPageNo,date:now.date,tx:now.tx,clinic:now.clinic,events:now.events,secg:now.secg,key:curKey,feat:poolSave,ts:now.ts,level:histEntry&&histEntry.level!=null?histEntry.level:null,causes:histEntry&&histEntry.causes||null,ref:histEntry&&histEntry.ref||null,mode:histEntry&&histEntry.mode||null});
     for(const x of extra){const i=saves.findIndex(y=>y.pdf===x.pdf);if(i>=0)saves.splice(i,1);saves.push(x);}
     // イベントのPDF（S-ECGの記録日時がなくイベントの見出しがある）は、その日の比較相手（前回・基準）にしない。PDFごとの記録（saves）にだけ残す
     const rs=isEvent?[...reports]:reports.filter(r=>!(curKey&&r.key===curKey));if(!isEvent)rs.push({date:now.date,key:curKey,feat:poolSave,ts:now.ts,pdf:nowPdf});rs.sort((a,b)=>a.key<b.key?-1:1);
