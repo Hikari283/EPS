@@ -199,6 +199,7 @@
     <h1>PaceGuard <span style="color:var(--accent)">LATITUDE</span><small>S-ICD WAVEFORM MONITOR · β</small></h1>
   </div>
   <div class="chips">
+    <button class="chip" id="rvChip" title="医師がまだ確認していない、注意・要確認の記録（押すと一覧へ）" hidden style="cursor:pointer"></button>
     <button class="chip" id="lastChip" title="最新の結果（押すとその場所へ）" hidden style="cursor:pointer"></button>
     <span class="chip" title="自動比較の状態"><span class="live" id="liveDot"></span><span id="liveTxt">自動比較 停止中</span></span>
     <span class="chip" id="netChip" hidden></span>
@@ -288,6 +289,16 @@
         <div id="tlStrip" style="display:flex;gap:6px;overflow-x:auto;padding:6px 0;flex:1;min-width:0"></div>
       </div>
     </div>
+  </details>
+  <details class="card" id="rvCard">
+    <summary>📋 要確認リスト（ツールが🟡注意・⚠️要確認と判定した記録）<span class="hint" id="rvSum" style="margin-left:8px;font-weight:400;letter-spacing:0"></span></summary>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0">
+      <span class="seg" title="表示する記録"><button id="rvFNew">未確認</button><button id="rvFBad">異常あり</button><button id="rvFAll">すべて</button></span>
+      <button id="rvReload" class="ghost">🔄 読み直す</button><button id="rvCsv" class="ghost">⬇ CSVで書き出す</button>
+      <span class="hint" id="rvMsg"></span>
+    </div>
+    <div style="overflow-x:auto"><table class="crit" id="rvTable"></table></div>
+    <div class="hint" style="margin-top:6px">行の「🎞 波形」でタイムラインに基準と並べて表示、「🔬 詳しく」で今の基準と評価し直して解析の全部を表示します。「最初の判定」は評価し直しても変わりません。医師の判断は「基準」フォルダの記録に保存されます（氏名は入りません）。</div>
   </details>
 
   <section class="card" id="watchCard">
@@ -800,7 +811,7 @@ let dirHandle=null, savedHandle=null;
 // 選んだフォルダをIndexedDBに記憶し、次回から選び直さずに使う（ブラウザが再許可を求めることがある）
 function idb(mode,fn){return new Promise((res,rej)=>{const o=indexedDB.open('pg_lat',1);o.onupgradeneeded=()=>o.result.createObjectStore('kv');
   o.onerror=()=>rej(o.error);o.onsuccess=()=>{let tx,r;try{tx=o.result.transaction('kv',mode);r=fn(tx.objectStore('kv'));}catch(e){rej(e);return;}tx.oncomplete=()=>res(r&&r.result);tx.onerror=()=>rej(tx.error);};});}
-const setFolderStatus=(html)=>{$('folderStatus').innerHTML=html;if(dirHandle)showBaseDirStatus();};
+const setFolderStatus=(html)=>{$('folderStatus').innerHTML=html;if(dirHandle){showBaseDirStatus();setTimeout(()=>rvLoad(),300);}};
 $('settings').addEventListener('toggle',()=>{if($('settings').open)showBaseDirStatus();});
 $('pickFolder').onclick=async()=>{
   if(!dirHandle&&savedHandle&&await ensureDir())return; // 記憶済みフォルダは許可だけで再接続
@@ -1406,6 +1417,77 @@ document.addEventListener('click',async e=>{const b=e.target.closest('.tlReeval'
   const keep={id:tl.id,idx:tl.idx,top:tl.top};reloadArchived=b.dataset.pdf;
   try{await loadPDF(f,{forceEval:true});}finally{reloadArchived=null;}
   await tlLoad(keep.id);await tlTop(keep.top);await tlGo(keep.idx);});
+// ===== 📋 要確認リスト：ツールが🟡注意・⚠️要確認と判定した記録と、医師の判断 =====
+let rvRows=[],rvFilt='new';try{rvFilt=localStorage.getItem('pg_lat_rvfilt')||'new';}catch(_){}
+const rvJ={'':'未確認',ok:'問題なし',abn:'異常あり'};
+const rvIc=l=>l==null?'—':['✅ 変化なし','🟡 注意','⚠️ 要確認'][l];
+function rvFiltBtns(){$('rvFNew').classList.toggle('on',rvFilt==='new');$('rvFBad').classList.toggle('on',rvFilt==='bad');$('rvFAll').classList.toggle('on',rvFilt==='all');}
+async function rvLoad(){
+  const d=dirHandle?await baseDir(false):null;if(!d){$('rvMsg').textContent='データフォルダに接続すると表示されます。';return;}
+  const rows=[];
+  try{for await(const [name,h] of d.entries()){if(h.kind!=='file'||!/\.json$/i.test(name))continue;let j;try{j=JSON.parse(await (await h.getFile()).text());}catch(_){continue;}
+    for(const sv of (j&&j.saves)||[]){
+      if(!sv.secg&&(sv.events||[]).length)continue; // イベントのPDFは比較の対象外
+      const f=sv.first||(sv.level!=null?{level:sv.level,causes:sv.causes||null,ref:sv.ref||null,mode:sv.mode||null,ts:sv.ts}:null);
+      if(!f||!(f.level>=1))continue;
+      rows.push({id:String(j.id||name.replace(/\.json$/i,'')),pdf:sv.pdf,when:String(sv.secg||sv.date||'').replace(/\s*JST/,''),key:sv.key||'',first:f,now:sv.level,review:sv.review||{judge:'',memo:''}});}}}catch(_){}
+  rows.sort((a,b)=>(b.key||b.when)<(a.key||a.when)?-1:1); // 新しい順
+  rvRows=rows;rvRender();
+}
+function rvRender(){
+  const n=rvRows.filter(r=>!r.review.judge).length;
+  $('rvChip').hidden=!n;$('rvChip').textContent=`📋 未確認 ${n}件`;
+  $('rvSum').textContent=rvRows.length?`未確認 ${n}件／全 ${rvRows.length}件`:'';
+  const show=rvRows.map((r,i)=>({r,i})).filter(({r})=>rvFilt==='all'||(rvFilt==='new'?!r.review.judge:r.review.judge==='abn'));
+  $('rvMsg').textContent=rvRows.length?'':'注意・要確認と判定された記録はありません。';
+  $('rvTable').innerHTML=show.length?`<tr><th>患者ID</th><th>記録日時</th><th>最初の判定</th><th>理由</th><th>医師の判断</th><th>メモ</th><th></th></tr>`+show.map(({r,i})=>{
+    const why=(r.first.causes||[]).join('／');
+    return `<tr class="lv${r.first.level}" data-i="${i}"><td><b>${escH(r.id)}</b></td><td>${escH(r.when)}</td>
+      <td>${rvIc(r.first.level)}${r.now!=null&&r.now!==r.first.level?`<div class="hint">今の評価：${rvIc(r.now)}</div>`:''}</td>
+      <td class="hint" style="max-width:300px">${escH(why.length>90?why.slice(0,90)+'…':why)||'—'}</td>
+      <td><select class="rvJudge">${Object.entries(rvJ).map(([k,v])=>`<option value="${k}"${r.review.judge===k?' selected':''}>${v}</option>`).join('')}</select></td>
+      <td><input class="rvMemo inp" value="${escH(r.review.memo||'')}" placeholder="メモ" style="width:160px"></td>
+      <td style="white-space:nowrap"><button class="rvView ghost">🎞 波形</button> <button class="rvDeep ghost">🔬 詳しく</button></td></tr>`;}).join('')
+    :`<tr><td class="hint">${rvRows.length?(rvFilt==='new'?'未確認の記録はありません。':'該当する記録はありません。'):''}</td></tr>`;
+}
+async function rvSave(i,judge,memo){
+  const r=rvRows[i];if(!r)return;
+  const st=await readBaseline(r.id);const sv=st&&(st.saves||[]).find(x=>x.pdf===r.pdf);
+  if(!sv){$('rvMsg').textContent='記録が見つからず、保存できませんでした。';return;}
+  sv.review={judge,memo,ts:Date.now()};
+  if(!(await writeBaseline(r.id,st))){$('rvMsg').textContent='保存できませんでした（フォルダの許可を確認してください）。';return;}
+  r.review=sv.review;rvRender();$('rvMsg').textContent=`${r.id} の判断を保存しました。`;
+}
+async function rvOpen(r){ // タイムラインで、基準と並べてその記録を表示
+  $('tlCard').open=true;await tlLoad(r.id);
+  let k=tl.items.findIndex(it=>it.pdf===r.pdf);
+  if(k<0&&tlFilt!=='all'){tlFilt='all';tlFiltBtns();await tlLoad(r.id);k=tl.items.findIndex(it=>it.pdf===r.pdf);}
+  if(k>=0){await tlTop(-1);await tlGo(k);}
+  $('tlCard').scrollIntoView({block:'start'});
+}
+document.addEventListener('change',e=>{const tr=e.target.closest('#rvTable tr[data-i]');if(!tr)return;
+  if(e.target.classList.contains('rvJudge')||e.target.classList.contains('rvMemo'))rvSave(+tr.dataset.i,tr.querySelector('.rvJudge').value,tr.querySelector('.rvMemo').value);});
+document.addEventListener('click',async e=>{const tr=e.target.closest('#rvTable tr[data-i]');if(!tr)return;const r=rvRows[+tr.dataset.i];if(!r)return;
+  if(e.target.closest('.rvView'))return rvOpen(r);
+  if(e.target.closest('.rvDeep')){const b=e.target.closest('.rvDeep');b.disabled=true;b.textContent='評価中…';
+    const f=await fileFromPath(r.pdf);if(!f){b.textContent='PDFが見つかりません';return;}
+    reloadArchived=r.pdf;try{await loadPDF(f,{forceEval:true});}finally{reloadArchived=null;}
+    $('result').scrollIntoView({block:'start'});}});
+for(const [b,v] of [['rvFNew','new'],['rvFBad','bad'],['rvFAll','all']])$(b).onclick=()=>{rvFilt=v;try{localStorage.setItem('pg_lat_rvfilt',v);}catch(_){}rvFiltBtns();rvRender();};
+rvFiltBtns();
+$('rvReload').onclick=()=>rvLoad();
+$('rvChip').onclick=()=>{$('rvCard').open=true;rvFilt='new';rvFiltBtns();rvRender();$('rvCard').scrollIntoView({block:'start'});};
+$('rvCard').addEventListener('toggle',()=>{if($('rvCard').open)rvLoad();});
+// CSV（研究の集計用）：氏名は入らない。Excelで文字化けしないよう先頭にBOMを付ける
+$('rvCsv').onclick=async()=>{
+  const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"',lv=l=>l==null?'':['変化なし','注意','要確認'][l];
+  const lines=[['患者ID','記録日時','最初の判定','最初の判定の比較相手','理由','今の評価','医師の判断','メモ','判断した日時'].map(q).join(',')]
+    .concat(rvRows.map(r=>[r.id,r.when,lv(r.first.level),r.first.ref||'',(r.first.causes||[]).join('／'),lv(r.now),rvJ[r.review.judge||''],r.review.memo||'',r.review.ts?new Date(r.review.ts).toLocaleString('ja-JP'):''].map(q).join(',')));
+  const d=new Date(),p2=v=>String(v).padStart(2,'0'),name=`PaceGuard_要確認リスト_${d.getFullYear()}${p2(d.getMonth()+1)}${p2(d.getDate())}.csv`,text='\ufeff'+lines.join('\r\n');
+  // 保存先を選ぶ画面で保存（file:// の画面では、普通のダウンロードだとファイル名が付かないことがあるため）
+  if(window.showSaveFilePicker){try{const fh=await window.showSaveFilePicker({suggestedName:name,types:[{description:'CSV',accept:{'text/csv':['.csv']}}]});const w=await fh.createWritable();await w.write(text);await w.close();$('rvMsg').textContent='CSVを保存しました：'+fh.name;}catch(e){if(e&&e.name!=='AbortError')$('rvMsg').textContent='保存できませんでした：'+(e.message||e);}return;}
+  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(text);a.download=name;document.body.appendChild(a);a.click();a.remove();
+};
 // 評価が終わったら、その患者のタイムラインを自動で表示（たたんであれば中身だけ準備）
 function tlAuto(id){if(id)tlLoad(id,true).catch(()=>{});}
 // 拡張機能（自動レポート）から「この患者で保存済みのイベントは？」と聞かれたら、基準フォルダの記録から答える
@@ -1553,7 +1635,7 @@ async function runEval(mode){
     const why=isEvent?'イベントの記録として保存しました（基準・前回にはS-ECGのレポートを使います）':first?((store&&store.feat&&!store.reports)?'新しい計測方式で登録しました（この波形が基準になります）':'初回登録しました（この波形が基準になります）'):'比較できる前の日付のレポートがありません';
     $('result').innerHTML=`<div class="verdict info"><h2>${why}</h2>この患者（ID:${id}）の${now.date||'今回'}のレポートとして保存しました。${first?'次から「📌 基準と比較」で、同じ日付のレポートでも比べられます。':'同じ日付どうしを比べるときは「📌 基準と比較」を使ってください。'}${curKey?'':'<br><b>※照会日が読み取れていません。照会日を入力すると前後関係で正しく比較できます。</b>'}${dirHandle?'':'<br><b>※フォルダ未選択のため保存できていません。</b>'}
       <div class="hint" style="margin-top:6px">${measure(pool)}</div>${rowNotes.length?`<div class="cause">記録の中の所見：${rowNotes.map(x=>`${x.info?'ℹ️':ic(x.lv)} ${x.row}：${x.why}`).join('　')}</div>`:''}</div>${rowTable}`;
-    $('overlayCard').hidden=true; showRhythm(); tlAuto(id); return;
+    $('overlayCard').hidden=true; showRhythm(); tlAuto(id); rvLoad(); return;
   }
   const r={k:0,b:bp,c:pool,...compareFeat(bp,pool)};
   const sign=v=>(v>0?'+':'')+v;
@@ -1585,7 +1667,7 @@ async function runEval(mode){
   $('overlayCard').hidden=false; // 先に表示してから描く（幅を正しく取るため）
   drawBeat(r);
   showRhythm();
-  tlAuto(id);
+  tlAuto(id); rvLoad();
 };
 // 代表拍の重ね描き（実寸：横 ms・縦 mV。青＝前回、橙＝今回。QRSの始まりと終わりに縦線）
 let lastBeatR=null;
