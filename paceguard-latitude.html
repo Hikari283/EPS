@@ -817,7 +817,7 @@ let dirHandle=null, savedHandle=null;
 // 選んだフォルダをIndexedDBに記憶し、次回から選び直さずに使う（ブラウザが再許可を求めることがある）
 function idb(mode,fn){return new Promise((res,rej)=>{const o=indexedDB.open('pg_lat',1);o.onupgradeneeded=()=>o.result.createObjectStore('kv');
   o.onerror=()=>rej(o.error);o.onsuccess=()=>{let tx,r;try{tx=o.result.transaction('kv',mode);r=fn(tx.objectStore('kv'));}catch(e){rej(e);return;}tx.oncomplete=()=>res(r&&r.result);tx.onerror=()=>rej(tx.error);};});}
-const setFolderStatus=(html)=>{$('folderStatus').innerHTML=html;if(dirHandle){showBaseDirStatus();setTimeout(()=>rvLoad(),300);}};
+const setFolderStatus=(html)=>{$('folderStatus').innerHTML=html;if(dirHandle){showBaseDirStatus();setTimeout(()=>rvLoad(),300);if(!KEEP_PDF&&!purgeAutoDone){purgeAutoDone=true;setTimeout(()=>purgePdfs(true),800);}}};
 $('settings').addEventListener('toggle',()=>{if($('settings').open)showBaseDirStatus();});
 $('pickFolder').onclick=async()=>{
   if(!dirHandle&&savedHandle&&await ensureDir())return; // 記憶済みフォルダは許可だけで再接続
@@ -1488,16 +1488,25 @@ async function loadImageRecord(path,id){
 // ===== 元のPDFの保存：残す／残さない =====
 function keepPdfUi(){$('keepPdfYes').checked=KEEP_PDF;$('keepPdfNo').checked=!KEEP_PDF;$('purgePdf').disabled=KEEP_PDF;}
 keepPdfUi();
-$('keepPdfNo').onchange=()=>{KEEP_PDF=false;try{localStorage.setItem('pg_lat_keeppdf','0');}catch(_){}keepPdfUi();$('purgeMsg').textContent='これから評価するPDFは、波形の画像だけを残します。今ある元のPDFは、下のボタンで置き換えられます。';};
+$('keepPdfNo').onchange=()=>{KEEP_PDF=false;try{localStorage.setItem('pg_lat_keeppdf','0');}catch(_){}keepPdfUi();$('purgeMsg').textContent='これから評価するPDFは、波形の画像だけを残します。今ある元のPDFも自動で置き換えます…';purgePdfs(true);};
 $('keepPdfYes').onchange=()=>{if(!confirm('元のPDF（氏名などが入っています）をこのPCに保存するようにします。\n情報セキュリティの許可を得ている場合だけ切り替えてください。よろしいですか？')){keepPdfUi();return;}
   KEEP_PDF=true;try{localStorage.setItem('pg_lat_keeppdf','1');}catch(_){}keepPdfUi();$('purgeMsg').textContent='これから評価するPDFは、元のPDFのまま保存します。';};
 // 今ある元のPDFを、波形の部分だけの画像に置き換える（_削除済み・_対象外・波形のない書類のPDFは消す）。元のPDFはLATITUDEから出し直せる
+// 自動：元のPDFを残さない設定では、フォルダに接続したときに、残っている元のPDFを自動で画像に置き換える（確認なし）
+let purgeBusy=false,purgeAutoDone=false;
+async function purgePdfs(auto){
+  if(!dirHandle||purgeBusy)return;
+  purgeBusy=true;try{await purgeRun(auto);}finally{purgeBusy=false;}
+}
 $('purgePdf').onclick=async()=>{
   if(!dirHandle){$('purgeMsg').textContent='先にデータフォルダに接続してください。';return;}
   if(!confirm('保存してある元のPDFを、波形の部分だけの画像に置き換えて、元のPDFを消します。\n・_削除済み、_対象外、波形のない書類のPDFも消します\n・消したPDFはこのツールからは戻せません（LATITUDEから出し直せます）\nよろしいですか？'))return;
+  purgePdfs(false);
+};
+async function purgeRun(auto){
   const msg=t=>$('purgeMsg').textContent=t,bd=await baseDir(false),jsons=[];
   if(bd)for await(const [n,h] of bd.entries()){if(h.kind!=='file'||!/\.json$/i.test(n))continue;try{jsons.push({n,j:JSON.parse(await (await h.getFile()).text()),dirty:false});}catch(_){}}
-  let top;try{top=await dirHandle.getDirectoryHandle(PDF_DIR);}catch(_){msg('元のPDFはありません。');return;}
+  let top;try{top=await dirHandle.getDirectoryHandle(PDF_DIR);}catch(_){if(!auto)msg('元のPDFはありません。');return;}
   const lib=await ensurePdfjs(),toDel=[];let conv=0,del=0,fail=0;
   for await(const [folder,fh] of top.entries()){if(fh.kind!=='directory')continue;const pd=await top.getDirectoryHandle(folder);
     const names=[];for await(const [n,h] of pd.entries())if(h.kind==='file'&&/\.pdf$/i.test(n))names.push(n);
@@ -1521,9 +1530,11 @@ $('purgePdf').onclick=async()=>{
   for(const J of jsons)if(J.dirty){try{const w=await (await bd.getFileHandle(J.n,{create:true})).createWritable();await w.write(JSON.stringify(J.j));await w.close();}catch(_){msg('記録を書き直せなかったので、元のPDFは消していません。');return;}}
   for(const [pd,n] of toDel){try{await pd.removeEntry(n);del++;}catch(_){}}
   tl.cache.clear();tlEvPages.clear();idIndex=null;
-  msg(`完了：波形の画像 ${conv}枚を作り、元のPDF ${del}個を消しました${fail?`（読めなかったPDF ${fail}個は残しています）`:''}。`);
+  const done=`波形の画像 ${conv}枚を作り、元のPDF ${del}個を消しました${fail?`（読めなかったPDF ${fail}個は残しています）`:''}。`;
+  if(!(auto&&!conv&&!del))msg((auto?'自動で置き換え：':'完了：')+done);
+  if(auto&&(conv||del))setFolderStatus(`<span class="ok-t">フォルダ接続済み：${escH(dirHandle.name)}</span>　🔒 元のPDFを画像に置き換えました（${del}個）`);
   if(tl.id)tlLoad(tl.id);rvLoad();
-};
+}
 // ===== 📋 要確認リスト：ツールが🟡注意・⚠️要確認と判定した記録と、医師の判断 =====
 let rvRows=[],rvFilt='new';try{rvFilt=localStorage.getItem('pg_lat_rvfilt')||'new';}catch(_){}
 const rvJ={'':'未確認',ok:'問題なし',abn:'異常あり'};
@@ -1913,7 +1924,7 @@ async function startWatch(dir,{processExisting=false}={}){
 }
 const sizeSeen=new Map();
 async function pollWatch(){
-  if(!watchDir||watchBusy)return;watchBusy=true;
+  if(!watchDir||watchBusy||purgeBusy)return;watchBusy=true;
   try{
     const todo=[];
     for await(const [name,h] of watchDir.entries()){
