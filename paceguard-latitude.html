@@ -1517,8 +1517,12 @@ async function runEval(mode){
   const saveStore=async(histEntry)=>{
     nowPdf=await archivePdf(id,now);
     // PDF1枚ごとの記録（照会日が同じ別のイベント記録でも上書きしない）
+    const old=((store&&store.saves)||[]).find(x=>nowPdf&&x.pdf===nowPdf)||null;
     const saves=((store&&store.saves)||[]).filter(x=>!(nowPdf&&x.pdf===nowPdf));
-    saves.push({pdf:nowPdf,page:curPageNo,date:now.date,tx:now.tx,clinic:now.clinic,events:now.events,secg:now.secg,key:curKey,feat:poolSave,ts:now.ts,level:histEntry&&histEntry.level!=null?histEntry.level:null,causes:histEntry&&histEntry.causes||null,ref:histEntry&&histEntry.ref||null,mode:histEntry&&histEntry.mode||null});
+    // 最初の判定（評価し直しても消さない）と、医師の判断（要確認リストで入力）は引き継ぐ
+    const lvNow=histEntry&&histEntry.level!=null?histEntry.level:null;
+    const first=old?(old.first||(old.level!=null?{level:old.level,causes:old.causes||null,ref:old.ref||null,mode:old.mode||null,ts:old.ts}:null)):null;
+    saves.push({first:first||(lvNow!=null?{level:lvNow,causes:histEntry.causes||null,ref:histEntry.ref||null,mode:histEntry.mode||null,ts:now.ts}:null),review:old&&old.review||null,pdf:nowPdf,page:curPageNo,date:now.date,tx:now.tx,clinic:now.clinic,events:now.events,secg:now.secg,key:curKey,feat:poolSave,ts:now.ts,level:histEntry&&histEntry.level!=null?histEntry.level:null,causes:histEntry&&histEntry.causes||null,ref:histEntry&&histEntry.ref||null,mode:histEntry&&histEntry.mode||null});
     // イベントのPDF（S-ECGの記録日時がなくイベントの見出しがある）は、その日の比較相手（前回・基準）にしない。PDFごとの記録（saves）にだけ残す
     const rs=isEvent?[...reports]:reports.filter(r=>!(curKey&&r.key===curKey));if(!isEvent)rs.push({date:now.date,key:curKey,feat:poolSave,ts:now.ts,pdf:nowPdf});rs.sort((a,b)=>a.key<b.key?-1:1);
     const hist=((store&&store.history)||[]).filter(h=>!(curKey&&dateKey(h.date)===curKey));if(histEntry)hist.push(histEntry);
