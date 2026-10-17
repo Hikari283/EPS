@@ -293,7 +293,7 @@
   <details class="card" id="rvCard">
     <summary>📋 要確認リスト（ツールが🟡注意・⚠️要確認と判定した記録）<span class="hint" id="rvSum" style="margin-left:8px;font-weight:400;letter-spacing:0"></span></summary>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0">
-      <span class="seg" title="表示する記録"><button id="rvFNew">未確認</button><button id="rvFBad">異常あり</button><button id="rvFAll">すべて</button></span>
+      <span class="seg" title="表示する記録"><button id="rvFNew">未確認</button><button id="rvFBad">異常あり</button><button id="rvFAll">すべて</button><button id="rvFHid">外したもの</button></span>
       <button id="rvReload" class="ghost">🔄 読み直す</button><button id="rvCsv" class="ghost">⬇ CSVで書き出す</button>
       <span class="hint" id="rvMsg"></span>
     </div>
@@ -1421,7 +1421,7 @@ document.addEventListener('click',async e=>{const b=e.target.closest('.tlReeval'
 let rvRows=[],rvFilt='new';try{rvFilt=localStorage.getItem('pg_lat_rvfilt')||'new';}catch(_){}
 const rvJ={'':'未確認',ok:'問題なし',abn:'異常あり'};
 const rvIc=l=>l==null?'—':['✅ 変化なし','🟡 注意','⚠️ 要確認'][l];
-function rvFiltBtns(){$('rvFNew').classList.toggle('on',rvFilt==='new');$('rvFBad').classList.toggle('on',rvFilt==='bad');$('rvFAll').classList.toggle('on',rvFilt==='all');}
+function rvFiltBtns(){for(const [b,v] of [['rvFNew','new'],['rvFBad','bad'],['rvFAll','all'],['rvFHid','hid']])$(b).classList.toggle('on',rvFilt===v);}
 async function rvLoad(){
   const d=dirHandle?await baseDir(false):null;if(!d){$('rvMsg').textContent='データフォルダに接続すると表示されます。';return;}
   const rows=[];
@@ -1430,15 +1430,15 @@ async function rvLoad(){
       if(!sv.secg&&(sv.events||[]).length)continue; // イベントのPDFは比較の対象外
       const f=sv.first||(sv.level!=null?{level:sv.level,causes:sv.causes||null,ref:sv.ref||null,mode:sv.mode||null,ts:sv.ts}:null);
       if(!f||!(f.level>=1))continue;
-      rows.push({id:String(j.id||name.replace(/\.json$/i,'')),pdf:sv.pdf,when:String(sv.secg||sv.date||'').replace(/\s*JST/,''),key:sv.key||'',first:f,now:sv.level,review:sv.review||{judge:'',memo:''}});}}}catch(_){}
+      rows.push({id:String(j.id||name.replace(/\.json$/i,'')),pdf:sv.pdf,when:String(sv.secg||sv.date||'').replace(/\s*JST/,''),key:sv.key||'',first:f,now:sv.level,review:sv.review||{judge:'',memo:''},hid:!!sv.rvHidden});}}}catch(_){}
   rows.sort((a,b)=>(b.key||b.when)<(a.key||a.when)?-1:1); // 新しい順
   rvRows=rows;rvRender();
 }
 function rvRender(){
-  const n=rvRows.filter(r=>!r.review.judge).length;
+  const live=rvRows.filter(r=>!r.hid),n=live.filter(r=>!r.review.judge).length;
   $('rvChip').hidden=!n;$('rvChip').textContent=`📋 未確認 ${n}件`;
-  $('rvSum').textContent=rvRows.length?`未確認 ${n}件／全 ${rvRows.length}件`:'';
-  const show=rvRows.map((r,i)=>({r,i})).filter(({r})=>rvFilt==='all'||(rvFilt==='new'?!r.review.judge:r.review.judge==='abn'));
+  $('rvSum').textContent=live.length?`未確認 ${n}件／全 ${live.length}件`:'';
+  const show=rvRows.map((r,i)=>({r,i})).filter(({r})=>rvFilt==='hid'?r.hid:!r.hid&&(rvFilt==='all'||(rvFilt==='new'?!r.review.judge:r.review.judge==='abn')));
   $('rvMsg').textContent=rvRows.length?'':'注意・要確認と判定された記録はありません。';
   $('rvTable').innerHTML=show.length?`<tr><th>患者ID</th><th>記録日時</th><th>最初の判定</th><th>理由</th><th>医師の判断</th><th>メモ</th><th></th></tr>`+show.map(({r,i})=>{
     const why=(r.first.causes||[]).join('／');
@@ -1447,8 +1447,8 @@ function rvRender(){
       <td class="hint" style="max-width:300px">${escH(why.length>90?why.slice(0,90)+'…':why)||'—'}</td>
       <td><select class="rvJudge">${Object.entries(rvJ).map(([k,v])=>`<option value="${k}"${r.review.judge===k?' selected':''}>${v}</option>`).join('')}</select></td>
       <td><input class="rvMemo inp" value="${escH(r.review.memo||'')}" placeholder="メモ" style="width:160px"></td>
-      <td style="white-space:nowrap"><button class="rvView ghost">🎞 波形</button> <button class="rvDeep ghost">🔬 詳しく</button></td></tr>`;}).join('')
-    :`<tr><td class="hint">${rvRows.length?(rvFilt==='new'?'未確認の記録はありません。':'該当する記録はありません。'):''}</td></tr>`;
+      <td style="white-space:nowrap"><button class="rvView ghost">🎞 波形</button> <button class="rvDeep ghost">🔬 詳しく</button> ${r.hid?'<button class="rvHide ghost" title="リストに戻す">↩ 戻す</button>':'<button class="rvHide ghost" title="リストから外す（PDFと記録は残ります）">🗑</button>'}</td></tr>`;}).join('')
+    :`<tr><td class="hint">${rvRows.length?(rvFilt==='new'?'未確認の記録はありません。':rvFilt==='hid'?'外した記録はありません。':'該当する記録はありません。'):''}</td></tr>`;
 }
 async function rvSave(i,judge,memo){
   const r=rvRows[i];if(!r)return;
@@ -1457,6 +1457,15 @@ async function rvSave(i,judge,memo){
   sv.review={judge,memo,ts:Date.now()};
   if(!(await writeBaseline(r.id,st))){$('rvMsg').textContent='保存できませんでした（フォルダの許可を確認してください）。';return;}
   r.review=sv.review;rvRender();$('rvMsg').textContent=`${r.id} の判断を保存しました。`;
+}
+// リストから外す／戻す：PDFと評価の記録は消さず、「外した」印だけを付ける（「外したもの」から戻せる）
+async function rvHide(i){
+  const r=rvRows[i];if(!r)return;const hide=!r.hid;
+  if(hide&&!confirm(`${r.id}（${r.when}）を要確認リストから外します。\nPDFと評価の記録は消えません（「外したもの」から戻せます）。\nPDFそのものを消したいときは、タイムラインの🗑を使ってください。`))return;
+  const st=await readBaseline(r.id);const sv=st&&(st.saves||[]).find(x=>x.pdf===r.pdf);if(!sv){$('rvMsg').textContent='記録が見つかりませんでした。';return;}
+  if(hide)sv.rvHidden=true;else delete sv.rvHidden;
+  if(!(await writeBaseline(r.id,st))){$('rvMsg').textContent='保存できませんでした（フォルダの許可を確認してください）。';return;}
+  r.hid=hide;rvRender();$('rvMsg').textContent=`${r.id} を${hide?'リストから外しました':'リストに戻しました'}。`;
 }
 async function rvOpen(r){ // タイムラインで、基準と並べてその記録を表示
   $('tlCard').open=true;await tlLoad(r.id);
@@ -1469,11 +1478,12 @@ document.addEventListener('change',e=>{const tr=e.target.closest('#rvTable tr[da
   if(e.target.classList.contains('rvJudge')||e.target.classList.contains('rvMemo'))rvSave(+tr.dataset.i,tr.querySelector('.rvJudge').value,tr.querySelector('.rvMemo').value);});
 document.addEventListener('click',async e=>{const tr=e.target.closest('#rvTable tr[data-i]');if(!tr)return;const r=rvRows[+tr.dataset.i];if(!r)return;
   if(e.target.closest('.rvView'))return rvOpen(r);
+  if(e.target.closest('.rvHide'))return rvHide(+tr.dataset.i);
   if(e.target.closest('.rvDeep')){const b=e.target.closest('.rvDeep');b.disabled=true;b.textContent='評価中…';
     const f=await fileFromPath(r.pdf);if(!f){b.textContent='PDFが見つかりません';return;}
     reloadArchived=r.pdf;try{await loadPDF(f,{forceEval:true});}finally{reloadArchived=null;}
     $('result').scrollIntoView({block:'start'});}});
-for(const [b,v] of [['rvFNew','new'],['rvFBad','bad'],['rvFAll','all']])$(b).onclick=()=>{rvFilt=v;try{localStorage.setItem('pg_lat_rvfilt',v);}catch(_){}rvFiltBtns();rvRender();};
+for(const [b,v] of [['rvFNew','new'],['rvFBad','bad'],['rvFAll','all'],['rvFHid','hid']])$(b).onclick=()=>{rvFilt=v;try{localStorage.setItem('pg_lat_rvfilt',v);}catch(_){}rvFiltBtns();rvRender();};
 rvFiltBtns();
 $('rvReload').onclick=()=>rvLoad();
 $('rvChip').onclick=()=>{$('rvCard').open=true;rvFilt='new';rvFiltBtns();rvRender();$('rvCard').scrollIntoView({block:'start'});};
@@ -1482,7 +1492,7 @@ $('rvCard').addEventListener('toggle',()=>{if($('rvCard').open)rvLoad();});
 $('rvCsv').onclick=async()=>{
   const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"',lv=l=>l==null?'':['変化なし','注意','要確認'][l];
   const lines=[['患者ID','記録日時','最初の判定','最初の判定の比較相手','理由','今の評価','医師の判断','メモ','判断した日時'].map(q).join(',')]
-    .concat(rvRows.map(r=>[r.id,r.when,lv(r.first.level),r.first.ref||'',(r.first.causes||[]).join('／'),lv(r.now),rvJ[r.review.judge||''],r.review.memo||'',r.review.ts?new Date(r.review.ts).toLocaleString('ja-JP'):''].map(q).join(',')));
+    .concat(rvRows.filter(r=>!r.hid).map(r=>[r.id,r.when,lv(r.first.level),r.first.ref||'',(r.first.causes||[]).join('／'),lv(r.now),rvJ[r.review.judge||''],r.review.memo||'',r.review.ts?new Date(r.review.ts).toLocaleString('ja-JP'):''].map(q).join(',')));
   const d=new Date(),p2=v=>String(v).padStart(2,'0'),name=`PaceGuard_要確認リスト_${d.getFullYear()}${p2(d.getMonth()+1)}${p2(d.getDate())}.csv`,text='\ufeff'+lines.join('\r\n');
   // 保存先を選ぶ画面で保存（file:// の画面では、普通のダウンロードだとファイル名が付かないことがあるため）
   if(window.showSaveFilePicker){try{const fh=await window.showSaveFilePicker({suggestedName:name,types:[{description:'CSV',accept:{'text/csv':['.csv']}}]});const w=await fh.createWritable();await w.write(text);await w.close();$('rvMsg').textContent='CSVを保存しました：'+fh.name;}catch(e){if(e&&e.name!=='AbortError')$('rvMsg').textContent='保存できませんでした：'+(e.message||e);}return;}
@@ -1604,7 +1614,7 @@ async function runEval(mode){
     // 最初の判定（評価し直しても消さない）と、医師の判断（要確認リストで入力）は引き継ぐ
     const lvNow=histEntry&&histEntry.level!=null?histEntry.level:null;
     const first=old?(old.first||(old.level!=null?{level:old.level,causes:old.causes||null,ref:old.ref||null,mode:old.mode||null,ts:old.ts}:null)):null;
-    saves.push({first:first||(lvNow!=null?{level:lvNow,causes:histEntry.causes||null,ref:histEntry.ref||null,mode:histEntry.mode||null,ts:now.ts}:null),review:old&&old.review||null,pdf:nowPdf,page:curPageNo,date:now.date,tx:now.tx,clinic:now.clinic,events:now.events,secg:now.secg,key:curKey,feat:poolSave,ts:now.ts,level:histEntry&&histEntry.level!=null?histEntry.level:null,causes:histEntry&&histEntry.causes||null,ref:histEntry&&histEntry.ref||null,mode:histEntry&&histEntry.mode||null});
+    saves.push({first:first||(lvNow!=null?{level:lvNow,causes:histEntry.causes||null,ref:histEntry.ref||null,mode:histEntry.mode||null,ts:now.ts}:null),review:old&&old.review||null,...(old&&old.rvHidden?{rvHidden:true}:{}),pdf:nowPdf,page:curPageNo,date:now.date,tx:now.tx,clinic:now.clinic,events:now.events,secg:now.secg,key:curKey,feat:poolSave,ts:now.ts,level:histEntry&&histEntry.level!=null?histEntry.level:null,causes:histEntry&&histEntry.causes||null,ref:histEntry&&histEntry.ref||null,mode:histEntry&&histEntry.mode||null});
     // イベントのPDF（S-ECGの記録日時がなくイベントの見出しがある）は、その日の比較相手（前回・基準）にしない。PDFごとの記録（saves）にだけ残す
     const rs=isEvent?[...reports]:reports.filter(r=>!(curKey&&r.key===curKey));if(!isEvent)rs.push({date:now.date,key:curKey,feat:poolSave,ts:now.ts,pdf:nowPdf});rs.sort((a,b)=>a.key<b.key?-1:1);
     const hist=((store&&store.history)||[]).filter(h=>!(curKey&&dateKey(h.date)===curKey));if(histEntry)hist.push(histEntry);
