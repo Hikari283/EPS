@@ -364,6 +364,12 @@
       <button id="pdfDirSave">保存</button>
       <span class="status" id="pdfDirMsg"></span>
     </div>
+    <div style="margin-top:10px;padding:8px 10px;border:1px solid var(--line);border-radius:8px">
+      <b>元のPDFの保存</b>
+      <label class="hint row"><input type="radio" name="keepPdf" id="keepPdfNo"> 残さない（標準）：波形の部分だけの画像と数値を残す。氏名などが入ったPDFはこのPCに残さない</label>
+      <label class="hint row"><input type="radio" name="keepPdf" id="keepPdfYes"> 残す：情報セキュリティの許可を得た場合だけ（元のPDFを患者ごとのフォルダに保存）</label>
+      <div style="margin-top:4px"><button id="purgePdf">今ある元のPDFを、波形の画像に置き換える</button> <span class="status" id="purgeMsg"></span></div>
+    </div>
     <div class="hint" style="margin-top:6px">評価したPDFを「データフォルダ／このフォルダ／患者ごとのフォルダ／日付.pdf」に保存します。患者ごとのフォルダ名は下の「患者ファイルの名前」と同じ形（.jsonを除いたもの）です。</div>
     <div class="hint" style="margin-top:6px">新しい患者のファイルを作るときの名前です。使える項目：<code>{ID}</code>（患者ID）・<code>{機種}</code>　例：<code>{ID}.json</code>、<code>{ID}_{機種}.json</code>。<br>既にあるファイルは今の名前のまま使います。ファイル名を手で変えても、ファイルの中に書かれた患者IDで自動的に見つけます。</div>
   </details>
@@ -863,6 +869,8 @@ function fileNameFor(id,obj){let n=FILE_PAT.replace(/\{ID\}/g,id).replace(/\{氏
 $('filePatSave').onclick=()=>{const v=$('filePat').value.trim();if(!/\{ID\}/.test(v)){$('filePatMsg').innerHTML='<span class="warn-t">{ID} を必ず入れてください（例：{ID}.json）</span>';return;}
   FILE_PAT=v;try{localStorage.setItem('pg_lat_filepat',v);}catch(_){}$('filePatMsg').innerHTML=`<span class="ok-t">保存しました。例：${fileNameFor('01652389',{name:'',device:'A219'})}</span>`;};
 // ===== PDFを患者ごとのフォルダに整理 =====
+// 元のPDFを残すか（標準は残さない＝波形の部分だけの画像を残す）。許可を得たら「残す」に切り替える
+let KEEP_PDF=false;try{KEEP_PDF=localStorage.getItem('pg_lat_keeppdf')==='1';}catch(_){}
 let PDF_DIR='患者PDF';try{const v=localStorage.getItem('pg_lat_pdfdir');if(v)PDF_DIR=v;}catch(_){}
 $('pdfDirName').value=PDF_DIR;
 $('pdfDirSave').onclick=()=>{const v=safeName($('pdfDirName').value);if(!v){$('pdfDirMsg').innerHTML='<span class="warn-t">名前を入れてください</span>';return;}PDF_DIR=v;$('pdfDirName').value=v;try{localStorage.setItem('pg_lat_pdfdir',v);}catch(_){}$('pdfDirMsg').innerHTML='<span class="ok-t">保存しました</span>';};
@@ -878,9 +886,15 @@ async function archiveNonSicd(file){if(!dirHandle||!file)return null;
     const fh=await od.getFileHandle(safeName(file.name),{create:true}),w=await fh.createWritable();await w.write(await file.arrayBuffer());await w.close();return `${PDF_DIR}/_対象外/${safeName(file.name)}`;}catch(_){return null;}}
 const pdfKey=f=>f?`${f.name}|${f.size}|${f.lastModified}`:''; // 読み込んだPDF／最後に整理したPDF
 let reloadArchived=null; // タイムラインから「評価し直す」で読み込んだ時：すでに患者PDFにあるので保存し直さない
+// 波形の部分だけ（緑の線の範囲）を画像にして保存する。ページの見出し（氏名などがある所）は入らない
+async function saveWaveImg(dir,fname,doc,pageNo){
+  const c=await ecgImage(doc,pageNo||0,false),blob=await new Promise(r=>c.toBlob(r,'image/png'));
+  const w=await (await dir.getFileHandle(fname,{create:true})).createWritable();await w.write(blob);await w.close();
+}
 async function archivePdf(id,obj,tag){
   if(reloadArchived&&!tag)return reloadArchived;
   if(!dirHandle||!lastPdfFile||!id)return null;
+  if(!KEEP_PDF&&tag)return null; // 元のPDFを残さない設定：波形のない書類は保存しない
   try{
     const top=await dirHandle.getDirectoryHandle(PDF_DIR,{create:true});
     const folder=fileNameFor(id,obj).replace(/\.json$/i,'')||id;
@@ -893,7 +907,8 @@ async function archivePdf(id,obj,tag){
     else{ // 毎回別のファイルにする：照会日＋保存した日時（同じ患者・同じ照会日を何度保存しても上書きしない）
       const d=new Date(),p2=v=>String(v).padStart(2,'0');
       fname=`${name.replace(/\.pdf$/i,'')}_保存${d.getFullYear()}${p2(d.getMonth()+1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}.pdf`;}
-    const fh=await pd.getFileHandle(fname,{create:true});const w=await fh.createWritable();await w.write(await lastPdfFile.arrayBuffer());await w.close();
+    if(!KEEP_PDF){fname=fname.replace(/\.pdf$/i,'.png');await saveWaveImg(pd,fname,lastPdfDoc,curPageNo);} // 元のPDFは残さず、波形の画像だけ
+    else{const fh=await pd.getFileHandle(fname,{create:true});const w=await fh.createWritable();await w.write(await lastPdfFile.arrayBuffer());await w.close();}
     lastArchive={file:lastPdfFile,key:pdfKey(lastPdfFile),path:`${PDF_DIR}/${folder}/${fname}`};return lastArchive.path;
   }catch(e){return null;}
 }
@@ -1200,7 +1215,7 @@ async function findRefPdf(ref,id,obj){
   const m=String(ref&&ref.date||'').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})(?:\D+(\d{1,2}):(\d{2}))?/);if(!m||!dirHandle)return null;
   const stem=`${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}${m[4]?'_'+m[4].padStart(2,'0')+m[5]:''}`;
   try{const top=await dirHandle.getDirectoryHandle(PDF_DIR);const pd=await top.getDirectoryHandle(fileNameFor(id,obj).replace(/\.json$/i,'')||id);
-    const names=[];for await(const [n,h] of pd.entries())if(h.kind==='file'&&n.startsWith(stem)&&/\.pdf$/i.test(n)&&!/_書類\d/.test(n))names.push(n);
+    const names=[];for await(const [n,h] of pd.entries())if(h.kind==='file'&&n.startsWith(stem)&&/\.(pdf|png)$/i.test(n)&&!/_書類\d|_イベント\d/.test(n))names.push(n);
     names.sort();if(!names.length)return null;return await (await pd.getFileHandle(names[names.length-1])).getFile();}catch(_){return null;}
 }
 async function ecgImage(doc,pageNo,full){ // 波形のページを描く。full＝ページをそのまま全部／それ以外＝緑の線がある範囲だけを高い倍率で（どちらもPDFの見た目は加工しない）
@@ -1264,19 +1279,25 @@ async function tlSetMode(full){tlFull=full;try{localStorage.setItem('pg_lat_tlmo
 $('tlModeFull').onclick=()=>tlSetMode(true);$('tlModeCrop').onclick=()=>tlSetMode(false);
 // 複数のイベントがまとまったPDF：ページごとに左上のイベント見出し（例 035: 2025年02月09日 12:44 JST, AF）を読み、イベントとページの対応を返す
 const tlEvPages=new Map();
+async function eventPagesDoc(doc){
+  const out=[];
+  for(let pg=1;pg<=(doc.numPages||1);pg++){const tc=await (await doc.getPage(pg)).getTextContent();const t=tc.items.map(x=>x.str).join('').replace(/\s+/g,'');
+    const ev=headerInfo(t,false,'').events[0];if(ev&&!out.some(e=>e.no===ev.no&&e.dt===ev.dt))out.push({...ev,page:pg});}
+  return out;
+}
 async function eventPages(path){
   if(tlEvPages.has(path))return tlEvPages.get(path);
   let out=[];
-  try{const f=await fileFromPath(path);if(f){const lib=await ensurePdfjs();const doc=await lib.getDocument({data:new Uint8Array(await f.arrayBuffer()),isEvalSupported:false}).promise;
-    for(let pg=1;pg<=doc.numPages;pg++){const tc=await (await doc.getPage(pg)).getTextContent();const t=tc.items.map(x=>x.str).join('').replace(/\s+/g,'');
-      const ev=headerInfo(t,false,'').events[0];if(ev&&!out.some(e=>e.no===ev.no&&e.dt===ev.dt))out.push({...ev,page:pg});}}}catch(_){}
+  if(/\.pdf$/i.test(path||''))try{const f=await fileFromPath(path);if(f){const lib=await ensurePdfjs();out=await eventPagesDoc(await lib.getDocument({data:new Uint8Array(await f.arrayBuffer()),isEvalSupported:false}).promise);}}catch(_){}
   tlEvPages.set(path,out);return out;
 }
+async function dirOfPath(path){if(!dirHandle||!path)return null;try{let d=dirHandle;for(const p of path.split('/').slice(0,-1))d=await d.getDirectoryHandle(p);return d;}catch(_){return null;}}
 async function tlImage(rep){
   const k=(tlFull?'F|':'C|')+(rep.pdf||'')+'|'+(rep.key||rep.date)+'|'+(rep.page||0);if(tl.cache.has(k))return tl.cache.get(k);
   let url=null;
   try{const f=await findRefPdf(rep,tl.id,tl.obj);
-    if(f){const lib=await ensurePdfjs();const doc=await lib.getDocument({data:new Uint8Array(await f.arrayBuffer()),isEvalSupported:false}).promise;url=(await ecgImage(doc,rep.page||0,tlFull)).toDataURL('image/png');}}catch(_){}
+    if(f&&/\.png$/i.test(f.name)){url=await new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result);fr.onerror=()=>r(null);fr.readAsDataURL(f);});} // 波形の画像（元のPDFを残さない設定）
+    else if(f){const lib=await ensurePdfjs();const doc=await lib.getDocument({data:new Uint8Array(await f.arrayBuffer()),isEvalSupported:false}).promise;url=(await ecgImage(doc,rep.page||0,tlFull)).toDataURL('image/png');}}catch(_){}
   tl.cache.set(k,url);return url;
 }
 const tlPill=lv=>lv==null?'':`<span class="${['ok-t','warn-t','bad-t'][lv]}" style="font-weight:700">${['✅ 変化なし','🟡 注意','⚠️ 要確認'][lv]}</span>`;
@@ -1290,7 +1311,7 @@ function tlWhy(h){ // 今の基準と比べた時の判定の理由
   return `<div class="hint">比較相手：${escH(String(h.ref||'?').replace(/\s*JST/,''))}（${h.mode==='base'?'基準':'前回'}）${c.length?'　理由：'+escH(c.join('／')):''}</div>`;
 }
 async function tlPanel(box,rep,title){
-  const need=rep.file&&!rep.own;
+  const need=rep.file&&!rep.own&&/\.pdf$/i.test(rep.pdf||'');
   const sent=rep.tx||rep.date||'',fmt=d=>String(d).replace(/(\d{4})年(\d{2})月(\d{2})日\s*/,'$1/$2/$3 ').replace(/\s*JST/,'');
   const evLine=(rep.events||[]).length?`<div class="hint" style="margin-top:2px">⚡ イベント ${rep.events.map(e=>`<b style="color:var(--tx)">${escH(e.no)}：${escH(fmt(e.dt))}</b>${e.type?`（<b style="color:var(--warn)">${escH(e.type)}</b>）`:''}`).join('、')}</div>`:'';
   const sgLine=rep.secg?`<div class="hint" style="margin-top:2px">〰 S-ECG記録 <b style="color:var(--tx)">${escH(fmt(rep.secg))}</b></div>`:'';
@@ -1340,7 +1361,7 @@ async function tlLoad(idArg,quiet){
   const files=[];
   try{const top=await dirHandle.getDirectoryHandle(PDF_DIR);
     for(const fname of [...new Set([fileNameFor(id,tl.obj).replace(/\.json$/i,''),id])]){let pd=null;try{pd=await top.getDirectoryHandle(fname);}catch(_){}if(!pd)continue;
-      for await(const [n,h] of pd.entries()){if(h.kind!=='file'||!/\.pdf$/i.test(n))continue;
+      for await(const [n,h] of pd.entries()){if(h.kind!=='file'||!/\.(pdf|png)$/i.test(n))continue;
         const m=n.match(/^(\d{4})-(\d{2})-(\d{2})(?:_(\d{2})(\d{2}))?/);const key=m?m[1]+m[2]+m[3]+(m[4]||'00')+(m[5]||'00'):'';
         files.push({n,key,path:`${PDF_DIR}/${fname}/${n}`,doc:/_書類\d/.test(n)});}}}catch(_){}
   const items=[];
@@ -1354,7 +1375,7 @@ async function tlLoad(idArg,quiet){
   for(const r of reps)if(!items.some(it=>it.key===r.key))items.push({...r,own:true});
   items.sort((a,b)=>a.key===b.key?((a.file||'')<(b.file||'')?-1:1):(a.key<b.key?-1:1));
   // 保存済みのPDFで送信日時やS-ECGの記録日時が記録されていないものは、PDFの文字から直接読む
-  for(const it of items){if(!it.pdf||(it.secg&&it.tx))continue;
+  for(const it of items){if(!it.pdf||/\.png$/i.test(it.pdf)||(it.secg&&it.tx))continue;
     try{const f=await fileFromPath(it.pdf);if(!f)continue;const h=headerInfo((await extractRawPdfText(await f.arrayBuffer())).replace(/\s+/g,''),false,'');
       if(!it.secg&&h.secg)it.secg=h.secg;if(!it.tx&&h.tx)it.tx=h.tx;if(!(it.events||[]).length&&h.events.length)it.events=h.events;}catch(_){}}
   // まとめて作ったイベントのPDFは、イベントごとの項目に分ける（同じイベントが複数のPDFにあれば1つだけ）
@@ -1378,7 +1399,7 @@ async function tlLoad(idArg,quiet){
   for(const it of items){const l=bf?featLevel(bf,it.feat):null;if(!l)continue;const self=it.pdf&&tl.base.pdf===it.pdf;
     it.lv=self?0:l.level;it.h=self?null:{ref:tl.base.secg||tl.base.date,mode:'base',causes:l.causes};}
   const nPdf=items.filter(it=>it.file).length;
-  $('tlMsg').textContent=`ID ${id}：PDF ${nPdf}枚・評価の記録 ${reps.length}日分`+(tlFilt==='all'?'':tl.fb?`（${tlFilt==='secg'?'S-ECG':'イベント'}のPDFが無いので、すべて表示）`:`（${tlFilt==='secg'?'S-ECGだけ':'イベントだけ'} ${tl.items.length}件を表示）`);$('tlSum').textContent=`ID ${id}・${items.length}枚`;$('tlBody').hidden=false;$('tlId').value=id;
+  $('tlMsg').textContent=`ID ${id}：波形 ${nPdf}枚・評価の記録 ${reps.length}日分`+(tlFilt==='all'?'':tl.fb?`（${tlFilt==='secg'?'S-ECG':'イベント'}のPDFが無いので、すべて表示）`:`（${tlFilt==='secg'?'S-ECGだけ':'イベントだけ'} ${tl.items.length}件を表示）`);$('tlSum').textContent=`ID ${id}・${items.length}枚`;$('tlBody').hidden=false;$('tlId').value=id;
   $('tlSlider').max=tl.items.length-1;
   const isBase=it=>!!(tl.base&&it.pdf&&tl.base.pdf===it.pdf);
   $('tlStrip').innerHTML=tl.items.map((it,k)=>`<button class="tlTh" data-k="${k}" style="flex:0 0 auto;padding:4px;width:150px;text-align:left${isBase(it)?';border:2px solid var(--accent)!important':''}"><div style="font-size:11px;line-height:1.35">${isBase(it)?'<b style="color:var(--accent)">📌基準</b> ':''}${tlThumbLabel(it)} ${it.lv==null?'':['✅','🟡','⚠️'][it.lv]}</div><div class="tlImg" style="height:46px;background:#fff;border-radius:4px;overflow:hidden"></div></button>`).join('');
@@ -1417,6 +1438,45 @@ document.addEventListener('click',async e=>{const b=e.target.closest('.tlReeval'
   const keep={id:tl.id,idx:tl.idx,top:tl.top};reloadArchived=b.dataset.pdf;
   try{await loadPDF(f,{forceEval:true});}finally{reloadArchived=null;}
   await tlLoad(keep.id);await tlTop(keep.top);await tlGo(keep.idx);});
+// ===== 元のPDFの保存：残す／残さない =====
+function keepPdfUi(){$('keepPdfYes').checked=KEEP_PDF;$('keepPdfNo').checked=!KEEP_PDF;$('purgePdf').disabled=KEEP_PDF;}
+keepPdfUi();
+$('keepPdfNo').onchange=()=>{KEEP_PDF=false;try{localStorage.setItem('pg_lat_keeppdf','0');}catch(_){}keepPdfUi();$('purgeMsg').textContent='これから評価するPDFは、波形の画像だけを残します。今ある元のPDFは、下のボタンで置き換えられます。';};
+$('keepPdfYes').onchange=()=>{if(!confirm('元のPDF（氏名などが入っています）をこのPCに保存するようにします。\n情報セキュリティの許可を得ている場合だけ切り替えてください。よろしいですか？')){keepPdfUi();return;}
+  KEEP_PDF=true;try{localStorage.setItem('pg_lat_keeppdf','1');}catch(_){}keepPdfUi();$('purgeMsg').textContent='これから評価するPDFは、元のPDFのまま保存します。';};
+// 今ある元のPDFを、波形の部分だけの画像に置き換える（_削除済み・_対象外・波形のない書類のPDFは消す）。元のPDFはLATITUDEから出し直せる
+$('purgePdf').onclick=async()=>{
+  if(!dirHandle){$('purgeMsg').textContent='先にデータフォルダに接続してください。';return;}
+  if(!confirm('保存してある元のPDFを、波形の部分だけの画像に置き換えて、元のPDFを消します。\n・_削除済み、_対象外、波形のない書類のPDFも消します\n・消したPDFはこのツールからは戻せません（LATITUDEから出し直せます）\nよろしいですか？'))return;
+  const msg=t=>$('purgeMsg').textContent=t,bd=await baseDir(false),jsons=[];
+  if(bd)for await(const [n,h] of bd.entries()){if(h.kind!=='file'||!/\.json$/i.test(n))continue;try{jsons.push({n,j:JSON.parse(await (await h.getFile()).text()),dirty:false});}catch(_){}}
+  let top;try{top=await dirHandle.getDirectoryHandle(PDF_DIR);}catch(_){msg('元のPDFはありません。');return;}
+  const lib=await ensurePdfjs(),toDel=[];let conv=0,del=0,fail=0;
+  for await(const [folder,fh] of top.entries()){if(fh.kind!=='directory')continue;const pd=await top.getDirectoryHandle(folder);
+    const names=[];for await(const [n,h] of pd.entries())if(h.kind==='file'&&/\.pdf$/i.test(n))names.push(n);
+    for(const n of names){const path=`${PDF_DIR}/${folder}/${n}`;msg(`処理中：${folder}/${n}`);
+      if(folder.startsWith('_')||/_書類\d/.test(n)){toDel.push([pd,n]);continue;}
+      try{const f=await (await pd.getFileHandle(n)).getFile(),doc=await lib.getDocument({data:new Uint8Array(await f.arrayBuffer()),isEvalSupported:false}).promise;
+        const png=n.replace(/\.pdf$/i,'.png'),newPath=`${PDF_DIR}/${folder}/${png}`;
+        const refs=[];for(const J of jsons)for(const sv of J.j.saves||[])if(sv.pdf===path)refs.push({J,sv});
+        const sv0=refs[0]&&refs[0].sv;let page=(sv0&&sv0.page)||0;
+        if(sv0&&!sv0.secg&&(sv0.events||[]).length>1&&(doc.numPages||1)>1){ // まとめたイベントのPDF：ページごとに分ける
+          const pages=await eventPagesDoc(doc);
+          if(pages.length>1){const mine=pages.find(x=>x.page===page)||pages[0];page=mine.page;sv0.events=[{no:mine.no,dt:mine.dt,type:mine.type}];
+            for(const ev of pages){if(ev===mine)continue;const fn=`${png.replace(/\.png$/i,'')}_イベント${ev.no}.png`;await saveWaveImg(pd,fn,doc,ev.page);
+              refs[0].J.j.saves.push({pdf:`${PDF_DIR}/${folder}/${fn}`,page:0,date:sv0.date,tx:sv0.tx,clinic:sv0.clinic,events:[{no:ev.no,dt:ev.dt,type:ev.type}],secg:'',key:sv0.key,feat:null,ts:sv0.ts,level:null});conv++;}}}
+        await saveWaveImg(pd,png,doc,page);conv++;
+        for(const J of jsons){const t=JSON.stringify(J.j);if(t.includes(JSON.stringify(path))){J.j=JSON.parse(t.split(JSON.stringify(path)).join(JSON.stringify(newPath)));J.dirty=true;}}
+        for(const r of refs)r.J.dirty=true;
+        toDel.push([pd,n]);
+      }catch(e){fail++;}}}
+  // 記録を書き直してから、元のPDFを消す（途中で失敗しても記録とファイルが食い違わないように）
+  for(const J of jsons)if(J.dirty){try{const w=await (await bd.getFileHandle(J.n,{create:true})).createWritable();await w.write(JSON.stringify(J.j));await w.close();}catch(_){msg('記録を書き直せなかったので、元のPDFは消していません。');return;}}
+  for(const [pd,n] of toDel){try{await pd.removeEntry(n);del++;}catch(_){}}
+  tl.cache.clear();tlEvPages.clear();idIndex=null;
+  msg(`完了：波形の画像 ${conv}枚を作り、元のPDF ${del}個を消しました${fail?`（読めなかったPDF ${fail}個は残しています）`:''}。`);
+  if(tl.id)tlLoad(tl.id);rvLoad();
+};
 // ===== 📋 要確認リスト：ツールが🟡注意・⚠️要確認と判定した記録と、医師の判断 =====
 let rvRows=[],rvFilt='new';try{rvFilt=localStorage.getItem('pg_lat_rvfilt')||'new';}catch(_){}
 const rvJ={'':'未確認',ok:'問題なし',abn:'異常あり'};
@@ -1480,6 +1540,7 @@ document.addEventListener('click',async e=>{const tr=e.target.closest('#rvTable 
   if(e.target.closest('.rvView'))return rvOpen(r);
   if(e.target.closest('.rvHide'))return rvHide(+tr.dataset.i);
   if(e.target.closest('.rvDeep')){const b=e.target.closest('.rvDeep');b.disabled=true;b.textContent='評価中…';
+    if(!/\.pdf$/i.test(r.pdf||'')){b.disabled=false;b.textContent='🔬 詳しく';$('rvMsg').textContent='元のPDFを残さない設定のため、評価し直せません。LATITUDEからPDFを開き直すと、もう一度評価できます。';return;}
     const f=await fileFromPath(r.pdf);if(!f){b.textContent='PDFが見つかりません';return;}
     reloadArchived=r.pdf;try{await loadPDF(f,{forceEval:true});}finally{reloadArchived=null;}
     $('result').scrollIntoView({block:'start'});}});
@@ -1596,6 +1657,15 @@ async function runEval(mode){
   let nowPdf=null; // 患者PDFフォルダに整理したこのPDFの場所（基準・前回のPDFを後で表示するために記録）
   const saveStore=async(histEntry)=>{
     nowPdf=await archivePdf(id,now);
+    // 元のPDFを残さない設定で、まとめて作ったイベントのPDF：イベントのページごとに波形の画像を作って、別々の記録にする
+    const extra=[];
+    if(!KEEP_PDF&&isEvent&&nowPdf&&/\.png$/i.test(nowPdf)&&lastPdfDoc&&(lastPdfDoc.numPages||1)>1){
+      try{const pages=await eventPagesDoc(lastPdfDoc);
+        if(pages.length>1){const mine=pages.find(x=>x.page===curPageNo)||pages[0],dir=await dirOfPath(nowPdf),stem=nowPdf.split('/').pop().replace(/\.png$/i,''),folderPath=nowPdf.split('/').slice(0,-1).join('/');
+          now.events=[{no:mine.no,dt:mine.dt,type:mine.type}];
+          for(const ev of pages){if(ev===mine||!dir)continue;const fn=`${stem}_イベント${ev.no}.png`;await saveWaveImg(dir,fn,lastPdfDoc,ev.page);
+            extra.push({pdf:`${folderPath}/${fn}`,page:0,date:now.date,tx:now.tx,clinic:now.clinic,events:[{no:ev.no,dt:ev.dt,type:ev.type}],secg:'',key:curKey,feat:null,ts:now.ts,level:null});}}}catch(_){}
+    }
     // PDF1枚ごとの記録（照会日が同じ別のイベント記録でも上書きしない）
     const old=((store&&store.saves)||[]).find(x=>nowPdf&&x.pdf===nowPdf)||null;
     const saves=((store&&store.saves)||[]).filter(x=>!(nowPdf&&x.pdf===nowPdf));
@@ -1603,6 +1673,7 @@ async function runEval(mode){
     const lvNow=histEntry&&histEntry.level!=null?histEntry.level:null;
     const first=old?(old.first||(old.level!=null?{level:old.level,causes:old.causes||null,ref:old.ref||null,mode:old.mode||null,ts:old.ts}:null)):null;
     saves.push({first:first||(lvNow!=null?{level:lvNow,causes:histEntry.causes||null,ref:histEntry.ref||null,mode:histEntry.mode||null,ts:now.ts}:null),review:old&&old.review||null,...(old&&old.rvHidden?{rvHidden:true}:{}),pdf:nowPdf,page:curPageNo,date:now.date,tx:now.tx,clinic:now.clinic,events:now.events,secg:now.secg,key:curKey,feat:poolSave,ts:now.ts,level:histEntry&&histEntry.level!=null?histEntry.level:null,causes:histEntry&&histEntry.causes||null,ref:histEntry&&histEntry.ref||null,mode:histEntry&&histEntry.mode||null});
+    for(const x of extra){const i=saves.findIndex(y=>y.pdf===x.pdf);if(i>=0)saves.splice(i,1);saves.push(x);}
     // イベントのPDF（S-ECGの記録日時がなくイベントの見出しがある）は、その日の比較相手（前回・基準）にしない。PDFごとの記録（saves）にだけ残す
     const rs=isEvent?[...reports]:reports.filter(r=>!(curKey&&r.key===curKey));if(!isEvent)rs.push({date:now.date,key:curKey,feat:poolSave,ts:now.ts,pdf:nowPdf});rs.sort((a,b)=>a.key<b.key?-1:1);
     const hist=((store&&store.history)||[]).filter(h=>!(curKey&&dateKey(h.date)===curKey));if(histEntry)hist.push(histEntry);
@@ -1814,18 +1885,20 @@ async function pollWatch(){
       $('result').innerHTML='';
       await loadPDF(f,{forceEval:true});
       if(curNonSicd){ // S-ICD以外：_対象外 フォルダへ移して、通知は出さない
-        const to=await archiveNonSicd(f);let moved=to?'コピー：'+to:'';
-        if(to&&$('watchMove').checked){try{await watchDir.removeEntry(f.name);moved='→ '+to;}catch(_){}}
+        let moved='';
+        if(!KEEP_PDF){try{await watchDir.removeEntry(f.name);moved='保存せずに削除（元のPDFを残さない設定）';}catch(_){}}
+        else{const to=await archiveNonSicd(f);moved=to?'コピー：'+to:'';if(to&&$('watchMove').checked){try{await watchDir.removeEntry(f.name);moved='→ '+to;}catch(_){}}}
         watchLog.unshift({t:new Date().toLocaleTimeString('ja-JP'),file:f.name,moved,id:$('fId').value,date:$('fDate').value,verdict:'S-ICD以外（対象外）',cause:curNonSicd,lv:0});renderWatchLog();continue;}
       const isEcg=curSigs.length>0;
       if(!isEcg){ // 波形のない書類（一緒に印刷した他のPDF）：IDが読めれば患者フォルダへ一緒に整理し、画面の結果は前の波形のものに戻す
         const id=$('fId').value.trim();if(id&&dirHandle)await archivePdf(id,{name:$('fName').value,date:$('fDate').value,device:$('fDev').value},'書類');
+        if(!KEEP_PDF&&id){try{await watchDir.removeEntry(f.name);}catch(_){}} // 元のPDFを残さない設定：波形のない書類は保存せずに消す
         $('result').innerHTML=prevRes;$('overlayCard').hidden=prevOv;}
       const h2=isEcg?document.querySelector('#result h2'):null,cause=isEcg?document.querySelector('#result .cause'):null;
-      const verdict=h2?h2.textContent.replace('（自動評価）','').trim():(isEcg?'評価なし':'波形なしの書類'+($('fId').value.trim()?'（患者フォルダへ）':'（IDが読めず残しました）'));
+      const verdict=h2?h2.textContent.replace('（自動評価）','').trim():(isEcg?'評価なし':'波形なしの書類'+($('fId').value.trim()?(KEEP_PDF?'（患者フォルダへ）':'（保存せずに削除）'):'（IDが読めず残しました）'));
       const lv=/要確認/.test(verdict)?2:/注意/.test(verdict)?1:0;
       let moved='';
-      if(lastArchive&&lastArchive.file===f){moved=lastArchive.path;if($('watchMove').checked){try{await watchDir.removeEntry(f.name);moved='→ '+moved;}catch(_){moved='コピー：'+moved;}}else moved='コピー：'+moved;}
+      if(lastArchive&&lastArchive.file===f){moved=lastArchive.path;if($('watchMove').checked||!KEEP_PDF){try{await watchDir.removeEntry(f.name);moved='→ '+moved;}catch(_){moved='コピー：'+moved;}}else moved='コピー：'+moved;}
       const row={t:new Date().toLocaleTimeString('ja-JP'),file:f.name,moved,id:$('fId').value,date:$('fDate').value,verdict,cause:cause?cause.textContent.replace(/^主な原因：/,''):'',lv};
       watchLog.unshift(row);renderWatchLog();
       if(isEcg)notifyResult('PaceGuard LATITUDE：'+verdict,`ID ${row.id||'—'}　${row.date||''}\n${row.cause}`,lv);
