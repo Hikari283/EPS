@@ -1576,10 +1576,10 @@ function rvRender(){
   $('rvSum').textContent=live.length?`未確認 ${n}件／全 ${live.length}件`:'';
   const show=rvRows.map((r,i)=>({r,i})).filter(({r})=>rvFilt==='hid'?r.hid:!r.hid&&(rvFilt==='all'||(rvFilt==='new'?!r.review.judge:r.review.judge==='abn')));
   $('rvMsg').textContent=rvRows.length?'':'注意・要確認と判定された記録はありません。';
-  $('rvTable').innerHTML=show.length?`<tr><th>患者ID</th><th>記録日時</th><th>最初の判定</th><th>理由</th><th>医師の判断</th><th>メモ</th><th></th></tr>`+show.map(({r,i})=>{
+  $('rvTable').innerHTML=show.length?`<tr><th>患者ID</th><th>記録日時</th><th>最初の判定（比較相手）</th><th>理由</th><th>医師の判断</th><th>メモ</th><th></th></tr>`+show.map(({r,i})=>{
     const why=(r.first.causes||[]).join('／');
     return `<tr class="lv${r.first.level}" data-i="${i}"><td><b>${escH(r.id)}</b></td><td>${escH(r.when)}</td>
-      <td>${rvIc(r.first.level)}${r.now!=null&&r.now!==r.first.level?`<div class="hint">今の評価：${rvIc(r.now)}</div>`:''}</td>
+      <td>${rvIc(r.first.level)}${r.first.ref?`<div class="hint">${r.first.mode==='base'?'📌基準':'前回'}（${escH(String(r.first.ref).replace(/(\d{4})年(\d{2})月(\d{2})日\s*/,'$1/$2/$3 ').replace(/\s*JST/,''))}）と比較</div>`:''}${r.now!=null&&r.now!==r.first.level?`<div class="hint">今の評価：${rvIc(r.now)}</div>`:''}</td>
       <td class="hint" style="max-width:300px">${escH(why.length>90?why.slice(0,90)+'…':why)||'—'}</td>
       <td><select class="rvJudge">${Object.entries(rvJ).map(([k,v])=>`<option value="${k}"${r.review.judge===k?' selected':''}>${v}</option>`).join('')}</select></td>
       <td><input class="rvMemo inp" value="${escH(r.review.memo||'')}" placeholder="メモ" style="width:160px"></td>
