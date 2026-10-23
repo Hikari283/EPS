@@ -1367,7 +1367,7 @@ function tlThumbLabel(it){
   const f=d=>escH(String(d||'').replace(/(\d{4})年(\d{2})月(\d{2})日\s*/,'$1/$2/$3 ').replace(/\s*(JST|ＪＳＴ)/g,''));const ev=(it.events||[])[0];
   if(it.secg)return `〰 ${f(it.secg)}`; // S-ECGのレポート（サマリに過去のイベント一覧があっても、波形はS-ECG）
   if(ev)return `⚡${escH(ev.no)} ${f(ev.dt)}${ev.type?` <b style="color:var(--warn)">${escH(ev.type)}</b>`:''}`;
-  return f(it.date||'?');
+  return `<span class="hint">日時不明</span>（📡送信 ${f(it.tx||it.date||'?')}）`; // 記録日時が読めない時は、送信日を記録日時のように見せない
 }
 function tlEqualize(){
   const hs=[...document.querySelectorAll('#tlBase .tlhead,#tlCur .tlhead')];hs.forEach(h=>h.style.minHeight='');
@@ -1386,7 +1386,7 @@ async function tlGo(i){
   const it=tl.items[i];tlVs();
   [...$('tlStrip').children].forEach((c,k)=>c.style.outline=k===i?'3px solid var(--accent)':'none');
   const th=$('tlStrip').children[i];if(th){const sp=$('tlStrip');sp.scrollLeft=th.offsetLeft-sp.clientWidth/2+th.clientWidth/2;}
-  await tlPanel($('tlCur'),it,`${i+1}/${tl.items.length}　${(it.when||it.tx||it.date||'?').replace(/\s*JST/,'')}`);
+  await tlPanel($('tlCur'),it,`${i+1}/${tl.items.length}　${it.when?it.when.replace(/\s*JST/,''):'日時不明（📡送信 '+String(it.tx||it.date||'?').replace(/\s*JST/,'')+'）'}`);
 }
 async function tlLoad(idArg,quiet){
   if(!dirHandle)await ensureDir();if(!dirHandle){$('tlMsg').innerHTML='<span class="warn-t">データフォルダに接続できません。📁で選んでください。</span>';return;}
@@ -1668,7 +1668,7 @@ async function tlThumbs(){ // サムネイルは後から順番に読み込む
 async function tlTop(i){
   if(!tl.items.length)return;
   if(i>=0){i=Math.max(0,Math.min(tl.items.length-1,i));tl.top=i;$('tlTSlider').value=i;$('tlTSlider').style.opacity=1;
-    const it=tl.items[i];tlVs();await tlPanel($('tlBase'),it,`⬆ ${i+1}/${tl.items.length}　${(it.when||it.tx||it.date||'?').replace(/\s*JST/,'')}`);}
+    const it=tl.items[i];tlVs();await tlPanel($('tlBase'),it,`⬆ ${i+1}/${tl.items.length}　${it.when?it.when.replace(/\s*JST/,''):'日時不明（📡送信 '+String(it.tx||it.date||'?').replace(/\s*JST/,'')+'）'}`);}
   else{tl.top=-1;const bi=tl.items.findIndex(it=>it.key===tl.base.key);$('tlTSlider').value=bi>=0?bi:0;$('tlTSlider').style.opacity=.5;
     tlVs();await tlPanel($('tlBase'),{...tl.base,lv:null},`📌 基準：${tl.base.date||'?'}`);}
 }
