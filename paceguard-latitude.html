@@ -1404,8 +1404,7 @@ async function tlLoad(idArg,quiet){
     const saved=(f.n.match(/保存(\d{8})-(\d{2})(\d{2})/)||[]);
     items.push({...(r||{}),date:(r&&r.date)||f.key.replace(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})$/,'$1年$2月$3日 $4:$5'),key:f.key,pdf:f.path,file:f.n,
       saved:saved[1]?`${saved[1].slice(4,6)}/${saved[1].slice(6,8)} ${saved[2]}:${saved[3]}保存`:'',lv:r?r.lv:null,h:r?r.h:null,feat:r?r.feat:null,own:!!r});}
-  // PDFが見つからない日付の記録も（数値だけでも）入れる
-  for(const r of reps)if(!items.some(it=>it.key===r.key))items.push({...r,own:true});
+  // PDF・画像のファイルが見つからない記録は、タイムラインには出さない（数値の記録は基準・前回の比較用に残す）
   items.sort((a,b)=>a.key===b.key?((a.file||'')<(b.file||'')?-1:1):(a.key<b.key?-1:1));
   // 保存済みのPDFで送信日時やS-ECGの記録日時が記録されていないものは、PDFの文字から直接読む
   for(const it of items){if(!it.pdf||/\.png$/i.test(it.pdf)||(it.secg&&it.tx))continue;
