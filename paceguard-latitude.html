@@ -252,7 +252,7 @@
       <input id="tlId" placeholder="空なら今の患者" class="inp" style="width:170px">
       <button class="primary" id="tlShow">🎞 表示</button>
       <span class="seg" title="表示のしかた"><button id="tlModeFull">📄 ページそのまま</button><button id="tlModeCrop">〰 波形の部分だけ</button></span>
-      <span class="seg" title="表示するPDF"><button id="tlFAll">すべて</button><button id="tlFSecg">〰 S-ECGだけ</button><button id="tlFEv">⚡ イベントだけ</button></span>
+      <span class="seg" title="表示するPDF" hidden><button id="tlFAll">すべて</button><button id="tlFSecg">〰 S-ECGだけ</button><button id="tlFEv">⚡ イベントだけ</button></span>
       <span class="hint" id="tlMsg">「患者PDF」に整理したPDFを、加工せずにそのまま表示し、日付順にめくって見られます。</span>
     </div>
     <div id="tlBody" hidden>
@@ -1304,8 +1304,11 @@ function tlOvA(){
 }
 let ovT=0;$('tlOvA').oninput=()=>{clearTimeout(ovT);ovT=setTimeout(tlOvA,30);};
 // 表示するPDFの絞り込み：すべて／S-ECGだけ（イベントなし）／イベントだけ
-const tlIsEv=it=>!!(it.split||(!it.secg&&(it.events||[]).length));
-let tlFilt='all';try{tlFilt=localStorage.getItem('pg_lat_tlfilt')||'all';}catch(_){}
+// イベントの記録かどうか：イベントの見出しがある（S-ECGの日時がない）か、波形が3段以上（S-ECGはいつも2段＝12秒、イベントは5段＝30秒など）
+const EV_ROWS=3;
+const evLike=x=>!!(x&&((!x.secg&&(x.events||[]).length)||(x.feat&&Array.isArray(x.feat.rows)&&x.feat.rows.length>=EV_ROWS)));
+const tlIsEv=it=>!!(it.split||evLike(it));
+let tlFilt='all'; // 絞り込みはやめた：いつも全部を表示
 function tlFiltBtns(){$('tlFAll').classList.toggle('on',tlFilt==='all');$('tlFSecg').classList.toggle('on',tlFilt==='secg');$('tlFEv').classList.toggle('on',tlFilt==='ev');}
 tlFiltBtns();
 for(const [b,v] of [['tlFAll','all'],['tlFSecg','secg'],['tlFEv','ev']])$(b).onclick=()=>{tlFilt=v;try{localStorage.setItem('pg_lat_tlfilt',v);}catch(_){}tlFiltBtns();if(tl.id)tlLoad(tl.id);};
@@ -1365,7 +1368,8 @@ async function tlPanel(box,rep,title){
 // サムネイルの日付：S-ECGの記録日時 → イベント（番号・日時・種類）→ 照会日
 function tlThumbLabel(it){
   const f=d=>escH(String(d||'').replace(/(\d{4})年(\d{2})月(\d{2})日\s*/,'$1/$2/$3 ').replace(/\s*(JST|ＪＳＴ)/g,''));const ev=(it.events||[])[0];
-  if(it.secg)return `〰 ${f(it.secg)}`; // S-ECGのレポート（サマリに過去のイベント一覧があっても、波形はS-ECG）
+  if(!tlIsEv(it))return `〰 ${f(it.secg||it.tx||it.date||'?')}${it.secg?'':'<span class="hint">（送信）</span>'}`; // S-ECG：記録日時、なければ送信日時
+  if(it.secg)return `⚡ ${f(it.secg)}`; // 波形が3段以上＝イベントの記録（S-ECGの欄に載ったもの）
   if(ev)return `⚡${escH(ev.no)} ${f(ev.dt)}${ev.type?` <b style="color:var(--warn)">${escH(ev.type)}</b>`:''}`;
   return `<span class="hint">日時不明</span>（📡送信 ${f(it.tx||it.date||'?')}）`; // 記録日時が読めない時は、送信日を記録日時のように見せない
 }
@@ -1429,14 +1433,15 @@ async function tlLoad(idArg,quiet){
     items.length=0;items.push(...out);}
   // 並び順（左が古い）：S-ECGの記録日時 → イベントの日時 → 照会日 の順に使える日時で
   const dk=d=>{const m=String(d||'').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})(?:\D+(\d{1,2}):(\d{2}))?/);return m?m[1]+m[2].padStart(2,'0')+m[3].padStart(2,'0')+(m[4]||'00').padStart(2,'0')+(m[5]||'00'):'';};
-  items.forEach(it=>{const ev=(it.events||[])[0];it.when=it.secg||(ev?ev.dt:'');it.sk=dk(it.when)||it.key||'';}); // 記録された日時（S-ECG記録 → イベント）。送信日は使わない
+  // 記録された日時：S-ECG＝S-ECGの記録日時（読めなければ送信日時。S-ECGは送信のときに記録される）／イベント＝イベントの日時（読めなければ不明）
+  items.forEach(it=>{const ev=(it.events||[])[0],isEv=tlIsEv(it);it.when=isEv?(it.secg||(ev&&ev.dt)||''):(it.secg||it.tx||it.date||'');it.sk=dk(it.when)||dk(it.tx)||it.key||'';});
   items.sort((a,b)=>a.sk===b.sk?((a.file||'')<(b.file||'')?-1:1):(a.sk<b.sk?-1:1));
   tl.all=items;tl.items=items.filter(it=>tlFilt==='all'||(tlIsEv(it)?tlFilt==='ev':tlFilt==='secg'));
   tl.fb=!tl.items.length&&items.length>0;if(tl.fb)tl.items=items; // 該当なしの時は全部を出す
   tl.base=st.baseline?{...st.baseline,...(items.find(it=>it.pdf&&st.baseline.pdf&&it.pdf===st.baseline.pdf)||{})}:items[0];
   // 判定マークは保存した時のものではなく、今の基準とその場で比べ直したもの（基準を変えても画面の評価とそろう）
   const bf=tl.base&&tl.base.feat;
-  for(const it of items){const l=bf?featLevel(bf,it.feat):null;if(!l)continue;const self=it.pdf&&tl.base.pdf===it.pdf;
+  for(const it of items){if(evLike(it)){it.lv=null;it.h=null;continue;}const l=bf?featLevel(bf,it.feat):null;if(!l)continue;const self=it.pdf&&tl.base.pdf===it.pdf;
     it.lv=self?0:l.level;it.h=self?null:{ref:tl.base.secg||tl.base.date,mode:'base',causes:l.causes};}
   const nPdf=items.filter(it=>it.file).length;
   $('tlMsg').textContent=`ID ${id}：波形 ${nPdf}枚・評価の記録 ${reps.length}日分`+(tlFilt==='all'?'':tl.fb?`（${tlFilt==='secg'?'S-ECG':'イベント'}のPDFが無いので、すべて表示）`:`（${tlFilt==='secg'?'S-ECGだけ':'イベントだけ'} ${tl.items.length}件を表示）`);$('tlSum').textContent=`ID ${id}・${items.length}枚`;$('tlBody').hidden=false;$('tlId').value=id;
@@ -1578,7 +1583,7 @@ async function rvLoad(){
   const rows=[];
   try{for await(const [name,h] of d.entries()){if(h.kind!=='file'||!/\.json$/i.test(name))continue;let j;try{j=JSON.parse(await (await h.getFile()).text());}catch(_){continue;}
     for(const sv of (j&&j.saves)||[]){
-      if(!sv.secg&&(sv.events||[]).length)continue; // イベントのPDFは比較の対象外
+      if(evLike(sv))continue; // イベントの記録は比較の対象外
       const f=sv.first||(sv.level!=null?{level:sv.level,causes:sv.causes||null,ref:sv.ref||null,mode:sv.mode||null,ts:sv.ts}:null);
       if(!f||!(f.level>=1))continue;
       rows.push({rk:sameRecKey(sv),secg:sv.secg||'',ts:sv.ts||0,id:String(j.id||name.replace(/\.json$/i,'')),pdf:sv.pdf,when:String(sv.secg||sv.date||'').replace(/\s*JST/,''),key:sv.key||'',first:f,now:sv.level,review:sv.review||{judge:'',memo:''},hid:!!sv.rvHidden});}}}catch(_){}
@@ -1738,8 +1743,8 @@ async function runEval(mode){
   const dateKey=d=>{const m=String(d||'').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})(?:\D+(\d{1,2}):(\d{2}))?/);return m?m[1]+m[2].padStart(2,'0')+m[3].padStart(2,'0')+(m[4]||'0').padStart(2,'0')+(m[5]||'00'):'';};
   const reports=store?(store.reports||(store.feat?[{date:store.date,key:dateKey(store.date),feat:store.feat,ts:store.ts||0}]:[])):[];
   const curKey=dateKey($('fDate').value);
-  const older=reports.filter(r=>curKey?(r.key&&r.key<curKey):true);
-  const baseRep=store&&store.baseline?store.baseline:(reports.length?[...reports].sort((a,b)=>a.key<b.key?-1:1)[0]:null);
+  const older=reports.filter(r=>!evLike(r)&&(curKey?(r.key&&r.key<curKey):true)); // 以前の記録に混ざったイベントは比較相手にしない
+  const baseRep=store&&store.baseline?store.baseline:(reports.filter(r=>!evLike(r)).length?[...reports.filter(r=>!evLike(r))].sort((a,b)=>a.key<b.key?-1:1)[0]:null);
   const prevRep=[...older].sort((a,b)=>a.key<b.key?1:-1)[0]||null;
   if(auto)mode=prevRep?'prev':'base'; // 自動：前の日付があれば前回、なければ基準（同じ日付でも比べられる）
   const ref=mode==='base'?baseRep:prevRep,refLabel=mode==='base'?'基準':'前回';
@@ -1748,7 +1753,7 @@ async function runEval(mode){
   const rowsSave=curFeat.map((f,k)=>{const u=curPool&&curPool.rowInfo[k]||{};return f&&!f.error?{hr:f.hr,amp:f.amp,width:f.width,nBeats:f.nBeats,noise:curNoise[k].max,used:!!u.used,reason:u.reason||'',corr:u.corr??null}:{error:true};});
   const poolSave=pool?{tpl:pool.tpl,amp:pool.amp,ampVar:pool.ampVar,width:pool.width,on:pool.on,off:pool.off,pol:pool.pol,hr:pool.hr,nBeats:pool.nBeats,rows:rowsSave,rh:(r0=>r0&&r0.enough?{cv:r0.cv,madsd:r0.madsd,irr:r0.irr,af:r0.af,bigem:r0.bigem,hr:r0.hr}:null)(curPool&&curPool.rhythm)}:null;
   const now={id,name:$('fName').value,date:$('fDate').value,device:$('fDev').value,ts:Date.now(),tx:meta.tx||'',clinic:meta.clinic||'',events:meta.events||[],secg:meta.secg||''};
-  const isEvent=!now.secg&&(now.events||[]).length>0; // イベントのPDF：その日の比較相手（前回・基準）にはしない
+  const isEvent=(!now.secg&&(now.events||[]).length>0)||curSigs.length>=EV_ROWS; // イベントの記録（見出し、または波形が3段以上）：その日の比較相手（前回・基準）にはしない
   let nowPdf=null; // 患者PDFフォルダに整理したこのPDFの場所（基準・前回のPDFを後で表示するために記録）
   const saveStore=async(histEntry)=>{
     nowPdf=await archivePdf(id,now);
