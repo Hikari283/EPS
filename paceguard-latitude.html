@@ -1533,6 +1533,9 @@ async function purgeRun(auto){
       try{const f=await (await pd.getFileHandle(n)).getFile(),doc=await lib.getDocument({data:new Uint8Array(await f.arrayBuffer()),isEvalSupported:false}).promise;
         const png=n.replace(/\.pdf$/i,'.png'),newPath=`${PDF_DIR}/${folder}/${png}`;
         const refs=[];for(const J of jsons)for(const sv of J.j.saves||[])if(sv.pdf===path)refs.push({J,sv});
+        // 消す前に、記録に足りない日時（送信・S-ECG記録・イベント）をPDFの文字から読んで書き込む（画像からは読めないため）
+        try{const h=headerInfo((await extractRawPdfText(await f.arrayBuffer())).replace(/\s+/g,''),false,'');
+          for(const r of refs){if(!r.sv.secg&&h.secg)r.sv.secg=h.secg;if(!r.sv.tx&&h.tx)r.sv.tx=h.tx;if(!(r.sv.events||[]).length&&h.events.length)r.sv.events=h.events;}}catch(_){}
         const sv0=refs[0]&&refs[0].sv;let page=(sv0&&sv0.page)||0;
         if(sv0&&!sv0.secg&&(sv0.events||[]).length>1&&(doc.numPages||1)>1){ // まとめたイベントのPDF：ページごとに分ける
           const pages=await eventPagesDoc(doc);
