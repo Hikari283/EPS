@@ -284,9 +284,14 @@
       </div>
       <div id="tlOverlay" hidden style="position:relative;margin-top:8px;background:#fff;border:1px solid #cbd5e1;border-radius:6px;overflow:hidden"></div>
       <div class="hint" style="margin-top:8px">全部の日付（クリックで下の波形をその日に。キーボードの ← → で下、Shift＋← → で上をめくれます）</div>
-      <div style="display:flex;gap:8px;align-items:stretch">
-        <button id="tlBaseTh" class="tlTh" title="基準の波形（押すと上に基準を表示）" style="flex:0 0 auto;padding:4px;width:150px;text-align:left;margin:6px 0;border:2px solid var(--accent)!important;box-shadow:4px 0 0 -1px var(--line)" hidden><div style="font-size:11px;line-height:1.35"></div><div class="tlImg" style="height:46px;background:#fff;border-radius:4px;overflow:hidden"></div></button>
-        <div id="tlStrip" style="display:flex;gap:6px;overflow-x:auto;padding:6px 0;flex:1;min-width:0"></div>
+      <div style="display:flex;gap:8px;align-items:flex-start">
+        <button id="tlBaseTh" class="tlTh" title="基準の波形（押すと上に基準を表示）" style="flex:0 0 auto;padding:4px;width:150px;text-align:left;margin:26px 0 6px;border:2px solid var(--accent)!important;box-shadow:4px 0 0 -1px var(--line)" hidden><div style="font-size:11px;line-height:1.35"></div><div class="tlImg" style="height:46px;background:#fff;border-radius:4px;overflow:hidden"></div></button>
+        <div style="flex:1;min-width:0">
+          <div class="hint" style="margin-top:4px">〰 S-ECG</div>
+          <div id="tlStrip" style="display:flex;gap:6px;overflow-x:auto;padding:4px 0"></div>
+          <div id="tlEvRow" hidden><div class="hint" style="margin-top:4px">⚡ イベント</div>
+          <div id="tlStripEv" style="display:flex;gap:6px;overflow-x:auto;padding:4px 0"></div></div>
+        </div>
       </div>
     </div>
   </details>
@@ -1388,8 +1393,8 @@ function tlVs(){ // 今表示している上と下を、その場で比べる（
 async function tlGo(i){
   if(!tl.items.length)return;i=Math.max(0,Math.min(tl.items.length-1,i));tl.idx=i;$('tlSlider').value=i;
   const it=tl.items[i];tlVs();
-  [...$('tlStrip').children].forEach((c,k)=>c.style.outline=k===i?'3px solid var(--accent)':'none');
-  const th=$('tlStrip').children[i];if(th){const sp=$('tlStrip');sp.scrollLeft=th.offsetLeft-sp.clientWidth/2+th.clientWidth/2;}
+  document.querySelectorAll('#tlStrip .tlTh,#tlStripEv .tlTh').forEach(c=>c.style.outline=+c.dataset.k===i?'3px solid var(--accent)':'none');
+  const th=document.querySelector(`#tlStrip .tlTh[data-k="${i}"],#tlStripEv .tlTh[data-k="${i}"]`);if(th){const sp=th.parentElement;sp.scrollLeft=th.offsetLeft-sp.offsetLeft-sp.clientWidth/2+th.clientWidth/2;}
   await tlPanel($('tlCur'),it,`${i+1}/${tl.items.length}　${it.when?it.when.replace(/\s*JST/,''):'日時不明（📡送信 '+String(it.tx||it.date||'?').replace(/\s*JST/,'')+'）'}`);
 }
 async function tlLoad(idArg,quiet){
@@ -1449,7 +1454,10 @@ async function tlLoad(idArg,quiet){
   const isBase=it=>!!(tl.base&&it.pdf&&tl.base.pdf===it.pdf);
   // 判定の枠：要確認＝赤、注意＝黄（基準は緑）
   const lvBorder=it=>isBase(it)?';border:2px solid var(--accent)!important':it.lv===2?';border:3px solid var(--bad)!important;background:rgba(225,29,72,.06)':it.lv===1?';border:2px solid var(--warn)!important':'';
-  $('tlStrip').innerHTML=tl.items.map((it,k)=>`<button class="tlTh" data-k="${k}" style="flex:0 0 auto;padding:4px;width:150px;text-align:left${lvBorder(it)}"><div style="font-size:11px;line-height:1.35">${isBase(it)?'<b style="color:var(--accent)">📌基準</b> ':''}${tlThumbLabel(it)} ${it.lv==null?'':['✅','🟡','⚠️'][it.lv]}</div><div class="tlImg" style="height:46px;background:#fff;border-radius:4px;overflow:hidden"></div></button>`).join('');
+  const thumb=(it,k)=>`<button class="tlTh" data-k="${k}" style="flex:0 0 auto;padding:4px;width:150px;text-align:left${lvBorder(it)}"><div style="font-size:11px;line-height:1.35">${isBase(it)?'<b style="color:var(--accent)">📌基準</b> ':''}${tlThumbLabel(it)} ${it.lv==null?'':['✅','🟡','⚠️'][it.lv]}</div><div class="tlImg" style="height:46px;background:#fff;border-radius:4px;overflow:hidden"></div></button>`;
+  // S-ECGとイベントを分けて2列に並べる（どちらも左から時系列。番号 k は全体の通し番号のまま）
+  const all=tl.items.map((it,k)=>({it,k}));$('tlStrip').innerHTML=all.filter(x=>!tlIsEv(x.it)).map(x=>thumb(x.it,x.k)).join('');
+  const evs=all.filter(x=>tlIsEv(x.it));$('tlStripEv').innerHTML=evs.map(x=>thumb(x.it,x.k)).join('');$('tlEvRow').hidden=!evs.length;
   $('tlTSlider').max=tl.items.length-1;
   await tlTop(-1);
   await tlGo(tl.items.length-1);
@@ -1670,7 +1678,7 @@ async function tlThumbs(){ // サムネイルは後から順番に読み込む
   // 一番左に固定：基準の波形（時系列の中にも📌付きで入る）
   bt.hidden=!tl.base;if(tl.base){bt.querySelector('div').innerHTML=`<b style="color:var(--accent)">📌 基準</b><br>${tlThumbLabel(tl.base)}`;bt.querySelector('.tlImg').innerHTML='';
     tlImage(tl.base).then(url=>{if(url&&tl.id===id)bt.querySelector('.tlImg').innerHTML=`<img src="${url}" style="width:100%;height:100%;object-fit:cover;object-position:left top">`;});}
-  for(let k=0;k<tl.items.length;k++){if(tl.id!==id||tlFull!==mode)return;const url=await tlImage(tl.items[k]);const c=$('tlStrip').children[k];if(c&&url)c.querySelector('.tlImg').innerHTML=`<img src="${url}" style="width:100%;height:100%;object-fit:cover;object-position:left top">`;}
+  for(let k=0;k<tl.items.length;k++){if(tl.id!==id||tlFull!==mode)return;const url=await tlImage(tl.items[k]);const c=document.querySelector(`#tlStrip .tlTh[data-k="${k}"],#tlStripEv .tlTh[data-k="${k}"]`);if(c&&url)c.querySelector('.tlImg').innerHTML=`<img src="${url}" style="width:100%;height:100%;object-fit:cover;object-position:left top">`;}
 }
 // 上の波形：基準（-1）か、スライドバーで選んだ日付
 async function tlTop(i){
