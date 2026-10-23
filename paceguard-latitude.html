@@ -1385,6 +1385,7 @@ function tlEqualize(){
 window.addEventListener('resize',()=>{try{tlEqualize();}catch(_){}});
 function tlVs(){ // 今表示している上と下を、その場で比べる（同じ物差し）
   const top=tl.top<0?tl.base:tl.items[tl.top],bot=tl.items[tl.idx],b=top&&top.feat,c=bot&&bot.feat;
+  if((top&&tlIsEv(top))||(bot&&tlIsEv(bot))){$('tlVs').innerHTML='⚡ イベントの波形は、不整脈のときの記録なので数値では比べません。画像を並べて目で見比べてください。';return;}
   if(!b||!c||!b.tpl||!c.tpl){$('tlVs').innerHTML=top&&bot?'上と下をこの場で比べるには、両方のPDFの数値が必要です（「📥 このPDFで評価し直す」を押してください）':'';return;}
   const r=compareFeat(b,c);
   $('tlVs').innerHTML=`<b>上と下をこの場で比べると：</b>${tlPill(r.level)}　形 相関 ${r.corr.toFixed(2)}・QRS幅 ${r.dW>=0?'+':''}${r.dW} ms・波高 ${Math.round(r.ampRatio*100)}%（許容 ±${Math.round(r.tol*100)}%）${r.polFlip?'・<b>向きが逆</b>':''}`
