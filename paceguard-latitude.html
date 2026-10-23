@@ -1020,11 +1020,12 @@ function analyzeRow(sig){
 }
 // QRS幅：代表拍の傾きが「最大傾きの12%」と「基線部分（−100〜−60ms）のノイズの傾きの3倍」の大きい方を超えている範囲。
 // ノイズが多い記録でQRSの始まり・終わりが外側に伸びて、幅が長く測られるのを防ぐ
-function qrsSpan(tpl){
+function qrsSpan(tpl,noiseRel){
   const L=tpl.length,qa=idxOf(QRS_A),qb=idxOf(QRS_B);
   const ts=new Float32Array(L);for(let j=1;j<L-1;j++){const a=tpl[j+1],b=tpl[j-1];ts[j]=isNaN(a)||isNaN(b)?0:Math.abs(a-b);}
   let smax=0;for(let j=qa;j<=qb;j++)smax=Math.max(smax,ts[j]);
-  const noise=median2(Array.from(ts.slice(1,idxOf(-60))));
+  // noiseRel：2つを比べる時は、両方で同じノイズの基準（最大の傾きに対する割合）を使う
+  const noise=noiseRel!=null?noiseRel*smax:median2(Array.from(ts.slice(1,idxOf(-60))));
   const st=Math.max(smax*0.12,noise*3);let on=idxOf(0),off=idxOf(0);
   while(on>qa&&(ts[on]>st||ts[on-1]>st||ts[on-2]>st))on--;while(off<qb&&(ts[off]>st||ts[off+1]>st||ts[off+2]>st))off++;
   return {on,off,width:(off-on)*DT};
@@ -1096,7 +1097,7 @@ function featLevel(b,c){
   if(!b||!c||!b.tpl||!c.tpl)return null;
   const r=compareFeat(b,c),ar=r.ampRatio,hiT=1+r.tol*1.6,hiY=1+r.tol;
   const lv=[r.corr<0.80?2:r.corr<0.90?1:0,(ar>hiT||ar<1/hiT)?2:(ar>hiY||ar<1/hiY)?1:0,
-    (r.dW>=30||(r.c.width>=120&&r.dW>=20))?2:r.dW>=20?1:0,r.polFlip?2:0];
+    r.wGate?0:(r.dW>=30||(r.c.width>=120&&r.dW>=20))?2:r.dW>=20?1:0,r.polFlip?2:0];
   const why=[...(r.red||[]),...(r.yel||[])];
   (c.rows||[]).forEach((x,k)=>{if(x&&!x.error&&x.used===false){lv.push(1);why.push(`${k+1}段目：${String(x.reason||'除外').replace(/（.*$/,'')}`);}}); // 頻拍・ノイズ・形の違う段
   if(c.rh&&c.rh.af){lv.push(1);why.push('RR不規則（心房細動の疑い）');}else if(c.rh&&c.rh.bigem&&!c.rh.pvc){lv.push(1);why.push('二段脈の可能性');}
@@ -1107,16 +1108,21 @@ function compareFeat(b,c){
   const {corr,lag}=shiftCorr(b.tpl,c.tpl,qa,qb,10);
   const ampRatio=c.amp/(b.amp||1),tol=Math.max(0.30,2*Math.hypot(b.ampVar||0,c.ampVar||0));
   // QRS幅は保存値ではなく、両方の代表拍から同じ方法で測り直す（測り方を改良しても古い記録と公平に比べられる）
-  const sb=qrsSpan(b.tpl),sc=qrsSpan(c.tpl);b={...b,width:sb.width,on:sb.on*DT-PRE,off:sb.off*DT-PRE};c={...c,width:sc.width,on:sc.on*DT-PRE,off:sc.off*DT-PRE};
+  // 同じ物差しで測る：ノイズの基準を「最大の傾きに対する割合」にそろえ、2つのうち大きい方を両方に使う
+  const relN=t=>{const L=t.length,qa=idxOf(QRS_A),qb=idxOf(QRS_B),ts=[];let mx=0;for(let j=1;j<L-1;j++){const v=isNaN(t[j+1])||isNaN(t[j-1])?0:Math.abs(t[j+1]-t[j-1]);ts.push(v);if(j>=qa&&j<=qb)mx=Math.max(mx,v);}return mx?median2(ts.slice(0,idxOf(-60)-1))/mx:0;};
+  const nr=Math.max(relN(b.tpl),relN(c.tpl));
+  const sb=qrsSpan(b.tpl,nr),sc=qrsSpan(c.tpl,nr);b={...b,width:sb.width,on:sb.on*DT-PRE,off:sb.off*DT-PRE};c={...c,width:sc.width,on:sc.on*DT-PRE,off:sc.off*DT-PRE};
   const dW=c.width-b.width,polFlip=b.pol!==c.pol;
+  // 形がほぼ同じ（相関0.97以上）なら、QRS幅の差は測定のぶれとみなして判定に使わない（本当に幅が広がると形も変わるため）
+  const wGate=corr>=0.97;
   const red=[],yel=[];
   if(polFlip)red.push('QRSの主な向きが逆転（上向き⇄下向き）');
   if(corr<0.80)red.push(`QRSの形が大きく変化（相関 ${corr.toFixed(2)}）`);else if(corr<0.90)yel.push(`QRSの形がやや変化（相関 ${corr.toFixed(2)}）`);
-  if(dW>=30||(c.width>=120&&dW>=20))red.push(`QRS幅の延長 ${b.width}→${c.width}ms（+${dW}ms）＝脚ブロック等を確認`);else if(dW>=20)yel.push(`QRS幅がやや延長 ${b.width}→${c.width}ms（+${dW}ms）`);
+  if(wGate){}else if(dW>=30||(c.width>=120&&dW>=20))red.push(`QRS幅の延長 ${b.width}→${c.width}ms（+${dW}ms）＝脚ブロック等を確認`);else if(dW>=20)yel.push(`QRS幅がやや延長 ${b.width}→${c.width}ms（+${dW}ms）`);
   const hiT=1+tol*1.6,hiY=1+tol;
   if(ampRatio>hiT||ampRatio<1/hiT)red.push(`波高が大きく変化 ${b.amp.toFixed(2)}→${c.amp.toFixed(2)}mV（${Math.round(ampRatio*100)}%、呼吸のゆれの範囲 ±${Math.round(tol*100)}%を大きく超える）`);
   else if(ampRatio>hiY||ampRatio<1/hiY)yel.push(`波高の変化 ${b.amp.toFixed(2)}→${c.amp.toFixed(2)}mV（${Math.round(ampRatio*100)}%、呼吸のゆれの範囲 ±${Math.round(tol*100)}%を超える）`);
-  return {corr,lag,ampRatio,tol,dW,polFlip,level:red.length?2:yel.length?1:0,red,yel,b,c};
+  return {corr,lag,ampRatio,tol,dW,polFlip,wGate,level:red.length?2:yel.length?1:0,red,yel,b,c};
 }
 const THR=0.94;
 function compareRow(base,cur){
@@ -1811,11 +1817,11 @@ async function runEval(mode){
   const r={k:0,b:bp,c:pool,...compareFeat(bp,pool)};
   const sign=v=>(v>0?'+':'')+v;
   const lvCorr=r.corr<0.80?2:r.corr<0.90?1:0,ar=r.ampRatio,hiT=1+r.tol*1.6,hiY=1+r.tol,lvAmp=(ar>hiT||ar<1/hiT)?2:(ar>hiY||ar<1/hiY)?1:0;
-  const lvW=(r.dW>=30||(r.c.width>=120&&r.dW>=20))?2:r.dW>=20?1:0,lvP=r.polFlip?2:0;
+  const lvW=r.wGate?0:(r.dW>=30||(r.c.width>=120&&r.dW>=20))?2:r.dW>=20?1:0,lvP=r.polFlip?2:0;
   const crit=[
     {lv:lvCorr,name:'QRSの形',prev:'—',cur:'—',chg:`相関 ${r.corr.toFixed(3)}`,rule:'0.90未満で注意／0.80未満で要確認',why:'QRSの形が変わった（ブロック・リード位置など）'},
     {lv:lvAmp,name:'波高',prev:`${r.b.amp.toFixed(2)} mV`,cur:`${r.c.amp.toFixed(2)} mV`,chg:`${Math.round(ar*100)}%`,rule:`±${Math.round(r.tol*100)}%を超えると注意／±${Math.round(r.tol*160)}%で要確認（呼吸のゆれから自動）`,why:ar<1?'波高が低下':'波高が増加'},
-    {lv:lvW,name:'QRS幅',prev:`${r.b.width} ms`,cur:`${r.c.width} ms`,chg:`${sign(r.dW)} ms`,rule:'+20msで注意／+30ms（120ms以上なら+20ms）で要確認',why:'QRSが広がった（脚ブロック等）'},
+    {lv:lvW,name:'QRS幅',prev:`${r.b.width} ms`,cur:`${r.c.width} ms`,chg:`${sign(r.dW)} ms`,rule:r.wGate?'形がほぼ同じ（相関0.97以上）なので、幅の差は測定のぶれとして判定に使わない':'+20msで注意／+30ms（120ms以上なら+20ms）で要確認',why:'QRSが広がった（脚ブロック等）'},
     {lv:lvP,name:'向き',prev:r.b.pol>0?'上向き':'下向き',cur:r.c.pol>0?'上向き':'下向き',chg:r.polFlip?'逆転':'同じ',rule:'逆転で要確認',why:'主な振れの向きが逆転'},
     {lv:0,name:'心拍数（参考）',prev:`${r.b.hr??'—'} bpm`,cur:`${r.c.hr??'—'} bpm`,chg:'',rule:'判定には使わない',why:''},
   ];
