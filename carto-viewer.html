@@ -104,6 +104,7 @@ body.dragging #views{outline:3px dashed var(--accent);outline-offset:-6px}
     <button data-mode="line" title="クリックした点を結んだラインの長さ">ライン</button>
   </span>
   <span id="recState"></span>
+  <button id="btnDiag" title="読み込んだデータの中身を確認（患者情報なし）">読み込み診断</button>
   <button id="btnHelp">使い方</button>
 </header>
 <main>
@@ -268,6 +269,12 @@ body.dragging #views{outline:3px dashed var(--accent);outline-offset:-6px}
   <div><img id="slideImg" alt=""><div id="slideCap"></div></div>
   <div id="slideNav"><button id="slPrev">◀</button><span id="slNum"></span><button id="slNext">▶</button><button id="slClose">閉じる (Esc)</button></div>
 </div>
+<div id="diagOv" class="overlay hidden"><div class="modal" style="max-width:900px;width:92vw">
+  <h2 style="margin-top:0">読み込み診断</h2>
+  <p class="small muted">読み込んだファイルの構造と、各値が正しく読めているかを表示します。<b>患者名・ID・フォルダ名は含めません</b>（ファイル名中のマップ名は &lt;map&gt; に置き換えます）。<br>うまく表示されないときは、この内容をコピーしてClaudeに貼り付けてください。</p>
+  <div class="row"><button id="diagCopy" class="primary">コピー</button><button id="diagSave">テキストで保存</button><span class="sp"></span><button id="diagClose">閉じる</button></div>
+  <pre id="diagText" class="res" style="max-height:60vh;overflow:auto;white-space:pre-wrap"></pre>
+</div></div>
 <div id="helpOv" class="overlay hidden"><div class="modal">
   <h2 style="margin-top:0">CARTO Viewer の使い方</h2>
   <p>CARTO 3 の Export データを、このPCのブラウザだけで表示・解析するツールです。<b>データは外部に送信しません。</b>本物のCARTOではないので、診療の最終判断には使わないでください。</p>
@@ -1284,6 +1291,10 @@ function bindPanel(){
   $('#btnResetEdits').onclick=()=>{if(!S.study||!confirm('LATの修正と除外をすべて元に戻しますか？'))return;for(const m of S.study.maps){for(const p of m.points){p.lat=p.lat0;p.latEdited=false;p.excluded=false;}m.edited=false;m.version++;}dirtyAll('cp');renderWave();saveSoon();};
   // ヘッダ
   $$('#modeSeg button').forEach(b=>b.onclick=()=>setMode(b.dataset.mode));
+  $('#btnDiag').onclick=async()=>{if(!S.study)return toast('先にデータを読み込んでください');progress('診断中…');try{$('#diagText').textContent=await buildDiag();}finally{progress(null);}$('#diagOv').classList.remove('hidden');};
+  $('#diagClose').onclick=()=>$('#diagOv').classList.add('hidden');
+  $('#diagCopy').onclick=async()=>{try{await navigator.clipboard.writeText($('#diagText').textContent);toast('コピーしました');}catch(_){const r=document.createRange();r.selectNodeContents($('#diagText'));getSelection().removeAllRanges();getSelection().addRange(r);toast('選択しました。Ctrl+Cでコピーしてください');}};
+  $('#diagSave').onclick=()=>download(`carto_diag_${stamp()}.txt`,new Blob([$('#diagText').textContent],{type:'text/plain'}));
   $('#btnHelp').onclick=()=>$('#helpOv').classList.remove('hidden');$('#helpClose').onclick=()=>$('#helpOv').classList.add('hidden');
   $('#helpOv').onclick=e=>{if(e.target.id==='helpOv')$('#helpOv').classList.add('hidden');};
   $('#btnDemo').onclick=()=>{progress('デモデータを作成中…');setTimeout(()=>{try{setStudy(makeDemoStudy());}finally{progress(null);}},30);};
@@ -1314,7 +1325,7 @@ function bindPanel(){
     if(e.key==='ArrowRight'){stepPoint(1);e.preventDefault();}else if(e.key==='ArrowLeft'){stepPoint(-1);e.preventDefault();}
     else if(e.key==='Delete'||e.key==='Backspace'){if(S.sel){toggleExclude(S.sel.map,S.sel.p);e.preventDefault();}}
     else if(e.key===' '){togglePropPlay();e.preventDefault();}
-    else if(e.key==='Escape'){measClear();renderMeas();$('#helpOv').classList.add('hidden');}
+    else if(e.key==='Escape'){measClear();renderMeas();$('#helpOv').classList.add('hidden');$('#diagOv').classList.add('hidden');}
   });
   window.addEventListener('resize',()=>{dirtyAll('');renderWave();});
 }
@@ -1577,6 +1588,65 @@ function restoreState(){
   $('#caseNotes').value='';$('#caseTags').value='';
   let st=null;try{st=JSON.parse(localStorage.getItem(studyKey())||'null');}catch(_){}
   if(st){const n=applyState(st);if(n)setTimeout(()=>toast(`前回の編集（${n}点）を復元しました。「記録」タブで元に戻せます`,5000),400);}
+}
+
+
+/* ===================== 読み込み診断 ===================== */
+function rangeStr(arr){let n=0,mn=Infinity,mx=-Infinity;for(const v of arr){if(!fin(v))continue;n++;if(v<mn)mn=v;if(v>mx)mx=v;}return n?`${n}件 ${+mn.toFixed(3)}〜${+mx.toFixed(3)}`:'0件';}
+async function buildDiag(){
+  const st=S.study;if(!st)return '読み込まれていません';
+  const L=[];const add=s=>L.push(s);
+  add('CARTO Viewer 読み込み診断  '+new Date().toISOString().slice(0,10));
+  add('ブラウザ: '+navigator.userAgent.replace(/\s*\(.*?\)\s*/,' '));
+  if(st.demo){add('※デモデータです（実データではありません）');}
+  const vfs=st.vfs;
+  const mapNames=st.maps.map(m=>m.name).sort((a,b)=>b.length-a.length);
+  const mask=base=>{let b=base;for(const n of mapNames){if(b.startsWith(n)){b='<map>'+b.slice(n.length);break;}}return b.replace(/\d+/g,'#');};
+  if(vfs){
+    add('\n== ファイル ==');add('総数: '+vfs.all.length);
+    const kinds=new Map();for(const e of vfs.all){const inVT=/visitag/i.test(e.path)?'VisiTagExport/':'';const k=inVT+mask(e.base);kinds.set(k,(kinds.get(k)||0)+1);}
+    for(const[k,n]of [...kinds].sort((a,b)=>b[1]-a[1]).slice(0,60))add(`  ${String(n).padStart(5)}  ${k}`);
+    if(kinds.size>60)add(`  …ほか ${kinds.size-60}種類`);
+  }
+  for(const[mi,m]of st.maps.entries()){
+    add(`\n== マップ${mi+1}: ${m.name} ==`);
+    if(m.mesh){const me=m.mesh;add(`メッシュ: 頂点 ${me.nv} / 表示三角形 ${me.tris.length/3}`);
+      const ak=Object.entries(me.attrs).filter(([k])=>!/name/i.test(k)).slice(0,12).map(([k,v])=>k+'='+String(v).slice(0,30));if(ak.length)add('  属性: '+ak.join(', '));
+      add('  色の列: '+(me.colorNames.length?me.colorNames.join(' '):'なし'));
+      for(const n of me.colorNames)add(`    ${n}: ${rangeStr(me.colors[n])}`);
+      const b=Viewer.prototype.bounds.call({map:m});add(`  座標の中心 ${b.c.map(x=>x.toFixed(1)).join(', ')} / 半径 ${b.r.toFixed(1)} mm`);
+    }else add('メッシュ: なし');
+    const P=m.points;add(`ポイント: ${P.length}点`);
+    if(P.length){add('  LAT: '+rangeStr(P.map(p=>p.lat0)));add('  Bipolar: '+rangeStr(P.map(p=>p.bip)));add('  Unipolar: '+rangeStr(P.map(p=>p.uni)));add('  Impedance: '+rangeStr(P.map(p=>p.imp)));
+      add('  X: '+rangeStr(P.map(p=>p.x))+'  Y: '+rangeStr(P.map(p=>p.y))+'  Z: '+rangeStr(P.map(p=>p.z)));}
+    if(vfs){
+      const ct=await vfs.text(m.name+'_car.txt');
+      if(ct){const ls=ct.split(/\r?\n/);add('  _car.txt 1行目: '+mask(ls[0].slice(0,120)).replace(/#/g,'#'));
+        const first=ls.find(l=>/^P\s/.test(l.trim()));if(first){const f=first.trim().split(/\s+/);add(`  _car.txt データ行の列数: ${f.length}`);add('  先頭データ行: '+f.map((x,i)=>i+':'+x).join(' '));}}
+      const ecgN=P.filter(p=>vfs.get(p.ecgFile)).length,xmlN=P.filter(p=>vfs.get(p.xmlFile)).length;
+      add(`  ECGファイル ${ecgN}/${P.length}点、Point XML ${xmlN}/${P.length}点 が見つかりました`);
+      const p0=P.find(p=>vfs.get(p.ecgFile));
+      if(p0){
+        try{const et=await vfs.text(p0.ecgFile);const ls=et.split(/\r?\n/);add('  ECGヘッダ（先頭4行）:');for(const l of ls.slice(0,4))add('    | '+l.slice(0,300));
+          const e=parseECG(et);add(`  ECG解析: ${e.order.length}ch × ${e.len}サンプル, gain=${e.gain}, Uni=${e.uniCh}, Bi=${e.bipCh}, Ref=${e.refCh}`);
+          add('    Bipolar: '+(egmBip(e)?'OK':'見つからない')+' / Unipolar: '+(egmUni(e)?'OK':'見つからない')+' / Ref: '+(e.refCh&&e.ch[e.refCh]?'OK':'見つからない')+' / 12誘導: '+['I','II','V1','V6'].filter(n=>e.ch[n]).length+'/4');
+          const b=egmBip(e);if(b){let mx=0;for(const v of b)mx=Math.max(mx,Math.abs(v));add(`    Bipolar最大振幅 ${mx.toFixed(2)} mV（car値 ${fmt(p0.bip,2)} mV）`);}
+        }catch(err){add('  ECG解析エラー: '+err.message);}
+      }
+      const px=P.find(p=>vfs.get(p.xmlFile));
+      if(px){try{const xt=await vfs.text(px.xmlFile);const r=parsePointXml(xt);
+        const tags=[...new Set([...xt.matchAll(/<([A-Za-z_][\w\-]*)/g)].map(x=>x[1]))].slice(0,25);
+        const attrs=[...new Set([...xt.matchAll(/([A-Za-z_][\w\-]*)\s*=\s*"/g)].map(x=>x[1]))].slice(0,40);
+        add(`  Point XML: Ref=${r.ref} Map=${r.mapAnn} WOI=${r.woi?r.woi.join('〜'):'なし'}  → LAT=${fin(r.ref)&&fin(r.mapAnn)?r.mapAnn-r.ref:'?'}（car値 ${fmt(px.lat0,0)}）`);
+        add('    タグ: '+tags.join(' '));add('    属性: '+attrs.join(' '));}catch(err){add('  Point XML解析エラー: '+err.message);}}
+    }
+  }
+  add('\n== VisiTag ==');
+  if(st.visitag){add(`焼灼点 ${st.visitag.sites.length}個 / 読めた項目: ${st.visitag.params.map(p=>p.k).join(', ')}`);}else add('なし');
+  if(vfs){const vt=vfs.all.filter(e=>/visitag/i.test(e.path)&&/\.txt$/i.test(e.base)).slice(0,8);
+    for(const e of vt){try{const t=await vfs.text(e);add(`  ${e.base}: 1行目 `+t.split(/\r?\n/)[0].slice(0,300));}catch(_){}}}
+  if(st.warn.length){add('\n== 警告 ==');for(const w of st.warn)add('  '+mask(w));}
+  return L.join('\n');
 }
 
 /* ===================== メインループ ===================== */
