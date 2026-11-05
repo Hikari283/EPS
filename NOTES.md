@@ -351,5 +351,6 @@ CARTO 3 の Export データ（フォルダ/ZIP）をブラウザだけで表示
 - **実データでは未検証**（公開情報からの推定形式＋自作テストZIPで確認）。car列の位置、ECGヘッダ、座標系（+X=左/+Y=背側/+Z=頭側と仮定）は実データで要確認。
 - 機能: LAT/Bipolar/Unipolar/メッシュ値, 等時線, Propagation, Ripple風, 2画面比較, 波形(Bi/Uni/Ref/12誘導)とLAT修正・除外→再補間(IDW), 低電位面積, 伝導速度矢印, 分裂/遅延電位/LAVA候補検出, VisiTag色分け・隙間チェック, 距離/ライン(測地線), PNG/WebM, スライド書き出し, 症例メモ(localStorage)
 - 上部: メニューバー（Study/Map/Point/Catheter/ECG/Display/Imaging/Window/Tools/Help、`MENUS`）とワークフロー（Setup/Mapping/Ablation/Verification、`setWF()`）。3D画面内にマップ・表示の選択、横カラーバー（LAT・Tag）、向きの目印、AP〜SUPボタン、透明度。
+- 波形パネルは左右2分割: 左=リアルタイム風（`RT`、各点の記録を取得順に流し続け、3Dに水色の輪で位置表示、クリックで右に固定）、右=選択ポイント（`W`、LAT修正）。描画は共通の `drawWave(st,p)`。
 - 波形パネル: 「全電極（CARTO風）」でII/V1・CS・多電極カテーテル（スプライン別に色分け、電極ごとの局所興奮点）、CL自動計算、掃引速度(mm/s)、記録の実時間再生（次の点へ連続）、右側にポイント一覧。リアルタイム電位はExportに無いので、各点の2.5秒記録で代用。
 - 「デモデータ」ボタンで架空の左室VT症例を生成（`makeDemoStudy()`）。
