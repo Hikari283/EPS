@@ -67,7 +67,7 @@ body.dragging #views{outline:3px dashed var(--accent);outline-offset:-6px}
 #waveCanvas{flex:1;min-width:0;width:100%;height:100%;display:block;cursor:crosshair}
 #rtCanvas{flex:1;min-width:0;height:100%;display:block;cursor:pointer;border-right:2px solid #2b343f}
 #rtCanvas.hidden{display:none}
-#ptList{width:250px;overflow:auto;border-left:1px solid var(--line);background:#0b0f14}
+#ptList{width:290px;overflow:auto;border-left:1px solid var(--line);background:#0b0f14}
 #ptList.hidden{display:none}
 #ptList table{width:100%;border-collapse:collapse;font-size:12px}
 #ptList th{position:sticky;top:0;background:#1d242d;color:var(--muted);font-weight:normal;cursor:pointer;padding:3px 4px;text-align:right}
@@ -75,6 +75,14 @@ body.dragging #views{outline:3px dashed var(--accent);outline-offset:-6px}
 #ptList tr.sel td{background:#2a5d93;color:#fff}
 #ptList tr.ex td{color:#555;text-decoration:line-through}
 #ptList tbody tr{cursor:pointer}
+#pvHead{padding:6px;border-bottom:1px solid var(--line);background:#121820}
+#pvHead .pt{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+#pvHead .pt b{font-size:15px;color:#fff}
+#pvHead .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:3px}
+#pvHead .c{background:#0b0f14;border:1px solid #26303b;border-radius:5px;padding:2px 4px;text-align:center}
+#pvHead .c .v{font-size:17px;font-weight:700;color:#fff;line-height:1.2}
+#pvHead .c .k{font-size:10px;color:#8fb8e0}
+#pvHead .na{color:#666}
 #pinfo b{color:#fff}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#24303d;border:1px solid var(--accent);padding:8px 14px;border-radius:8px;opacity:0;transition:opacity .25s;pointer-events:none;z-index:60;max-width:80vw}
 #toast.show{opacity:1}
@@ -334,14 +342,14 @@ main.noside{grid-template-columns:minmax(0,1fr)}main.noside aside{display:none}
     <select id="wLayout" title="電位の並べ方"><option value="map">マッピング電極</option><option value="all">全電極（CARTO風）</option></select>
     <select id="wSpeed" title="掃引速度"><option value="0">WOIに合わせる</option><option value="50">50 mm/s</option><option value="100">100 mm/s</option><option value="200">200 mm/s</option><option value="400">400 mm/s</option></select>
     <button id="wPlay" class="on" title="左のリアルタイム波形を一時停止/再生">❚❚ 停止</button><select id="wRate" title="再生速度"><option value="1">×1</option><option value="0.5">×0.5</option><option value="0.25">×0.25</option></select><label title="記録の最後まで来たら次のポイントへ"><input type="checkbox" id="wChain" checked>次の点へ</label>
-    <button id="wList" title="ポイント一覧">一覧</button>
+    <button id="wList" class="on" title="ポイントビューア（一覧）">ポイントビューア</button>
     <label><input type="checkbox" id="chMap" checked>Bi/Uni</label>
     <label><input type="checkbox" id="chRef" checked>Ref</label>
     <label><input type="checkbox" id="chEcg">12誘導</label>
     <label><input type="checkbox" id="chOther">その他</label>
     <button id="gDown" title="振幅を小さく">−</button><button id="gUp" title="振幅を大きく">＋</button>
   </div>
-  <div id="waveBody"><canvas id="rtCanvas" title="クリックすると右側に固定して表示"></canvas><canvas id="waveCanvas"></canvas><div id="ptList" class="hidden"></div></div>
+  <div id="waveBody"><canvas id="rtCanvas" title="クリックすると右側に固定して表示"></canvas><canvas id="waveCanvas"></canvas><div id="ptList"><div id="pvHead"></div><div id="pvBody"></div></div></div>
 </section>
 </div>
 <div id="toast"></div>
@@ -1721,18 +1729,27 @@ function drawWave(st,p){
 function setPlay(on){
   RT.playing=on;$('#wPlay').textContent=on?'❚❚ 停止':'▶ 再生';$('#wPlay').classList.toggle('on',on);
 }
+function renderPvHead(){
+  const h=$('#pvHead');if(!h)return;
+  if(!S.sel){h.innerHTML='<div class="muted small">ポイントをクリックすると、ここに値が出ます</div>';return;}
+  const{map,p}=S.sel,cl=p.egm?computeCL(p.egm):NaN,m=p.metrics;
+  const c=(k,v)=>`<div class="c"><div class="v${v==='—'?' na':''}">${v}</div><div class="k">${k}</div></div>`;
+  h.innerHTML=`<div class="pt"><b>P${p.id}</b><span class="small muted">${esc(map.name)}${p.excluded?' <span class="bad">除外</span>':''}</span></div><div class="grid">`+
+    c('CL (ms)',fin(cl)?cl:'—')+c('LAT (ms)',fmt(p.lat,0)+(p.latEdited?'*':''))+c('Bi (mV)',fmt(p.bip,2))+c('Uni (mV)',fmt(p.uni,2))+c('Imp (Ω)',fmt(p.imp,0))+
+    c('Tag',p.label?esc(p.label):'—')+(m?c('偏位',m.defl)+c('持続 (ms)',m.dur)+c('QRS後 (ms)',m.late||0):'')+'</div>';
+}
 function listMap(){return S.sel?S.sel.map:(av()&&av().map);}
 let listKey='';
 function renderPtList(force){
-  const el=$('#ptList');if(el.classList.contains('hidden'))return;const m=listMap();if(!m){el.innerHTML='';return;}
+  const el=$('#ptList');if(el.classList.contains('hidden'))return;renderPvHead();const m=listMap();const body=$('#pvBody');if(!m){body.innerHTML='';return;}
   const key=m.name+'|'+m.version+'|'+W.listSort+'|'+m.points.length;
   if(force||key!==listKey){listKey=key;
     const k=W.listSort.replace('-',''),dir=W.listSort.startsWith('-')?-1:1;
-    const val=p=>k==='id'?p.id:k==='lat'?p.lat:k==='bip'?p.bip:k==='uni'?p.uni:0;
+    const val=p=>k==='id'?p.id:k==='lat'?p.lat:k==='bip'?p.bip:k==='uni'?p.uni:k==='imp'?p.imp:0;
     const pts=m.points.slice().sort((a,b)=>{const x=val(a),y=val(b);if(!fin(x))return 1;if(!fin(y))return -1;return(x-y)*dir;});
     const ar=c=>W.listSort===c?' ▲':W.listSort==='-'+c?' ▼':'';
-    el.innerHTML=`<table><thead><tr><th data-s="id">#${ar('id')}</th><th data-s="lat">LAT${ar('lat')}</th><th data-s="bip">Bi${ar('bip')}</th><th data-s="uni">Uni${ar('uni')}</th><th style="text-align:left">ラベル</th></tr></thead><tbody>`+
-      pts.map(p=>`<tr data-id="${p.id}" class="${p.excluded?'ex':''}"><td>${p.id}</td><td>${fmt(p.lat,0)}${p.latEdited?'*':''}</td><td>${fmt(p.bip,2)}</td><td>${fmt(p.uni,2)}</td><td style="text-align:left;color:#ffb347">${esc(p.label||'')}</td></tr>`).join('')+'</tbody></table>';}
+    body.innerHTML=`<table><thead><tr><th data-s="id">#${ar('id')}</th><th data-s="lat">LAT${ar('lat')}</th><th data-s="bip">Bi${ar('bip')}</th><th data-s="uni">Uni${ar('uni')}</th><th data-s="imp">Imp${ar('imp')}</th><th style="text-align:left">Tag</th></tr></thead><tbody>`+
+      pts.map(p=>`<tr data-id="${p.id}" class="${p.excluded?'ex':''}"><td>${p.id}</td><td>${fmt(p.lat,0)}${p.latEdited?'*':''}</td><td>${fmt(p.bip,2)}</td><td>${fmt(p.uni,2)}</td><td>${fmt(p.imp,0)}</td><td style="text-align:left;color:#ffb347">${esc(p.label||'')}</td></tr>`).join('')+'</tbody></table>';}
   el.querySelectorAll('tr.sel').forEach(r=>r.classList.remove('sel'));
   if(S.sel&&S.sel.map===m){const r=el.querySelector(`tr[data-id="${S.sel.p.id}"]`);if(r){r.classList.add('sel');const top=r.offsetTop-el.clientHeight/2;if(r.offsetTop<el.scrollTop+20||r.offsetTop>el.scrollTop+el.clientHeight-20)el.scrollTop=top;}}
 }
