@@ -612,7 +612,7 @@ function egmBip(e){
   if(e.bipCh&&e.ch[e.bipCh])r=e.ch[e.bipCh];
   else{
     let a=null,b=null;
-    if(e.bipCh&&e.bipCh.includes('-')){const[x,y]=e.bipCh.split('-');a=e.ch[x];b=e.ch[y];}
+    if(e.bipCh&&e.bipCh.includes('-')){let[x,y]=e.bipCh.split('-');if(!e.ch[y]&&/^\d+$/.test(y)){const m=/^(.*?)\d+$/.exec(x);if(m)y=m[1]+y;}a=e.ch[x];b=e.ch[y];}
     if((!a||!b)&&e.uniCh){const m=/^(.*?)(\d+)$/.exec(e.uniCh);if(m){a=e.ch[e.uniCh];b=e.ch[m[1]+(+m[2]+1)];}}
     if(a&&b){r=new Float32Array(a.length);for(let i=0;i<a.length;i++)r[i]=a[i]-b[i];}
   }
