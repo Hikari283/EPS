@@ -191,6 +191,7 @@ body.dragging #views{outline:3px dashed var(--accent);outline-offset:-6px}
       <div id="vtNone" class="muted">VisiTagのデータがありません（Exportの VisiTagExport フォルダ内の Sites.txt を読みます）。</div>
       <div id="vtUI">
         <div class="row"><label><input type="checkbox" id="vtOn" checked> 表示</label><span class="lb" style="min-width:auto">大きさ</span><input type="range" id="vtSize" min="1" max="5" step="0.25" value="2.5"><span class="muted small">mm</span></div>
+        <div class="row"><label><input type="checkbox" id="vtChain" checked> 隣の焼灼点を線でつなぐ（CARTO風）</label></div>
         <div class="row"><span class="lb">色分け</span><select id="vtParam"></select></div>
         <div class="row"><span class="lb">範囲</span><input type="number" id="vtLo" step="any"> 〜 <input type="number" id="vtHi" step="any"><button id="vtAuto">自動</button></div>
         <div class="res" id="vtRes"></div>
@@ -957,6 +958,7 @@ function buildSpheres(items){
   for(const it of items){for(const s of SPHERE){P[k*3]=it.x+s[0]*it.r;P[k*3+1]=it.y+s[1]*it.r;P[k*3+2]=it.z+s[2]*it.r;N[k*3]=s[0];N[k*3+1]=s[1];N[k*3+2]=s[2];C[k*4]=it.c[0];C[k*4+1]=it.c[1];C[k*4+2]=it.c[2];C[k*4+3]=it.c[3]??1;k++;}}
   return{P,N,C,count:n};
 }
+function isAtrial(m){return !!m&&/(^|[^A-Za-z])(LA|RA|LAA|RAA|CS|SVC|PV|AFL|AF)([^A-Za-z]|$)/i.test(m.name);}
 const VIEWS={AP:[[0,-1,0],[0,0,1]],PA:[[0,1,0],[0,0,1]],LAO:[[0.5,-0.866,0],[0,0,1]],RAO:[[-0.5,-0.866,0],[0,0,1]],LL:[[1,0,0],[0,0,1]],RL:[[-1,0,0],[0,0,1]],SUP:[[0,0,1],[0,-1,0]],INF:[[0,0,-1],[0,-1,0]]};
 class Viewer{
   constructor(el,idx){
@@ -975,7 +977,7 @@ class Viewer{
   upload(name,data,target){const gl=this.gl;target=target||gl.ARRAY_BUFFER;let b=this.buf[name];if(!b)b=this.buf[name]=gl.createBuffer();gl.bindBuffer(target,b);gl.bufferData(target,data,gl.DYNAMIC_DRAW);return b;}
   attr(loc,buf,size){const gl=this.gl;if(loc<0)return;gl.bindBuffer(gl.ARRAY_BUFFER,buf);gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,size,gl.FLOAT,false,0,0);}
   get T(){return typeDef(this.type);}
-  range(){const k=this.type;if(!this.ranges[k]){const T=this.T;this.ranges[k]=T.def?{lo:T.def[0],hi:T.def[1]}:(()=>{const[lo,hi]=this.map?autoRange(this.map,T):[0,1];return{lo,hi,auto:true};})();}return this.ranges[k];}
+  range(){const k=this.type;if(!this.ranges[k]){const T=this.T;const def=(T.k==='Bipolar'&&isAtrial(this.map))?[0.1,0.5]:T.def;this.ranges[k]=def?{lo:def[0],hi:def[1]}:(()=>{const[lo,hi]=this.map?autoRange(this.map,T):[0,1];return{lo,hi,auto:true};})();}return this.ranges[k];}
   setMap(map,keepCam){
     const first=!this.map;this.map=map;
     for(const k in this.ranges)if(this.ranges[k].auto)delete this.ranges[k];
@@ -1045,6 +1047,7 @@ class Viewer{
     const segs=[],m=this.map;if(!m)return segs;
     if(S.opt.cvOn&&m.mesh)for(const s of cvArrows(m))segs.push({...s,depth:true});
     if(S.opt.ripple&&m.mesh)for(const s of rippleBars(m))segs.push({...s,depth:true});
+    if(S.study&&S.study.visitag&&S.opt.vtOn&&S.opt.vtChain)for(const g of vtChain())segs.push({a:[g.a.x,g.a.y,g.a.z],b:[g.b.x,g.b.y,g.b.z],c:[0.45,0.7,1,1],w:Math.max(0.5,S.opt.vtSize*0.35),depth:true});
     if(S.study&&S.study.visitag&&S.opt.vtOn&&S.opt.gapShow&&S.gaps)for(const g of S.gaps)segs.push({a:[g.a.x,g.a.y,g.a.z],b:[g.b.x,g.b.y,g.b.z],c:[1,0.15,0.15,1],w:0.9,depth:false});
     if(m.mesh&&S.meas.map===m){
       const V=m.mesh.verts,N=m.mesh.norms,P=i=>[V[i*3]+N[i*3]*0.4,V[i*3+1]+N[i*3+1]*0.4,V[i*3+2]+N[i*3+2]*0.4];
@@ -1182,7 +1185,7 @@ const S={
   anim:{prop:false,phase:0,rphase:0,rippleT:0},
   opt:{src:'auto',fill:15,scar:0.05,iso:false,isoSteps:12,opacity:1,showPts:true,showExcl:true,ptSize:1.3,ptColor:'value',
     propSpeed:80,propBand:15,ripple:false,rippleScale:6,rippleSpeed:60,cvOn:false,cvSpacing:6,
-    vtOn:true,vtSize:2.5,vtParam:'ai',vtLo:0,vtHi:1,gapShow:true},
+    vtOn:true,vtChain:true,gapThr:6,vtSize:2.5,vtParam:'ai',vtLo:0,vtHi:1,gapShow:true},
   wch:{map:true,ref:true,ecg:false,other:false}
 };
 const av=()=>S.viewers[S.active];
@@ -1274,7 +1277,7 @@ function bindPanel(){
   $('#vtParam').onchange=e=>{S.opt.vtParam=e.target.value;vtAutoRange();dirtyAll('v');};
   const vr=()=>{S.opt.vtLo=+$('#vtLo').value;S.opt.vtHi=+$('#vtHi').value;dirtyAll('v');};$('#vtLo').onchange=vr;$('#vtHi').onchange=vr;
   $('#vtAuto').onclick=()=>{vtAutoRange();dirtyAll('v');};
-  $('#btnGap').onclick=runGap;$('#gapShow').onchange=e=>{S.opt.gapShow=e.target.checked;dirtyAll('');};
+  $('#btnGap').onclick=runGap;$('#vtChain').onchange=e=>{S.opt.vtChain=e.target.checked;dirtyAll('');};$('#gapThr').onchange=e=>{S.opt.gapThr=+e.target.value||6;dirtyAll('');};$('#gapShow').onchange=e=>{S.opt.gapShow=e.target.checked;dirtyAll('');};
   $('#gapTable').onclick=e=>{const tr=e.target.closest('tr[data-i]');if(!tr||!S.gaps)return;const g=S.gaps[+tr.dataset.i];const v=av();v.target=[(g.a.x+g.b.x)/2,(g.a.y+g.b.y)/2,(g.a.z+g.b.z)/2];v.dist=Math.min(v.dist,120);v.dirty=true;afterCam(v);};
   // 計測
   $$('[data-mode2]').forEach(b=>b.onclick=()=>setMode(b.dataset.mode2));
@@ -1487,9 +1490,16 @@ function vtAutoRange(){
   const pl=vt.params.find(p=>p.k===k);
   $('#vtRes').textContent=`焼灼点 ${vt.sites.length}個\n${pl?pl.label:''}：中央値 ${fmt(percentile(vals,0.5))}（${fmt(percentile(vals,0))}〜${fmt(percentile(vals,1))}）\n色：赤=低い → 紫=高い`;
 }
+function vtChain(){
+  const vt=S.study.visitag,thr=S.opt.gapThr;const key=thr+'|'+vt.sites.length;
+  if(vt._chain&&vt._chain.key===key)return vt._chain.list;
+  const by=new Map();for(const s of vt.sites){if(!by.has(s.session))by.set(s.session,[]);by.get(s.session).push(s);}
+  const list=[];for(const l of by.values()){l.sort((a,b)=>a.idx-b.idx);for(let i=1;i<l.length;i++){const a=l[i-1],b=l[i];if(v3.dist([a.x,a.y,a.z],[b.x,b.y,b.z])<=thr)list.push({a,b});}}
+  vt._chain={key,list};return list;
+}
 function runGap(){
   const vt=S.study&&S.study.visitag;if(!vt)return toast('VisiTagのデータがありません');
-  const thr=+$('#gapThr').value||6;const bySes=new Map();for(const s of vt.sites){if(!bySes.has(s.session))bySes.set(s.session,[]);bySes.get(s.session).push(s);}
+  const thr=+$('#gapThr').value||6;S.opt.gapThr=thr;const bySes=new Map();for(const s of vt.sites){if(!bySes.has(s.session))bySes.set(s.session,[]);bySes.get(s.session).push(s);}
   const gaps=[],all=[];
   for(const[ses,list]of bySes){list.sort((a,b)=>a.idx-b.idx);for(let i=1;i<list.length;i++){const d=v3.dist([list[i-1].x,list[i-1].y,list[i-1].z],[list[i].x,list[i].y,list[i].z]);all.push(d);if(d>thr)gaps.push({a:list[i-1],b:list[i],d,ses});}}
   S.gaps=gaps;dirtyAll('');
