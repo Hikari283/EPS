@@ -340,3 +340,14 @@ USBで持ち運ぶ場合、**常に「最後に編集した方が最新」**。�
 - 置き換え時、PDFを消す前に足りない日時（secg・tx・events）をPDFの文字から読んで記録に書き込む（以前の置き換えで日時不明になった反省）。
 - 2026-10-23 イベントの見分け：見出し、または波形3段以上（S-ECGは2段）。evLikeで比較相手・要確認リスト・タイムライン判定から除外。タイムラインの絞り込みは廃止（いつも全部）。日時：S-ECG＝記録日時→なければ送信日時（送信と表示）、イベント＝S-ECG欄の日時→イベント見出しの日時→なければ日時不明（📡送信）。テストの模擬波形は2段に変更。
 - タイムラインのサムネイルを2列に：上＝〰S-ECG（左端に📌基準）、下＝⚡イベント。どちらも左から時系列。
+
+---
+
+## CARTO Viewer（`carto-viewer.html`）
+
+CARTO 3 の Export データ（フォルダ/ZIP）をブラウザだけで表示・解析する単一HTML。外部ライブラリなし（WebGLは自前、ZIPは DecompressionStream で展開）。
+
+- 読む形式: `<map>.mesh` / `<map>_car.txt` / `<map>_Points_Export.xml` / `<map>_P#_Point_Export.xml` / `<map>_P#_ECG_Export.txt` / `VisiTagExport/Sites.txt`
+- **実データでは未検証**（公開情報からの推定形式＋自作テストZIPで確認）。car列の位置、ECGヘッダ、座標系（+X=左/+Y=背側/+Z=頭側と仮定）は実データで要確認。
+- 機能: LAT/Bipolar/Unipolar/メッシュ値, 等時線, Propagation, Ripple風, 2画面比較, 波形(Bi/Uni/Ref/12誘導)とLAT修正・除外→再補間(IDW), 低電位面積, 伝導速度矢印, 分裂/遅延電位/LAVA候補検出, VisiTag色分け・隙間チェック, 距離/ライン(測地線), PNG/WebM, スライド書き出し, 症例メモ(localStorage)
+- 「デモデータ」ボタンで架空の左室VT症例を生成（`makeDemoStudy()`）。

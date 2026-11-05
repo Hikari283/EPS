@@ -1,0 +1,1610 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CARTO Viewer</title>
+<style>
+:root{--bg:#0e1217;--panel:#161b22;--panel2:#1d242d;--line:#2b343f;--text:#e3e8ee;--muted:#8b97a5;--accent:#3d9bff;--accent2:#1f5fa8;--warn:#ffb347;--bad:#ff5b5b;--ok:#46cf86}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:13px/1.45 system-ui,-apple-system,"Segoe UI","Hiragino Sans","Yu Gothic UI","Meiryo",sans-serif;overflow:hidden}
+button,select,input,textarea{font:inherit;color:inherit}
+button,.btn{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:4px 10px;cursor:pointer;white-space:nowrap;display:inline-block;user-select:none}
+button:hover,.btn:hover{border-color:var(--accent)}
+button.on{background:var(--accent2);border-color:var(--accent)}
+button.primary{background:var(--accent2);border-color:var(--accent)}
+button:disabled{opacity:.45;cursor:default}
+select,input[type=number],input[type=text],textarea{background:#0b0f14;border:1px solid var(--line);border-radius:5px;padding:3px 6px;max-width:100%}
+input[type=number]{width:72px}
+input[type=range]{width:120px;vertical-align:middle}
+#app{display:grid;grid-template-rows:auto minmax(0,1fr) auto;height:100vh}
+header{display:flex;gap:6px;align-items:center;padding:6px 10px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+.brand{font-size:15px;margin-right:6px}
+.sp{flex:1}
+.muted{color:var(--muted)}
+.small{font-size:11px}
+.seg{display:inline-flex}
+.seg button{border-radius:0;margin-left:-1px}
+.seg button:first-child{border-radius:6px 0 0 6px;margin-left:0}
+.seg button:last-child{border-radius:0 6px 6px 0}
+main{display:grid;grid-template-columns:330px minmax(0,1fr);min-height:0}
+aside{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.tabs{display:flex;border-bottom:1px solid var(--line)}
+.tabs button{flex:1;border:0;border-radius:0;background:transparent;padding:7px 0;border-bottom:2px solid transparent}
+.tabs button.on{border-bottom-color:var(--accent);background:transparent;color:#fff}
+.tabpane{display:none;overflow:auto;padding:8px 10px;flex:1}
+.tabpane.on{display:block}
+fieldset{border:1px solid var(--line);border-radius:8px;margin:0 0 10px;padding:6px 8px 8px}
+legend{color:var(--muted);padding:0 4px;font-size:12px}
+.row{display:flex;align-items:center;gap:6px;margin:4px 0;flex-wrap:wrap}
+.row>.lb{min-width:70px;color:var(--muted)}
+.res{background:#0b0f14;border:1px solid var(--line);border-radius:6px;padding:6px;margin-top:6px;font-size:12px;white-space:pre-wrap}
+.res:empty{display:none}
+table.list{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}
+table.list td,table.list th{padding:2px 4px;border-bottom:1px solid var(--line);text-align:right}
+table.list th{color:var(--muted);font-weight:normal}
+table.list tbody tr{cursor:pointer}
+table.list tbody tr:hover td{background:#1c2733}
+#views{position:relative;display:flex;min-width:0;min-height:0;background:#000}
+.view{position:relative;flex:1;min-width:0;border:2px solid transparent}
+.view.active{border-color:#2a5d93}
+#views.single .view.active{border-color:transparent}
+.view.hidden{display:none}
+.view canvas.gl{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+.vlabel{position:absolute;left:8px;top:6px;font-size:12px;color:#cfd8e3;text-shadow:0 0 3px #000;pointer-events:none}
+.cbar{position:absolute;right:6px;top:28px;pointer-events:none}
+#dropHint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;color:var(--muted);pointer-events:none;padding:20px;line-height:1.9}
+#dropHint.hidden{display:none}
+body.dragging #views{outline:3px dashed var(--accent);outline-offset:-6px}
+#wave{height:270px;background:var(--panel);border-top:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+#wave.collapsed{height:34px}
+#waveResize{height:6px;margin-top:-3px;cursor:ns-resize;flex:none}
+#waveResize:hover{background:var(--accent2)}
+#wave.collapsed #waveCanvas{display:none}
+.wbar{display:flex;gap:6px;align-items:center;padding:4px 8px;flex-wrap:wrap;border-bottom:1px solid var(--line)}
+.wbar label{color:var(--muted)}
+#waveCanvas{flex:1;width:100%;min-height:0;display:block;cursor:crosshair}
+#pinfo b{color:#fff}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#24303d;border:1px solid var(--accent);padding:8px 14px;border-radius:8px;opacity:0;transition:opacity .25s;pointer-events:none;z-index:60;max-width:80vw}
+#toast.show{opacity:1}
+#progress{position:fixed;left:50%;top:60px;transform:translateX(-50%);background:#24303d;border:1px solid var(--warn);padding:8px 14px;border-radius:8px;z-index:60}
+#progress.hidden{display:none}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:50;display:flex;align-items:center;justify-content:center}
+.overlay.hidden{display:none}
+.modal{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 20px;max-width:780px;max-height:86vh;overflow:auto;line-height:1.7}
+.modal h3{margin:14px 0 4px}
+#slideImg{max-width:92vw;max-height:76vh;border-radius:6px;display:block;margin:0 auto}
+#slideCap{text-align:center;margin-top:10px;font-size:18px;white-space:pre-wrap}
+#slideNav{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:8px;align-items:center}
+.snap{display:flex;gap:6px;align-items:center;margin:4px 0}
+.snap img{width:84px;border-radius:4px;border:1px solid var(--line)}
+.snap .cap{flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis}
+.warn{color:var(--warn)}
+.bad{color:var(--bad)}
+.ok{color:var(--ok)}
+.recdot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--bad);margin-right:4px;animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.2}}
+@media (max-width:820px){main{grid-template-columns:1fr;grid-template-rows:50vh minmax(0,1fr)}aside{order:2;border-right:0;border-top:1px solid var(--line)}#views{order:1}}
+</style>
+</head>
+<body>
+<div id="app">
+<header>
+  <b class="brand">CARTO Viewer</b>
+  <label class="btn" title="CARTOのExportフォルダを選びます">フォルダを開く<input type="file" id="inDir" webkitdirectory multiple hidden></label>
+  <label class="btn" title="ZIP、または .mesh / _car.txt などを複数選択">ZIP・ファイルを開く<input type="file" id="inFiles" multiple hidden></label>
+  <button id="btnDemo">デモデータ</button>
+  <span id="studyName" class="muted"></span>
+  <span class="sp"></span>
+  <span class="muted small">クリック操作:</span>
+  <span class="seg" id="modeSeg">
+    <button data-mode="select" class="on" title="ポイントを選んで電位を表示">選択</button>
+    <button data-mode="exclude" title="クリックしたポイントを除外/復帰">除外</button>
+    <button data-mode="dist" title="2点間の距離">距離</button>
+    <button data-mode="line" title="クリックした点を結んだラインの長さ">ライン</button>
+  </span>
+  <span id="recState"></span>
+  <button id="btnHelp">使い方</button>
+</header>
+<main>
+<aside>
+  <div class="tabs" id="tabs">
+    <button data-tab="t-view" class="on">表示</button>
+    <button data-tab="t-ana">解析</button>
+    <button data-tab="t-abl">焼灼</button>
+    <button data-tab="t-meas">計測</button>
+    <button data-tab="t-rec">記録</button>
+  </div>
+
+  <div class="tabpane on" id="t-view">
+    <fieldset><legend>マップ（<span id="activeName">左</span>の画面）</legend>
+      <div class="row"><span class="lb">マップ</span><select id="selMap" style="flex:1"></select></div>
+      <div class="row"><span class="lb">表示</span><select id="selType" style="flex:1"></select></div>
+      <div class="row"><span class="lb">範囲</span><input type="number" id="rLo" step="any"> 〜 <input type="number" id="rHi" step="any"> <span id="rUnit" class="muted"></span></div>
+      <div class="row"><span class="lb"></span><button id="rAuto">自動</button><span id="rPresets"></span></div>
+      <div class="row" id="scarRow"><span class="lb">瘢痕（灰色）</span><input type="number" id="scarThr" step="0.01" value="0.05"> mV未満</div>
+      <div class="row"><span class="lb">等時線</span><label><input type="checkbox" id="isoOn"> 段階表示</label><input type="number" id="isoSteps" value="12" min="3" max="40"> 段</div>
+      <div class="row"><span class="lb">色の計算</span><select id="srcSel"><option value="auto">CARTOのメッシュ値（あれば）</option><option value="interp">ポイントから再計算</option></select></div>
+      <div class="row"><span class="lb">補間半径</span><input type="number" id="fillR" value="15" min="2" max="60"> mm</div>
+    </fieldset>
+    <fieldset><legend>表示オプション</legend>
+      <div class="row"><span class="lb">透明度</span><input type="range" id="opacity" min="0.1" max="1" step="0.05" value="1"></div>
+      <div class="row"><span class="lb">ポイント</span><label><input type="checkbox" id="showPts" checked> 表示</label><label><input type="checkbox" id="showExcl" checked> 除外点も</label></div>
+      <div class="row"><span class="lb">点の大きさ</span><input type="range" id="ptSize" min="0.4" max="4" step="0.1" value="1.3"></div>
+      <div class="row"><span class="lb">点の色</span><select id="ptColor"><option value="value">マップの値</option><option value="white">白</option><option value="label">ラベル付きを強調</option></select></div>
+    </fieldset>
+    <fieldset><legend>向き</legend>
+      <div class="row" id="viewBtns">
+        <button data-v="AP">AP</button><button data-v="PA">PA</button><button data-v="LAO">LAO</button><button data-v="RAO">RAO</button>
+        <button data-v="LL">LL</button><button data-v="RL">RL</button><button data-v="SUP">頭側</button><button data-v="INF">足側</button><button data-v="FIT">全体</button>
+      </div>
+      <div class="muted small">CARTO座標が +X=患者左 / +Y=背側 / +Z=頭側 と仮定しています。実データで向きが違えば調整します。</div>
+    </fieldset>
+    <fieldset><legend>2画面比較</legend>
+      <div class="row"><label><input type="checkbox" id="compareOn"> 2画面で並べる</label><label><input type="checkbox" id="syncCam" checked> 視点を連動</label></div>
+      <div class="muted small">画面をクリックして選ぶと、その画面のマップと表示を変更できます。</div>
+    </fieldset>
+    <fieldset><legend>Propagation（伝播アニメーション）</legend>
+      <div class="row"><button id="propPlay">▶ 再生</button><span class="muted small">表示を「Propagation」にすると動きます</span></div>
+      <div class="row"><span class="lb">速さ</span><input type="range" id="propSpeed" min="10" max="400" value="80"><span id="propSpeedV" class="muted"></span></div>
+      <div class="row"><span class="lb">帯の幅</span><input type="range" id="propBand" min="3" max="60" value="15"><span id="propBandV" class="muted"></span></div>
+    </fieldset>
+    <fieldset><legend>Ripple風表示（電位を棒で表示）</legend>
+      <div class="row"><label><input type="checkbox" id="rippleOn"> 表示する</label></div>
+      <div class="row"><span class="lb">棒の長さ</span><input type="range" id="rippleScale" min="1" max="20" value="6"><span class="muted small">mm/mV</span></div>
+      <div class="row"><span class="lb">速さ</span><input type="range" id="rippleSpeed" min="10" max="300" value="60"></div>
+      <div class="muted small">全ポイントの電位を読み込みます（時間がかかることがあります）。</div>
+    </fieldset>
+  </div>
+
+  <div class="tabpane" id="t-ana">
+    <fieldset><legend>低電位領域の面積</legend>
+      <div class="row"><span class="lb">低電位</span><input type="number" id="lvThr" value="0.5" step="0.05"> mV未満（Bipolar）</div>
+      <div class="row"><span class="lb">瘢痕</span><input type="number" id="lvScar" value="0.05" step="0.01"> mV未満</div>
+      <div class="row"><button id="btnArea" class="primary">計算する</button></div>
+      <div class="res" id="areaRes"></div>
+    </fieldset>
+    <fieldset><legend>伝導速度</legend>
+      <div class="row"><label><input type="checkbox" id="cvOn"> 矢印を表示</label><span class="lb" style="min-width:auto">間隔</span><input type="number" id="cvSpacing" value="6" min="2" max="30"> mm</div>
+      <div class="row"><span class="lb">遅い伝導</span><input type="number" id="cvSlow" value="0.3" step="0.05"> m/s未満</div>
+      <div class="row"><button id="btnCV" class="primary">計算する</button></div>
+      <div class="res" id="cvRes"></div>
+      <div class="muted small">LATマップの勾配から計算した参考値です。矢印の色は 赤=遅い、紫=速い。</div>
+    </fieldset>
+    <fieldset><legend>電位解析（分裂電位・遅延電位・LAVA）</legend>
+      <div class="row"><span class="lb">解析窓</span><input type="number" id="anWin0" placeholder="WOI"> 〜 <input type="number" id="anWin1" placeholder="WOI"> ms</div>
+      <div class="row"><span class="lb">QRS終末</span><input type="number" id="qrsEnd" placeholder="自動"> ms（Ref基準、空欄=自動）</div>
+      <div class="row"><span class="lb">分裂の基準</span>偏位 <input type="number" id="fracN" value="6" min="2"> 個以上</div>
+      <div class="row"><span class="lb">分離の基準</span>無電位の間隔 <input type="number" id="gapMs" value="15" min="5"> ms以上</div>
+      <div class="row"><span class="lb">感度</span><input type="range" id="sens" min="5" max="40" value="15"><span id="sensV" class="muted"></span></div>
+      <div class="row"><button id="btnEGM" class="primary">全ポイントを解析</button></div>
+      <div class="res" id="egmRes"></div>
+      <div class="row"><span class="lb">並び順</span><select id="egmSort"><option value="late">遅延電位（QRS後）</option><option value="defl">偏位数</option><option value="dur">持続時間</option><option value="pp">振幅（小さい順）</option></select></div>
+      <div id="egmTable"></div>
+      <div class="muted small">結果は「表示」タブの表示メニュー（分裂電位・持続時間・遅延電位）でマップとしても見られます。自動検出なので、必ず波形を目で確認してください。</div>
+    </fieldset>
+  </div>
+
+  <div class="tabpane" id="t-abl">
+    <fieldset><legend>VisiTag（焼灼点）</legend>
+      <div id="vtNone" class="muted">VisiTagのデータがありません（Exportの VisiTagExport フォルダ内の Sites.txt を読みます）。</div>
+      <div id="vtUI">
+        <div class="row"><label><input type="checkbox" id="vtOn" checked> 表示</label><span class="lb" style="min-width:auto">大きさ</span><input type="range" id="vtSize" min="1" max="5" step="0.25" value="2.5"><span class="muted small">mm</span></div>
+        <div class="row"><span class="lb">色分け</span><select id="vtParam"></select></div>
+        <div class="row"><span class="lb">範囲</span><input type="number" id="vtLo" step="any"> 〜 <input type="number" id="vtHi" step="any"><button id="vtAuto">自動</button></div>
+        <div class="res" id="vtRes"></div>
+      </div>
+    </fieldset>
+    <fieldset><legend>焼灼点の間隔チェック</legend>
+      <div class="row"><span class="lb">基準</span>隣の点まで <input type="number" id="gapThr" value="6" step="0.5"> mm超を「隙間」とする</div>
+      <div class="row"><label><input type="checkbox" id="gapShow" checked> 隙間を赤線で表示</label><button id="btnGap" class="primary">チェック</button></div>
+      <div class="res" id="gapRes"></div>
+      <div id="gapTable"></div>
+      <div class="muted small">同じセッション内で、番号が連続する焼灼点どうしの中心間距離を見ています。</div>
+    </fieldset>
+  </div>
+
+  <div class="tabpane" id="t-meas">
+    <fieldset><legend>計測</legend>
+      <div class="row"><button data-mode2="dist">距離（2点）</button><button data-mode2="line">ライン（複数点）</button><button data-mode2="select">終了</button></div>
+      <div class="muted small" id="measHint">「距離」：表面を2回クリックします。<br>「ライン」：点を順にクリックし、「確定」を押します。<br>表面に沿った距離（測地線）と直線距離を表示します。</div>
+      <div class="row"><button id="measDone">ラインを確定</button><button id="measUndo">1点戻す</button><button id="measClear">全部消す</button></div>
+      <div class="res" id="measNow"></div>
+      <table class="list" id="measTable"><thead><tr><th style="text-align:left">#</th><th>種類</th><th>表面に沿って</th><th>直線</th></tr></thead><tbody></tbody></table>
+    </fieldset>
+  </div>
+
+  <div class="tabpane" id="t-rec">
+    <fieldset><legend>画像・動画</legend>
+      <div class="row"><button id="btnShot">画像を保存（PNG）</button></div>
+      <div class="row"><span class="lb">動画</span><select id="recKind"><option value="rotate">360°回転</option><option value="prop">伝播を1周</option><option value="manual">手動で停止</option></select><button id="btnRec">録画開始</button></div>
+      <div class="muted small">動画はWebM形式で保存されます（Chrome/Edgeで再生可、PowerPointにも貼れます）。</div>
+    </fieldset>
+    <fieldset><legend>スライド（症例検討会用）</legend>
+      <div class="row"><input type="text" id="snapCap" placeholder="説明（例：前壁に低電位、LAVAあり）" style="flex:1"></div>
+      <div class="row"><button id="btnSnap" class="primary">今の画面を追加</button><button id="btnShow">スライドショー</button><button id="btnExportSlides">HTMLで書き出し</button></div>
+      <div id="snapList"></div>
+    </fieldset>
+    <fieldset><legend>症例メモ</legend>
+      <div class="row"><span class="lb">タグ</span><input type="text" id="caseTags" placeholder="例：VT, 虚血性, 前壁" style="flex:1"></div>
+      <textarea id="caseNotes" rows="6" style="width:100%" placeholder="所見・方針など（このPCのブラウザ内だけに保存されます）"></textarea>
+      <div class="row"><span class="lb">選択点のラベル</span><input type="text" id="ptLabel" placeholder="例：LAVA, 至適部位" style="flex:1"></div>
+    </fieldset>
+    <fieldset><legend>編集内容の保存</legend>
+      <div class="row"><button id="btnExportJSON">書き出し（JSON）</button><label class="btn">読み込み<input type="file" id="inJSON" accept=".json" hidden></label></div>
+      <div class="row"><button id="btnResetEdits">LAT修正・除外を全部元に戻す</button></div>
+      <div class="muted small">LATの修正・除外・ラベル・メモは、このブラウザに自動保存されます。同じ症例を開くと復元します。</div>
+    </fieldset>
+  </div>
+</aside>
+<section id="views" class="single">
+  <div class="view active" id="view0"><canvas class="gl"></canvas><div class="vlabel"></div><div class="cbar"><canvas width="110" height="240"></canvas></div></div>
+  <div class="view hidden" id="view1"><canvas class="gl"></canvas><div class="vlabel"></div><div class="cbar"><canvas width="110" height="240"></canvas></div></div>
+  <div id="dropHint">CARTOのExportフォルダ（またはZIP）をここにドラッグ＆ドロップ<br>または上の「フォルダを開く」<br><span class="small">データはこのPCの中だけで処理され、外部には送信されません。<br>試すだけなら「デモデータ」を押してください。</span></div>
+</section>
+</main>
+<section id="wave">
+  <div id="waveResize" title="ドラッグで高さを変更"></div>
+  <div class="wbar">
+    <button id="waveToggle" title="波形パネルを開く/閉じる">▾</button>
+    <button id="pPrev" title="前のポイント (←)">◀</button><button id="pNext" title="次のポイント (→)">▶</button>
+    <span id="pinfo" class="muted">ポイントをクリックすると電位を表示します</span>
+    <span class="sp"></span>
+    <button id="pExcl" title="Deleteキー">除外</button>
+    <button id="latSnap" title="現在のLAT付近の最も急峻な点に合わせる">LATを吸着</button>
+    <button id="latRevert">LATを元に戻す</button>
+    <label><input type="checkbox" id="chMap" checked>Bi/Uni</label>
+    <label><input type="checkbox" id="chRef" checked>Ref</label>
+    <label><input type="checkbox" id="chEcg">12誘導</label>
+    <label><input type="checkbox" id="chOther">その他</label>
+    <button id="gDown" title="振幅を小さく">−</button><button id="gUp" title="振幅を大きく">＋</button>
+  </div>
+  <canvas id="waveCanvas"></canvas>
+</section>
+</div>
+<div id="toast"></div>
+<div id="progress" class="hidden"></div>
+<div id="slideOv" class="overlay hidden">
+  <div><img id="slideImg" alt=""><div id="slideCap"></div></div>
+  <div id="slideNav"><button id="slPrev">◀</button><span id="slNum"></span><button id="slNext">▶</button><button id="slClose">閉じる (Esc)</button></div>
+</div>
+<div id="helpOv" class="overlay hidden"><div class="modal">
+  <h2 style="margin-top:0">CARTO Viewer の使い方</h2>
+  <p>CARTO 3 の Export データを、このPCのブラウザだけで表示・解析するツールです。<b>データは外部に送信しません。</b>本物のCARTOではないので、診療の最終判断には使わないでください。</p>
+  <h3>読み込めるデータ</h3>
+  <ul>
+    <li><code>○○.mesh</code>：3Dの形とメッシュ上の値（LAT、電位など）</li>
+    <li><code>○○_car.txt</code>：ポイントの座標・LAT・電位</li>
+    <li><code>○○_Points_Export.xml</code>、<code>○○_P#_Point_Export.xml</code>：アノテーション（Ref、LAT、WOI）</li>
+    <li><code>○○_P#_ECG_Export.txt</code>：ポイントごとの心内電位・12誘導</li>
+    <li><code>VisiTagExport/Sites.txt</code>：焼灼点</li>
+  </ul>
+  <p>フォルダごと、またはZIPのまま開けます。CARTOのバージョンでファイル形式が少しずつ違うので、読めないファイルがあれば教えてください。</p>
+  <h3>マウス操作</h3>
+  <ul>
+    <li>左ドラッグ：回転　／　右ドラッグ（またはShift＋ドラッグ）：移動　／　ホイール：拡大・縮小</li>
+    <li>クリック：上の「クリック操作」で選んだ動作（選択・除外・距離・ライン）</li>
+  </ul>
+  <h3>波形パネル</h3>
+  <ul>
+    <li>赤い線（LAT）をドラッグすると、LATを付け直せます。ダブルクリックした位置にも移動できます。修正するとマップを自動で再計算します。</li>
+    <li>ホイール：時間方向の拡大・縮小　／　ドラッグ：時間方向の移動</li>
+  </ul>
+  <h3>キーボード</h3>
+  <ul>
+    <li>← →：前後のポイント　／　Delete：選択点を除外/復帰　／　Space：伝播の再生/停止　／　Esc：計測を中止</li>
+  </ul>
+  <h3>注意</h3>
+  <ul>
+    <li>色の補間、伝導速度、分裂電位・LAVAの検出は独自の簡易計算です。CARTOの表示とまったく同じにはなりません。</li>
+    <li>このツールのスクリーンショットには、患者名は入りません。</li>
+  </ul>
+  <div style="text-align:right"><button id="helpClose">閉じる</button></div>
+</div></div>
+
+<script>
+'use strict';
+/* ===================== 基本ユーティリティ ===================== */
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const clamp=(x,a,b)=>x<a?a:x>b?b:x;
+const fin=Number.isFinite;
+const fmt=(x,d=1)=>fin(x)?x.toFixed(d):'—';
+const sleep0=()=>new Promise(r=>setTimeout(r,0));
+function toast(msg,ms=2800){const t=$('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>t.classList.remove('show'),ms);}
+function progress(msg){const p=$('#progress');if(msg==null){p.classList.add('hidden');return;}p.classList.remove('hidden');p.textContent=msg;}
+function download(name,blob){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1500);}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function natCmp(a,b){return a.localeCompare(b,undefined,{numeric:true});}
+function stamp(){const d=new Date(),z=n=>String(n).padStart(2,'0');return `${d.getFullYear()}${z(d.getMonth()+1)}${z(d.getDate())}_${z(d.getHours())}${z(d.getMinutes())}`;}
+function percentile(arr,q){const a=arr.filter(fin).sort((x,y)=>x-y);if(!a.length)return NaN;return a[Math.min(a.length-1,Math.max(0,Math.round(q*(a.length-1))))];}
+const v3={
+  sub:(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]],add:(a,b)=>[a[0]+b[0],a[1]+b[1],a[2]+b[2]],
+  sc:(a,s)=>[a[0]*s,a[1]*s,a[2]*s],dot:(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2],
+  cross:(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],
+  len:a=>Math.hypot(a[0],a[1],a[2]),norm:a=>{const l=Math.hypot(a[0],a[1],a[2])||1;return[a[0]/l,a[1]/l,a[2]/l];},
+  dist:(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2])
+};
+
+/* ===================== ファイル（フォルダ・ZIP） ===================== */
+function decodeText(b){
+  try{return new TextDecoder('utf-8',{fatal:true}).decode(b);}catch(_){}
+  try{return new TextDecoder('windows-1252').decode(b);}catch(_){return new TextDecoder().decode(b);}
+}
+class VFS{
+  constructor(){this.byBase=new Map();this.all=[];}
+  add(path,getBytes,size){path=path.replace(/\\/g,'/');const base=path.split('/').pop();const e={path,base,getBytes,size};this.all.push(e);const k=base.toLowerCase();if(!this.byBase.has(k))this.byBase.set(k,e);}
+  get(base){return this.byBase.get(String(base).toLowerCase())||null;}
+  async text(x){const e=typeof x==='string'?this.get(x):x;if(!e)return null;return decodeText(await e.getBytes());}
+}
+async function readZip(blob){
+  const size=blob.size,tl=Math.min(size,65536+22+20);
+  const tail=new Uint8Array(await blob.slice(size-tl).arrayBuffer());const dv=new DataView(tail.buffer);
+  let eo=-1;for(let i=tl-22;i>=0;i--){if(dv.getUint32(i,true)===0x06054b50){eo=i;break;}}
+  if(eo<0)throw new Error('ZIPファイルとして読めませんでした');
+  let count=dv.getUint16(eo+10,true),cdSize=dv.getUint32(eo+12,true),cdOff=dv.getUint32(eo+16,true);
+  if(cdOff===0xffffffff||count===0xffff||cdSize===0xffffffff){
+    const li=eo-20;
+    if(li>=0&&dv.getUint32(li,true)===0x07064b50){
+      const z64=Number(dv.getBigUint64(li+8,true));const z=new DataView(await blob.slice(z64,z64+56).arrayBuffer());
+      if(z.getUint32(0,true)===0x06064b50){count=Number(z.getBigUint64(32,true));cdSize=Number(z.getBigUint64(40,true));cdOff=Number(z.getBigUint64(48,true));}
+    }
+  }
+  const buf=await blob.slice(cdOff,cdOff+cdSize).arrayBuffer();const cd=new DataView(buf),u8=new Uint8Array(buf);
+  const utf8=new TextDecoder('utf-8');let sjis;try{sjis=new TextDecoder('shift_jis');}catch(_){sjis=utf8;}
+  const out=[];let p=0;
+  while(p+46<=cd.byteLength&&cd.getUint32(p,true)===0x02014b50){
+    const flags=cd.getUint16(p+8,true),method=cd.getUint16(p+10,true);
+    let comp=cd.getUint32(p+20,true),unc=cd.getUint32(p+24,true);
+    const nl=cd.getUint16(p+28,true),xl=cd.getUint16(p+30,true),cl=cd.getUint16(p+32,true);
+    let off=cd.getUint32(p+42,true);
+    const nb=u8.subarray(p+46,p+46+nl);
+    const name=((flags&0x800)?utf8:(nb.some(b=>b>127)?sjis:utf8)).decode(nb);
+    let x=p+46+nl;const xe=x+xl;
+    while(x+4<=xe){const id=cd.getUint16(x,true),sz=cd.getUint16(x+2,true);
+      if(id===1){let q=x+4;if(unc===0xffffffff){unc=Number(cd.getBigUint64(q,true));q+=8;}if(comp===0xffffffff){comp=Number(cd.getBigUint64(q,true));q+=8;}if(off===0xffffffff){off=Number(cd.getBigUint64(q,true));q+=8;}}
+      x+=4+sz;}
+    out.push({name,method,comp,size:unc,off,enc:!!(flags&1),dir:name.endsWith('/')});
+    p=xe+cl;
+  }
+  return out;
+}
+async function zipEntryData(blob,e){
+  if(e.enc)throw new Error('パスワード付きZIPには対応していません');
+  const h=new DataView(await blob.slice(e.off,e.off+30).arrayBuffer());
+  const start=e.off+30+h.getUint16(26,true)+h.getUint16(28,true);
+  const part=blob.slice(start,start+e.comp);
+  if(e.method===0)return new Uint8Array(await part.arrayBuffer());
+  if(e.method===8){
+    if(typeof DecompressionStream==='undefined')throw new Error('このブラウザはZIPの展開に対応していません。ZIPを展開してからフォルダで開いてください');
+    return new Uint8Array(await new Response(part.stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());
+  }
+  throw new Error('未対応の圧縮方式です('+e.method+')');
+}
+async function addSource(vfs,blob,path){
+  if(/\.zip$/i.test(path)){
+    const entries=await readZip(blob);const root=path.replace(/\.zip$/i,'');
+    for(const e of entries){
+      if(e.dir)continue;const p=root+'/'+e.name;
+      if(/\.zip$/i.test(e.name)){try{await addSource(vfs,new Blob([await zipEntryData(blob,e)]),p);}catch(err){console.warn(err);}}
+      else vfs.add(p,()=>zipEntryData(blob,e),e.size);
+    }
+  }else vfs.add(path,async()=>new Uint8Array(await blob.arrayBuffer()),blob.size);
+}
+async function readDropEntries(items){
+  const files=[];
+  async function walk(entry,path){
+    if(entry.isFile){const f=await new Promise((res,rej)=>entry.file(res,rej));files.push({file:f,path:path+entry.name});}
+    else if(entry.isDirectory){
+      const rd=entry.createReader();let batch;
+      do{batch=await new Promise((res,rej)=>rd.readEntries(res,rej));for(const c of batch)await walk(c,path+entry.name+'/');}while(batch.length);
+    }
+  }
+  const entries=[...items].map(it=>it.webkitGetAsEntry&&it.webkitGetAsEntry()).filter(Boolean);
+  for(const en of entries)await walk(en,'');
+  return files;
+}
+
+/* ===================== CARTO ファイルの解析 ===================== */
+const MESH_DEFAULT_COLS=['Unipolar','Bipolar','LAT','Impedance','A1','A2','A2-A1','SCI','ICL','ACL','Force','Paso','µBi'];
+function parseMesh(text){
+  const lines=text.split(/\r?\n/);
+  let sec='',lastComment='',colorNames=null;
+  const attrs={},verts=[],tris=[],tg=[],colors=[];
+  for(const line of lines){
+    const t=line.trim();if(!t)continue;
+    const c0=t[0];
+    if(c0==='['){sec=t.slice(1,t.indexOf(']')).toLowerCase();lastComment='';continue;}
+    if(c0===';'){lastComment=t.slice(1).trim();continue;}
+    if(c0==='#')continue;
+    const eq=t.indexOf('=');if(eq<0)continue;
+    const key=t.slice(0,eq).trim(),val=t.slice(eq+1).trim();
+    if(sec==='generalattributes'){attrs[key]=val;continue;}
+    const f=val.split(/\s+/);
+    if(sec==='verticessection'){verts.push(+f[0],+f[1],+f[2]);}
+    else if(sec==='trianglessection'){tris.push(+f[0],+f[1],+f[2]);tg.push(f.length>6?+f[6]:0);}
+    else if(sec==='verticescolorssection'){
+      if(!colorNames){colorNames=lastComment?lastComment.split(/\s+/):MESH_DEFAULT_COLS.slice();if(colorNames.length===f.length+1)colorNames.shift();}
+      colors.push(f.map(Number));
+    }
+  }
+  const nv=verts.length/3;
+  if(!nv)throw new Error('メッシュに頂点がありません');
+  const vis=[];
+  for(let i=0;i<tg.length;i++){
+    if(tg[i]===-1000000)continue;
+    const a=tris[i*3],b=tris[i*3+1],c=tris[i*3+2];
+    if(a<nv&&b<nv&&c<nv&&a>=0&&b>=0&&c>=0)vis.push(a,b,c);
+  }
+  const mesh={nv,verts:Float32Array.from(verts),tris:Uint32Array.from(vis),colors:{},colorNames:[],attrs};
+  if(colors.length===nv&&colorNames){
+    colorNames.forEach((n,ci)=>{
+      const arr=new Float32Array(nv);let any=false;
+      for(let i=0;i<nv;i++){const v=colors[i][ci];if(fin(v)&&v>-9999){arr[i]=v;any=true;}else arr[i]=NaN;}
+      if(any){mesh.colors[n]=arr;mesh.colorNames.push(n);}
+    });
+  }
+  computeNormals(mesh);
+  return mesh;
+}
+function computeNormals(mesh){
+  const V=mesh.verts,T=mesh.tris,N=new Float32Array(V.length);
+  for(let t=0;t<T.length;t+=3){
+    const a=T[t]*3,b=T[t+1]*3,c=T[t+2]*3;
+    const ux=V[b]-V[a],uy=V[b+1]-V[a+1],uz=V[b+2]-V[a+2],wx=V[c]-V[a],wy=V[c+1]-V[a+1],wz=V[c+2]-V[a+2];
+    const nx=uy*wz-uz*wy,ny=uz*wx-ux*wz,nz=ux*wy-uy*wx;
+    for(const k of [a,b,c]){N[k]+=nx;N[k+1]+=ny;N[k+2]+=nz;}
+  }
+  for(let i=0;i<N.length;i+=3){const l=Math.hypot(N[i],N[i+1],N[i+2])||1;N[i]/=l;N[i+1]/=l;N[i+2]/=l;}
+  mesh.norms=N;
+}
+function parseCar(text){
+  const pts=[];
+  for(const ln of text.split(/\r?\n/)){
+    const t=ln.trim();if(!/^P\s/.test(t))continue;
+    const f=t.split(/\s+/);if(f.length<12)continue;
+    const id=+f[1];if(!fin(id))continue;
+    const num=i=>{const v=+f[i];return fin(v)&&v>-9999?v:NaN;};
+    pts.push({id,x:+f[3],y:+f[4],z:+f[5],bip:num(9),uni:num(10),lat:num(11),imp:num(12)});
+  }
+  return pts;
+}
+function parsePointsList(text){
+  const r={};const re=/<Point\b[^>]*>/gi;let m;
+  while((m=re.exec(text))){const id=/\bID\s*=\s*"([^"]+)"/i.exec(m[0]),fn=/File_Name\s*=\s*"([^"]+)"/i.exec(m[0]);if(id&&fn)r[+id[1]]=fn[1].split(/[\\/]/).pop();}
+  return r;
+}
+function parsePointXml(text){
+  const woi=/<WOI\b[^>]*\bFrom\s*=\s*"([^"]+)"[^>]*\bTo\s*=\s*"([^"]+)"/i.exec(text);
+  const ref=/Reference_Annotation\s*=\s*"([^"]+)"/i.exec(text),map=/Map_Annotation\s*=\s*"([^"]+)"/i.exec(text);
+  return{ref:ref?+ref[1]:null,mapAnn:map?+map[1]:null,woi:woi?[+woi[1],+woi[2]]:null};
+}
+function parseECG(text){
+  const lines=text.split(/\r?\n/);
+  let gain=0.003,uniCh=null,bipCh=null,refCh=null,names=null,start=-1;
+  for(let i=0;i<Math.min(lines.length,15);i++){
+    const l=lines[i];let m;
+    if((m=/gain\)?\s*=\s*([\d.eE+-]+)/i.exec(l)))gain=+m[1];
+    if((m=/Unipolar Mapping Channel\s*=\s*([^\s,]+)/i.exec(l)))uniCh=m[1];
+    if((m=/Bipolar Mapping Channel\s*=\s*([^\s,]+)/i.exec(l)))bipCh=m[1];
+    if((m=/Reference Channel\s*=\s*([^\s,]+)/i.exec(l)))refCh=m[1];
+    const toks=l.trim().split(/\s+/);
+    if(!names&&toks.length>=3&&toks.filter(t=>/\(\d+\)$/.test(t)).length>=toks.length*0.5){names=toks.map(t=>t.replace(/\(\d+\)$/,''));start=i+1;}
+  }
+  if(!names)throw new Error('ECGファイルの列名が見つかりません');
+  const nc=names.length,rows=[];
+  for(let i=start;i<lines.length;i++){const t=lines[i].trim();if(!t)continue;const f=t.split(/\s+/);if(f.length<nc*0.8)continue;rows.push(f);}
+  const ch={};
+  names.forEach((n,c)=>{const a=new Float32Array(rows.length);for(let r=0;r<rows.length;r++)a[r]=(+rows[r][c]||0)*gain;ch[n]=a;});
+  return{fs:1000,gain,ch,order:names,uniCh,bipCh,refCh,len:rows.length};
+}
+function egmBip(e){
+  if(!e)return null;
+  if(e._bip!==undefined)return e._bip;
+  let r=null;
+  if(e.bipCh&&e.ch[e.bipCh])r=e.ch[e.bipCh];
+  else{
+    let a=null,b=null;
+    if(e.bipCh&&e.bipCh.includes('-')){const[x,y]=e.bipCh.split('-');a=e.ch[x];b=e.ch[y];}
+    if((!a||!b)&&e.uniCh){const m=/^(.*?)(\d+)$/.exec(e.uniCh);if(m){a=e.ch[e.uniCh];b=e.ch[m[1]+(+m[2]+1)];}}
+    if(a&&b){r=new Float32Array(a.length);for(let i=0;i<a.length;i++)r[i]=a[i]-b[i];}
+  }
+  e._bip=r;return r;
+}
+function egmUni(e){return e&&e.uniCh&&e.ch[e.uniCh]?e.ch[e.uniCh]:null;}
+function parseVisiTag(text){
+  const lines=text.split(/\r?\n/).filter(l=>l.trim());if(lines.length<2)return null;
+  const hdr=lines[0].trim().split(/\s+/),lc=hdr.map(h=>h.toLowerCase());
+  const ix=lc.indexOf('x'),iy=lc.indexOf('y'),iz=lc.indexOf('z');if(ix<0||iy<0||iz<0)return null;
+  const find=(...keys)=>{for(const k of keys){const i=lc.indexOf(k.toLowerCase());if(i>=0)return i;}for(const k of keys){if(k.length<4)continue;const i=lc.findIndex(h=>h.includes(k.toLowerCase()));if(i>=0)return i;}return -1;};
+  const defs=[['ai','Ablation Index','RFIndex','AblationIndex','AI'],['fti','FTI','FTI'],['dur','焼灼時間 (s)','DurationTime','Duration'],['force','平均Force (g)','AverageForce','MeanForce','Force'],
+    ['power','最大出力 (W)','MaxPower','AveragePower','Power'],['temp','最高温度 (℃)','MaxTemperature','Temperature'],['impDrop','インピーダンス低下 (Ω)','ImpedanceDrop'],['imp','基礎インピーダンス (Ω)','BaseImpedance']];
+  const params=[];for(const[k,label,...keys]of defs){const i=find(...keys);if(i>=0)params.push({k,label,i});}
+  const is=find('Session'),ii=find('SiteIndex','Index');
+  const sites=[];
+  for(let r=1;r<lines.length;r++){
+    const f=lines[r].trim().split(/\s+/);const x=+f[ix],y=+f[iy],z=+f[iz];if(!fin(x)||!fin(y)||!fin(z))continue;
+    const s={x,y,z,session:is>=0?f[is]:'1',idx:ii>=0?+f[ii]:r,v:{}};
+    for(const p of params){const v=+f[p.i];s.v[p.k]=fin(v)?v:NaN;}
+    sites.push(s);
+  }
+  return sites.length?{sites,params:params.map(({k,label})=>({k,label}))}:null;
+}
+
+/* ===================== スタディの組み立て ===================== */
+function initPoint(p){p.lat0=p.lat;p.excluded=false;p.latEdited=false;p.label='';p.loaded=!!p.egm;p.metrics=null;}
+function newMap(name){return{name,mesh:null,points:[],version:0,edited:false,cache:{},notified:false};}
+async function buildStudy(vfs,studyName){
+  const names=new Set();
+  for(const e of vfs.all){
+    if(/\.mesh$/i.test(e.base))names.add(e.base.replace(/\.mesh$/i,''));
+    else if(/_car\.txt$/i.test(e.base))names.add(e.base.replace(/_car\.txt$/i,''));
+  }
+  if(!names.size)throw new Error('.mesh や _car.txt が見つかりませんでした。CARTOのExportフォルダか確認してください');
+  const maps=[];let i=0;const warn=[];
+  for(const n of [...names].sort(natCmp)){
+    progress(`マップを読み込み中 ${++i}/${names.size}：${n}`);await sleep0();
+    const map=newMap(n);
+    const me=vfs.get(n+'.mesh');
+    if(me){try{map.mesh=parseMesh(await vfs.text(me));}catch(err){warn.push(n+'.mesh：'+err.message);}}
+    const ce=vfs.get(n+'_car.txt');
+    if(ce){try{map.points=parseCar(await vfs.text(ce));}catch(err){warn.push(n+'_car.txt：'+err.message);}}
+    let plist=null;const pl=vfs.get(n+'_Points_Export.xml');
+    if(pl){try{plist=parsePointsList(await vfs.text(pl));}catch(_){}}
+    for(const p of map.points){initPoint(p);p.xmlFile=(plist&&plist[p.id])||(n+'_P'+p.id+'_Point_Export.xml');p.ecgFile=n+'_P'+p.id+'_ECG_Export.txt';}
+    if(!map.mesh&&!map.points.length)continue;
+    maps.push(map);
+  }
+  let visitag=null;
+  const vtFiles=vfs.all.filter(e=>/visitag/i.test(e.path)&&/\.txt$/i.test(e.base));
+  const pref=vtFiles.filter(e=>/^sites\.txt$/i.test(e.base));
+  for(const e of pref.length?pref:vtFiles){try{const r=parseVisiTag(await vfs.text(e));if(r){visitag=r;break;}}catch(_){}}
+  progress(null);
+  if(!maps.length)throw new Error('表示できるマップがありませんでした');
+  return{name:studyName,maps,visitag,vfs,warn};
+}
+async function loadPointDetail(map,p){
+  if(p.loaded)return;
+  if(p._loading)return p._loading;
+  p._loading=(async()=>{
+    const vfs=S.study&&S.study.vfs;
+    if(vfs){
+      try{const xt=await vfs.text(p.xmlFile);if(xt){const r=parsePointXml(xt);p.ref=r.ref;p.mapAnn=r.mapAnn;p.woi=r.woi;}}catch(e){console.warn(e);}
+      try{const et=await vfs.text(p.ecgFile);if(et)p.egm=parseECG(et);}catch(e){console.warn(p.ecgFile,e);}
+    }
+    if(p.egmGen&&!p.egm)p.egm=p.egmGen();
+    if(p.egm&&!fin(p.ref)){p.ref=guessRef(p.egm);p.refGuessed=true;}
+    if(!fin(p.lat)&&fin(p.mapAnn)&&fin(p.ref)){p.lat=p.lat0=p.mapAnn-p.ref;}
+    p.loaded=true;
+  })();
+  return p._loading;
+}
+function guessRef(e){
+  const r=e.refCh&&e.ch[e.refCh];if(!r)return Math.floor(e.len/2);
+  let best=0,bi=Math.floor(e.len/2);
+  for(let i=Math.floor(e.len*0.2);i<e.len*0.8;i++){const d=Math.abs(r[i+1]-r[i-1]);if(d>best){best=d;bi=i;}}
+  return bi;
+}
+async function loadAllEGM(map){
+  const todo=map.points.filter(p=>!p.loaded);if(!todo.length)return;
+  let done=0;const N=todo.length;
+  async function worker(){while(todo.length){const p=todo.shift();await loadPointDetail(map,p);done++;if(done%20===0||done===N)progress(`電位を読み込み中 ${done}/${N}`);}}
+  await Promise.all(Array.from({length:6},worker));
+  progress(null);
+}
+
+/* ===================== デモデータ ===================== */
+function icosphere(sub){
+  const t=(1+Math.sqrt(5))/2;
+  let V=[[-1,t,0],[1,t,0],[-1,-t,0],[1,-t,0],[0,-1,t],[0,1,t],[0,-1,-t],[0,1,-t],[t,0,-1],[t,0,1],[-t,0,-1],[-t,0,1]].map(v3.norm);
+  let F=[[0,11,5],[0,5,1],[0,1,7],[0,7,10],[0,10,11],[1,5,9],[5,11,4],[11,10,2],[10,7,6],[7,1,8],[3,9,4],[3,4,2],[3,2,6],[3,6,8],[3,8,9],[4,9,5],[2,4,11],[6,2,10],[8,6,7],[9,8,1]];
+  for(let s=0;s<sub;s++){
+    const cache=new Map(),NF=[];
+    const mid=(a,b)=>{const k=a<b?a+'_'+b:b+'_'+a;if(cache.has(k))return cache.get(k);const m=v3.norm(v3.sc(v3.add(V[a],V[b]),.5));V.push(m);cache.set(k,V.length-1);return V.length-1;};
+    for(const[a,b,c]of F){const ab=mid(a,b),bc=mid(b,c),ca=mid(c,a);NF.push([a,ab,ca],[b,bc,ab],[c,ca,bc],[ab,bc,ca]);}
+    F=NF;
+  }
+  return{V,F};
+}
+function seeded(seed){let s=seed>>>0;return()=>{s=(s*1664525+1013904223)>>>0;return s/4294967296;};}
+function makeDemoStudy(){
+  const rnd=seeded(7);const gauss=()=>{let u=0,v=0;while(!u)u=rnd();v=rnd();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);};
+  const{V,F}=icosphere(4);
+  const nv=V.length;const dirs=V.map(v=>v.slice());
+  const verts=new Float32Array(nv*3);
+  for(let i=0;i<nv;i++){const[x,y,z]=V[i];const bump=1+0.06*Math.sin(3*x+1)*Math.cos(2*y)+0.04*Math.sin(4*z);
+    verts[i*3]=x*30*bump;verts[i*3+1]=y*27*bump;verts[i*3+2]=z*42*bump-5;}
+  const tris=[];for(const f of F){const cz=(dirs[f[0]][2]+dirs[f[1]][2]+dirs[f[2]][2])/3;if(cz>0.93)continue;tris.push(...f);}
+  const mesh={nv,verts,tris:Uint32Array.from(tris),colors:{},colorNames:[],attrs:{}};computeNormals(mesh);
+  const scarC=v3.norm([0.85,-0.45,-0.1]);
+  const ang=i=>Math.acos(clamp(v3.dot(dirs[i],scarC),-1,1));
+  const zone=i=>{const a=ang(i);return a<0.33?'core':a<0.62?'border':'normal';};
+  const isth=v3.norm([0.9,-0.35,0.25]);
+  const cvAt=i=>{const z=zone(i);if(z==='core'){return v3.dot(dirs[i],isth)>0.985?0.12:0.02;}if(z==='border')return 0.3;return 0.75;};
+  const src=dirs.reduce((b,d,i)=>v3.dot(d,v3.norm([-0.8,0.3,-0.5]))>v3.dot(dirs[b],v3.norm([-0.8,0.3,-0.5]))?i:b,0);
+  const adj=meshAdj(mesh);
+  const dist=dijkstraCost(mesh,adj,src,(a,b,len)=>len/((cvAt(a)+cvAt(b))/2));
+  const latV=new Float32Array(nv),bipV=new Float32Array(nv),uniV=new Float32Array(nv);
+  for(let i=0;i<nv;i++){
+    latV[i]=dist[i]-20;const z=zone(i),a=ang(i);
+    if(z==='core'){bipV[i]=0.03+0.08*rnd();uniV[i]=1.5+1.5*rnd();}
+    else if(z==='border'){const f=(a-0.33)/0.29;bipV[i]=0.12+f*1.1+0.1*rnd();uniV[i]=3+f*4;}
+    else{bipV[i]=1.6+2.5*rnd();uniV[i]=7+5*rnd();}
+  }
+  const used=new Set(tris);const cand=[...used];
+  const shared12=make12Lead(800);
+  function makeMap(name,post){
+    const map=newMap(name);map.mesh=mesh;
+    const picks=new Set();while(picks.size<(post?300:430))picks.add(cand[Math.floor(rnd()*cand.length)]);
+    let id=1;
+    for(const vi of picks){
+      const z=zone(vi);const off=(rnd()*2-1)*1.2;
+      const n=[mesh.norms[vi*3],mesh.norms[vi*3+1],mesh.norms[vi*3+2]];
+      let bip=bipV[vi]*(1+0.15*gauss()),uni=uniV[vi]*(1+0.1*gauss()),lat=Math.round(latV[vi]+gauss()*3);
+      if(post&&z==='border'){bip=Math.max(0.04,bip*0.25);uni*=0.5;}
+      bip=Math.max(0.02,bip);
+      const p={id:id++,x:verts[vi*3]+n[0]*off,y:verts[vi*3+1]+n[1]*off,z:verts[vi*3+2]+n[2]*off,bip:+bip.toFixed(2),uni:+uni.toFixed(2),lat,imp:100+20*rnd(),
+        ref:800,woi:[-60,320],mapAnn:800+lat};
+      const zz=z,seed=Math.floor(rnd()*1e9);
+      p.egmGen=()=>synthEGM(p,zz,post,seed,shared12);
+      initPoint(p);p.loaded=false;
+      map.points.push(p);
+    }
+    return map;
+  }
+  const m1=makeMap('1-LV 基質マップ',false),m2=makeMap('2-LV 焼灼後',true);
+  const u=v3.norm(v3.cross(scarC,[0,0,1])),w=v3.cross(scarC,u);
+  const sites=[];const N=34;let idx=1;
+  for(let k=0;k<N;k++){
+    if(k===9||k===10)continue;
+    const th=2*Math.PI*k/N,a=0.5;
+    const d=v3.norm(v3.add(v3.sc(scarC,Math.cos(a)),v3.sc(v3.add(v3.sc(u,Math.cos(th)),v3.sc(w,Math.sin(th))),Math.sin(a))));
+    let bi=0,bd=-2;for(const i of cand){const dd=v3.dot(dirs[i],d);if(dd>bd){bd=dd;bi=i;}}
+    sites.push({x:verts[bi*3],y:verts[bi*3+1],z:verts[bi*3+2],session:'1',idx:idx++,
+      v:{ai:Math.round(380+180*rnd()),fti:Math.round(250+300*rnd()),dur:Math.round(12+28*rnd()),force:+(7+16*rnd()).toFixed(1),power:Math.round(35+15*rnd()),temp:Math.round(38+6*rnd()),impDrop:+(4+12*rnd()).toFixed(1),imp:Math.round(95+30*rnd())}});
+  }
+  const visitag={sites,params:[{k:'ai',label:'Ablation Index'},{k:'fti',label:'FTI'},{k:'dur',label:'焼灼時間 (s)'},{k:'force',label:'平均Force (g)'},{k:'power',label:'最大出力 (W)'},{k:'temp',label:'最高温度 (℃)'},{k:'impDrop',label:'インピーダンス低下 (Ω)'},{k:'imp',label:'基礎インピーダンス (Ω)'}]};
+  return{name:'デモ症例（架空データ）',maps:[m1,m2],visitag,vfs:null,warn:[],demo:true};
+}
+function make12Lead(ref){
+  const L=2000,names=['I','II','III','aVR','aVL','aVF','V1','V2','V3','V4','V5','V6'];
+  const g=(t,c,s)=>Math.exp(-((t-c)**2)/(2*s*s));
+  const w={I:[0.6,-0.2,0.25],II:[0.9,-0.4,0.3],V1:[-0.3,1.1,-0.2],V2:[-0.1,1.4,0.4],V3:[0.5,0.9,0.5],V4:[1.2,0.4,0.6],V5:[1.3,0.1,0.5],V6:[1.1,-0.05,0.4]};
+  const base={};
+  for(const n of ['I','II','V1','V2','V3','V4','V5','V6']){
+    const a=new Float32Array(L),c=w[n];
+    for(let i=0;i<L;i++){const t=i-ref;a[i]=c[0]*g(t,45,13)+(-c[1])*g(t,85,16)*0.8+0.3*c[2]*g(t,330,45)+(-0.15*c[0])*g(t,15,6);}
+    base[n]=a;
+  }
+  const d=(f)=>{const a=new Float32Array(L);for(let i=0;i<L;i++)a[i]=f(i);return a;};
+  base.III=d(i=>base.II[i]-base.I[i]);base.aVR=d(i=>-(base.I[i]+base.II[i])/2);base.aVL=d(i=>base.I[i]-base.II[i]/2);base.aVF=d(i=>base.II[i]-base.I[i]/2);
+  return names.map(n=>[n,base[n]]);
+}
+function synthEGM(p,zone,post,seed,shared12){
+  const rnd=seeded(seed),L=2000,ref=p.ref;
+  const bip=new Float32Array(L),uni=new Float32Array(L),m2=new Float32Array(L),rch=new Float32Array(L);
+  const dg=(t,c,s)=>{const x=(t-c)/s;return -x*Math.exp(-x*x/2)*1.65;};
+  const g=(t,c,s)=>Math.exp(-((t-c)**2)/(2*s*s));
+  const act=ref+p.lat;
+  for(let i=0;i<L;i++){
+    const t=i;let b=0;
+    b+=p.bip*dg(t,act,3.2);
+    if(zone!=='normal'){b+=0.25*dg(t,ref+50,12);}
+    if(zone==='border'&&!post){
+      const k=3+Math.floor(rnd()*0);for(let j=1;j<=k;j++)b+=p.bip*0.5*dg(t,act+j*9,2.5)*(j%2?1:-1);
+    }
+    if(zone==='core'&&!post&&p.lat>130){b+=0.35*dg(t,act,2.5);}
+    b+=0.008*Math.sin(i*0.7)+0.006*Math.sin(i*2.3);
+    bip[i]=b;
+    uni[i]=-p.uni*g(t,act+3,7)+0.35*p.uni*g(t,act-12,9)+0.8*g(t,ref+330,45)+0.05*Math.sin(i*0.05);
+    m2[i]=uni[i]-b;
+    rch[i]=2.2*dg(t,ref,2)+0.03*Math.sin(i*0.9);
+  }
+  const ch={'M1':uni,'M2':m2,'M1-M2':bip,'RV1-RV2':rch};
+  const order=['M1','M2','M1-M2','RV1-RV2'];
+  for(const[n,a]of shared12){ch[n]=a;order.push(n);}
+  return{fs:1000,gain:1,ch,order,uniCh:'M1',bipCh:'M1-M2',refCh:'RV1-RV2',len:L};
+}
+
+/* ===================== メッシュの計算（補間・測地線・面積・伝導速度） ===================== */
+function meshAdj(mesh){
+  if(mesh.adj)return mesh.adj;
+  const nv=mesh.nv,T=mesh.tris,V=mesh.verts,deg=new Int32Array(nv+1);
+  for(let t=0;t<T.length;t+=3){deg[T[t]]+=2;deg[T[t+1]]+=2;deg[T[t+2]]+=2;}
+  const off=new Int32Array(nv+1);for(let i=0;i<nv;i++)off[i+1]=off[i]+deg[i];
+  const nb=new Int32Array(off[nv]),wt=new Float32Array(off[nv]),fill=off.slice(0,nv);
+  const L=(a,b)=>Math.hypot(V[a*3]-V[b*3],V[a*3+1]-V[b*3+1],V[a*3+2]-V[b*3+2]);
+  const put=(a,b)=>{const k=fill[a]++;nb[k]=b;wt[k]=L(a,b);};
+  for(let t=0;t<T.length;t+=3){const a=T[t],b=T[t+1],c=T[t+2];put(a,b);put(b,a);put(b,c);put(c,b);put(c,a);put(a,c);}
+  mesh.adj={off,nb,wt};return mesh.adj;
+}
+class Heap{constructor(){this.k=[];this.v=[];}
+  push(key,val){const k=this.k,v=this.v;let i=k.length;k.push(key);v.push(val);while(i>0){const p=(i-1)>>1;if(k[p]<=key)break;k[i]=k[p];v[i]=v[p];i=p;}k[i]=key;v[i]=val;}
+  pop(){const k=this.k,v=this.v;const rk=k[0],rv=v[0];const lk=k.pop(),lv=v.pop();if(k.length){let i=0;const n=k.length;while(true){let l=2*i+1;if(l>=n)break;if(l+1<n&&k[l+1]<k[l])l++;if(k[l]>=lk)break;k[i]=k[l];v[i]=v[l];i=l;}k[i]=lk;v[i]=lv;}return[rk,rv];}
+  get size(){return this.k.length;}}
+function dijkstraCost(mesh,adj,src,cost,dst=-1){
+  const nv=mesh.nv,d=new Float64Array(nv).fill(Infinity),prev=new Int32Array(nv).fill(-1);
+  const h=new Heap();d[src]=0;h.push(0,src);
+  while(h.size){const[du,u]=h.pop();if(du>d[u])continue;if(u===dst)break;
+    for(let k=adj.off[u];k<adj.off[u+1];k++){const w=adj.nb[k];const nd=du+(cost?cost(u,w,adj.wt[k]):adj.wt[k]);if(nd<d[w]){d[w]=nd;prev[w]=u;h.push(nd,w);}}}
+  d.prev=prev;return d;
+}
+function geodesic(mesh,a,b){
+  if(a===b)return{len:0,path:[a]};
+  const d=dijkstraCost(mesh,meshAdj(mesh),a,null,b);
+  if(!fin(d[b]))return{len:NaN,path:[a,b]};
+  const path=[];for(let u=b;u!==-1;u=d.prev[u])path.push(u);
+  return{len:d[b],path:path.reverse()};
+}
+function nearestVertex(mesh,pos){
+  const V=mesh.verts;let bi=0,bd=Infinity;
+  for(let i=0;i<mesh.nv;i++){const dx=V[i*3]-pos[0],dy=V[i*3+1]-pos[1],dz=V[i*3+2]-pos[2];const d=dx*dx+dy*dy+dz*dz;if(d<bd){bd=d;bi=i;}}
+  return bi;
+}
+function interpolate(map,get,R){
+  const mesh=map.mesh,V=mesh.verts,nv=mesh.nv,out=new Float32Array(nv).fill(NaN);
+  const pts=map.points.filter(p=>!p.excluded&&fin(get(p)));if(!pts.length)return out;
+  const cs=Math.max(R,1),grid=new Map(),key=(a,b,c)=>a+','+b+','+c;
+  for(const p of pts){const k=key(Math.floor(p.x/cs),Math.floor(p.y/cs),Math.floor(p.z/cs));let g=grid.get(k);if(!g)grid.set(k,g=[]);g.push(p);}
+  const R2=R*R,K=6,bd=new Float64Array(K),bv=new Float64Array(K);
+  for(let i=0;i<nv;i++){
+    const x=V[i*3],y=V[i*3+1],z=V[i*3+2],gx=Math.floor(x/cs),gy=Math.floor(y/cs),gz=Math.floor(z/cs);let n=0;
+    for(let a=-1;a<=1;a++)for(let b=-1;b<=1;b++)for(let c=-1;c<=1;c++){
+      const g=grid.get(key(gx+a,gy+b,gz+c));if(!g)continue;
+      for(const p of g){const d=(p.x-x)**2+(p.y-y)**2+(p.z-z)**2;if(d>R2)continue;
+        if(n<K){let j=n++;while(j>0&&bd[j-1]>d){bd[j]=bd[j-1];bv[j]=bv[j-1];j--;}bd[j]=d;bv[j]=get(p);}
+        else if(d<bd[K-1]){let j=K-1;while(j>0&&bd[j-1]>d){bd[j]=bd[j-1];bv[j]=bv[j-1];j--;}bd[j]=d;bv[j]=get(p);}}
+    }
+    if(!n)continue;
+    if(bd[0]<0.04){out[i]=bv[0];continue;}
+    let sw=0,sv=0;for(let j=0;j<n;j++){const w=1/bd[j];sw+=w;sv+=w*bv[j];}
+    out[i]=sv/sw;
+  }
+  return out;
+}
+function triArea(V,a,b,c){
+  const ux=V[b*3]-V[a*3],uy=V[b*3+1]-V[a*3+1],uz=V[b*3+2]-V[a*3+2],wx=V[c*3]-V[a*3],wy=V[c*3+1]-V[a*3+1],wz=V[c*3+2]-V[a*3+2];
+  return 0.5*Math.hypot(uy*wz-uz*wy,uz*wx-ux*wz,ux*wy-uy*wx);
+}
+function computeArea(map,thr,scar){
+  const mesh=map.mesh,vals=vertexValues(map,typeDef('Bipolar')),V=mesh.verts,T=mesh.tris;
+  let total=0,mapped=0,low=0,sc=0;
+  for(let t=0;t<T.length;t+=3){
+    const a=T[t],b=T[t+1],c=T[t+2],A=triArea(V,a,b,c);total+=A;
+    const va=vals[a],vb=vals[b],vc=vals[c];if(!fin(va)||!fin(vb)||!fin(vc))continue;
+    mapped+=A;low+=A*((va<thr)+(vb<thr)+(vc<thr))/3;sc+=A*((va<scar)+(vb<scar)+(vc<scar))/3;
+  }
+  return{total:total/100,mapped:mapped/100,low:low/100,scar:sc/100};
+}
+function computeCV(map){
+  const key='cv|'+map.version+'|'+S.opt.src+'|'+S.opt.fill;
+  if(map.cache.cv&&map.cache.cv.key===key)return map.cache.cv;
+  const mesh=map.mesh,lat=vertexValues(map,typeDef('LAT')),V=mesh.verts,T=mesh.tris;
+  const tri=[];
+  for(let t=0;t<T.length;t+=3){
+    const a=T[t],b=T[t+1],c=T[t+2];const ta=lat[a],tb=lat[b],tc=lat[c];if(!fin(ta)||!fin(tb)||!fin(tc))continue;
+    const p0=[V[a*3],V[a*3+1],V[a*3+2]],e1=v3.sub([V[b*3],V[b*3+1],V[b*3+2]],p0),e2=v3.sub([V[c*3],V[c*3+1],V[c*3+2]],p0);
+    const d1=tb-ta,d2=tc-ta,a11=v3.dot(e1,e1),a12=v3.dot(e1,e2),a22=v3.dot(e2,e2),det=a11*a22-a12*a12;if(Math.abs(det)<1e-9)continue;
+    const x=(d1*a22-d2*a12)/det,y=(d2*a11-d1*a12)/det;const g=v3.add(v3.sc(e1,x),v3.sc(e2,y));const gl=v3.len(g);if(gl<1e-6)continue;
+    const speed=1/gl;if(speed>3||speed<0.02)continue;
+    const cen=v3.sc(v3.add(p0,v3.add(v3.sc(e1,1/3),v3.sc(e2,1/3))),1);
+    const n=v3.norm(v3.cross(e1,e2));
+    tri.push({cen,dir:v3.sc(g,1/gl),speed,n,area:0.5*v3.len(v3.cross(e1,e2))});
+  }
+  const r={key,tri};map.cache.cv=r;return r;
+}
+function cvArrows(map){
+  const cv=computeCV(map),sp=Math.max(1,S.opt.cvSpacing),seen=new Set(),segs=[];
+  for(const t of cv.tri){
+    const k=Math.floor(t.cen[0]/sp)+','+Math.floor(t.cen[1]/sp)+','+Math.floor(t.cen[2]/sp);if(seen.has(k))continue;seen.add(k);
+    const L=sp*0.6,c=v3.add(t.cen,v3.sc(t.n,0.6)),a=v3.sub(c,v3.sc(t.dir,L/2)),b=v3.add(c,v3.sc(t.dir,L/2));
+    const col=cmap(clamp((t.speed-0.15)/1.2,0,1));col.push(1);
+    const side=v3.norm(v3.cross(t.dir,t.n));const hb=v3.sub(b,v3.sc(t.dir,L*0.35));
+    segs.push({a,b,c:col,w:0.35},{a:b,b:v3.add(hb,v3.sc(side,L*0.22)),c:col,w:0.35},{a:b,b:v3.sub(hb,v3.sc(side,L*0.22)),c:col,w:0.35});
+  }
+  return segs;
+}
+
+/* ===================== 電位解析 ===================== */
+function detectQrsEnd(e,ref){
+  const leads=['I','II','V1','V2','V3','V4','V5','V6'].map(n=>e.ch[n]).filter(Boolean);if(!leads.length)return null;
+  const L=e.len,lo=Math.max(2,ref-150),hi=Math.min(L-3,ref+300);if(hi<=lo)return null;
+  const E=new Float32Array(L);
+  for(let i=lo;i<=hi;i++){let s=0;for(const a of leads)s+=Math.abs(a[i+1]-a[i-1]);E[i]=s;}
+  let mx=0,pi=lo;for(let i=lo;i<=hi;i++)if(E[i]>mx){mx=E[i];pi=i;}
+  if(mx<=0)return null;
+  const th=0.12*mx;
+  for(let i=pi;i<hi-20;i++){let ok=true;for(let j=0;j<20;j++)if(E[i+j]>=th){ok=false;break;}if(ok)return i-ref;}
+  return null;
+}
+function analyzePoint(p,opt){
+  const e=p.egm;if(!e||!fin(p.ref))return null;const s=egmBip(e);if(!s)return null;
+  const ref=p.ref,L=e.len;
+  let a0=fin(opt.w0)?opt.w0:(p.woi?p.woi[0]:-100),a1=fin(opt.w1)?opt.w1:(p.woi?p.woi[1]:300);
+  const w0=clamp(Math.round(ref+a0),2,L-3),w1=clamp(Math.round(ref+a1),2,L-3);if(w1-w0<10)return null;
+  let mx=-Infinity,mn=Infinity;for(let i=w0;i<=w1;i++){if(s[i]>mx)mx=s[i];if(s[i]<mn)mn=s[i];}
+  const pp=mx-mn,h=Math.max(opt.sens*pp,0.02);
+  let dir=0,hi=s[w0],lo=s[w0],ext=0,cnt=0;
+  for(let i=w0;i<=w1;i++){const v=s[i];
+    if(dir===0){if(v>hi)hi=v;if(v<lo)lo=v;if(hi-lo>h){dir=v===hi?1:-1;ext=v;cnt=1;}}
+    else if(dir===1){if(v>ext)ext=v;else if(ext-v>h){dir=-1;ext=v;cnt++;}}
+    else{if(v<ext)ext=v;else if(v-ext>h){dir=1;ext=v;cnt++;}}}
+  let dmx=0;const d=new Float32Array(w1-w0+1);
+  for(let i=w0;i<=w1;i++){const x=Math.abs(s[i+1]-s[i-1])/2;d[i-w0]=x;if(x>dmx)dmx=x;}
+  const th=Math.max(dmx*opt.sens*0.8,0.004);
+  const segs=[];let cur=null;
+  for(let i=0;i<d.length;i++){if(d[i]>th){if(cur&&i-cur[1]<=8)cur[1]=i;else{cur=[i,i];segs.push(cur);}}}
+  const sg=segs.filter(x=>x[1]-x[0]>=2).map(x=>[x[0]+w0,x[1]+w0]);
+  const qe=fin(opt.qrsEnd)?opt.qrsEnd:detectQrsEnd(e,ref);
+  let dur=0,late=0,isolated=false;
+  if(sg.length){dur=sg[sg.length-1][1]-sg[0][0];
+    for(let k=1;k<sg.length;k++)if(sg[k][0]-sg[k-1][1]>=opt.gap)isolated=true;
+    if(fin(qe)){const endT=sg[sg.length-1][1]-ref;late=Math.max(0,endT-qe);}}
+  return{pp,defl:cnt,dur,late,isolated,frac:cnt>=opt.fracN,qrsEnd:qe,segs:sg};
+}
+function anaOpt(){
+  const n=id=>{const v=$(id).value;return v===''?NaN:+v;};
+  return{w0:n('#anWin0'),w1:n('#anWin1'),qrsEnd:n('#qrsEnd'),fracN:+$('#fracN').value||6,gap:+$('#gapMs').value||15,sens:(+$('#sens').value||15)/100};
+}
+
+/* ===================== 表示の種類・色 ===================== */
+const BASE_TYPES=[
+  {k:'LAT',label:'LAT',unit:'ms',kind:'lat',prop:'lat',mesh:'LAT'},
+  {k:'Bipolar',label:'Bipolar電位',unit:'mV',kind:'volt',prop:'bip',mesh:'Bipolar',def:[0.5,1.5]},
+  {k:'Unipolar',label:'Unipolar電位',unit:'mV',kind:'volt',prop:'uni',mesh:'Unipolar',def:[3,8.3]},
+  {k:'PROP',label:'Propagation（伝播）',unit:'ms',kind:'prop',prop:'lat',mesh:'LAT'},
+  {k:'Impedance',label:'インピーダンス',unit:'Ω',kind:'other',prop:'imp',mesh:'Impedance'},
+  {k:'m_defl',label:'分裂電位：偏位数',unit:'個',kind:'metric',get:p=>p.metrics?p.metrics.defl:NaN},
+  {k:'m_dur',label:'局所電位の持続時間',unit:'ms',kind:'metric',get:p=>p.metrics?p.metrics.dur:NaN},
+  {k:'m_late',label:'遅延電位：QRS終末より後',unit:'ms',kind:'metric',get:p=>p.metrics?p.metrics.late:NaN},
+  {k:'NONE',label:'メッシュのみ（色なし）',kind:'none'}
+];
+function typeDef(k){
+  let t=BASE_TYPES.find(x=>x.k===k);
+  if(!t&&k.startsWith('mesh:')){const n=k.slice(5);t={k,label:n+'（メッシュ値）',unit:'',kind:'other',mesh:n};}
+  if(t&&!t.get&&t.prop)t.get=(pp=>p=>p[pp])(t.prop);
+  return t||BASE_TYPES[0];
+}
+function typesForMap(map){
+  const list=BASE_TYPES.slice();
+  if(map&&map.mesh)for(const n of map.mesh.colorNames)if(!['LAT','Bipolar','Unipolar','Impedance'].includes(n))list.splice(list.length-1,0,typeDef('mesh:'+n));
+  return list;
+}
+const RAINBOW=[[1,0,0],[1,0.55,0],[1,1,0],[0.1,0.85,0.1],[0,0.85,0.9],[0.1,0.35,1],[0.6,0.1,0.85]];
+function cmap(t){t=clamp(t,0,1)*(RAINBOW.length-1);const i=Math.min(RAINBOW.length-2,Math.floor(t)),f=t-i,a=RAINBOW[i],b=RAINBOW[i+1];return[a[0]+(b[0]-a[0])*f,a[1]+(b[1]-a[1])*f,a[2]+(b[2]-a[2])*f];}
+const GRAY_NA=[0.62,0.62,0.62],GRAY_SCAR=[0.33,0.33,0.36];
+function vertexValues(map,T){
+  if(!map.mesh||T.kind==='none')return null;
+  const meshArr=T.mesh&&map.mesh.colors[T.mesh];
+  const canInterp=!!T.get;
+  const useMesh=meshArr&&(!canInterp||(S.opt.src==='auto'&&!map.edited));
+  const key=T.k+'|'+map.version+'|'+(useMesh?'m':'i'+S.opt.fill);
+  const c=map.cache['v:'+T.k];if(c&&c.key===key)return c.vals;
+  const vals=useMesh?meshArr:(canInterp?interpolate(map,T.get,S.opt.fill):new Float32Array(map.mesh.nv).fill(NaN));
+  map.cache['v:'+T.k]={key,vals};
+  return vals;
+}
+function colorFor(val,T,lo,hi){
+  if(!fin(val))return GRAY_NA;
+  if(T.kind==='volt'&&val<S.opt.scar)return GRAY_SCAR;
+  let t=(val-lo)/((hi-lo)||1);
+  if(S.opt.iso&&T.kind!=='volt'){const n=S.opt.isoSteps;t=Math.floor(clamp(t,0,0.9999)*n)/(n-1);}
+  return cmap(t);
+}
+function autoRange(map,T){
+  let arr;const vals=vertexValues(map,T);
+  if(vals)arr=Array.from(vals);else arr=map.points.filter(p=>!p.excluded).map(p=>T.get?T.get(p):NaN);
+  let lo=percentile(arr,T.kind==='lat'||T.kind==='prop'?0.02:0.05),hi=percentile(arr,T.kind==='lat'||T.kind==='prop'?0.98:0.95);
+  if(!fin(lo)||!fin(hi)){lo=0;hi=1;}if(hi<=lo)hi=lo+1;
+  const dec=T.kind==='volt'?2:0,r=x=>+x.toFixed(dec);
+  return[r(lo),r(hi)];
+}
+
+/* ===================== WebGL ビューア ===================== */
+const VS_LIT=`attribute vec3 aP;attribute vec3 aN;attribute vec4 aC;uniform mat4 uMVP;uniform mat4 uV;varying vec3 vN;varying vec3 vE;varying vec4 vC;
+void main(){gl_Position=uMVP*vec4(aP,1.0);vN=(uV*vec4(aN,0.0)).xyz;vE=(uV*vec4(aP,1.0)).xyz;vC=aC;}`;
+const FS_LIT=`precision mediump float;varying vec3 vN;varying vec3 vE;varying vec4 vC;uniform float uA;
+void main(){vec3 n=normalize(vN);vec3 e=normalize(-vE);float d=abs(dot(n,e));vec3 c=vC.rgb*(0.32+0.68*d)+vec3(pow(d,28.0)*0.16);gl_FragColor=vec4(c,vC.a*uA);}`;
+const VS_FLAT=`attribute vec3 aP;attribute vec4 aC;uniform mat4 uMVP;varying vec4 vC;void main(){gl_Position=uMVP*vec4(aP,1.0);vC=aC;}`;
+const FS_FLAT=`precision mediump float;varying vec4 vC;void main(){gl_FragColor=vC;}`;
+const M4={
+  mul(a,b){const r=new Float32Array(16);for(let c=0;c<4;c++)for(let i=0;i<4;i++){let s=0;for(let k=0;k<4;k++)s+=a[k*4+i]*b[c*4+k];r[c*4+i]=s;}return r;},
+  persp(fovy,asp,n,f){const t=1/Math.tan(fovy/2);return new Float32Array([t/asp,0,0,0,0,t,0,0,0,0,(f+n)/(n-f),-1,0,0,2*f*n/(n-f),0]);},
+  trans(x,y,z){return new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,x,y,z,1]);},
+  rot(R){return new Float32Array([R[0],R[3],R[6],0,R[1],R[4],R[7],0,R[2],R[5],R[8],0,0,0,0,1]);},
+  inv(m){const a=m,inv=new Float32Array(16);
+    inv[0]=a[5]*a[10]*a[15]-a[5]*a[11]*a[14]-a[9]*a[6]*a[15]+a[9]*a[7]*a[14]+a[13]*a[6]*a[11]-a[13]*a[7]*a[10];
+    inv[4]=-a[4]*a[10]*a[15]+a[4]*a[11]*a[14]+a[8]*a[6]*a[15]-a[8]*a[7]*a[14]-a[12]*a[6]*a[11]+a[12]*a[7]*a[10];
+    inv[8]=a[4]*a[9]*a[15]-a[4]*a[11]*a[13]-a[8]*a[5]*a[15]+a[8]*a[7]*a[13]+a[12]*a[5]*a[11]-a[12]*a[7]*a[9];
+    inv[12]=-a[4]*a[9]*a[14]+a[4]*a[10]*a[13]+a[8]*a[5]*a[14]-a[8]*a[6]*a[13]-a[12]*a[5]*a[10]+a[12]*a[6]*a[9];
+    inv[1]=-a[1]*a[10]*a[15]+a[1]*a[11]*a[14]+a[9]*a[2]*a[15]-a[9]*a[3]*a[14]-a[13]*a[2]*a[11]+a[13]*a[3]*a[10];
+    inv[5]=a[0]*a[10]*a[15]-a[0]*a[11]*a[14]-a[8]*a[2]*a[15]+a[8]*a[3]*a[14]+a[12]*a[2]*a[11]-a[12]*a[3]*a[10];
+    inv[9]=-a[0]*a[9]*a[15]+a[0]*a[11]*a[13]+a[8]*a[1]*a[15]-a[8]*a[3]*a[13]-a[12]*a[1]*a[11]+a[12]*a[3]*a[9];
+    inv[13]=a[0]*a[9]*a[14]-a[0]*a[10]*a[13]-a[8]*a[1]*a[14]+a[8]*a[2]*a[13]+a[12]*a[1]*a[10]-a[12]*a[2]*a[9];
+    inv[2]=a[1]*a[6]*a[15]-a[1]*a[7]*a[14]-a[5]*a[2]*a[15]+a[5]*a[3]*a[14]+a[13]*a[2]*a[7]-a[13]*a[3]*a[6];
+    inv[6]=-a[0]*a[6]*a[15]+a[0]*a[7]*a[14]+a[4]*a[2]*a[15]-a[4]*a[3]*a[14]-a[12]*a[2]*a[7]+a[12]*a[3]*a[6];
+    inv[10]=a[0]*a[5]*a[15]-a[0]*a[7]*a[13]-a[4]*a[1]*a[15]+a[4]*a[3]*a[13]+a[12]*a[1]*a[7]-a[12]*a[3]*a[5];
+    inv[14]=-a[0]*a[5]*a[14]+a[0]*a[6]*a[13]+a[4]*a[1]*a[14]-a[4]*a[2]*a[13]-a[12]*a[1]*a[6]+a[12]*a[2]*a[5];
+    inv[3]=-a[1]*a[6]*a[11]+a[1]*a[7]*a[10]+a[5]*a[2]*a[11]-a[5]*a[3]*a[10]-a[9]*a[2]*a[7]+a[9]*a[3]*a[6];
+    inv[7]=a[0]*a[6]*a[11]-a[0]*a[7]*a[10]-a[4]*a[2]*a[11]+a[4]*a[3]*a[10]+a[8]*a[2]*a[7]-a[8]*a[3]*a[6];
+    inv[11]=-a[0]*a[5]*a[11]+a[0]*a[7]*a[9]+a[4]*a[1]*a[11]-a[4]*a[3]*a[9]-a[8]*a[1]*a[7]+a[8]*a[3]*a[5];
+    inv[15]=a[0]*a[5]*a[10]-a[0]*a[6]*a[9]-a[4]*a[1]*a[10]+a[4]*a[2]*a[9]+a[8]*a[1]*a[6]-a[8]*a[2]*a[5];
+    let det=a[0]*inv[0]+a[1]*inv[4]+a[2]*inv[8]+a[3]*inv[12];if(!det)return inv;det=1/det;for(let i=0;i<16;i++)inv[i]*=det;return inv;},
+  xf(m,v){const x=v[0],y=v[1],z=v[2],w=v[3];return[m[0]*x+m[4]*y+m[8]*z+m[12]*w,m[1]*x+m[5]*y+m[9]*z+m[13]*w,m[2]*x+m[6]*y+m[10]*z+m[14]*w,m[3]*x+m[7]*y+m[11]*z+m[15]*w];}
+};
+const R3={
+  mul(a,b){const r=new Array(9);for(let i=0;i<3;i++)for(let j=0;j<3;j++)r[i*3+j]=a[i*3]*b[j]+a[i*3+1]*b[3+j]+a[i*3+2]*b[6+j];return r;},
+  rx(t){const c=Math.cos(t),s=Math.sin(t);return[1,0,0,0,c,-s,0,s,c];},
+  ry(t){const c=Math.cos(t),s=Math.sin(t);return[c,0,s,0,1,0,-s,0,c];},
+  ortho(R){const r=v3.norm([R[0],R[1],R[2]]);let u=[R[3],R[4],R[5]];u=v3.norm(v3.sub(u,v3.sc(r,v3.dot(u,r))));const b=v3.cross(r,u);return[...r,...u,...b];}
+};
+function sphereTemplate(){
+  let V=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
+  let F=[[0,2,4],[2,1,4],[1,3,4],[3,0,4],[2,0,5],[1,2,5],[3,1,5],[0,3,5]];
+  for(let s=0;s<2;s++){const NF=[];const mid=(a,b)=>{V.push(v3.norm(v3.sc(v3.add(V[a],V[b]),.5)));return V.length-1;};
+    for(const[a,b,c]of F){const ab=mid(a,b),bc=mid(b,c),ca=mid(c,a);NF.push([a,ab,ca],[b,bc,ab],[c,ca,bc],[ab,bc,ca]);}F=NF;}
+  const out=[];for(const f of F)for(const i of f)out.push(V[i]);return out;
+}
+const SPHERE=sphereTemplate();
+function buildSpheres(items){
+  const n=items.length*SPHERE.length,P=new Float32Array(n*3),N=new Float32Array(n*3),C=new Float32Array(n*4);let k=0;
+  for(const it of items){for(const s of SPHERE){P[k*3]=it.x+s[0]*it.r;P[k*3+1]=it.y+s[1]*it.r;P[k*3+2]=it.z+s[2]*it.r;N[k*3]=s[0];N[k*3+1]=s[1];N[k*3+2]=s[2];C[k*4]=it.c[0];C[k*4+1]=it.c[1];C[k*4+2]=it.c[2];C[k*4+3]=it.c[3]??1;k++;}}
+  return{P,N,C,count:n};
+}
+const VIEWS={AP:[[0,-1,0],[0,0,1]],PA:[[0,1,0],[0,0,1]],LAO:[[0.5,-0.866,0],[0,0,1]],RAO:[[-0.5,-0.866,0],[0,0,1]],LL:[[1,0,0],[0,0,1]],RL:[[-1,0,0],[0,0,1]],SUP:[[0,0,1],[0,-1,0]],INF:[[0,0,-1],[0,-1,0]]};
+class Viewer{
+  constructor(el,idx){
+    this.el=el;this.idx=idx;this.canvas=el.querySelector('canvas.gl');this.label=el.querySelector('.vlabel');this.cbCanvas=el.querySelector('.cbar canvas');
+    const gl=this.gl=this.canvas.getContext('webgl',{preserveDrawingBuffer:true,antialias:true,premultipliedAlpha:false});
+    if(!gl)throw new Error('WebGLが使えません');
+    this.uint=gl.getExtension('OES_element_index_uint');
+    this.pLit=this.prog(VS_LIT,FS_LIT);this.pFlat=this.prog(VS_FLAT,FS_FLAT);
+    this.R=[1,0,0,0,0,1,0,-1,0];this.target=[0,0,0];this.dist=200;this.fov=35*Math.PI/180;
+    this.map=null;this.type='LAT';this.ranges={};this.dirty=true;this.colDirty=true;this.ptsDirty=true;this.vtDirty=true;
+    this.buf={};this.bindEvents();
+  }
+  prog(vs,fs){const gl=this.gl;const mk=(t,s)=>{const sh=gl.createShader(t);gl.shaderSource(sh,s);gl.compileShader(sh);if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(sh));return sh;};
+    const p=gl.createProgram();gl.attachShader(p,mk(gl.VERTEX_SHADER,vs));gl.attachShader(p,mk(gl.FRAGMENT_SHADER,fs));gl.linkProgram(p);
+    p.a={P:gl.getAttribLocation(p,'aP'),N:gl.getAttribLocation(p,'aN'),C:gl.getAttribLocation(p,'aC')};p.u={MVP:gl.getUniformLocation(p,'uMVP'),V:gl.getUniformLocation(p,'uV'),A:gl.getUniformLocation(p,'uA')};return p;}
+  upload(name,data,target){const gl=this.gl;target=target||gl.ARRAY_BUFFER;let b=this.buf[name];if(!b)b=this.buf[name]=gl.createBuffer();gl.bindBuffer(target,b);gl.bufferData(target,data,gl.DYNAMIC_DRAW);return b;}
+  attr(loc,buf,size){const gl=this.gl;if(loc<0)return;gl.bindBuffer(gl.ARRAY_BUFFER,buf);gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,size,gl.FLOAT,false,0,0);}
+  get T(){return typeDef(this.type);}
+  range(){const k=this.type;if(!this.ranges[k]){const T=this.T;this.ranges[k]=T.def?{lo:T.def[0],hi:T.def[1]}:(()=>{const[lo,hi]=this.map?autoRange(this.map,T):[0,1];return{lo,hi,auto:true};})();}return this.ranges[k];}
+  setMap(map,keepCam){
+    const first=!this.map;this.map=map;
+    for(const k in this.ranges)if(this.ranges[k].auto)delete this.ranges[k];
+    if(map&&map.mesh){const m=map.mesh;this.upload('mP',m.verts);this.upload('mN',m.norms);
+      const idx=(!this.uint&&m.nv>65535)?null:(m.nv>65535?m.tris:Uint16Array.from(m.tris));
+      if(idx){this.upload('mI',idx,this.gl.ELEMENT_ARRAY_BUFFER);this.idxType=m.nv>65535?this.gl.UNSIGNED_INT:this.gl.UNSIGNED_SHORT;}
+      else{const T=m.tris,P=new Float32Array(T.length*3),N=new Float32Array(T.length*3);for(let i=0;i<T.length;i++){for(let j=0;j<3;j++){P[i*3+j]=m.verts[T[i]*3+j];N[i*3+j]=m.norms[T[i]*3+j];}}this.upload('mP',P);this.upload('mN',N);this.idxType=null;}
+    }
+    if(first||!keepCam)this.fit();
+    this.colDirty=this.ptsDirty=this.vtDirty=this.dirty=true;
+  }
+  bounds(){const m=this.map;let mn=[Infinity,Infinity,Infinity],mx=[-Infinity,-Infinity,-Infinity];
+    const add=(x,y,z)=>{if(x<mn[0])mn[0]=x;if(y<mn[1])mn[1]=y;if(z<mn[2])mn[2]=z;if(x>mx[0])mx[0]=x;if(y>mx[1])mx[1]=y;if(z>mx[2])mx[2]=z;};
+    if(m.mesh){const V=m.mesh.verts,T=m.mesh.tris;for(let i=0;i<T.length;i++){const k=T[i]*3;add(V[k],V[k+1],V[k+2]);}}
+    for(const p of m.points)add(p.x,p.y,p.z);
+    if(!fin(mn[0]))return{c:[0,0,0],r:50};
+    return{c:v3.sc(v3.add(mn,mx),.5),r:Math.max(5,v3.dist(mn,mx)/2)};}
+  fit(){if(!this.map)return;const b=this.bounds();this.target=b.c;this.dist=b.r/Math.sin(this.fov/2)*1.05;this.dirty=true;}
+  setView(name){if(name==='FIT'){this.fit();return;}const[back,up]=VIEWS[name];const r=v3.cross(up,back);this.R=[...v3.norm(r),...v3.norm(up),...v3.norm(back)];this.dirty=true;afterCam(this);}
+  matrices(){const w=this.canvas.width,h=this.canvas.height;const near=Math.max(0.5,this.dist*0.02),far=this.dist*6+500;
+    const P=M4.persp(this.fov,w/h,near,far);const V=M4.mul(M4.trans(0,0,-this.dist),M4.mul(M4.rot(this.R),M4.trans(-this.target[0],-this.target[1],-this.target[2])));
+    return{P,V,MVP:M4.mul(P,V)};}
+  eye(){return v3.add(this.target,v3.sc([this.R[6],this.R[7],this.R[8]],this.dist));}
+  resize(){const dpr=Math.min(2,window.devicePixelRatio||1);const w=Math.max(1,Math.round(this.canvas.clientWidth*dpr)),h=Math.max(1,Math.round(this.canvas.clientHeight*dpr));
+    if(this.canvas.width!==w||this.canvas.height!==h){this.canvas.width=w;this.canvas.height=h;this.dirty=true;}}
+  updateColors(){
+    const m=this.map;if(!m||!m.mesh)return;const n=m.mesh.nv,C=new Float32Array(n*4),T=this.T;
+    if(T.kind==='none'){for(let i=0;i<n;i++){C[i*4]=0.78;C[i*4+1]=0.72;C[i*4+2]=0.66;C[i*4+3]=1;}}
+    else{
+      const vals=vertexValues(m,T),{lo,hi}=this.range();
+      if(T.kind==='prop'){
+        const span=hi-lo,bw=S.opt.propBand,t=lo-bw+S.anim.phase*(span+2*bw);
+        for(let i=0;i<n;i++){const v=vals[i];let c;
+          if(!fin(v))c=GRAY_NA;else{const d=t-v;if(d<0)c=[0.22,0.2,0.55];else if(d<bw){const f=d/bw;c=[1,0.15+0.75*f,0.1+0.1*f];}else c=[0.42,0.22,0.68];}
+          C[i*4]=c[0];C[i*4+1]=c[1];C[i*4+2]=c[2];C[i*4+3]=1;}
+        this.propT=t;
+      }else for(let i=0;i<n;i++){const c=colorFor(vals[i],T,lo,hi);C[i*4]=c[0];C[i*4+1]=c[1];C[i*4+2]=c[2];C[i*4+3]=1;}
+    }
+    if(this.idxType===null){const Tr=m.mesh.tris,C2=new Float32Array(Tr.length*4);for(let i=0;i<Tr.length;i++)for(let j=0;j<4;j++)C2[i*4+j]=C[Tr[i]*4+j];this.upload('mC',C2);}
+    else this.upload('mC',C);
+    this.colDirty=false;
+  }
+  updatePoints(){
+    const m=this.map,T=this.T,items=[];
+    if(m&&S.opt.showPts){const{lo,hi}=this.range();const r=S.opt.ptSize;
+      for(const p of m.points){
+        if(p.excluded&&!S.opt.showExcl)continue;
+        const sel=S.sel&&S.sel.p===p;let c;
+        if(p.excluded)c=[0.35,0.35,0.35,1];
+        else if(S.opt.ptColor==='white')c=[0.95,0.95,0.95,1];
+        else if(S.opt.ptColor==='label')c=p.label?[1,0.55,0.1,1]:[0.9,0.9,0.9,1];
+        else{const v=T.get?T.get(p):NaN;c=fin(v)?[...colorFor(v,T.kind==='prop'?typeDef('LAT'):T,lo,hi),1]:[0.92,0.92,0.92,1];}
+        items.push({x:p.x,y:p.y,z:p.z,r:p.excluded?r*0.6:r,c});
+        if(sel)items.push({x:p.x,y:p.y,z:p.z,r:r*1.9,c:[1,1,0.2,0.55]});
+      }}
+    const s=buildSpheres(items.filter(i=>i.c[3]>=1));this.upload('pP',s.P);this.upload('pN',s.N);this.upload('pC',s.C);this.ptsCount=s.count;
+    const h=buildSpheres(items.filter(i=>i.c[3]<1));this.upload('hP',h.P);this.upload('hN',h.N);this.upload('hC',h.C);this.hlCount=h.count;
+    this.ptsDirty=false;
+  }
+  updateVT(){
+    const vt=S.study&&S.study.visitag;let items=[];
+    if(vt&&S.opt.vtOn){const k=S.opt.vtParam,lo=S.opt.vtLo,hi=S.opt.vtHi;
+      items=vt.sites.map(s=>{const v=s.v[k];const c=fin(v)?cmap(1-clamp((v-lo)/((hi-lo)||1),0,1)):[0.8,0.8,0.8];return{x:s.x,y:s.y,z:s.z,r:S.opt.vtSize,c:[...c,1]};});}
+    const s=buildSpheres(items);this.upload('vP',s.P);this.upload('vN',s.N);this.upload('vC',s.C);this.vtCount=s.count;this.vtDirty=false;
+  }
+  segments(){
+    const segs=[],m=this.map;if(!m)return segs;
+    if(S.opt.cvOn&&m.mesh)for(const s of cvArrows(m))segs.push({...s,depth:true});
+    if(S.opt.ripple&&m.mesh)for(const s of rippleBars(m))segs.push({...s,depth:true});
+    if(S.study&&S.study.visitag&&S.opt.vtOn&&S.opt.gapShow&&S.gaps)for(const g of S.gaps)segs.push({a:[g.a.x,g.a.y,g.a.z],b:[g.b.x,g.b.y,g.b.z],c:[1,0.15,0.15,1],w:0.9,depth:false});
+    if(m.mesh&&S.meas.map===m){
+      const V=m.mesh.verts,N=m.mesh.norms,P=i=>[V[i*3]+N[i*3]*0.4,V[i*3+1]+N[i*3+1]*0.4,V[i*3+2]+N[i*3+2]*0.4];
+      const draw=(path,col)=>{for(let i=1;i<path.length;i++)segs.push({a:P(path[i-1]),b:P(path[i]),c:col,w:0.6,depth:false});};
+      for(const r of S.meas.results)draw(r.path,[0.4,0.85,1,0.7]);
+      if(S.meas.path)draw(S.meas.path,[0.2,1,1,1]);
+      for(const v of S.meas.pts){const c=P(v);const d=1.6;segs.push({a:v3.add(c,[-d,0,0]),b:v3.add(c,[d,0,0]),c:[1,1,1,1],w:0.6},{a:v3.add(c,[0,-d,0]),b:v3.add(c,[0,d,0]),c:[1,1,1,1],w:0.6},{a:v3.add(c,[0,0,-d]),b:v3.add(c,[0,0,d]),c:[1,1,1,1],w:0.6});}
+    }
+    return segs;
+  }
+  drawSegs(segs,MVP){
+    if(!segs.length)return;const gl=this.gl,eye=this.eye();
+    for(const depth of [true,false]){
+      const list=segs.filter(s=>!!s.depth===depth);if(!list.length)continue;
+      const P=new Float32Array(list.length*18),C=new Float32Array(list.length*24);let k=0;
+      for(const s of list){const d=v3.sub(s.b,s.a),mid=v3.sc(v3.add(s.a,s.b),.5);let side=v3.cross(d,v3.sub(eye,mid));const l=v3.len(side);if(l<1e-9)continue;side=v3.sc(side,(s.w||0.5)/2/l);
+        const q=[v3.sub(s.a,side),v3.add(s.a,side),v3.add(s.b,side),v3.sub(s.a,side),v3.add(s.b,side),v3.sub(s.b,side)];
+        for(const p of q){P[k*3]=p[0];P[k*3+1]=p[1];P[k*3+2]=p[2];C[k*4]=s.c[0];C[k*4+1]=s.c[1];C[k*4+2]=s.c[2];C[k*4+3]=s.c[3]??1;k++;}}
+      if(depth)gl.enable(gl.DEPTH_TEST);else gl.disable(gl.DEPTH_TEST);
+      gl.useProgram(this.pFlat);gl.uniformMatrix4fv(this.pFlat.u.MVP,false,MVP);
+      this.attr(this.pFlat.a.P,this.upload('sP',P.subarray(0,k*3)),3);this.attr(this.pFlat.a.C,this.upload('sC',C.subarray(0,k*4)),4);
+      gl.drawArrays(gl.TRIANGLES,0,k);
+    }
+    gl.enable(gl.DEPTH_TEST);
+  }
+  drawLit(pre,count,MVP,V,alpha){
+    if(!count)return;const gl=this.gl,p=this.pLit;gl.useProgram(p);gl.uniformMatrix4fv(p.u.MVP,false,MVP);gl.uniformMatrix4fv(p.u.V,false,V);gl.uniform1f(p.u.A,alpha);
+    this.attr(p.a.P,this.buf[pre+'P'],3);this.attr(p.a.N,this.buf[pre+'N'],3);this.attr(p.a.C,this.buf[pre+'C'],4);gl.drawArrays(gl.TRIANGLES,0,count);
+  }
+  render(){
+    this.resize();const gl=this.gl;gl.viewport(0,0,this.canvas.width,this.canvas.height);
+    gl.clearColor(0.04,0.05,0.07,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+    this.dirty=false;if(!this.map)return;
+    if(this.colDirty)this.updateColors();if(this.ptsDirty)this.updatePoints();if(this.vtDirty)this.updateVT();
+    const{V,MVP}=this.matrices();gl.enable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+    const op=S.opt.opacity;
+    const drawMesh=()=>{const m=this.map.mesh;if(!m)return;const p=this.pLit;gl.useProgram(p);gl.uniformMatrix4fv(p.u.MVP,false,MVP);gl.uniformMatrix4fv(p.u.V,false,V);gl.uniform1f(p.u.A,op);
+      this.attr(p.a.P,this.buf.mP,3);this.attr(p.a.N,this.buf.mN,3);this.attr(p.a.C,this.buf.mC,4);
+      if(this.idxType){gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.buf.mI);gl.drawElements(gl.TRIANGLES,m.tris.length,this.idxType,0);}else gl.drawArrays(gl.TRIANGLES,0,m.tris.length);};
+    if(op>=0.999)drawMesh();
+    this.drawLit('p',this.ptsCount,MVP,V,1);this.drawLit('v',this.vtCount,MVP,V,1);
+    if(op<0.999){gl.depthMask(false);drawMesh();gl.depthMask(true);}
+    gl.depthMask(false);this.drawLit('h',this.hlCount,MVP,V,1);gl.depthMask(true);
+    this.drawSegs(this.segments(),MVP);
+  }
+  ray(cx,cy){const r=this.canvas.getBoundingClientRect();const x=(cx-r.left)/r.width*2-1,y=1-(cy-r.top)/r.height*2;
+    const{MVP}=this.matrices();const inv=M4.inv(MVP);const a=M4.xf(inv,[x,y,-1,1]),b=M4.xf(inv,[x,y,1,1]);
+    const o=[a[0]/a[3],a[1]/a[3],a[2]/a[3]],e=[b[0]/b[3],b[1]/b[3],b[2]/b[3]];return{o,d:v3.norm(v3.sub(e,o))};}
+  pick(cx,cy){
+    const m=this.map;if(!m)return null;const{o,d}=this.ray(cx,cy);
+    let bp=null,bt=Infinity;
+    if(S.opt.showPts){const rr=S.opt.ptSize*1.8;for(const p of m.points){if(p.excluded&&!S.opt.showExcl)continue;const w=[p.x-o[0],p.y-o[1],p.z-o[2]];const t=v3.dot(w,d);if(t<0)continue;const q=v3.sub(w,v3.sc(d,t));if(v3.dot(q,q)<rr*rr&&t<bt){bt=t;bp=p;}}}
+    let mt=Infinity,mtri=-1;
+    if(m.mesh){const V=m.mesh.verts,T=m.mesh.tris;
+      for(let t=0;t<T.length;t+=3){const a=T[t]*3,b=T[t+1]*3,c=T[t+2]*3;
+        const e1x=V[b]-V[a],e1y=V[b+1]-V[a+1],e1z=V[b+2]-V[a+2],e2x=V[c]-V[a],e2y=V[c+1]-V[a+1],e2z=V[c+2]-V[a+2];
+        const px=d[1]*e2z-d[2]*e2y,py=d[2]*e2x-d[0]*e2z,pz=d[0]*e2y-d[1]*e2x;const det=e1x*px+e1y*py+e1z*pz;if(Math.abs(det)<1e-12)continue;const id=1/det;
+        const tx=o[0]-V[a],ty=o[1]-V[a+1],tz=o[2]-V[a+2];const u=(tx*px+ty*py+tz*pz)*id;if(u<0||u>1)continue;
+        const qx=ty*e1z-tz*e1y,qy=tz*e1x-tx*e1z,qz=tx*e1y-ty*e1x;const vv=(d[0]*qx+d[1]*qy+d[2]*qz)*id;if(vv<0||u+vv>1)continue;
+        const tt=(e2x*qx+e2y*qy+e2z*qz)*id;if(tt>0&&tt<mt){mt=tt;mtri=t;}}}
+    const surf=mtri>=0?{pos:v3.add(o,v3.sc(d,mt)),tri:mtri}:null;
+    if(bp&&(!surf||bt<mt+S.opt.ptSize*3||S.opt.opacity<0.999))return{kind:'point',p:bp,surf};
+    if(surf)return{kind:'surf',surf};
+    return null;
+  }
+  bindEvents(){
+    const c=this.canvas,ptrs=new Map();let down=null,pinch=null;
+    c.addEventListener('contextmenu',e=>e.preventDefault());
+    c.addEventListener('pointerdown',e=>{c.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,[e.clientX,e.clientY]);setActive(this.idx);
+      if(ptrs.size===2){const[a,b]=[...ptrs.values()];pinch={d:Math.hypot(a[0]-b[0],a[1]-b[1]),m:[(a[0]+b[0])/2,(a[1]+b[1])/2]};down=null;}
+      else down={x:e.clientX,y:e.clientY,lx:e.clientX,ly:e.clientY,btn:e.button,shift:e.shiftKey,t:performance.now(),moved:false};});
+    c.addEventListener('pointermove',e=>{if(!ptrs.has(e.pointerId))return;ptrs.set(e.pointerId,[e.clientX,e.clientY]);
+      if(pinch&&ptrs.size===2){const[a,b]=[...ptrs.values()];const d=Math.hypot(a[0]-b[0],a[1]-b[1]),m=[(a[0]+b[0])/2,(a[1]+b[1])/2];
+        this.dist=clamp(this.dist*pinch.d/d,5,5000);this.pan(m[0]-pinch.m[0],m[1]-pinch.m[1]);pinch={d,m};this.dirty=true;afterCam(this);return;}
+      if(!down)return;const dx=e.clientX-down.lx,dy=e.clientY-down.ly;down.lx=e.clientX;down.ly=e.clientY;
+      if(Math.hypot(e.clientX-down.x,e.clientY-down.y)>4)down.moved=true;if(!down.moved)return;
+      if(down.btn===2||down.btn===1||down.shift)this.pan(dx,dy);
+      else{const k=0.008;this.R=R3.ortho(R3.mul(R3.mul(R3.ry(dx*k),R3.rx(dy*k)),this.R));}
+      this.dirty=true;afterCam(this);});
+    const up=e=>{ptrs.delete(e.pointerId);if(ptrs.size<2)pinch=null;
+      if(down&&!down.moved&&e.type==='pointerup'&&down.btn===0&&performance.now()-down.t<700)onViewClick(this,e.clientX,e.clientY);
+      down=null;};
+    c.addEventListener('pointerup',up);c.addEventListener('pointercancel',up);
+    c.addEventListener('wheel',e=>{e.preventDefault();this.dist=clamp(this.dist*Math.exp(e.deltaY*0.0012),5,5000);this.dirty=true;afterCam(this);},{passive:false});
+  }
+  pan(dx,dy){const h=this.canvas.clientHeight||1;const s=2*this.dist*Math.tan(this.fov/2)/h;const r=[this.R[0],this.R[1],this.R[2]],u=[this.R[3],this.R[4],this.R[5]];
+    this.target=v3.add(this.target,v3.add(v3.sc(r,-dx*s),v3.sc(u,dy*s)));}
+  updateLabel(){
+    if(!this.map){this.label.textContent='';return;}
+    const T=this.T;let s=this.map.name+' ／ '+T.label;
+    if(T.kind==='prop'&&fin(this.propT))s+=`  t = ${Math.round(this.propT)} ms`;
+    if(this.map.edited)s+='（編集あり・再計算）';
+    this.label.textContent=s;
+    const ctx=this.cbCanvas.getContext('2d');ctx.clearRect(0,0,this.cbCanvas.width,this.cbCanvas.height);
+    if(T.kind!=='none')drawColorbar(ctx,6,6,this,1);
+  }
+}
+function drawColorbar(ctx,x,y,v,sc){
+  const T=v.T;if(T.kind==='none')return;const{lo,hi}=v.range();const W=16*sc,H=180*sc;
+  ctx.save();ctx.fillStyle='rgba(10,13,18,.55)';ctx.fillRect(x-4*sc,y-4*sc,W+76*sc,H+(T.kind==='volt'?40:22)*sc);
+  for(let i=0;i<H;i++){const t=1-i/H;let c;if(T.kind==='prop')c=t>0.5?[1,0.5,0.1]:[0.42,0.22,0.68];else{let tt=t;if(S.opt.iso&&T.kind!=='volt'){const n=S.opt.isoSteps;tt=Math.floor(clamp(t,0,0.9999)*n)/(n-1);}c=cmap(tt);}
+    ctx.fillStyle=`rgb(${c.map(z=>Math.round(z*255)).join(',')})`;ctx.fillRect(x,y+i,W,1.2);}
+  ctx.fillStyle='#e8eef5';ctx.font=`${11*sc}px system-ui,sans-serif`;ctx.textBaseline='middle';
+  const d=T.kind==='volt'?2:0;
+  ctx.fillText(`${(+hi).toFixed(d)} ${T.unit||''}`,x+W+5*sc,y+5*sc);ctx.fillText(`${((+lo+ +hi)/2).toFixed(d)}`,x+W+5*sc,y+H/2);ctx.fillText(`${(+lo).toFixed(d)} ${T.unit||''}`,x+W+5*sc,y+H-5*sc);
+  if(T.kind==='lat'||T.kind==='prop'){ctx.fillStyle='#9aa7b5';ctx.fillText('遅い',x+W+5*sc,y+H*0.25);ctx.fillText('早い',x+W+5*sc,y+H*0.75);}
+  let yy=y+H+10*sc;
+  ctx.fillStyle=`rgb(${GRAY_NA.map(z=>z*255).join(',')})`;ctx.fillRect(x,yy-5*sc,W,10*sc);ctx.fillStyle='#cfd8e3';ctx.fillText('データなし',x+W+5*sc,yy);
+  if(T.kind==='volt'){yy+=16*sc;ctx.fillStyle=`rgb(${GRAY_SCAR.map(z=>z*255).join(',')})`;ctx.fillRect(x,yy-5*sc,W,10*sc);ctx.fillStyle='#cfd8e3';ctx.fillText(`< ${S.opt.scar} 瘢痕`,x+W+5*sc,yy);}
+  ctx.restore();
+}
+function rippleBars(map){
+  const key='rp|'+map.version;
+  if(!map.cache.rp||map.cache.rp.key!==key){
+    const lats=map.points.filter(p=>!p.excluded&&fin(p.lat)).map(p=>p.lat);
+    const lo=(lats.length?Math.min(...lats):-50)-30,hi=(lats.length?Math.max(...lats):150)+30;
+    const mesh=map.mesh,dirs=new Map();
+    for(const p of map.points){const vi=nearestVertex(mesh,[p.x,p.y,p.z]);dirs.set(p,[mesh.norms[vi*3],mesh.norms[vi*3+1],mesh.norms[vi*3+2]]);}
+    map.cache.rp={key,lo,hi,dirs};
+  }
+  const rp=map.cache.rp,t=rp.lo+S.anim.rphase*(rp.hi-rp.lo);S.anim.rippleT=t;
+  const segs=[],sc=S.opt.rippleScale;
+  for(const p of map.points){if(p.excluded||!p.egm||!fin(p.ref))continue;const s=egmBip(p.egm);if(!s)continue;
+    const i=Math.round(p.ref+t);if(i<0||i>=s.length)continue;const a=Math.abs(s[i]);const len=Math.min(25,a*sc);if(len<0.15)continue;
+    const n=rp.dirs.get(p);const base=[p.x,p.y,p.z];const col=cmap(clamp(1-a/Math.max(0.05,p.bip||1),0,1)*0.15+0.42);
+    segs.push({a:base,b:v3.add(base,v3.sc(n,len)),c:[...col,1],w:0.9});}
+  return segs;
+}
+
+/* ===================== 状態 ===================== */
+const S={
+  study:null,viewers:[],active:0,compare:false,sync:true,mode:'select',sel:null,
+  meas:{map:null,pts:[],path:null,results:[],len:0,straight:0},
+  snaps:[],gaps:null,rec:null,
+  anim:{prop:false,phase:0,rphase:0,rippleT:0},
+  opt:{src:'auto',fill:15,scar:0.05,iso:false,isoSteps:12,opacity:1,showPts:true,showExcl:true,ptSize:1.3,ptColor:'value',
+    propSpeed:80,propBand:15,ripple:false,rippleScale:6,rippleSpeed:60,cvOn:false,cvSpacing:6,
+    vtOn:true,vtSize:2.5,vtParam:'ai',vtLo:0,vtHi:1,gapShow:true},
+  wch:{map:true,ref:true,ecg:false,other:false}
+};
+const av=()=>S.viewers[S.active];
+function allViewers(){return S.viewers.filter(v=>!v.el.classList.contains('hidden'));}
+function dirtyAll(what){for(const v of S.viewers){if(what.includes('c'))v.colDirty=true;if(what.includes('p'))v.ptsDirty=true;if(what.includes('v'))v.vtDirty=true;v.dirty=true;}}
+function afterCam(v){if(S.compare&&S.sync)for(const o of S.viewers)if(o!==v){o.R=v.R.slice();o.target=v.target.slice();o.dist=v.dist;o.dirty=true;}}
+
+/* ===================== 読み込み ===================== */
+async function openSources(list,name){
+  try{
+    progress('ファイルを確認中…');const vfs=new VFS();
+    for(const{file,path}of list)await addSource(vfs,file,path||file.webkitRelativePath||file.name);
+    const root=(list[0]&&(list[0].path||list[0].file.webkitRelativePath||list[0].file.name)||'').split('/')[0].replace(/\.zip$/i,'');
+    const study=await buildStudy(vfs,name||root||'症例');
+    setStudy(study);
+    if(study.warn.length)toast('一部読めないファイルがありました：'+study.warn[0],6000);
+  }catch(err){progress(null);console.error(err);toast('読み込みエラー：'+err.message,7000);}
+}
+function setStudy(study){
+  S.study=study;S.sel=null;S.gaps=null;S.meas={map:null,pts:[],path:null,results:[],len:0,straight:0};
+  $('#studyName').textContent=study.name+`（${study.maps.length}マップ）`;$('#dropHint').classList.add('hidden');
+  restoreState();
+  const m0=study.maps.find(m=>m.points.length)||study.maps[0];
+  S.viewers[0].type=m0.mesh&&m0.mesh.colors.LAT||m0.points.some(p=>fin(p.lat))?'LAT':'Bipolar';
+  S.viewers[0].ranges={};S.viewers[0].setMap(m0);
+  const m1=study.maps.find(m=>m!==m0)||m0;S.viewers[1].type=study.demo?'Bipolar':S.viewers[0].type;S.viewers[1].ranges={};S.viewers[1].setMap(m1);
+  setupVT();setActive(0);renderWave();renderMeas();$('#egmRes').textContent='';$('#egmTable').innerHTML='';$('#areaRes').textContent='';$('#cvRes').textContent='';$('#gapRes').textContent='';$('#gapTable').innerHTML='';
+  toast(study.demo?'デモデータを読み込みました（架空の左室VT症例）':'読み込みました：'+study.maps.map(m=>m.name).join('、'),4000);
+}
+
+/* ===================== パネル ===================== */
+function setActive(i){
+  S.active=i;S.viewers.forEach((v,k)=>v.el.classList.toggle('active',k===i));
+  $('#activeName').textContent=S.compare?(i===0?'左':'右'):'表示中';syncPanel();
+}
+function syncPanel(){
+  const v=av();const st=S.study;
+  const sm=$('#selMap');sm.innerHTML=st?st.maps.map((m,i)=>`<option value="${i}">${esc(m.name)}（${m.points.length}点）</option>`).join(''):'';
+  if(st&&v.map)sm.value=st.maps.indexOf(v.map);
+  const types=typesForMap(v.map);$('#selType').innerHTML=types.map(t=>`<option value="${esc(t.k)}">${esc(t.label)}</option>`).join('');$('#selType').value=v.type;
+  syncRange();
+}
+function syncRange(){
+  const v=av(),T=v.T;const r=v.map?v.range():{lo:'',hi:''};
+  $('#rLo').value=r.lo;$('#rHi').value=r.hi;$('#rUnit').textContent=T.unit||'';
+  $('#scarRow').style.display=T.kind==='volt'?'':'none';
+  const pr=T.k==='Bipolar'?[[0.5,1.5],[0.1,0.5],[0.05,0.5]]:T.k==='Unipolar'?[[3,8.3],[4,5.5]]:[];
+  $('#rPresets').innerHTML=pr.map(p=>`<button data-lo="${p[0]}" data-hi="${p[1]}">${p[0]}–${p[1]}</button>`).join('');
+  for(const v2 of S.viewers)v2.updateLabel&&v2.map&&v2.updateLabel();
+}
+function bindPanel(){
+  $$('#tabs button').forEach(b=>b.onclick=()=>{$$('#tabs button').forEach(x=>x.classList.toggle('on',x===b));$$('.tabpane').forEach(p=>p.classList.toggle('on',p.id===b.dataset.tab));});
+  $('#selMap').onchange=e=>{const v=av();v.setMap(S.study.maps[+e.target.value],true);if(!typesForMap(v.map).some(t=>t.k===v.type))v.type='LAT';syncPanel();if(S.meas.map&&S.meas.map!==v.map)measClear();};
+  $('#selType').onchange=e=>{const v=av();v.type=e.target.value;v.colDirty=v.ptsDirty=v.dirty=true;syncRange();
+    if(v.T.kind==='prop'&&!S.anim.prop)togglePropPlay(true);
+    if(v.T.kind==='metric'&&!v.map.points.some(p=>p.metrics))toast('先に「解析」タブで電位解析を実行してください',4000);};
+  const setR=()=>{const v=av(),r=v.range();r.lo=+$('#rLo').value;r.hi=+$('#rHi').value;r.auto=false;v.colDirty=v.ptsDirty=v.dirty=true;v.updateLabel();};
+  $('#rLo').onchange=setR;$('#rHi').onchange=setR;
+  $('#rAuto').onclick=()=>{const v=av();if(!v.map)return;const[lo,hi]=autoRange(v.map,v.T);v.ranges[v.type]={lo,hi,auto:true};v.colDirty=v.ptsDirty=v.dirty=true;syncRange();};
+  $('#rPresets').onclick=e=>{const b=e.target.closest('button');if(!b)return;$('#rLo').value=b.dataset.lo;$('#rHi').value=b.dataset.hi;setR();};
+  const num=(id,key,what,cb)=>{$(id).addEventListener('input',e=>{const x=+e.target.value;if(!fin(x))return;S.opt[key]=x;dirtyAll(what);cb&&cb();});};
+  const chk=(id,key,what,cb)=>{$(id).addEventListener('change',e=>{S.opt[key]=e.target.checked;dirtyAll(what);cb&&cb();});};
+  num('#scarThr','scar','cp');chk('#isoOn','iso','cp');num('#isoSteps','isoSteps','cp');
+  $('#srcSel').onchange=e=>{S.opt.src=e.target.value;dirtyAll('cp');};
+  $('#fillR').onchange=e=>{S.opt.fill=clamp(+e.target.value||15,1,100);dirtyAll('cp');};
+  num('#opacity','opacity','');chk('#showPts','showPts','p');chk('#showExcl','showExcl','p');num('#ptSize','ptSize','p');
+  $('#ptColor').onchange=e=>{S.opt.ptColor=e.target.value;dirtyAll('p');};
+  $$('#viewBtns button').forEach(b=>b.onclick=()=>{const v=av();v.setView(b.dataset.v);afterCam(v);});
+  $('#compareOn').onchange=e=>{S.compare=e.target.checked;$('#view1').classList.toggle('hidden',!S.compare);$('#views').classList.toggle('single',!S.compare);if(!S.compare)setActive(0);else{afterCam(S.viewers[0]);setActive(S.active);}dirtyAll('');};
+  $('#syncCam').onchange=e=>{S.sync=e.target.checked;if(S.sync)afterCam(av());};
+  $('#propPlay').onclick=()=>togglePropPlay();
+  const pv=()=>{$('#propSpeedV').textContent=S.opt.propSpeed+' ms/秒';$('#propBandV').textContent=S.opt.propBand+' ms';};
+  num('#propSpeed','propSpeed','',pv);num('#propBand','propBand','c',pv);pv();
+  $('#rippleOn').onchange=async e=>{S.opt.ripple=e.target.checked;if(S.opt.ripple){for(const v of allViewers())if(v.map)await loadAllEGM(v.map);}dirtyAll('');};
+  num('#rippleScale','rippleScale','');num('#rippleSpeed','rippleSpeed','');
+  // 解析
+  $('#btnArea').onclick=()=>{const v=av();if(!v.map||!v.map.mesh)return toast('メッシュがありません');const thr=+$('#lvThr').value,sc=+$('#lvScar').value;const r=computeArea(v.map,thr,sc);
+    $('#areaRes').textContent=`${v.map.name}\n全表面積　　　 ${r.total.toFixed(1)} cm²\nマップ済み　　 ${r.mapped.toFixed(1)} cm²（${(r.mapped/r.total*100).toFixed(0)}%）\n低電位 <${thr}mV　${r.low.toFixed(1)} cm²（マップ済みの ${(r.low/(r.mapped||1)*100).toFixed(1)}%）\n瘢痕 <${sc}mV　 ${r.scar.toFixed(1)} cm²（${(r.scar/(r.mapped||1)*100).toFixed(1)}%）\n※Bipolarの値（${S.opt.src==='auto'&&!v.map.edited&&v.map.mesh.colors.Bipolar?'CARTOのメッシュ値':'ポイントから補間'}）で計算`;};
+  $('#cvOn').onchange=e=>{S.opt.cvOn=e.target.checked;dirtyAll('');};num('#cvSpacing','cvSpacing','');
+  $('#btnCV').onclick=()=>{const v=av();if(!v.map||!v.map.mesh)return toast('メッシュがありません');const cv=computeCV(v.map);const sp=cv.tri.map(t=>t.speed);if(!sp.length){$('#cvRes').textContent='LATの値が足りません';return;}
+    const slow=+$('#cvSlow').value;let A=0,As=0;for(const t of cv.tri){A+=t.area;if(t.speed<slow)As+=t.area;}
+    $('#cvRes').textContent=`${v.map.name}\n中央値　${percentile(sp,0.5).toFixed(2)} m/s\n10〜90%　${percentile(sp,0.1).toFixed(2)} 〜 ${percentile(sp,0.9).toFixed(2)} m/s\n遅い伝導 <${slow} m/s　${(As/100).toFixed(1)} cm²（${(As/A*100).toFixed(0)}%）`;
+    if(!S.opt.cvOn){$('#cvOn').checked=true;S.opt.cvOn=true;dirtyAll('');}};
+  $('#sens').oninput=()=>{$('#sensV').textContent=$('#sens').value+'%';};$('#sensV').textContent='15%';
+  $('#btnEGM').onclick=runEGM;$('#egmSort').onchange=renderEgmTable;
+  $('#egmTable').onclick=e=>{const tr=e.target.closest('tr[data-id]');if(!tr)return;const v=av();const p=v.map.points.find(q=>q.id==tr.dataset.id);if(p)selectPoint(v.map,p,true);};
+  // VisiTag
+  $('#vtOn').onchange=e=>{S.opt.vtOn=e.target.checked;dirtyAll('v');};num('#vtSize','vtSize','v');
+  $('#vtParam').onchange=e=>{S.opt.vtParam=e.target.value;vtAutoRange();dirtyAll('v');};
+  const vr=()=>{S.opt.vtLo=+$('#vtLo').value;S.opt.vtHi=+$('#vtHi').value;dirtyAll('v');};$('#vtLo').onchange=vr;$('#vtHi').onchange=vr;
+  $('#vtAuto').onclick=()=>{vtAutoRange();dirtyAll('v');};
+  $('#btnGap').onclick=runGap;$('#gapShow').onchange=e=>{S.opt.gapShow=e.target.checked;dirtyAll('');};
+  $('#gapTable').onclick=e=>{const tr=e.target.closest('tr[data-i]');if(!tr||!S.gaps)return;const g=S.gaps[+tr.dataset.i];const v=av();v.target=[(g.a.x+g.b.x)/2,(g.a.y+g.b.y)/2,(g.a.z+g.b.z)/2];v.dist=Math.min(v.dist,120);v.dirty=true;afterCam(v);};
+  // 計測
+  $$('[data-mode2]').forEach(b=>b.onclick=()=>setMode(b.dataset.mode2));
+  $('#measDone').onclick=measFinishLine;$('#measUndo').onclick=measUndo;$('#measClear').onclick=()=>{measClear();S.meas.results=[];renderMeas();dirtyAll('');};
+  // 記録
+  $('#btnShot').onclick=()=>{const c=composite();c.toBlob(b=>download(`carto_${stamp()}.png`,b));};
+  $('#btnRec').onclick=()=>S.rec?stopRec():startRec($('#recKind').value);
+  $('#btnSnap').onclick=addSnap;$('#btnShow').onclick=()=>openSlides(0);$('#btnExportSlides').onclick=exportSlides;
+  $('#snapList').onclick=e=>{const b=e.target.closest('button[data-del]');if(b){S.snaps.splice(+b.dataset.del,1);renderSnaps();return;}const im=e.target.closest('img[data-i]');if(im)openSlides(+im.dataset.i);};
+  $('#caseNotes').oninput=saveSoon;$('#caseTags').oninput=saveSoon;
+  $('#ptLabel').oninput=e=>{if(!S.sel)return;S.sel.p.label=e.target.value.trim();dirtyAll('p');renderWaveInfo();saveSoon();};
+  $('#btnExportJSON').onclick=()=>{if(!S.study)return;download(`carto_edit_${stamp()}.json`,new Blob([JSON.stringify(collectState(),null,1)],{type:'application/json'}));};
+  $('#inJSON').onchange=async e=>{const f=e.target.files[0];if(!f||!S.study)return;try{applyState(JSON.parse(await f.text()));toast('編集内容を読み込みました');saveSoon();}catch(err){toast('読み込めませんでした：'+err.message);}e.target.value='';};
+  $('#btnResetEdits').onclick=()=>{if(!S.study||!confirm('LATの修正と除外をすべて元に戻しますか？'))return;for(const m of S.study.maps){for(const p of m.points){p.lat=p.lat0;p.latEdited=false;p.excluded=false;}m.edited=false;m.version++;}dirtyAll('cp');renderWave();saveSoon();};
+  // ヘッダ
+  $$('#modeSeg button').forEach(b=>b.onclick=()=>setMode(b.dataset.mode));
+  $('#btnHelp').onclick=()=>$('#helpOv').classList.remove('hidden');$('#helpClose').onclick=()=>$('#helpOv').classList.add('hidden');
+  $('#helpOv').onclick=e=>{if(e.target.id==='helpOv')$('#helpOv').classList.add('hidden');};
+  $('#btnDemo').onclick=()=>{progress('デモデータを作成中…');setTimeout(()=>{try{setStudy(makeDemoStudy());}finally{progress(null);}},30);};
+  $('#inDir').onchange=e=>{const fs=[...e.target.files];if(fs.length)openSources(fs.map(f=>({file:f,path:f.webkitRelativePath||f.name})));e.target.value='';};
+  $('#inFiles').onchange=e=>{const fs=[...e.target.files];if(fs.length)openSources(fs.map(f=>({file:f,path:f.name})),fs.length===1?fs[0].name.replace(/\.zip$/i,''):null);e.target.value='';};
+  document.addEventListener('dragover',e=>{e.preventDefault();document.body.classList.add('dragging');});
+  document.addEventListener('dragleave',e=>{if(!e.relatedTarget)document.body.classList.remove('dragging');});
+  document.addEventListener('drop',async e=>{e.preventDefault();document.body.classList.remove('dragging');
+    const items=e.dataTransfer.items;let list=[];
+    if(items&&items.length&&items[0].webkitGetAsEntry){progress('ファイルを確認中…');list=await readDropEntries(items);}
+    else list=[...e.dataTransfer.files].map(f=>({file:f,path:f.name}));
+    if(list.length)openSources(list);else progress(null);});
+  // 波形
+  $('#waveToggle').onclick=()=>{$('#wave').classList.toggle('collapsed');$('#waveToggle').textContent=$('#wave').classList.contains('collapsed')?'▴':'▾';setTimeout(()=>{dirtyAll('');renderWave();},50);};
+  (()=>{const h=$('#waveResize');let st=null;h.addEventListener('pointerdown',e=>{h.setPointerCapture(e.pointerId);st={y:e.clientY,h:$('#wave').offsetHeight};});
+    h.addEventListener('pointermove',e=>{if(!st)return;$('#wave').style.height=clamp(st.h+(st.y-e.clientY),80,window.innerHeight-160)+'px';dirtyAll('');renderWave();});
+    h.addEventListener('pointerup',()=>{st=null;});})();
+  $('#chEcg').addEventListener('change',e=>{if(e.target.checked&&$('#wave').offsetHeight<420)$('#wave').style.height=Math.min(window.innerHeight*0.55,480)+'px';setTimeout(()=>{dirtyAll('');renderWave();},30);});
+  $('#pPrev').onclick=()=>stepPoint(-1);$('#pNext').onclick=()=>stepPoint(1);
+  $('#pExcl').onclick=()=>{if(S.sel)toggleExclude(S.sel.map,S.sel.p);};
+  $('#latSnap').onclick=latSnap;
+  $('#latRevert').onclick=()=>{if(!S.sel)return;const{map,p}=S.sel;p.lat=p.lat0;p.latEdited=false;markEdited(map);renderWave();};
+  const wc=(id,k)=>$(id).onchange=e=>{S.wch[k]=e.target.checked;renderWave();};wc('#chMap','map');wc('#chRef','ref');wc('#chEcg','ecg');wc('#chOther','other');
+  $('#gUp').onclick=()=>{W.gain*=1.4;renderWave();};$('#gDown').onclick=()=>{W.gain/=1.4;renderWave();};
+  document.addEventListener('keydown',e=>{
+    const ae=document.activeElement;if(ae&&ae.matches('input[type=text],input[type=number],textarea,select'))return;if(ae&&ae.matches('input,button'))ae.blur();
+    if(!$('#slideOv').classList.contains('hidden')){if(e.key==='ArrowRight')slideGo(1);else if(e.key==='ArrowLeft')slideGo(-1);else if(e.key==='Escape')closeSlides();return;}
+    if(e.key==='ArrowRight'){stepPoint(1);e.preventDefault();}else if(e.key==='ArrowLeft'){stepPoint(-1);e.preventDefault();}
+    else if(e.key==='Delete'||e.key==='Backspace'){if(S.sel){toggleExclude(S.sel.map,S.sel.p);e.preventDefault();}}
+    else if(e.key===' '){togglePropPlay();e.preventDefault();}
+    else if(e.key==='Escape'){measClear();renderMeas();$('#helpOv').classList.add('hidden');}
+  });
+  window.addEventListener('resize',()=>{dirtyAll('');renderWave();});
+}
+function setMode(m){
+  if(S.mode==='line'&&m!=='line'&&S.meas.pts.length>1)measFinishLine();
+  S.mode=m;$$('#modeSeg button').forEach(b=>b.classList.toggle('on',b.dataset.mode===m));$$('[data-mode2]').forEach(b=>b.classList.toggle('on',b.dataset.mode2===m));
+  if(m!=='dist'&&m!=='line')measClear();
+  for(const v of S.viewers)v.canvas.style.cursor=m==='select'?'default':'crosshair';
+  renderMeas();
+}
+function togglePropPlay(force){S.anim.prop=force!==undefined?force:!S.anim.prop;$('#propPlay').textContent=S.anim.prop?'❚❚ 停止':'▶ 再生';
+  if(S.anim.prop&&!allViewers().some(v=>v.T.kind==='prop')){const v=av();v.type='PROP';v.colDirty=v.ptsDirty=v.dirty=true;syncPanel();}}
+
+/* ===================== クリック・選択・除外 ===================== */
+function onViewClick(v,cx,cy){
+  const h=v.pick(cx,cy);
+  if(S.mode==='select'){if(h&&h.kind==='point')selectPoint(v.map,h.p);}
+  else if(S.mode==='exclude'){if(h&&h.kind==='point')toggleExclude(v.map,h.p);}
+  else if(S.mode==='dist'||S.mode==='line'){
+    if(!v.map.mesh)return toast('メッシュがないため計測できません');
+    const pos=h?(h.surf?h.surf.pos:[h.p.x,h.p.y,h.p.z]):null;if(!pos)return;
+    measAdd(v.map,nearestVertex(v.map.mesh,pos));
+  }
+}
+async function selectPoint(map,p,focus){
+  S.sel={map,p};dirtyAll('p');
+  if(focus){const v=S.viewers.find(x=>x.map===map)||av();v.target=[p.x,p.y,p.z];v.dirty=true;afterCam(v);}
+  $('#ptLabel').value=p.label||'';
+  renderWave();await loadPointDetail(map,p);
+  if(S.sel&&S.sel.p===p){W.fitTo(p);renderWave();}
+}
+function stepPoint(d){
+  const v=av();if(!v.map||!v.map.points.length)return;const pts=v.map.points;
+  let i=S.sel&&S.sel.map===v.map?pts.indexOf(S.sel.p):-1;i=(i+d+pts.length)%pts.length;selectPoint(v.map,pts[i]);
+}
+function toggleExclude(map,p){p.excluded=!p.excluded;markEdited(map);renderWave();}
+function markEdited(map){
+  map.edited=map.points.some(p=>p.excluded||p.latEdited);map.version++;
+  if(map.edited&&!map.notified&&map.mesh&&Object.keys(map.mesh.colors).length&&S.opt.src==='auto'){map.notified=true;toast('編集を反映するため、ポイントからマップを再計算して表示します',4500);}
+  dirtyAll('cp');saveSoon();
+}
+
+/* ===================== 波形パネル ===================== */
+const W={cv:$('#waveCanvas'),t0:-150,t1:350,gain:1,drag:null,hover:null,
+  fitTo(p){if(p.woi){this.t0=p.woi[0]-60;this.t1=p.woi[1]+60;}else{this.t0=-200;this.t1=400;}if(fin(p.lat)&&(p.lat<this.t0+20||p.lat>this.t1-20)){this.t0=p.lat-200;this.t1=p.lat+200;}}};
+function waveRows(p){
+  const e=p.egm,rows=[];if(!e)return rows;const used=new Set();
+  if(S.wch.map){const b=egmBip(e);if(b){rows.push({n:'Bi '+(e.bipCh||''),d:b,c:'#7fe3ff',bip:true});used.add(e.bipCh);}const u=egmUni(e);if(u){rows.push({n:'Uni '+e.uniCh,d:u,c:'#ffd27f'});used.add(e.uniCh);}}
+  if(S.wch.ref&&e.refCh&&e.ch[e.refCh]){rows.push({n:'Ref '+e.refCh,d:e.ch[e.refCh],c:'#9fff9f'});used.add(e.refCh);}
+  const L12=['I','II','III','aVR','aVL','aVF','V1','V2','V3','V4','V5','V6'];
+  if(S.wch.ecg)for(const n of L12)if(e.ch[n]){rows.push({n,d:e.ch[n],c:'#e0e0e0',ecg:true});used.add(n);}
+  if(S.wch.other)for(const n of e.order)if(!used.has(n)&&!L12.includes(n)&&e.ch[n])rows.push({n,d:e.ch[n],c:'#c9b3ff'});
+  return rows;
+}
+function renderWaveInfo(){
+  const el=$('#pinfo');if(!S.sel){el.innerHTML='ポイントをクリックすると電位を表示します';return;}const p=S.sel.p;
+  const m=p.metrics;
+  el.innerHTML=`<b>P${p.id}</b>　LAT <b>${fmt(p.lat,0)}</b> ms${p.latEdited?' <span class="warn">（修正済 元'+fmt(p.lat0,0)+'）</span>':''}　Bi <b>${fmt(p.bip,2)}</b> mV　Uni <b>${fmt(p.uni,2)}</b> mV`+
+    (p.excluded?' <span class="bad">除外中</span>':'')+(p.label?` <span class="pill">${esc(p.label)}</span>`:'')+
+    (m?`　<span class="muted">偏位${m.defl}・持続${m.dur}ms${m.late>0?'・<span class="warn">QRS後'+m.late+'ms</span>':''}${m.isolated?'・<span class="warn">分離電位</span>':''}</span>`:'')+
+    (p.refGuessed?' <span class="muted small">(Ref推定)</span>':'');
+  $('#pExcl').textContent=p.excluded?'除外を戻す':'除外';
+}
+function renderWave(){
+  renderWaveInfo();
+  const cv=W.cv;if($('#wave').classList.contains('collapsed'))return;
+  const dpr=Math.min(2,window.devicePixelRatio||1),w=cv.clientWidth,h=cv.clientHeight;if(!w||!h)return;
+  if(cv.width!==Math.round(w*dpr)||cv.height!==Math.round(h*dpr)){cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr);}
+  const ctx=cv.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#0b0f14';ctx.fillRect(0,0,w,h);
+  ctx.font='11px system-ui,sans-serif';ctx.textBaseline='middle';
+  if(!S.sel){return;}const p=S.sel.p;
+  if(!p.loaded){ctx.fillStyle='#8b97a5';ctx.fillText('読み込み中…',12,20);return;}
+  const rows=waveRows(p);
+  if(!p.egm||!rows.length){ctx.fillStyle='#8b97a5';ctx.fillText(p.egm?'表示するチャンネルが選ばれていません':'このポイントの電位ファイル（'+(p.ecgFile||'')+'）が見つかりません',12,20);return;}
+  const Lw=96,Rw=10,Tp=18,X=t=>Lw+(t-W.t0)/(W.t1-W.t0)*(w-Lw-Rw);W.X=X;W.Lw=Lw;W.Rw=Rw;W.w=w;
+  const ref=p.ref;
+  if(p.woi){ctx.fillStyle='rgba(61,155,255,0.08)';ctx.fillRect(X(p.woi[0]),Tp,X(p.woi[1])-X(p.woi[0]),h-Tp);}
+  if(p.metrics&&p.metrics.segs){ctx.fillStyle='rgba(255,179,71,0.12)';for(const s of p.metrics.segs)ctx.fillRect(X(s[0]-ref),Tp,Math.max(1,X(s[1]-ref)-X(s[0]-ref)),h-Tp);}
+  const step=niceStep((W.t1-W.t0)/8);ctx.strokeStyle='#1b232d';ctx.fillStyle='#6d7a88';ctx.lineWidth=1;
+  for(let t=Math.ceil(W.t0/step)*step;t<=W.t1;t+=step){const x=X(t);ctx.beginPath();ctx.moveTo(x,Tp);ctx.lineTo(x,h);ctx.stroke();ctx.fillText(t+'',x+2,9);}
+  const rh=(h-Tp)/rows.length;
+  let ecgMax=0;
+  const visMax=d=>{let mx=0;const i0=Math.max(0,Math.floor(ref+W.t0)),i1=Math.min(d.length-1,Math.ceil(ref+W.t1));let base=0,n=0;for(let i=i0;i<=i1;i+=4){base+=d[i];n++;}base/=n||1;for(let i=i0;i<=i1;i++){const a=Math.abs(d[i]-base);if(a>mx)mx=a;}return{mx,base};};
+  for(const r of rows){const s=visMax(r.d);r.mx=s.mx;r.base=s.base;if(r.ecg)ecgMax=Math.max(ecgMax,s.mx);}
+  rows.forEach((r,k)=>{
+    const mid=Tp+rh*(k+0.5),mx=r.ecg?ecgMax:r.mx;const sc=(rh*0.45/(mx||1))*W.gain;
+    if(rh>=30){ctx.fillStyle=r.c;ctx.fillText(r.n,6,mid-6);ctx.fillStyle='#6d7a88';ctx.fillText(mx.toFixed(mx<1?2:1)+' mV',6,mid+7);}
+    else{ctx.font=`${Math.max(8,Math.min(11,rh-2))}px system-ui,sans-serif`;ctx.fillStyle=r.c;ctx.fillText(r.n,6,mid);ctx.fillStyle='#6d7a88';ctx.textAlign='right';ctx.fillText(mx.toFixed(mx<1?2:1),Lw-4,mid);ctx.textAlign='left';ctx.font='11px system-ui,sans-serif';}
+    ctx.save();ctx.beginPath();ctx.rect(Lw,Tp+rh*k,w-Lw-Rw,rh);ctx.clip();
+    ctx.strokeStyle=r.c;ctx.lineWidth=1.1;ctx.beginPath();
+    const i0=Math.max(0,Math.floor(ref+W.t0)),i1=Math.min(r.d.length-1,Math.ceil(ref+W.t1));
+    for(let i=i0;i<=i1;i++){const x=X(i-ref),y=mid-(r.d[i]-r.base)*sc;i===i0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+    ctx.stroke();ctx.restore();
+    ctx.strokeStyle='#1b232d';ctx.beginPath();ctx.moveTo(Lw,Tp+rh*(k+1));ctx.lineTo(w-Rw,Tp+rh*(k+1));ctx.stroke();
+  });
+  const vline=(t,col,dash,lab)=>{const x=X(t);if(x<Lw||x>w-Rw)return;ctx.strokeStyle=col;ctx.setLineDash(dash);ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(x,Tp);ctx.lineTo(x,h);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle=col;ctx.fillText(lab,x+3,Tp+7);};
+  vline(0,'#46cf86',[4,3],'Ref');
+  if(p.metrics&&fin(p.metrics.qrsEnd))vline(p.metrics.qrsEnd,'#b0b0b0',[2,3],'QRS終末');
+  if(fin(p.lat)){const x=X(p.lat);vline(p.lat,'#ff5b5b',[],'LAT '+Math.round(p.lat));if(x>=Lw&&x<=w-Rw){ctx.fillStyle='#ff5b5b';ctx.beginPath();ctx.moveTo(x-6,Tp);ctx.lineTo(x+6,Tp);ctx.lineTo(x,Tp+8);ctx.fill();}}
+  if(W.hover!=null){const x=X(W.hover);ctx.strokeStyle='rgba(255,255,255,.25)';ctx.beginPath();ctx.moveTo(x,Tp);ctx.lineTo(x,h);ctx.stroke();ctx.fillStyle='#cfd8e3';ctx.fillText(Math.round(W.hover)+' ms',Math.min(x+4,w-60),h-8);}
+}
+function niceStep(x){const p=Math.pow(10,Math.floor(Math.log10(x)));const f=x/p;return(f<1.5?1:f<3.5?2:f<7.5?5:10)*p;}
+function bindWave(){
+  const cv=W.cv,tAt=x=>W.t0+(x-W.Lw)/(W.w-W.Lw-W.Rw)*(W.t1-W.t0);
+  cv.addEventListener('pointerdown',e=>{if(!S.sel||!W.X)return;const r=cv.getBoundingClientRect(),x=e.clientX-r.left;cv.setPointerCapture(e.pointerId);
+    const p=S.sel.p;if(fin(p.lat)&&Math.abs(W.X(p.lat)-x)<7)W.drag={kind:'lat'};else W.drag={kind:'pan',x,t0:W.t0,t1:W.t1};});
+  cv.addEventListener('pointermove',e=>{const r=cv.getBoundingClientRect(),x=e.clientX-r.left;if(!W.X)return;W.hover=tAt(x);
+    if(W.drag&&W.drag.kind==='lat'){S.sel.p._dragLat=Math.round(tAt(x));const p=S.sel.p;if(!p.latEdited&&p._dragLat!==p.lat){p.latEdited=true;}p.lat=p._dragLat;}
+    else if(W.drag&&W.drag.kind==='pan'){const dt=(x-W.drag.x)/(W.w-W.Lw-W.Rw)*(W.drag.t1-W.drag.t0);W.t0=W.drag.t0-dt;W.t1=W.drag.t1-dt;}
+    cv.style.cursor=(S.sel&&fin(S.sel.p.lat)&&Math.abs(W.X(S.sel.p.lat)-x)<7)?'ew-resize':'crosshair';renderWave();});
+  cv.addEventListener('pointerup',()=>{if(W.drag&&W.drag.kind==='lat'&&S.sel){const p=S.sel.p;p.latEdited=p.lat!==p.lat0;markEdited(S.sel.map);renderWave();}W.drag=null;});
+  cv.addEventListener('pointerleave',()=>{W.hover=null;renderWave();});
+  cv.addEventListener('dblclick',e=>{if(!S.sel||!W.X)return;const r=cv.getBoundingClientRect();const p=S.sel.p;p.lat=Math.round(tAt(e.clientX-r.left));p.latEdited=p.lat!==p.lat0;markEdited(S.sel.map);renderWave();});
+  cv.addEventListener('wheel',e=>{e.preventDefault();if(!W.X)return;const r=cv.getBoundingClientRect();const t=tAt(e.clientX-r.left),k=Math.exp(e.deltaY*0.0015);
+    W.t0=t-(t-W.t0)*k;W.t1=t+(W.t1-t)*k;if(W.t1-W.t0<20){const c=(W.t0+W.t1)/2;W.t0=c-10;W.t1=c+10;}renderWave();},{passive:false});
+}
+function latSnap(){
+  if(!S.sel)return;const{map,p}=S.sel;const e=p.egm;if(!e||!fin(p.ref))return toast('電位データがありません');
+  const u=egmUni(e),b=egmBip(e);const c=Math.round(p.ref+(fin(p.lat)?p.lat:0));let best=-1,bi=c;
+  for(let i=c-15;i<=c+15;i++){if(i<1||i>=e.len-1)continue;let s;if(u)s=-(u[i+1]-u[i-1]);else s=Math.abs(b[i]);if(s>best){best=s;bi=i;}}
+  p.lat=bi-p.ref;p.latEdited=p.lat!==p.lat0;markEdited(map);renderWave();toast(u?'Unipolarの最も急な下降点に合わせました':'Bipolarの最大振幅に合わせました');
+}
+
+/* ===================== 電位解析の実行 ===================== */
+async function runEGM(){
+  const v=av();if(!v.map)return;const map=v.map;
+  if(!S.study.vfs&&!map.points.some(p=>p.egmGen||p.egm))return toast('電位データがありません');
+  $('#btnEGM').disabled=true;
+  try{
+    await loadAllEGM(map);const opt=anaOpt();let n=0;
+    for(const p of map.points){p.metrics=p.egm?analyzePoint(p,opt):null;if(p.metrics)n++;}
+    map.version++;dirtyAll('cp');
+    const ms=map.points.filter(p=>p.metrics&&!p.excluded);
+    const fr=ms.filter(p=>p.metrics.frac).length,lp=ms.filter(p=>p.metrics.late>0).length,iso=ms.filter(p=>p.metrics.isolated).length;
+    const qe=percentile(ms.map(p=>p.metrics.qrsEnd),0.5);
+    $('#egmRes').textContent=`${map.name}：${n}点を解析\nQRS終末（中央値）　${fin(qe)?Math.round(qe)+' ms':'検出できず（12誘導なし）'}\n分裂電位（偏位${opt.fracN}以上）　${fr}点\n遅延電位（QRS終末より後）　${lp}点\n分離した電位成分（LAVA候補）　${iso}点`;
+    renderEgmTable();renderWave();
+  }finally{$('#btnEGM').disabled=false;}
+}
+function renderEgmTable(){
+  const v=av();if(!v.map)return;const k=$('#egmSort').value;
+  let ms=v.map.points.filter(p=>p.metrics&&!p.excluded);if(!ms.length){$('#egmTable').innerHTML='';return;}
+  ms.sort((a,b)=>k==='pp'?a.metrics.pp-b.metrics.pp:b.metrics[k]-a.metrics[k]);ms=ms.slice(0,40);
+  $('#egmTable').innerHTML=`<table class="list"><thead><tr><th style="text-align:left">点</th><th>振幅</th><th>偏位</th><th>持続</th><th>QRS後</th><th>分離</th></tr></thead><tbody>`+
+    ms.map(p=>{const m=p.metrics;return`<tr data-id="${p.id}"><td style="text-align:left">P${p.id}${p.label?' <span class="pill">'+esc(p.label)+'</span>':''}</td><td>${m.pp.toFixed(2)}</td><td class="${m.frac?'warn':''}">${m.defl}</td><td>${m.dur}</td><td class="${m.late>0?'warn':''}">${m.late||''}</td><td>${m.isolated?'●':''}</td></tr>`;}).join('')+'</tbody></table>';
+}
+
+/* ===================== VisiTag ===================== */
+function setupVT(){
+  const vt=S.study&&S.study.visitag;$('#vtNone').style.display=vt?'none':'';$('#vtUI').style.display=vt?'':'none';S.gaps=null;
+  if(!vt){dirtyAll('v');return;}
+  $('#vtParam').innerHTML=vt.params.map(p=>`<option value="${p.k}">${esc(p.label)}</option>`).join('');
+  if(!vt.params.some(p=>p.k===S.opt.vtParam))S.opt.vtParam=vt.params[0]?vt.params[0].k:'';
+  $('#vtParam').value=S.opt.vtParam;vtAutoRange();dirtyAll('v');
+}
+function vtAutoRange(){
+  const vt=S.study.visitag,k=S.opt.vtParam,vals=vt.sites.map(s=>s.v[k]);let lo=percentile(vals,0.05),hi=percentile(vals,0.95);if(!fin(lo)){lo=0;hi=1;}if(hi<=lo)hi=lo+1;
+  S.opt.vtLo=+lo.toFixed(1);S.opt.vtHi=+hi.toFixed(1);$('#vtLo').value=S.opt.vtLo;$('#vtHi').value=S.opt.vtHi;
+  const pl=vt.params.find(p=>p.k===k);
+  $('#vtRes').textContent=`焼灼点 ${vt.sites.length}個\n${pl?pl.label:''}：中央値 ${fmt(percentile(vals,0.5))}（${fmt(percentile(vals,0))}〜${fmt(percentile(vals,1))}）\n色：赤=低い → 紫=高い`;
+}
+function runGap(){
+  const vt=S.study&&S.study.visitag;if(!vt)return toast('VisiTagのデータがありません');
+  const thr=+$('#gapThr').value||6;const bySes=new Map();for(const s of vt.sites){if(!bySes.has(s.session))bySes.set(s.session,[]);bySes.get(s.session).push(s);}
+  const gaps=[],all=[];
+  for(const[ses,list]of bySes){list.sort((a,b)=>a.idx-b.idx);for(let i=1;i<list.length;i++){const d=v3.dist([list[i-1].x,list[i-1].y,list[i-1].z],[list[i].x,list[i].y,list[i].z]);all.push(d);if(d>thr)gaps.push({a:list[i-1],b:list[i],d,ses});}}
+  S.gaps=gaps;dirtyAll('');
+  $('#gapRes').textContent=`隣り合う焼灼点の間隔：中央値 ${fmt(percentile(all,0.5))} mm（最大 ${fmt(percentile(all,1))} mm）\n${thr} mm を超える隙間：${gaps.length}か所`;
+  $('#gapTable').innerHTML=gaps.length?`<table class="list"><thead><tr><th style="text-align:left">セッション</th><th>点</th><th>距離</th></tr></thead><tbody>`+gaps.map((g,i)=>`<tr data-i="${i}"><td style="text-align:left">${esc(g.ses)}</td><td>#${g.a.idx}→#${g.b.idx}</td><td class="bad">${g.d.toFixed(1)} mm</td></tr>`).join('')+'</tbody></table><div class="muted small">行をクリックすると、その場所を表示します。</div>':'';
+}
+
+/* ===================== 計測 ===================== */
+function measClear(){S.meas.pts=[];S.meas.path=null;S.meas.map=S.meas.results.length?S.meas.map:null;S.meas.len=0;S.meas.straight=0;dirtyAll('');}
+function measRecalc(){
+  const m=S.meas.map,pts=S.meas.pts;let path=[],len=0,st=0;const V=m.mesh.verts,P=i=>[V[i*3],V[i*3+1],V[i*3+2]];
+  for(let i=1;i<pts.length;i++){const g=geodesic(m.mesh,pts[i-1],pts[i]);len+=g.len;st+=v3.dist(P(pts[i-1]),P(pts[i]));path=path.concat(i>1?g.path.slice(1):g.path);}
+  S.meas.path=path.length?path:null;S.meas.len=len;S.meas.straight=st;
+}
+function measAdd(map,vi){
+  if(S.meas.map!==map){S.meas.results=[];S.meas.pts=[];}S.meas.map=map;
+  if(S.mode==='dist'&&S.meas.pts.length>=2)S.meas.pts=[];
+  S.meas.pts.push(vi);measRecalc();
+  if(S.mode==='dist'&&S.meas.pts.length===2){S.meas.results.push({kind:'距離',len:S.meas.len,straight:S.meas.straight,path:S.meas.path});S.meas.pts=[];S.meas.path=null;}
+  renderMeas();dirtyAll('');
+}
+function measFinishLine(){if(S.meas.pts.length<2)return;S.meas.results.push({kind:'ライン',len:S.meas.len,straight:S.meas.straight,path:S.meas.path,n:S.meas.pts.length});S.meas.pts=[];S.meas.path=null;renderMeas();dirtyAll('');}
+function measUndo(){if(S.meas.pts.length){S.meas.pts.pop();if(S.meas.pts.length)measRecalc();else S.meas.path=null;}else S.meas.results.pop();renderMeas();dirtyAll('');}
+function renderMeas(){
+  const now=$('#measNow');
+  if(S.meas.pts.length){now.textContent=`${S.mode==='line'?'ライン':'距離'}：${S.meas.pts.length}点　表面に沿って ${fmt(S.meas.len)} mm　直線 ${fmt(S.meas.straight)} mm`;}
+  else now.textContent=S.mode==='dist'?'表面をクリックしてください（2点）':S.mode==='line'?'点を順にクリックし、「ラインを確定」を押してください':'';
+  $('#measTable tbody').innerHTML=S.meas.results.map((r,i)=>`<tr><td style="text-align:left">${i+1}</td><td>${r.kind}${r.n?'（'+r.n+'点）':''}</td><td>${r.len.toFixed(1)} mm</td><td>${r.straight.toFixed(1)} mm</td></tr>`).join('');
+}
+
+/* ===================== 画像・動画・スライド ===================== */
+function composite(scale){
+  const vs=allViewers();for(const v of vs)v.render();
+  const w=vs.reduce((s,v)=>s+v.canvas.width,0),h=Math.max(...vs.map(v=>v.canvas.height));
+  const c=document.createElement('canvas');c.width=w;c.height=h;const ctx=c.getContext('2d');ctx.fillStyle='#0a0d12';ctx.fillRect(0,0,w,h);
+  let x=0;const dpr=Math.min(2,window.devicePixelRatio||1);
+  for(const v of vs){ctx.drawImage(v.canvas,x,0);
+    ctx.fillStyle='#e3e8ee';ctx.font=`${13*dpr}px system-ui,sans-serif`;ctx.textBaseline='top';ctx.fillText(v.label.textContent,x+10*dpr,8*dpr);
+    drawColorbar(ctx,x+v.canvas.width-100*dpr,34*dpr,v,dpr);
+    if(x>0){ctx.fillStyle='#2b343f';ctx.fillRect(x-1,0,2,h);}x+=v.canvas.width;}
+  return c;
+}
+function startRec(kind){
+  if(typeof MediaRecorder==='undefined')return toast('このブラウザは録画に対応していません');
+  const c0=composite();const c=document.createElement('canvas');c.width=c0.width&~1;c.height=c0.height&~1;const ctx=c.getContext('2d');
+  const mime=['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm','video/mp4'].find(m=>MediaRecorder.isTypeSupported(m));
+  const rec=new MediaRecorder(c.captureStream(30),mime?{mimeType:mime,videoBitsPerSecond:8e6}:undefined);const chunks=[];
+  rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data);};
+  rec.onstop=()=>{download(`carto_${stamp()}.${(mime||'').includes('mp4')?'mp4':'webm'}`,new Blob(chunks,{type:mime||'video/webm'}));toast('動画を保存しました');};
+  if(kind==='prop'){const v=av();if(v.T.kind!=='prop'){v.type='PROP';v.colDirty=v.dirty=true;syncPanel();}S.anim.phase=0;togglePropPlay(true);}
+  S.rec={c,ctx,rec,kind,ang:0,startPhase:0,wrapped:false};rec.start(200);
+  $('#btnRec').textContent='録画停止';$('#recState').innerHTML='<span class="recdot"></span>録画中';
+}
+function stopRec(){if(!S.rec)return;const r=S.rec;S.rec=null;r.rec.stop();$('#btnRec').textContent='録画開始';$('#recState').textContent='';}
+function addSnap(){
+  if(!S.study)return;const c=composite();const cap=$('#snapCap').value.trim();
+  const v=av();S.snaps.push({img:c.toDataURL('image/jpeg',0.9),cap:cap||(v.map?v.map.name+' ／ '+v.T.label:''),title:v.map?v.map.name:''});
+  $('#snapCap').value='';renderSnaps();toast('スライドに追加しました（'+S.snaps.length+'枚）');
+}
+function renderSnaps(){$('#snapList').innerHTML=S.snaps.map((s,i)=>`<div class="snap"><img src="${s.img}" data-i="${i}" title="クリックで表示"><div class="cap">${i+1}. ${esc(s.cap)}</div><button data-del="${i}" title="削除">×</button></div>`).join('')||'<div class="muted small">まだありません</div>';}
+let slideI=0;
+function openSlides(i){if(!S.snaps.length)return toast('先に「今の画面を追加」でスライドを作ってください');slideI=clamp(i,0,S.snaps.length-1);$('#slideOv').classList.remove('hidden');slideGo(0);}
+function slideGo(d){slideI=clamp(slideI+d,0,S.snaps.length-1);const s=S.snaps[slideI];$('#slideImg').src=s.img;$('#slideCap').textContent=s.cap;$('#slNum').textContent=`${slideI+1} / ${S.snaps.length}`;}
+function closeSlides(){$('#slideOv').classList.add('hidden');}
+function exportSlides(){
+  if(!S.snaps.length)return toast('スライドがありません');
+  const notes=$('#caseNotes').value.trim(),tags=$('#caseTags').value.trim();
+  const html=`<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>症例スライド</title><style>
+body{margin:0;background:#0a0d12;color:#e3e8ee;font:16px/1.6 system-ui,"Hiragino Sans","Meiryo",sans-serif}.s{display:none;height:100vh;flex-direction:column;align-items:center;justify-content:center;padding:16px;box-sizing:border-box}.s.on{display:flex}
+img{max-width:96vw;max-height:80vh;border-radius:6px}.c{margin-top:12px;font-size:20px;white-space:pre-wrap;text-align:center}.n{position:fixed;right:14px;bottom:10px;color:#8b97a5}
+.t{max-width:900px;white-space:pre-wrap;font-size:18px}h1{font-size:28px}@media print{.s{display:flex;page-break-after:always;height:auto}.n{display:none}}</style></head><body>
+<div class="s on"><h1>症例スライド</h1>${tags?`<div>タグ：${esc(tags)}</div>`:''}${notes?`<div class="t">${esc(notes)}</div>`:''}<div style="color:#8b97a5;margin-top:20px">← → キーでページ送り</div></div>
+${S.snaps.map(s=>`<div class="s"><img src="${s.img}"><div class="c">${esc(s.cap)}</div></div>`).join('')}
+<div class="n" id="n"></div><script>let i=0;const s=document.querySelectorAll('.s');function g(d){s[i].classList.remove('on');i=Math.max(0,Math.min(s.length-1,i+d));s[i].classList.add('on');document.getElementById('n').textContent=(i+1)+' / '+s.length;}
+document.addEventListener('keydown',e=>{if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown')g(1);if(e.key==='ArrowLeft'||e.key==='PageUp')g(-1);});document.addEventListener('click',e=>g(e.clientX>innerWidth/2?1:-1));g(0);<\/script></body></html>`;
+  download(`症例スライド_${stamp()}.html`,new Blob([html],{type:'text/html'}));
+}
+
+/* ===================== 保存（ブラウザ内） ===================== */
+function studyKey(){return 'cartoViewer:'+S.study.name+'|'+S.study.maps.map(m=>m.name+':'+m.points.length).join(',');}
+function collectState(){
+  const st={v:1,study:S.study.name,notes:$('#caseNotes').value,tags:$('#caseTags').value,edits:{}};
+  for(const m of S.study.maps){const e={};for(const p of m.points){if(p.excluded||p.latEdited||p.label){e[p.id]={};if(p.excluded)e[p.id].x=1;if(p.latEdited)e[p.id].lat=p.lat;if(p.label)e[p.id].label=p.label;}}if(Object.keys(e).length)st.edits[m.name]=e;}
+  return st;
+}
+function applyState(st){
+  $('#caseNotes').value=st.notes||'';$('#caseTags').value=st.tags||'';let n=0;
+  for(const m of S.study.maps){const e=(st.edits||{})[m.name];if(!e)continue;
+    for(const p of m.points){const x=e[p.id];if(!x)continue;n++;if(x.x)p.excluded=true;if(fin(x.lat)){p.lat=x.lat;p.latEdited=true;}if(x.label)p.label=x.label;}
+    m.edited=m.points.some(p=>p.excluded||p.latEdited);m.version++;}
+  dirtyAll('cp');return n;
+}
+let saveT=null;
+function saveSoon(){clearTimeout(saveT);saveT=setTimeout(()=>{if(!S.study)return;try{localStorage.setItem(studyKey(),JSON.stringify(collectState()));}catch(e){console.warn(e);}},500);}
+function restoreState(){
+  $('#caseNotes').value='';$('#caseTags').value='';
+  let st=null;try{st=JSON.parse(localStorage.getItem(studyKey())||'null');}catch(_){}
+  if(st){const n=applyState(st);if(n)setTimeout(()=>toast(`前回の編集（${n}点）を復元しました。「記録」タブで元に戻せます`,5000),400);}
+}
+
+/* ===================== メインループ ===================== */
+let lastT=performance.now(),labelT=0;
+function loop(now){
+  const dt=Math.min(0.1,(now-lastT)/1000);lastT=now;
+  if(S.anim.prop){const v=allViewers().find(x=>x.T.kind==='prop');if(v&&v.map){const{lo,hi}=v.range();const span=(hi-lo)+2*S.opt.propBand;const prev=S.anim.phase;S.anim.phase=(S.anim.phase+dt*S.opt.propSpeed/Math.max(1,span))%1;
+    if(S.rec&&S.rec.kind==='prop'&&S.anim.phase<prev){if(S.rec.wrapped)stopRec();else S.rec.wrapped=true;}
+    for(const x of allViewers())if(x.T.kind==='prop'){x.colDirty=true;x.dirty=true;}}}
+  if(S.opt.ripple){S.anim.rphase=(S.anim.rphase+dt*S.opt.rippleSpeed/400)%1;for(const x of allViewers())x.dirty=true;}
+  if(S.rec){if(S.rec.kind==='rotate'){const v=S.viewers[0];const a=dt*2*Math.PI/8;
+      v.R=rotWorldZ(S.rec.R0||(S.rec.R0=v.R.slice()),S.rec.ang+=a);v.dirty=true;afterCam(v);if(S.rec.ang>=2*Math.PI){stopRec();}}
+    for(const x of allViewers())x.dirty=true;}
+  for(const v of allViewers())if(v.dirty)v.render();
+  if(S.rec){const c=composite();S.rec.ctx.drawImage(c,0,0);}
+  if(now-labelT>150){labelT=now;for(const v of allViewers())if(v.map)v.updateLabel();}
+  requestAnimationFrame(loop);
+}
+function rotWorldZ(R0,a){const c=Math.cos(a),s=Math.sin(a);const Rz=[c,-s,0,s,c,0,0,0,1];return R3.ortho(R3.mul(R0,Rz));}
+
+/* ===================== 起動 ===================== */
+try{
+  S.viewers=[new Viewer($('#view0'),0),new Viewer($('#view1'),1)];
+}catch(err){document.body.innerHTML='<div style="padding:30px;color:#fff">このブラウザ（またはPC）では3D表示（WebGL）が使えません：'+esc(err.message)+'</div>';throw err;}
+bindPanel();bindWave();renderSnaps();setMode('select');
+setTimeout(()=>{if(!S.study)$('#views').classList.add('single');},0);
+requestAnimationFrame(loop);
+window.CV={S,openSources,makeDemoStudy,setStudy};
+</script>
+</body>
+</html>
