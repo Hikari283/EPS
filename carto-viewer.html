@@ -27,7 +27,7 @@ header{display:flex;gap:6px;align-items:center;padding:6px 10px;background:var(-
 .seg button{border-radius:0;margin-left:-1px}
 .seg button:first-child{border-radius:6px 0 0 6px;margin-left:0}
 .seg button:last-child{border-radius:0 6px 6px 0}
-main{display:grid;grid-template-columns:330px minmax(0,1fr);min-height:0}
+main{display:grid;grid-template-columns:var(--sideW,330px) 6px minmax(0,1fr);min-height:0}
 aside{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
 .tabs{display:flex;border-bottom:1px solid var(--line)}
 .tabs button{flex:1;border:0;border-radius:0;background:transparent;padding:7px 0;border-bottom:2px solid transparent}
@@ -58,16 +58,26 @@ table.list tbody tr:hover td{background:#1c2733}
 body.dragging #views{outline:3px dashed var(--accent);outline-offset:-6px}
 #wave{height:270px;background:var(--panel);border-top:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
 #wave.collapsed{height:34px}
-#waveResize{height:6px;margin-top:-3px;cursor:ns-resize;flex:none}
-#waveResize:hover{background:var(--accent2)}
+#waveResize{height:7px;cursor:ns-resize;flex:none;background:#1b222b;border-top:1px solid #2b343f;position:relative}
+.split{background:#1b222b;flex:none;position:relative;z-index:5;touch-action:none}
+.split:hover,.split.drag,#waveResize:hover,#waveResize.drag{background:#2a5d93}
+.split.v{width:6px;cursor:ew-resize}
+.split:after,#waveResize:after{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);border-radius:2px;background:#4a5767}
+.split.v:after{width:2px;height:28px}
+#waveResize:after{width:36px;height:2px}
+#views.single #viewSplit{display:none}
+#views.single #view0{flex:1 1 auto!important}
+#rtCanvas.hidden+#rtSplit{display:none}
+#waveBody:has(#ptList.hidden) #listSplit{display:none}
+main.noside #sideSplit{display:none}
 #wave.collapsed #waveBody{display:none}
 .wbar{display:flex;gap:6px;align-items:center;padding:4px 8px;flex-wrap:wrap;border-bottom:1px solid var(--line)}
 .wbar label{color:var(--muted)}
 #waveBody{flex:1;display:flex;min-height:0}
 #waveCanvas{flex:1;min-width:0;width:100%;height:100%;display:block;cursor:crosshair}
-#rtCanvas{flex:1;min-width:0;height:100%;display:block;cursor:pointer;border-right:2px solid #2b343f}
+#rtCanvas{flex:1 1 0;min-width:0;height:100%;display:block;cursor:pointer}
 #rtCanvas.hidden{display:none}
-#ptList{width:290px;overflow:auto;border-left:1px solid var(--line);background:#0b0f14}
+#ptList{width:290px;flex:none;overflow:auto;border-left:1px solid var(--line);background:#0b0f14}
 #ptList.hidden{display:none}
 #ptList table{width:100%;border-collapse:collapse;font-size:12px}
 #ptList th{position:sticky;top:0;background:#1d242d;color:var(--muted);font-weight:normal;cursor:pointer;padding:3px 4px;text-align:right}
@@ -142,8 +152,8 @@ body.dragging #views{outline:3px dashed var(--accent);outline-offset:-6px}
 .vviews button.cur{color:#ff9a3c;border-color:#ff9a3c;text-decoration:underline}
 .vop{font-size:11px;color:#b8c4d2;background:rgba(20,26,34,.75);padding:1px 6px;border-radius:5px}
 .vop input{width:80px}
-main.noside{grid-template-columns:minmax(0,1fr)}main.noside aside{display:none}
-@media (max-width:820px){main{grid-template-columns:1fr;grid-template-rows:50vh minmax(0,1fr)}aside{order:2;border-right:0;border-top:1px solid var(--line)}#views{order:1}}
+main.noside{grid-template-columns:minmax(0,1fr)!important}main.noside aside{display:none}
+@media (max-width:820px){#sideSplit{display:none}main{grid-template-columns:1fr!important;grid-template-rows:50vh minmax(0,1fr)}aside{order:2;border-right:0;border-top:1px solid var(--line)}#views{order:1}}
 </style>
 </head>
 <body>
@@ -311,6 +321,7 @@ main.noside{grid-template-columns:minmax(0,1fr)}main.noside aside{display:none}
     </fieldset>
   </div>
 </aside>
+<div class="split v" id="sideSplit" title="ドラッグで幅を変更（ダブルクリックで元に戻す）"></div>
 <section id="views" class="single">
   <div class="view active" id="view0"><canvas class="gl"></canvas>
     <div class="vtop"><select class="vMap" title="マップ"></select><select class="vType" title="表示"></select><div class="vlabel"></div></div>
@@ -319,6 +330,7 @@ main.noside{grid-template-columns:minmax(0,1fr)}main.noside aside{display:none}
     <div class="vbot"><span class="vviews"><button data-v="AP">AP</button><button data-v="PA">PA</button><button data-v="LAO">LAO</button><button data-v="RAO">RAO</button><button data-v="LL">LL</button><button data-v="RL">RL</button><button data-v="INF">INF</button><button data-v="SUP">SUP</button><button data-v="FIT">全体</button></span>
       <span class="vop">透明 <input type="range" class="vOp" min="0" max="90" step="5" value="0"><span class="vOpV">0%</span></span></div>
   </div>
+  <div class="split v" id="viewSplit" title="ドラッグで左右の大きさを変更"></div>
   <div class="view hidden" id="view1"><canvas class="gl"></canvas>
     <div class="vtop"><select class="vMap" title="マップ"></select><select class="vType" title="表示"></select><div class="vlabel"></div></div>
     <div class="cbar"><canvas width="340" height="64"></canvas></div>
@@ -330,7 +342,7 @@ main.noside{grid-template-columns:minmax(0,1fr)}main.noside aside{display:none}
 </section>
 </main>
 <section id="wave">
-  <div id="waveResize" title="ドラッグで高さを変更"></div>
+  <div id="waveResize" title="ドラッグで高さを変更（ダブルクリックで元に戻す）"></div>
   <div class="wbar">
     <button id="waveToggle" title="波形パネルを開く/閉じる">▾</button>
     <button id="pPrev" title="前のポイント (←)">◀</button><button id="pNext" title="次のポイント (→)">▶</button>
@@ -349,7 +361,7 @@ main.noside{grid-template-columns:minmax(0,1fr)}main.noside aside{display:none}
     <label><input type="checkbox" id="chOther">その他</label>
     <button id="gDown" title="振幅を小さく">−</button><button id="gUp" title="振幅を大きく">＋</button>
   </div>
-  <div id="waveBody"><canvas id="rtCanvas" title="クリックすると右側に固定して表示"></canvas><canvas id="waveCanvas"></canvas><div id="ptList"><div id="pvHead"></div><div id="pvBody"></div></div></div>
+  <div id="waveBody"><canvas id="rtCanvas" title="クリックすると右側に固定して表示"></canvas><div class="split v" id="rtSplit" title="ドラッグで幅を変更"></div><canvas id="waveCanvas"></canvas><div class="split v" id="listSplit" title="ドラッグで幅を変更"></div><div id="ptList"><div id="pvHead"></div><div id="pvBody"></div></div></div>
 </section>
 </div>
 <div id="toast"></div>
@@ -1455,12 +1467,10 @@ function bindPanel(){
     else list=[...e.dataTransfer.files].map(f=>({file:f,path:f.name}));
     if(list.length)openSources(list);else progress(null);});
   // 波形
-  $('#waveToggle').onclick=()=>{$('#wave').classList.toggle('collapsed');$('#waveToggle').textContent=$('#wave').classList.contains('collapsed')?'▴':'▾';setTimeout(()=>{dirtyAll('');renderWave();},50);};
-  (()=>{const h=$('#waveResize');let st=null;h.addEventListener('pointerdown',e=>{h.setPointerCapture(e.pointerId);st={y:e.clientY,h:$('#wave').offsetHeight};});
-    h.addEventListener('pointermove',e=>{if(!st)return;$('#wave').style.height=clamp(st.h+(st.y-e.clientY),80,window.innerHeight-160)+'px';dirtyAll('');renderWave();});
-    h.addEventListener('pointerup',()=>{st=null;});})();
-  $('#chEcg').addEventListener('change',e=>{if(e.target.checked&&$('#wave').offsetHeight<420)$('#wave').style.height=Math.min(window.innerHeight*0.55,480)+'px';setTimeout(()=>{dirtyAll('');renderWave();},30);});
-  $('#wLayout').onchange=e=>{W.layout=e.target.value;if(W.layout==='all'&&$('#wave').offsetHeight<480)$('#wave').style.height=Math.min(window.innerHeight*0.62,620)+'px';setTimeout(()=>{dirtyAll('');renderWave();},30);};
+  $('#waveToggle').onclick=()=>{$('#wave').classList.toggle('collapsed');$('#wave').style.height=$('#wave').classList.contains('collapsed')?'':LAY.wave+'px';$('#waveToggle').textContent=$('#wave').classList.contains('collapsed')?'▴':'▾';setTimeout(()=>{dirtyAll('');renderWave();},50);};
+  bindLayout();
+  $('#chEcg').addEventListener('change',e=>{if(e.target.checked&&LAY.wave<420){LAY.wave=Math.round(Math.min(window.innerHeight*0.55,480));applyLayout();}setTimeout(()=>{dirtyAll('');renderWave();},30);});
+  $('#wLayout').onchange=e=>{W.layout=e.target.value;if(W.layout==='all'&&LAY.wave<480){LAY.wave=Math.round(Math.min(window.innerHeight*0.62,620));applyLayout();}setTimeout(()=>{dirtyAll('');renderWave();},30);};
   $('#wSpeed').onchange=e=>{W.speed=+e.target.value;if(S.sel)W.fitTo(S.sel.p);renderWave();};
   $('#wPlay').onclick=()=>setPlay(!RT.playing);RT.cv.addEventListener('click',()=>{if(RT.p&&RT.map)selectPoint(RT.map,RT.p);});
   $('#wRate').onchange=e=>{W.rate=+e.target.value||1;};
@@ -1494,6 +1504,46 @@ function setMode(m){
 function togglePropPlay(force){S.anim.prop=force!==undefined?force:!S.anim.prop;$('#propPlay').textContent=S.anim.prop?'❚❚ 停止':'▶ 再生';
   if(S.anim.prop&&!allViewers().some(v=>v.T.kind==='prop')){const v=av();v.type='PROP';v.colDirty=v.ptsDirty=v.dirty=true;syncPanel();}}
 
+
+
+/* ===================== 枠の大きさ（可変） ===================== */
+const LAYOUT_KEY='cartoViewer:layout';
+const LAY={side:330,wave:270,rt:null,list:290,view:null};
+function applyLayout(){
+  document.documentElement.style.setProperty('--sideW',LAY.side+'px');
+  if(!$('#wave').classList.contains('collapsed'))$('#wave').style.height=LAY.wave+'px';
+  RT.cv.style.flex=LAY.rt?`0 0 ${LAY.rt}px`:'';
+  $('#ptList').style.width=LAY.list+'px';
+  $('#view0').style.flex=LAY.view?`0 0 ${LAY.view}px`:'';
+  setTimeout(()=>{dirtyAll('');renderWave();},20);
+}
+function saveLayout(){try{localStorage.setItem(LAYOUT_KEY,JSON.stringify(LAY));}catch(_){}}
+function setLayout(k,v){LAY[k]=v;applyLayout();saveLayout();}
+function splitter(el,axis,get,set,reset){
+  let st=null;
+  el.addEventListener('pointerdown',e=>{e.preventDefault();el.setPointerCapture(e.pointerId);el.classList.add('drag');st={p:axis==='x'?e.clientX:e.clientY,v:get()};});
+  el.addEventListener('pointermove',e=>{if(!st)return;const d=(axis==='x'?e.clientX:e.clientY)-st.p;set(st.v+d);});
+  const end=()=>{if(!st)return;st=null;el.classList.remove('drag');saveLayout();};
+  el.addEventListener('pointerup',end);el.addEventListener('pointercancel',end);
+  el.addEventListener('dblclick',()=>{reset();applyLayout();saveLayout();});
+}
+function bindLayout(){
+  try{Object.assign(LAY,JSON.parse(localStorage.getItem(LAYOUT_KEY)||'{}'));}catch(_){}
+  const W_=()=>window.innerWidth,H_=()=>window.innerHeight;
+  splitter($('#sideSplit'),'x',()=>LAY.side,v=>{LAY.side=clamp(v,200,Math.min(700,W_()-300));applyLayout();},()=>{LAY.side=330;});
+  // 上にドラッグすると波形パネルが大きくなる
+  splitter($('#waveResize'),'y',()=>-$('#wave').offsetHeight,v=>{LAY.wave=clamp(-v,80,H_()-150);if($('#wave').classList.contains('collapsed'))$('#waveToggle').click();applyLayout();},()=>{LAY.wave=270;});
+  splitter($('#rtSplit'),'x',()=>RT.cv.offsetWidth,v=>{const tot=$('#waveBody').clientWidth-($('#ptList').classList.contains('hidden')?0:$('#ptList').offsetWidth)-12;LAY.rt=clamp(v,150,tot-150);applyLayout();},()=>{LAY.rt=null;});
+  splitter($('#listSplit'),'x',()=>-$('#ptList').offsetWidth,v=>{LAY.list=clamp(-v,180,Math.min(700,W_()-400));applyLayout();},()=>{LAY.list=290;});
+  splitter($('#viewSplit'),'x',()=>$('#view0').offsetWidth,v=>{LAY.view=clamp(v,200,$('#views').clientWidth-206);applyLayout();},()=>{LAY.view=null;});
+  applyLayout();
+}
+function layoutPreset(k){
+  const H=window.innerHeight;
+  if($('#wave').classList.contains('collapsed'))$('#waveToggle').click();
+  if(k==='map')LAY.wave=Math.round(H*0.25);else if(k==='egm')LAY.wave=Math.round(H*0.68);else{LAY.side=330;LAY.wave=270;LAY.rt=null;LAY.list=290;LAY.view=null;}
+  applyLayout();saveLayout();
+}
 
 /* ===================== メニューバー・ワークフロー ===================== */
 const clickTab=id=>{const b=$$('#tabs button').find(x=>x.dataset.tab===id);if(b)b.click();if($('main').classList.contains('noside')){$('main').classList.remove('noside');setTimeout(()=>dirtyAll(''),30);}};
@@ -1540,6 +1590,7 @@ const MENUS={
     {l:'波形パネル',c:()=>!$('#wave').classList.contains('collapsed'),a:()=>$('#waveToggle').click()},
     {l:'リアルタイム波形（左半分）',c:()=>RT.on,a:()=>{RT.on=!RT.on;RT.cv.classList.toggle('hidden',!RT.on);dirtyAll('p');setTimeout(renderWave,30);}},
     {l:'ポイント一覧',c:()=>!$('#ptList').classList.contains('hidden'),a:()=>$('#wList').click()},'-',
+    {l:'マップを大きく',a:()=>layoutPreset('map')},{l:'電位を大きく',a:()=>layoutPreset('egm')},{l:'枠の大きさを元に戻す',a:()=>layoutPreset('reset')},'-',
     {l:'全画面表示',a:()=>{document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen();}}],
   tools:()=>[{l:'距離を測る（2点）',c:()=>S.mode==='dist',a:()=>{setMode('dist');clickTab('t-meas');},d:need},{l:'ラインの長さを測る',c:()=>S.mode==='line',a:()=>{setMode('line');clickTab('t-meas');},d:need},
     {l:'計測をすべて消す',a:()=>$('#measClear').click()},'-',
