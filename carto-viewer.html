@@ -27,7 +27,7 @@ header{display:flex;gap:6px;align-items:center;padding:6px 10px;background:var(-
 .seg button{border-radius:0;margin-left:-1px}
 .seg button:first-child{border-radius:6px 0 0 6px;margin-left:0}
 .seg button:last-child{border-radius:0 6px 6px 0}
-main{display:grid;grid-template-columns:var(--sideW,330px) 6px minmax(0,1fr);min-height:0}
+main{display:grid;grid-template-columns:var(--sideW,300px) 6px minmax(0,1fr);min-height:0}
 aside{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
 .tabs{display:flex;border-bottom:1px solid var(--line)}
 .tabs button{flex:1;border:0;border-radius:0;background:transparent;padding:7px 0;border-bottom:2px solid transparent}
@@ -72,7 +72,10 @@ body.dragging #views{outline:3px dashed var(--accent);outline-offset:-6px}
 main.noside #sideSplit{display:none}
 #wave.collapsed #waveBody{display:none}
 .wbar{display:flex;gap:6px;align-items:center;padding:4px 8px;flex-wrap:wrap;border-bottom:1px solid var(--line)}
-.wbar label{color:var(--muted)}
+.wbar label{color:var(--muted);font-size:12px;white-space:nowrap}
+.wbar{gap:4px;padding:3px 6px}
+.wbar button,.wbar select{font-size:12px;padding:2px 7px}
+.wbar #pinfo{font-size:12px}
 #waveBody{flex:1;display:flex;min-height:0}
 #waveCanvas{flex:1;min-width:0;width:100%;height:100%;display:block;cursor:crosshair}
 #rtCanvas{flex:1 1 0;min-width:0;height:100%;display:block;cursor:pointer}
@@ -148,7 +151,7 @@ main.noside #sideSplit{display:none}
 .vname{position:absolute;left:0;width:108px;text-align:center;bottom:22px;font-size:11px;color:#cfd8e3;pointer-events:none}
 .vbot{position:absolute;left:0;right:0;bottom:2px;display:flex;justify-content:center;align-items:center;gap:10px;flex-wrap:wrap;pointer-events:none}
 .vbot>*{pointer-events:auto}
-.vviews button{padding:1px 6px;font-size:11px;background:rgba(20,26,34,.75);border-color:#2f3a46;margin:0 1px}
+.vviews button{padding:3px 9px;font-size:12px;background:rgba(20,26,34,.75);border-color:#2f3a46;margin:0 1px}
 .vviews button.cur{color:#ff9a3c;border-color:#ff9a3c;text-decoration:underline}
 .vop{font-size:11px;color:#b8c4d2;background:rgba(20,26,34,.75);padding:1px 6px;border-radius:5px}
 .vop input{width:80px}
@@ -215,13 +218,6 @@ main.noside{grid-template-columns:minmax(0,1fr)!important}main.noside aside{disp
       <div class="row"><span class="lb">ポイント</span><label><input type="checkbox" id="showPts" checked> 表示</label><label><input type="checkbox" id="showExcl" checked> 除外点も</label></div>
       <div class="row"><span class="lb">点の大きさ</span><input type="range" id="ptSize" min="0.4" max="4" step="0.1" value="1.3"></div>
       <div class="row"><span class="lb">点の色</span><select id="ptColor"><option value="value">マップの値</option><option value="white">白</option><option value="label">ラベル付きを強調</option></select></div>
-    </fieldset>
-    <fieldset><legend>向き</legend>
-      <div class="row" id="viewBtns">
-        <button data-v="AP">AP</button><button data-v="PA">PA</button><button data-v="LAO">LAO</button><button data-v="RAO">RAO</button>
-        <button data-v="LL">LL</button><button data-v="RL">RL</button><button data-v="SUP">頭側</button><button data-v="INF">足側</button><button data-v="FIT">全体</button>
-      </div>
-      <div class="muted small">CARTO座標が +X=患者左 / +Y=背側 / +Z=頭側 と仮定しています。実データで向きが違えば調整します。</div>
     </fieldset>
     <fieldset><legend>2画面比較</legend>
       <div class="row"><label><input type="checkbox" id="compareOn"> 2画面で並べる</label><label><input type="checkbox" id="syncCam" checked> 視点を連動</label></div>
@@ -349,12 +345,12 @@ main.noside{grid-template-columns:minmax(0,1fr)!important}main.noside aside{disp
     <span id="pinfo" class="muted">ポイントをクリックすると電位を表示します</span>
     <span class="sp"></span>
     <button id="pExcl" title="Deleteキー">除外</button>
-    <button id="latSnap" title="現在のLAT付近の最も急峻な点に合わせる">LATを吸着</button>
-    <button id="latRevert">LATを元に戻す</button>
-    <select id="wLayout" title="電位の並べ方"><option value="map">マッピング電極</option><option value="all">全電極（CARTO風）</option></select>
-    <select id="wSpeed" title="掃引速度"><option value="0">WOIに合わせる</option><option value="50">50 mm/s</option><option value="100">100 mm/s</option><option value="200">200 mm/s</option><option value="400">400 mm/s</option></select>
+    <button id="latSnap" title="現在のLAT付近の最も急峻な点に合わせる">LAT吸着</button>
+    <button id="latRevert" title="LATを元に戻す">LAT戻す</button>
+    <select id="wLayout" title="電位の並べ方"><option value="map">マッピング電極</option><option value="all">全電極</option></select>
+    <select id="wSpeed" title="掃引速度"><option value="0">WOI</option><option value="50">50 mm/s</option><option value="100">100 mm/s</option><option value="200">200 mm/s</option><option value="400">400 mm/s</option></select>
     <button id="wPlay" class="on" title="左のリアルタイム波形を一時停止/再生">❚❚ 停止</button><select id="wRate" title="再生速度"><option value="1">×1</option><option value="0.5">×0.5</option><option value="0.25">×0.25</option></select><label title="記録の最後まで来たら次のポイントへ"><input type="checkbox" id="wChain" checked>次の点へ</label>
-    <button id="wList" class="on" title="ポイントビューア（一覧）">ポイントビューア</button>
+    <button id="wList" class="on" title="ポイントビューア（一覧）">一覧</button>
     <label><input type="checkbox" id="chMap" checked>Bi/Uni</label>
     <label><input type="checkbox" id="chRef" checked>Ref</label>
     <label><input type="checkbox" id="chEcg">12誘導</label>
@@ -392,6 +388,7 @@ main.noside{grid-template-columns:minmax(0,1fr)!important}main.noside aside{disp
   <ul>
     <li>左ドラッグ：回転　／　右ドラッグ（またはShift＋ドラッグ）：移動　／　ホイール：拡大・縮小</li>
     <li>クリック：上の「クリック操作」で選んだ動作（選択・除外・距離・ライン）</li>
+    <li>向き：マップの下の AP / PA / LAO / RAO / LL / RL / INF / SUP をクリック（CARTO座標を +X=患者左・+Y=背側・+Z=頭側 と仮定）</li>
   </ul>
   <h3>波形パネル</h3>
   <ul>
@@ -1102,7 +1099,7 @@ class Viewer{
     for(const p of m.points)add(p.x,p.y,p.z);
     if(!fin(mn[0]))return{c:[0,0,0],r:50};
     return{c:v3.sc(v3.add(mn,mx),.5),r:Math.max(5,v3.dist(mn,mx)/2)};}
-  fit(){if(!this.map)return;const b=this.bounds();this.target=b.c;this.dist=b.r/Math.sin(this.fov/2)*1.05;this.dirty=true;}
+  fit(){if(!this.map)return;const b=this.bounds();this.target=b.c;this.dist=b.r/Math.tan(this.fov/2)*0.95;this.dirty=true;}
   setView(name){if(name==='FIT'){this.fit();return;}const[back,up]=VIEWS[name];const r=v3.cross(up,back);this.R=[...v3.norm(r),...v3.norm(up),...v3.norm(back)];this.dirty=true;afterCam(this);}
   matrices(){const w=this.canvas.width,h=this.canvas.height;const near=Math.max(0.5,this.dist*0.02),far=this.dist*6+500;
     const P=M4.persp(this.fov,w/h,near,far);const V=M4.mul(M4.trans(0,0,-this.dist),M4.mul(M4.rot(this.R),M4.trans(-this.target[0],-this.target[1],-this.target[2])));
@@ -1402,7 +1399,7 @@ function bindPanel(){
   $('#fillR').onchange=e=>{S.opt.fill=clamp(+e.target.value||15,1,100);dirtyAll('cp');};
   num('#opacity','opacity','',syncViewOverlays);chk('#showPts','showPts','p');chk('#showExcl','showExcl','p');num('#ptSize','ptSize','p');
   $('#ptColor').onchange=e=>{S.opt.ptColor=e.target.value;dirtyAll('p');};
-  $$('#viewBtns button').forEach(b=>b.onclick=()=>{const v=av();v.setView(b.dataset.v);afterCam(v);});
+  
   for(const v of S.viewers){
     v.el.querySelector('.vMap').onchange=e=>{setActive(v.idx);$('#selMap').onchange({target:{value:e.target.value}});};
     v.el.querySelector('.vType').onchange=e=>{setActive(v.idx);$('#selType').value=e.target.value;$('#selType').onchange({target:{value:e.target.value}});};
@@ -1469,8 +1466,8 @@ function bindPanel(){
   // 波形
   $('#waveToggle').onclick=()=>{$('#wave').classList.toggle('collapsed');$('#wave').style.height=$('#wave').classList.contains('collapsed')?'':LAY.wave+'px';$('#waveToggle').textContent=$('#wave').classList.contains('collapsed')?'▴':'▾';setTimeout(()=>{dirtyAll('');renderWave();},50);};
   bindLayout();
-  $('#chEcg').addEventListener('change',e=>{if(e.target.checked&&LAY.wave<420){LAY.wave=Math.round(Math.min(window.innerHeight*0.55,480));applyLayout();}setTimeout(()=>{dirtyAll('');renderWave();},30);});
-  $('#wLayout').onchange=e=>{W.layout=e.target.value;if(W.layout==='all'&&LAY.wave<480){LAY.wave=Math.round(Math.min(window.innerHeight*0.62,620));applyLayout();}setTimeout(()=>{dirtyAll('');renderWave();},30);};
+  $('#chEcg').addEventListener('change',e=>{setTimeout(()=>{dirtyAll('');renderWave();},30);});
+  $('#wLayout').onchange=e=>{W.layout=e.target.value;setTimeout(()=>{dirtyAll('');renderWave();},30);};
   $('#wSpeed').onchange=e=>{W.speed=+e.target.value;if(S.sel)W.fitTo(S.sel.p);renderWave();};
   $('#wPlay').onclick=()=>setPlay(!RT.playing);RT.cv.addEventListener('click',()=>{if(RT.p&&RT.map)selectPoint(RT.map,RT.p);});
   $('#wRate').onchange=e=>{W.rate=+e.target.value||1;};
@@ -1507,10 +1504,12 @@ function togglePropPlay(force){S.anim.prop=force!==undefined?force:!S.anim.prop;
 
 
 /* ===================== 枠の大きさ（可変） ===================== */
-const LAYOUT_KEY='cartoViewer:layout';
-const LAY={side:330,wave:270,rt:null,list:290,view:null};
+const LAYOUT_KEY='cartoViewer:layout2';
+const defWave=()=>Math.round(clamp(window.innerHeight*0.28,150,340));
+const LAY={side:300,wave:null,rt:null,list:270,view:null};
 function applyLayout(){
   document.documentElement.style.setProperty('--sideW',LAY.side+'px');
+  if(!LAY.wave)LAY.wave=defWave();
   if(!$('#wave').classList.contains('collapsed'))$('#wave').style.height=LAY.wave+'px';
   RT.cv.style.flex=LAY.rt?`0 0 ${LAY.rt}px`:'';
   $('#ptList').style.width=LAY.list+'px';
@@ -1530,18 +1529,18 @@ function splitter(el,axis,get,set,reset){
 function bindLayout(){
   try{Object.assign(LAY,JSON.parse(localStorage.getItem(LAYOUT_KEY)||'{}'));}catch(_){}
   const W_=()=>window.innerWidth,H_=()=>window.innerHeight;
-  splitter($('#sideSplit'),'x',()=>LAY.side,v=>{LAY.side=clamp(v,200,Math.min(700,W_()-300));applyLayout();},()=>{LAY.side=330;});
+  splitter($('#sideSplit'),'x',()=>LAY.side,v=>{LAY.side=clamp(v,200,Math.min(700,W_()-300));applyLayout();},()=>{LAY.side=300;});
   // 上にドラッグすると波形パネルが大きくなる
-  splitter($('#waveResize'),'y',()=>-$('#wave').offsetHeight,v=>{LAY.wave=clamp(-v,80,H_()-150);if($('#wave').classList.contains('collapsed'))$('#waveToggle').click();applyLayout();},()=>{LAY.wave=270;});
+  splitter($('#waveResize'),'y',()=>-$('#wave').offsetHeight,v=>{LAY.wave=clamp(-v,80,H_()-150);if($('#wave').classList.contains('collapsed'))$('#waveToggle').click();applyLayout();},()=>{LAY.wave=defWave();});
   splitter($('#rtSplit'),'x',()=>RT.cv.offsetWidth,v=>{const tot=$('#waveBody').clientWidth-($('#ptList').classList.contains('hidden')?0:$('#ptList').offsetWidth)-12;LAY.rt=clamp(v,150,tot-150);applyLayout();},()=>{LAY.rt=null;});
-  splitter($('#listSplit'),'x',()=>-$('#ptList').offsetWidth,v=>{LAY.list=clamp(-v,180,Math.min(700,W_()-400));applyLayout();},()=>{LAY.list=290;});
+  splitter($('#listSplit'),'x',()=>-$('#ptList').offsetWidth,v=>{LAY.list=clamp(-v,180,Math.min(700,W_()-400));applyLayout();},()=>{LAY.list=270;});
   splitter($('#viewSplit'),'x',()=>$('#view0').offsetWidth,v=>{LAY.view=clamp(v,200,$('#views').clientWidth-206);applyLayout();},()=>{LAY.view=null;});
   applyLayout();
 }
 function layoutPreset(k){
   const H=window.innerHeight;
   if($('#wave').classList.contains('collapsed'))$('#waveToggle').click();
-  if(k==='map')LAY.wave=Math.round(H*0.25);else if(k==='egm')LAY.wave=Math.round(H*0.68);else{LAY.side=330;LAY.wave=270;LAY.rt=null;LAY.list=290;LAY.view=null;}
+  if(k==='map')LAY.wave=Math.round(H*0.25);else if(k==='egm')LAY.wave=Math.round(H*0.68);else{LAY.side=300;LAY.wave=defWave();LAY.rt=null;LAY.list=270;LAY.view=null;}
   applyLayout();saveLayout();
 }
 
