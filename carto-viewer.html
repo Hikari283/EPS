@@ -750,64 +750,119 @@ function icosphere(sub){
   return{V,F};
 }
 function seeded(seed){let s=seed>>>0;return()=>{s=(s*1664525+1013904223)>>>0;return s/4294967296;};}
+/* --- 陰関数（SDF）から心腔の形を作る：Surface Nets --- */
+const smin=(a,b,k)=>{const h=clamp(0.5+0.5*(b-a)/k,0,1);return b*(1-h)+a*h-k*h*(1-h);};
+function sdCap(p,a,b,ra,rb){const pa=v3.sub(p,a),ba=v3.sub(b,a);const h=clamp(v3.dot(pa,ba)/v3.dot(ba,ba),0,1);return v3.len(v3.sub(pa,v3.sc(ba,h)))-(ra+(rb-ra)*h);}
+function sdEllB(p,c,U,r){const d=v3.sub(p,c);const q=[v3.dot(d,U[0])/r[0],v3.dot(d,U[1])/r[1],v3.dot(d,U[2])/r[2]];return(v3.len(q)-1)*Math.min(r[0],r[1],r[2]);}
+function sdfMesh(sdf,bmin,bmax,h){
+  const nx=Math.ceil((bmax[0]-bmin[0])/h)+1,ny=Math.ceil((bmax[1]-bmin[1])/h)+1,nz=Math.ceil((bmax[2]-bmin[2])/h)+1;
+  const F=new Float32Array(nx*ny*nz),id=(i,j,k)=>i+nx*(j+ny*k);
+  for(let k=0;k<nz;k++)for(let j=0;j<ny;j++)for(let i=0;i<nx;i++)F[id(i,j,k)]=sdf([bmin[0]+i*h,bmin[1]+j*h,bmin[2]+k*h]);
+  const cell=new Int32Array((nx-1)*(ny-1)*(nz-1)).fill(-1),cid=(i,j,k)=>i+(nx-1)*(j+(ny-1)*k);
+  const V=[];const E=[[0,1],[2,3],[4,5],[6,7],[0,2],[1,3],[4,6],[5,7],[0,4],[1,5],[2,6],[3,7]];
+  for(let k=0;k<nz-1;k++)for(let j=0;j<ny-1;j++)for(let i=0;i<nx-1;i++){
+    const c=[];let neg=0;for(let n=0;n<8;n++){const v=F[id(i+(n&1),j+((n>>1)&1),k+((n>>2)&1))];c.push(v);if(v<0)neg++;}
+    if(neg===0||neg===8)continue;let sx=0,sy=0,sz=0,m=0;
+    for(const[a,b]of E){const fa=c[a],fb=c[b];if((fa<0)===(fb<0))continue;const t=fa/(fa-fb);
+      sx+=(a&1)+((b&1)-(a&1))*t;sy+=((a>>1)&1)+(((b>>1)&1)-((a>>1)&1))*t;sz+=((a>>2)&1)+(((b>>2)&1)-((a>>2)&1))*t;m++;}
+    cell[cid(i,j,k)]=V.length/3;V.push(bmin[0]+(i+sx/m)*h,bmin[1]+(j+sy/m)*h,bmin[2]+(k+sz/m)*h);}
+  const T=[];const quad=(a,b,c,d,flip)=>{if(a<0||b<0||c<0||d<0)return;if(flip)T.push(a,c,b,a,d,c);else T.push(a,b,c,a,c,d);};
+  for(let k=0;k<nz;k++)for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){const f0=F[id(i,j,k)];
+    if(i<nx-1&&j>0&&k>0&&j<ny-1&&k<nz-1){const f1=F[id(i+1,j,k)];if((f0<0)!==(f1<0))quad(cell[cid(i,j-1,k-1)],cell[cid(i,j,k-1)],cell[cid(i,j,k)],cell[cid(i,j-1,k)],f0<0);}
+    if(j<ny-1&&i>0&&k>0&&i<nx-1&&k<nz-1){const f1=F[id(i,j+1,k)];if((f0<0)!==(f1<0))quad(cell[cid(i-1,j,k-1)],cell[cid(i-1,j,k)],cell[cid(i,j,k)],cell[cid(i,j,k-1)],f0<0);}
+    if(k<nz-1&&i>0&&j>0&&i<nx-1&&j<ny-1){const f1=F[id(i,j,k+1)];if((f0<0)!==(f1<0))quad(cell[cid(i-1,j-1,k)],cell[cid(i,j-1,k)],cell[cid(i,j,k)],cell[cid(i-1,j,k)],f0<0);}}
+  const verts=Float32Array.from(V),nv=V.length/3,tris=Uint32Array.from(T);
+  const mesh={nv,verts,tris,colors:{},colorNames:[],attrs:{}};
+  const adj=meshAdj(mesh);
+  for(let it=0;it<3;it++){const nvv=new Float32Array(verts);for(let v=0;v<nv;v++){const o=adj.off[v],e=adj.off[v+1];if(e===o)continue;let x=0,y=0,z=0;for(let q=o;q<e;q++){const w=adj.nb[q];x+=verts[w*3];y+=verts[w*3+1];z+=verts[w*3+2];}const n=e-o;
+    nvv[v*3]=verts[v*3]*0.4+0.6*x/n;nvv[v*3+1]=verts[v*3+1]*0.4+0.6*y/n;nvv[v*3+2]=verts[v*3+2]*0.4+0.6*z/n;}verts.set(nvv);}
+  mesh.adj=null;computeNormals(mesh);return mesh;
+}
+function clipMesh(mesh,drop){
+  const V=mesh.verts,T=mesh.tris,out=[];
+  for(let t=0;t<T.length;t+=3){const a=T[t]*3,b=T[t+1]*3,c=T[t+2]*3;const cen=[(V[a]+V[b]+V[c])/3,(V[a+1]+V[b+1]+V[c+1])/3,(V[a+2]+V[b+2]+V[c+2])/3];if(!drop(cen))out.push(T[t],T[t+1],T[t+2]);}
+  mesh.tris=Uint32Array.from(out);mesh.adj=null;computeNormals(mesh);
+  mesh.used=new Uint8Array(mesh.nv);for(const i of mesh.tris)mesh.used[i]=1;return mesh;
+}
+const capOf=(a,dir,len)=>v3.add(a,v3.sc(v3.norm(dir),len));
+function laAnatomy(){
+  const mk=(n,a,dir,r0,r1,keep)=>({n,a,b:capOf(a,dir,48),r:[r0,r1],keep});
+  const veins=[mk('LSPV',[16,13,11],[0.62,0.55,0.55],8,6.5,26),mk('LIPV',[16,14,-6],[0.7,0.55,-0.45],7.5,6,22),mk('RSPV',[-15,14,11],[-0.55,0.62,0.55],8,6.5,24),mk('RIPV',[-15,15,-6],[-0.62,0.62,-0.45],7.5,6,20)];
+  const laa=[[[16,-8,9],[27,-19,15],6.5,4.8],[[27,-19,15],[31,-26,7],4.8,2.6]];
+  const mitral={c:[0,-9,-13],n:v3.norm([0,-0.62,-0.78]),r:14.5};
+  const U=[[1,0,0],[0,1,0],[0,0,1]],center=[0,2,0];
+  const sdf=p=>{let d=sdEllB(p,center,U,[26,19,21]);for(const v of veins)d=smin(d,sdCap(p,v.a,v.b,v.r[0],v.r[1]),5);for(const s of laa)d=smin(d,sdCap(p,s[0],s[1],s[2],s[3]),4);return d;};
+  const mesh=sdfMesh(sdf,[-62,-40,-48],[62,58,56],1.4);
+  clipMesh(mesh,c=>{for(const v of veins){const h=segH(c,v.a,v.b);if(h*48>v.keep&&sdCap(c,v.a,v.b,v.r[0]+4,v.r[1]+4)<0)return true;}
+    const d=v3.sub(c,mitral.c),ax=v3.dot(d,mitral.n);if(ax>-1.5&&v3.len(v3.sub(d,v3.sc(mitral.n,ax)))<mitral.r)return true;return false;});
+  return{mesh,veins,mitral,center};
+}
+function lvAnatomy(){
+  const ax=v3.norm([0.5,-0.55,-0.65]),u2=v3.norm(v3.cross(ax,[0,0,1])),u3=v3.cross(ax,u2);
+  const c=[0,0,0],U=[ax,u2,u3];
+  const ao={a:v3.add(v3.sub(c,v3.sc(ax,30)),v3.sc(u3,-10)),b:v3.add(v3.sub(c,v3.sc(ax,80)),v3.sc(u3,-40)),r:[10.5,10.5]};
+  const mit={c:v3.add(v3.sub(c,v3.sc(ax,40)),v3.sc(u3,9)),n:v3.norm(v3.sub(v3.sc(ax,-1),v3.sc(u3,-0.15))),r:15};
+  const sdf=p=>{let d=sdEllB(p,c,U,[46,26,28]);d=smin(d,sdCap(p,ao.a,ao.b,ao.r[0],ao.r[1]),5);return d;};
+  const mesh=sdfMesh(sdf,[-62,-62,-62],[62,62,62],1.6);
+  clipMesh(mesh,q=>{const h=segH(q,ao.a,ao.b);if(h>0.28&&sdCap(q,ao.a,ao.b,15,15)<0)return true;
+    const d=v3.sub(q,mit.c),a2=v3.dot(d,mit.n);if(a2>-2&&v3.len(v3.sub(d,v3.sc(mit.n,a2)))<mit.r)return true;return false;});
+  return{mesh,center:c,ax,mit,ao};
+}
+function segH(p,a,b){const ba=v3.sub(b,a);return v3.dot(v3.sub(p,a),ba)/v3.dot(ba,ba);}
 function makeDemoStudy(){
   const rnd=seeded(7);const gauss=()=>{let u=0,v=0;while(!u)u=rnd();v=rnd();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);};
-  const{V,F}=icosphere(4);
-  const nv=V.length;const dirs=V.map(v=>v.slice());
-  const verts=new Float32Array(nv*3);
-  for(let i=0;i<nv;i++){const[x,y,z]=V[i];const bump=1+0.06*Math.sin(3*x+1)*Math.cos(2*y)+0.04*Math.sin(4*z);
-    verts[i*3]=x*30*bump;verts[i*3+1]=y*27*bump;verts[i*3+2]=z*42*bump-5;}
-  const tris=[];for(const f of F){const cz=(dirs[f[0]][2]+dirs[f[1]][2]+dirs[f[2]][2])/3;if(cz>0.93)continue;tris.push(...f);}
-  const mesh={nv,verts,tris:Uint32Array.from(tris),colors:{},colorNames:[],attrs:{}};computeNormals(mesh);
-  const scarC=v3.norm([0.85,-0.45,-0.1]);
-  const ang=i=>Math.acos(clamp(v3.dot(dirs[i],scarC),-1,1));
-  const zone=i=>{const a=ang(i);return a<0.33?'core':a<0.62?'border':'normal';};
-  const isth=v3.norm([0.9,-0.35,0.25]);
-  const cvAt=i=>{const z=zone(i);if(z==='core'){return v3.dot(dirs[i],isth)>0.985?0.12:0.02;}if(z==='border')return 0.3;return 0.75;};
-  const src=dirs.reduce((b,d,i)=>v3.dot(d,v3.norm([-0.8,0.3,-0.5]))>v3.dot(dirs[b],v3.norm([-0.8,0.3,-0.5]))?i:b,0);
-  const adj=meshAdj(mesh);
-  const dist=dijkstraCost(mesh,adj,src,(a,b,len)=>len/((cvAt(a)+cvAt(b))/2));
-  const latV=new Float32Array(nv),bipV=new Float32Array(nv),uniV=new Float32Array(nv);
-  for(let i=0;i<nv;i++){
-    latV[i]=dist[i]-20;const z=zone(i),a=ang(i);
-    if(z==='core'){bipV[i]=0.03+0.08*rnd();uniV[i]=1.5+1.5*rnd();}
-    else if(z==='border'){const f=(a-0.33)/0.29;bipV[i]=0.12+f*1.1+0.1*rnd();uniV[i]=3+f*4;}
-    else{bipV[i]=1.6+2.5*rnd();uniV[i]=7+5*rnd();}
-  }
-  const used=new Set(tris);const cand=[...used];
   const shared12=make12Lead(800);
-  function makeMap(name,post){
+  const P=(mesh,i)=>[mesh.verts[i*3],mesh.verts[i*3+1],mesh.verts[i*3+2]];
+  function build(name,mesh,o){
+    const nv=mesh.nv,adj=meshAdj(mesh),zone=new Array(nv);for(let i=0;i<nv;i++)zone[i]=o.zone(i);
+    const cvz={normal:o.cv||0.8,border:0.3,core:0.03,iso:0};
+    const src=o.src;const dist=dijkstraCost(mesh,adj,src,(a,b,len)=>{const ca=zone[a]==='core'&&o.channel&&o.channel(a)?0.12:cvz[zone[a]],cb=zone[b]==='core'&&o.channel&&o.channel(b)?0.12:cvz[zone[b]];const c=(ca+cb)/2;return c>0?len/c:Infinity;});
     const map=newMap(name);map.mesh=mesh;
-    const picks=new Set();while(picks.size<(post?300:430))picks.add(cand[Math.floor(rnd()*cand.length)]);
+    const cand=[];for(let i=0;i<nv;i++)if((!mesh.used||mesh.used[i])&&o.sample(i))cand.push(i);
+    const picks=new Set();let guard=0;while(picks.size<o.n&&guard++<o.n*20)picks.add(cand[Math.floor(rnd()*cand.length)]);
     let id=1;
     for(const vi of picks){
-      const z=zone(vi);const off=(rnd()*2-1)*1.2;
-      const n=[mesh.norms[vi*3],mesh.norms[vi*3+1],mesh.norms[vi*3+2]];
-      let bip=bipV[vi]*(1+0.15*gauss()),uni=uniV[vi]*(1+0.1*gauss()),lat=Math.round(latV[vi]+gauss()*3);
-      if(post&&z==='border'){bip=Math.max(0.04,bip*0.25);uni*=0.5;}
-      bip=Math.max(0.02,bip);
-      const p={id:id++,x:verts[vi*3]+n[0]*off,y:verts[vi*3+1]+n[1]*off,z:verts[vi*3+2]+n[2]*off,bip:+bip.toFixed(2),uni:+uni.toFixed(2),lat,imp:100+20*rnd(),
-        ref:800,woi:[-60,320],mapAnn:800+lat};
-      const zz=z,seed=Math.floor(rnd()*1e9);
-      p.egmGen=()=>synthEGM(p,zz,post,seed,shared12);
-      initPoint(p);p.loaded=false;
-      map.points.push(p);
+      const z=zone[vi];const n=[mesh.norms[vi*3],mesh.norms[vi*3+1],mesh.norms[vi*3+2]],off=(rnd()*2-1)*1.0,q=P(mesh,vi);
+      let bip,uni;
+      if(z==='normal'){bip=o.bipN[0]+(o.bipN[1]-o.bipN[0])*rnd();uni=bip*2.6+2+2*rnd();}
+      else if(z==='border'){bip=0.15+0.5*rnd();uni=2+2*rnd();}
+      else if(z==='core'){bip=0.03+0.09*rnd();uni=1.2+1.2*rnd();}
+      else{bip=0.01+0.03*rnd();uni=0.4+0.5*rnd();}
+      const lat=fin(dist[vi])&&z!=='iso'?Math.round(dist[vi]+o.lat0+gauss()*3):NaN;
+      const p={id:id++,x:q[0]+n[0]*off,y:q[1]+n[1]*off,z:q[2]+n[2]*off,bip:+bip.toFixed(2),uni:+uni.toFixed(2),lat,imp:100+20*rnd(),ref:800,woi:o.woi,mapAnn:fin(lat)?800+lat:NaN};
+      const zz=z==='iso'?'normal':z,seed=Math.floor(rnd()*1e9);p.egmGen=()=>synthEGM(p,zz,o.post,seed,shared12);
+      initPoint(p);p.loaded=false;map.points.push(p);
     }
     return map;
   }
-  const m1=makeMap('1-LV 基質マップ',false),m2=makeMap('2-LV 焼灼後',true);
-  const u=v3.norm(v3.cross(scarC,[0,0,1])),w=v3.cross(scarC,u);
-  const sites=[];const N=34;let idx=1;
-  for(let k=0;k<N;k++){
-    if(k===9||k===10)continue;
-    const th=2*Math.PI*k/N,a=0.5;
-    const d=v3.norm(v3.add(v3.sc(scarC,Math.cos(a)),v3.sc(v3.add(v3.sc(u,Math.cos(th)),v3.sc(w,Math.sin(th))),Math.sin(a))));
-    let bi=0,bd=-2;for(const i of cand){const dd=v3.dot(dirs[i],d);if(dd>bd){bd=dd;bi=i;}}
-    sites.push({x:verts[bi*3],y:verts[bi*3+1],z:verts[bi*3+2],session:'1',idx:idx++,
-      v:{ai:Math.round(380+180*rnd()),fti:Math.round(250+300*rnd()),dur:Math.round(12+28*rnd()),force:+(7+16*rnd()).toFixed(1),power:Math.round(35+15*rnd()),temp:Math.round(38+6*rnd()),impDrop:+(4+12*rnd()).toFixed(1),imp:Math.round(95+30*rnd())}});
-  }
-  const visitag={sites,params:[{k:'ai',label:'Ablation Index'},{k:'fti',label:'FTI'},{k:'dur',label:'焼灼時間 (s)'},{k:'force',label:'平均Force (g)'},{k:'power',label:'最大出力 (W)'},{k:'temp',label:'最高温度 (℃)'},{k:'impDrop',label:'インピーダンス低下 (Ω)'},{k:'imp',label:'基礎インピーダンス (Ω)'}]};
-  return{name:'デモ症例（架空データ）',maps:[m1,m2],visitag,vfs:null,warn:[],demo:true};
+  // ---- 左房（AF：焼灼前 / PVI後） ----
+  const LA=laAnatomy(),lm=LA.mesh;
+  const veinOf=i=>{const q=P(lm,i);for(const v of LA.veins){const h=segH(q,v.a,v.b);if(h>0.12&&sdCap(q,v.a,v.b,v.r[0]+3,v.r[1]+3)<0)return v.n;}return null;};
+  const inMitral=i=>{const d=v3.sub(P(lm,i),LA.mitral.c),ax=v3.dot(d,LA.mitral.n);return ax>-4&&v3.len(v3.sub(d,v3.sc(LA.mitral.n,ax)))<LA.mitral.r+3;};
+  const postDir=v3.norm([0.05,1,-0.25]);
+  const laZone=post=>i=>{if(post&&veinOf(i))return 'iso';const d=v3.norm(v3.sub(P(lm,i),LA.center));const ang=Math.acos(clamp(v3.dot(d,postDir),-1,1));return ang<0.22?'core':ang<0.42?'border':'normal';};
+  const laSrc=(()=>{const t=v3.norm([-0.55,-0.55,0.6]);let bi=0,bd=-2;for(let i=0;i<lm.nv;i++){if(!lm.used[i]||veinOf(i)||inMitral(i))continue;const d=v3.dot(v3.norm(v3.sub(P(lm,i),LA.center)),t);if(d>bd){bd=d;bi=i;}}return bi;})();
+  const laSample=i=>!inMitral(i);
+  const la1=build('1-LA 焼灼前',lm,{zone:laZone(false),src:laSrc,lat0:-20,n:420,sample:laSample,bipN:[0.8,3.2],woi:[-80,150],post:false,cv:0.9});
+  const la2=build('2-LA PVI後',lm,{zone:laZone(true),src:laSrc,lat0:-20,n:320,sample:laSample,bipN:[0.8,3.2],woi:[-80,150],post:true,cv:0.9});
+  // PVIの焼灼点（左右の肺静脈を同側ごとに囲む）
+  const sites=[];let sidx=1;
+  const ring=(c,nrm,R,N,skip,ses)=>{const e1=v3.norm(v3.cross(nrm,[0,0,1])),e2=v3.cross(nrm,e1);
+    for(let k=0;k<N;k++){if(skip.includes(k))continue;const th=2*Math.PI*k/N;const t=v3.add(c,v3.add(v3.sc(e1,R*Math.cos(th)),v3.sc(e2,R*1.25*Math.sin(th))));
+      let bi=0,bd=Infinity;for(let i=0;i<lm.nv;i++){if(!lm.used[i]||veinOf(i))continue;const dd=v3.dist(P(lm,i),t);if(dd<bd){bd=dd;bi=i;}}
+      const q=P(lm,bi);sites.push({x:q[0],y:q[1],z:q[2],session:ses,idx:sidx++,v:{ai:Math.round(380+180*rnd()),fti:Math.round(250+300*rnd()),dur:Math.round(10+25*rnd()),force:+(7+16*rnd()).toFixed(1),power:Math.round(35+15*rnd()),temp:Math.round(38+6*rnd()),impDrop:+(4+12*rnd()).toFixed(1),imp:Math.round(95+30*rnd())}});}};
+  ring([21,15,2],v3.norm([1,0.55,0]),13,26,[7,8],'1');
+  ring([-21,15,2],v3.norm([-1,0.55,0]),13,26,[],'2');
+  // ---- 左室（VT基質） ----
+  const LV=lvAnatomy(),vm=LV.mesh;
+  const scarC=v3.norm([0.85,-0.45,-0.1]),isth=v3.norm([0.9,-0.35,0.25]);
+  const lvDir=i=>v3.norm(v3.sub(P(vm,i),LV.center));
+  const inValve=i=>{const q=P(vm,i);if(segH(q,LV.ao.a,LV.ao.b)>0.1&&sdCap(q,LV.ao.a,LV.ao.b,14,14)<0)return true;const d=v3.sub(q,LV.mit.c),a2=v3.dot(d,LV.mit.n);return a2>-5&&v3.len(v3.sub(d,v3.sc(LV.mit.n,a2)))<LV.mit.r+3;};
+  const lvZone=i=>{const a=Math.acos(clamp(v3.dot(lvDir(i),scarC),-1,1));return a<0.33?'core':a<0.62?'border':'normal';};
+  const lvSrc=(()=>{const t=v3.norm([-0.8,0.3,-0.5]);let bi=0,bd=-2;for(let i=0;i<vm.nv;i++){if(!vm.used[i]||inValve(i))continue;const d=v3.dot(lvDir(i),t);if(d>bd){bd=d;bi=i;}}return bi;})();
+  const lv=build('3-LV VT基質',vm,{zone:lvZone,channel:i=>v3.dot(lvDir(i),isth)>0.985,src:lvSrc,lat0:-20,n:430,sample:i=>!inValve(i),bipN:[1.6,4.1],woi:[-60,320],post:false,cv:0.75});
+  const visitag={mapNames:['1-LA 焼灼前','2-LA PVI後'],sites,params:[{k:'ai',label:'Ablation Index'},{k:'fti',label:'FTI'},{k:'dur',label:'焼灼時間 (s)'},{k:'force',label:'平均Force (g)'},{k:'power',label:'最大出力 (W)'},{k:'temp',label:'最高温度 (℃)'},{k:'impDrop',label:'インピーダンス低下 (Ω)'},{k:'imp',label:'基礎インピーダンス (Ω)'}]};
+  return{name:'デモ症例（架空データ）',maps:[la1,la2,lv],visitag,vfs:null,warn:[],demo:true};
 }
 const DEMO_CL=600,DEMO_BEATS=[-1200,-600,0,600,1200];
 function make12Lead(ref){
@@ -825,7 +880,7 @@ function make12Lead(ref){
   return names.map(n=>[n,base[n]]);
 }
 function synthEGM(p,zone,post,seed,shared12){
-  const rnd=seeded(seed),L=2000,ref=p.ref;
+  const rnd=seeded(seed),L=2000,ref=p.ref;const LATX=fin(p.lat)?p.lat:99999;
   const bip=new Float32Array(L),uni=new Float32Array(L),m2=new Float32Array(L),rch=new Float32Array(L);
   const dg=(t,c,s)=>{const x=(t-c)/s;return -x*Math.exp(-x*x/2)*1.65;};
   const g=(t,c,s)=>Math.exp(-((t-c)**2)/(2*s*s));
@@ -833,11 +888,11 @@ function synthEGM(p,zone,post,seed,shared12){
   for(let i=0;i<L;i++){
     let b=0,u=0,r=0;
     for(const bo of DEMO_BEATS){const t=i-ref-bo;if(t<-300||t>500)continue;
-      b+=p.bip*dg(t,p.lat,3.2);
+      b+=p.bip*dg(t,LATX,3.2);
       if(zone!=='normal')b+=0.25*dg(t,50,12);
-      for(const[o,a]of extra)b+=a*dg(t,p.lat+o,2.5);
-      if(zone==='core'&&!post&&p.lat>130)b+=0.35*dg(t,p.lat,2.5);
-      u+=-p.uni*g(t,p.lat+3,7)+0.35*p.uni*g(t,p.lat-12,9)+0.8*g(t,330,45);
+      for(const[o,a]of extra)b+=a*dg(t,LATX+o,2.5);
+      if(zone==='core'&&!post&&LATX>130)b+=0.35*dg(t,LATX,2.5);
+      u+=-p.uni*g(t,LATX+3,7)+0.35*p.uni*g(t,LATX-12,9)+0.8*g(t,330,45);
       r+=2.2*dg(t,0,2);}
     b+=0.008*Math.sin(i*0.7)+0.006*Math.sin(i*2.3);
     bip[i]=b;uni[i]=u+0.05*Math.sin(i*0.05);m2[i]=uni[i]-b;rch[i]=r+0.03*Math.sin(i*0.9);
@@ -851,7 +906,7 @@ function synthEGM(p,zone,post,seed,shared12){
   // 多電極カテーテル（スプラインA〜D、各5双極）
   for(const[si,sp]of ['A','B','C','D'].entries())for(let e=1;e<=5;e++){
     const off=(si-1.5)*6+(e-3)*3,amp=Math.max(0.05,p.bip*(0.5+0.8*rnd()));
-    lazy(`MPU ${sp}${e}-${sp}${e+1}`,()=>{const a=new Float32Array(L);for(let i=0;i<L;i++){let v=0;for(const bo of DEMO_BEATS){const t=i-ref-bo;if(t<-300||t>500)continue;v+=amp*dg(t,p.lat+off,3)+0.12*dg(t,50,12);for(const[o,aa]of extra)v+=aa*0.7*dg(t,p.lat+off+o,2.5);}a[i]=v+0.006*Math.sin(i*0.8+e);}return a;});}
+    lazy(`MPU ${sp}${e}-${sp}${e+1}`,()=>{const a=new Float32Array(L);for(let i=0;i<L;i++){let v=0;for(const bo of DEMO_BEATS){const t=i-ref-bo;if(t<-300||t>500)continue;v+=amp*dg(t,LATX+off,3)+0.12*dg(t,50,12);for(const[o,aa]of extra)v+=aa*0.7*dg(t,LATX+off+o,2.5);}a[i]=v+0.006*Math.sin(i*0.8+e);}return a;});}
   for(const[n,a]of shared12){ch[n]=a;order.push(n);}
   return{fs:1000,gain:1,ch,order,uniCh:'M1',bipCh:'M1-M2',refCh:'RV1-RV2',len:L};
 }
@@ -1183,7 +1238,7 @@ class Viewer{
   }
   updateVT(){
     const vt=S.study&&S.study.visitag;let items=[];
-    if(vt&&S.opt.vtOn){const k=S.opt.vtParam,lo=S.opt.vtLo,hi=S.opt.vtHi;
+    if(vt&&S.opt.vtOn&&vtForMap(this.map)){const k=S.opt.vtParam,lo=S.opt.vtLo,hi=S.opt.vtHi;
       items=vt.sites.map(s=>{const v=s.v[k];const c=fin(v)?cmap(1-clamp((v-lo)/((hi-lo)||1),0,1)):[0.8,0.8,0.8];return{x:s.x,y:s.y,z:s.z,r:S.opt.vtSize,c:[...c,1]};});}
     const s=buildSpheres(items);this.upload('vP',s.P);this.upload('vN',s.N);this.upload('vC',s.C);this.vtCount=s.count;this.vtDirty=false;
   }
@@ -1191,8 +1246,8 @@ class Viewer{
     const segs=[],m=this.map;if(!m)return segs;
     if(S.opt.cvOn&&m.mesh)for(const s of cvArrows(m))segs.push({...s,depth:true});
     if(S.opt.ripple&&m.mesh)for(const s of rippleBars(m))segs.push({...s,depth:true});
-    if(S.study&&S.study.visitag&&S.opt.vtOn&&S.opt.vtChain)for(const g of vtChain())segs.push({a:[g.a.x,g.a.y,g.a.z],b:[g.b.x,g.b.y,g.b.z],c:[0.45,0.7,1,1],w:Math.max(0.5,S.opt.vtSize*0.35),depth:true});
-    if(S.study&&S.study.visitag&&S.opt.vtOn&&S.opt.gapShow&&S.gaps)for(const g of S.gaps)segs.push({a:[g.a.x,g.a.y,g.a.z],b:[g.b.x,g.b.y,g.b.z],c:[1,0.15,0.15,1],w:0.9,depth:false});
+    if(vtForMap(m)&&S.opt.vtOn&&S.opt.vtChain)for(const g of vtChain())segs.push({a:[g.a.x,g.a.y,g.a.z],b:[g.b.x,g.b.y,g.b.z],c:[0.45,0.7,1,1],w:Math.max(0.5,S.opt.vtSize*0.35),depth:true});
+    if(vtForMap(m)&&S.opt.vtOn&&S.opt.gapShow&&S.gaps)for(const g of S.gaps)segs.push({a:[g.a.x,g.a.y,g.a.z],b:[g.b.x,g.b.y,g.b.z],c:[1,0.15,0.15,1],w:0.9,depth:false});
     if(m.mesh&&S.meas.map===m){
       const V=m.mesh.verts,N=m.mesh.norms,P=i=>[V[i*3]+N[i*3]*0.4,V[i*3+1]+N[i*3+1]*0.4,V[i*3+2]+N[i*3+2]*0.4];
       const draw=(path,col)=>{for(let i=1;i<path.length;i++)segs.push({a:P(path[i-1]),b:P(path[i]),c:col,w:0.6,depth:false});};
@@ -1307,9 +1362,10 @@ function drawHBar(ctx,x,y,v,sc){
     yy+=30*sc;};
   if(T.kind!=='none'){const{lo,hi}=v.range();bar(lo,hi,SHORT[T.k]||T.label,T.unit||'',t=>barColor(T,t),T.kind==='volt'?2:0);}
   const vt=S.study&&S.study.visitag;
-  if(vt&&S.opt.vtOn){const pl=vt.params.find(p=>p.k===S.opt.vtParam);bar(S.opt.vtLo,S.opt.vtHi,'Tag.'+(pl?(pl.k==='ai'?'AI':pl.k):''),'',t=>cmap(1-t),0);}
+  if(vt&&S.opt.vtOn&&vtForMap(v.map)){const pl=vt.params.find(p=>p.k===S.opt.vtParam);bar(S.opt.vtLo,S.opt.vtHi,'Tag.'+(pl?(pl.k==='ai'?'AI':pl.k):''),'',t=>cmap(1-t),0);}
   ctx.restore();
 }
+function vtForMap(m){const vt=S.study&&S.study.visitag;return !!vt&&(!vt.mapNames||(m&&vt.mapNames.includes(m.name)));}
 function drawHead(v){
   const c=v.el.querySelector('.head');if(!c)return;const ctx=c.getContext('2d');ctx.clearRect(0,0,60,60);if(!v.map)return;
   const R=v.R,cx=30,cy=30,r=22;
@@ -1406,7 +1462,7 @@ function setStudy(study){
   S.viewers[0].ranges={};S.viewers[0].setMap(m0);
   const m1=study.maps.find(m=>m!==m0)||m0;S.viewers[1].type=study.demo?'Bipolar':S.viewers[0].type;S.viewers[1].ranges={};S.viewers[1].setMap(m1);
   setupVT();setActive(0);renderWave();renderMeas();$('#egmRes').textContent='';$('#egmTable').innerHTML='';$('#areaRes').textContent='';$('#cvRes').textContent='';$('#gapRes').textContent='';$('#gapTable').innerHTML='';
-  toast(study.demo?'デモデータを読み込みました（架空の左室VT症例）':'読み込みました：'+study.maps.map(m=>m.name).join('、'),4000);
+  toast(study.demo?'デモデータを読み込みました（架空：左房 焼灼前／PVI後、左室VT基質）':'読み込みました：'+study.maps.map(m=>m.name).join('、'),4000);
 }
 
 /* ===================== パネル ===================== */
@@ -1439,7 +1495,7 @@ function syncRange(){
 }
 function bindPanel(){
   $$('#tabs button').forEach(b=>b.onclick=()=>{$$('#tabs button').forEach(x=>x.classList.toggle('on',x===b));$$('.tabpane').forEach(p=>p.classList.toggle('on',p.id===b.dataset.tab));});
-  $('#selMap').onchange=e=>{const v=av();v.setMap(S.study.maps[+e.target.value],true);if(!typesForMap(v.map).some(t=>t.k===v.type))v.type='LAT';syncPanel();if(S.meas.map&&S.meas.map!==v.map)measClear();};
+  $('#selMap').onchange=e=>{const v=av(),nm=S.study.maps[+e.target.value];v.setMap(nm,!!(v.map&&v.map.mesh===nm.mesh));if(!typesForMap(v.map).some(t=>t.k===v.type))v.type='LAT';syncPanel();if(S.meas.map&&S.meas.map!==v.map)measClear();};
   $('#selType').onchange=e=>{const v=av();v.type=e.target.value;v.colDirty=v.ptsDirty=v.dirty=true;syncRange();
     if(v.T.kind==='prop'&&!S.anim.prop)togglePropPlay(true);
     if(v.T.kind==='metric'&&!v.map.points.some(p=>p.metrics))toast('先に「解析」タブで電位解析を実行してください',4000);};
@@ -1456,8 +1512,8 @@ function bindPanel(){
   $('#ptColor').onchange=e=>{S.opt.ptColor=e.target.value;dirtyAll('p');};
   
   for(const v of S.viewers){
-    v.el.querySelector('.vMap').onchange=e=>{setActive(v.idx);$('#selMap').onchange({target:{value:e.target.value}});};
-    v.el.querySelector('.vType').onchange=e=>{setActive(v.idx);$('#selType').value=e.target.value;$('#selType').onchange({target:{value:e.target.value}});};
+    v.el.querySelector('.vMap').onchange=e=>{const val=e.target.value;setActive(v.idx);$('#selMap').onchange({target:{value:val}});};
+    v.el.querySelector('.vType').onchange=e=>{const val=e.target.value;setActive(v.idx);$('#selType').value=val;$('#selType').onchange({target:{value:val}});};
     v.el.querySelectorAll('.vviews button').forEach(b=>b.onclick=()=>{setActive(v.idx);v.setView(b.dataset.v);afterCam(v);});
     v.el.querySelector('.vOp').oninput=e=>{S.opt.opacity=1-(+e.target.value)/100;$('#opacity').value=S.opt.opacity;dirtyAll('');syncViewOverlays();};
   }
