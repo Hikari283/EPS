@@ -183,7 +183,7 @@ body,button,select,input,textarea{font-family:Tahoma,"Segoe UI",Verdana,"Meiryo 
 .wfb{background:linear-gradient(#6a7482,#424a55 48%,#353c46 52%,#2b313a);border:1px solid #171b20;border-radius:7px;color:#fff;font-size:15px;font-weight:bold;text-shadow:0 1px 1px #000;box-shadow:inset 0 1px 0 rgba(255,255,255,.25);min-width:110px;padding:6px 14px}
 .wfb.on{background:linear-gradient(#ffb07a,#f47a35 48%,#e9601c 52%,#d24f10);border-color:#9c3a08}
 #views{background:#000}
-.vtop select{background:linear-gradient(#3a64a8,#1e3d73);border:1px solid #7aa0dc;color:#cfe6ff;font-weight:bold;font-size:15px;border-radius:3px;padding:2px 6px;box-shadow:inset 0 1px 0 rgba(255,255,255,.2)}
+.vtop select{background:linear-gradient(#4a5462,#2e3540);border:1px solid #6b7686;color:#a9d4ff;font-weight:bold;font-size:15px;border-radius:3px;padding:2px 6px;box-shadow:inset 0 1px 0 rgba(255,255,255,.2)}
 .vtop select:last-of-type{font-size:12px}
 .vviews button{background:transparent!important;border:0!important;color:#d6dde6;font-size:13px;padding:2px 5px;text-shadow:0 1px 2px #000}
 .vviews button:hover{color:#fff;text-decoration:underline}
@@ -191,9 +191,10 @@ body,button,select,input,textarea{font-family:Tahoma,"Segoe UI",Verdana,"Meiryo 
 .vop{background:transparent;color:#d6dde6;font-size:13px}
 .gizmo{left:auto;right:6px;bottom:30px}
 .vname{left:auto;right:0;width:108px}
+.rl{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .head{position:absolute;left:50%;top:60px;width:60px;height:60px;transform:translateX(-90px);pointer-events:none}
 .view.narrow .head{left:16px;transform:none;top:88px}
-.vwm{position:absolute;left:8px;bottom:6px;font-size:10px;color:#556170;pointer-events:none}
+.vwm{position:absolute;left:12px;top:70px;font-size:10px;color:#556170;pointer-events:none}
 .vinfo{position:absolute;right:10px;top:76px;display:flex;gap:2px;background:rgba(8,10,14,.72);border:2px solid #d0473a;border-radius:4px;padding:2px 22px 4px 8px;cursor:move;user-select:none;z-index:4}
 .vinfo.hidden{display:none}
 .vinfo .ib{text-align:center;min-width:58px}
@@ -263,7 +264,7 @@ body,button,select,input,textarea{font-family:Tahoma,"Segoe UI",Verdana,"Meiryo 
       <div class="row"><span class="lb">透明度</span><input type="range" id="opacity" min="0.1" max="1" step="0.05" value="1"></div>
       <div class="row"><span class="lb">ポイント</span><label><input type="checkbox" id="showPts" checked> 表示</label><label><input type="checkbox" id="showExcl" checked> 除外点も</label></div>
       <div class="row"><span class="lb">点の大きさ</span><input type="range" id="ptSize" min="0.4" max="4" step="0.1" value="0.9"></div>
-      <div class="row"><span class="lb">点の色</span><select id="ptColor"><option value="value">マップの値</option><option value="white">白</option><option value="label">ラベル付きを強調</option></select></div>
+      <div class="row"><span class="lb">点の色</span><select id="ptColor"><option value="value">マップの値</option><option value="white" selected>白</option><option value="label">ラベル付きを強調</option></select></div>
     </fieldset>
     <fieldset><legend>2画面比較</legend>
       <div class="row"><label><input type="checkbox" id="compareOn"> 2画面で並べる</label><label><input type="checkbox" id="syncCam" checked> 視点を連動</label></div>
@@ -369,7 +370,7 @@ body,button,select,input,textarea{font-family:Tahoma,"Segoe UI",Verdana,"Meiryo 
     <div class="vtop"><select class="vMap" title="マップ"></select><select class="vType" title="表示"></select><div class="vlabel"></div></div>
     <div class="cbar"><canvas width="340" height="64"></canvas></div>
     <canvas class="gizmo" width="96" height="96"></canvas><div class="vname"></div>
-    <canvas class="head" width="60" height="60"></canvas>
+    <canvas class="rl"></canvas><canvas class="head" width="60" height="60"></canvas>
     <div class="vinfo hidden"><button class="x" title="閉じる">×</button><div class="ib"><div class="k">Point</div><div class="v f-pid">—</div></div><div class="ib"><div class="k">LAT</div><div class="v f-lat">—</div></div><div class="ib"><div class="k">CL</div><div class="v f-cl">—</div></div><div class="ib"><div class="k">Bi</div><div class="v f-bi">—</div></div><div class="ib"><div class="k">Uni</div><div class="v f-uni">—</div></div></div>
     <div class="vwm">研究・教育用ビューア（診療には使用しない）</div>
     <div class="vbot"><span class="vviews"><button data-v="AP">AP</button><button data-v="PA">PA</button><button data-v="LAO">LAO</button><button data-v="RAO">RAO</button><button data-v="LL">LL</button><button data-v="RL">RL</button><button data-v="INF">INF</button><button data-v="SUP">SUP</button><button data-v="FIT">全体</button></span>
@@ -380,7 +381,7 @@ body,button,select,input,textarea{font-family:Tahoma,"Segoe UI",Verdana,"Meiryo 
     <div class="vtop"><select class="vMap" title="マップ"></select><select class="vType" title="表示"></select><div class="vlabel"></div></div>
     <div class="cbar"><canvas width="340" height="64"></canvas></div>
     <canvas class="gizmo" width="96" height="96"></canvas><div class="vname"></div>
-    <canvas class="head" width="60" height="60"></canvas>
+    <canvas class="rl"></canvas><canvas class="head" width="60" height="60"></canvas>
     <div class="vinfo hidden"><button class="x" title="閉じる">×</button><div class="ib"><div class="k">Point</div><div class="v f-pid">—</div></div><div class="ib"><div class="k">LAT</div><div class="v f-lat">—</div></div><div class="ib"><div class="k">CL</div><div class="v f-cl">—</div></div><div class="ib"><div class="k">Bi</div><div class="v f-bi">—</div></div><div class="ib"><div class="k">Uni</div><div class="v f-uni">—</div></div></div>
     <div class="vwm">研究・教育用ビューア（診療には使用しない）</div>
     <div class="vbot"><span class="vviews"><button data-v="AP">AP</button><button data-v="PA">PA</button><button data-v="LAO">LAO</button><button data-v="RAO">RAO</button><button data-v="LL">LL</button><button data-v="RL">RL</button><button data-v="INF">INF</button><button data-v="SUP">SUP</button><button data-v="FIT">全体</button></span>
@@ -1090,7 +1091,9 @@ function typesForMap(map){
 }
 const RAINBOW=[[1,0,0],[1,0.55,0],[1,1,0],[0.1,0.85,0.1],[0,0.85,0.9],[0.1,0.35,1],[0.6,0.1,0.85]];
 function cmap(t){t=clamp(t,0,1)*(RAINBOW.length-1);const i=Math.min(RAINBOW.length-2,Math.floor(t)),f=t-i,a=RAINBOW[i],b=RAINBOW[i+1];return[a[0]+(b[0]-a[0])*f,a[1]+(b[1]-a[1])*f,a[2]+(b[2]-a[2])*f];}
-const GRAY_NA=[0.62,0.62,0.62],GRAY_SCAR=[0.33,0.33,0.36];
+const GRAY_NA=[0.80,0.80,0.86],GRAY_SCAR=[0.45,0.45,0.48];
+// CARTOのTag表示風：薄いピンク→赤
+const tagColor=t=>{t=clamp(t,0,1);return[0.97-0.15*t,0.72-0.62*t,0.78-0.66*t];};
 function vertexValues(map,T){
   if(!map.mesh||T.kind==='none')return null;
   const meshArr=T.mesh&&map.mesh.colors[T.mesh];
@@ -1122,7 +1125,7 @@ function autoRange(map,T){
 const VS_LIT=`attribute vec3 aP;attribute vec3 aN;attribute vec4 aC;uniform mat4 uMVP;uniform mat4 uV;varying vec3 vN;varying vec3 vE;varying vec4 vC;
 void main(){gl_Position=uMVP*vec4(aP,1.0);vN=(uV*vec4(aN,0.0)).xyz;vE=(uV*vec4(aP,1.0)).xyz;vC=aC;}`;
 const FS_LIT=`precision mediump float;varying vec3 vN;varying vec3 vE;varying vec4 vC;uniform float uA;
-void main(){vec3 n=normalize(vN);vec3 e=normalize(-vE);float d=abs(dot(n,e));vec3 c=vC.rgb*(0.32+0.68*d)+vec3(pow(d,28.0)*0.16);gl_FragColor=vec4(c,vC.a*uA);}`;
+void main(){vec3 n=normalize(vN);vec3 e=normalize(-vE);float d=abs(dot(n,e));vec3 c=vC.rgb*(0.55+0.45*d)+vec3(pow(d,40.0)*0.10);gl_FragColor=vec4(c,vC.a*uA);}`;
 const VS_FLAT=`attribute vec3 aP;attribute vec4 aC;uniform mat4 uMVP;varying vec4 vC;void main(){gl_Position=uMVP*vec4(aP,1.0);vC=aC;}`;
 const FS_FLAT=`precision mediump float;varying vec4 vC;void main(){gl_FragColor=vC;}`;
 const M4={
@@ -1252,7 +1255,7 @@ class Viewer{
   updateVT(){
     const vt=S.study&&S.study.visitag;let items=[];
     if(vt&&S.opt.vtOn&&vtForMap(this.map)){const k=S.opt.vtParam,lo=S.opt.vtLo,hi=S.opt.vtHi;
-      items=vt.sites.map(s=>{const v=s.v[k];const c=fin(v)?cmap(1-clamp((v-lo)/((hi-lo)||1),0,1)):[0.8,0.8,0.8];return{x:s.x,y:s.y,z:s.z,r:S.opt.vtSize,c:[...c,1]};});}
+      items=vt.sites.map(s=>{const v=s.v[k];const c=fin(v)?tagColor((v-lo)/((hi-lo)||1)):[0.8,0.8,0.8];return{x:s.x,y:s.y,z:s.z,r:S.opt.vtSize,c:[...c,1]};});}
     const s=buildSpheres(items);this.upload('vP',s.P);this.upload('vN',s.N);this.upload('vC',s.C);this.vtCount=s.count;this.vtDirty=false;
   }
   segments(){
@@ -1375,7 +1378,7 @@ function drawHBar(ctx,x,y,v,sc){
     yy+=30*sc;};
   if(T.kind!=='none'){const{lo,hi}=v.range();bar(lo,hi,SHORT[T.k]||T.label,T.unit||'',t=>barColor(T,t),T.kind==='volt'?2:0);}
   const vt=S.study&&S.study.visitag;
-  if(vt&&S.opt.vtOn&&vtForMap(v.map)){const pl=vt.params.find(p=>p.k===S.opt.vtParam);bar(S.opt.vtLo,S.opt.vtHi,'Tag.'+(pl?(pl.k==='ai'?'AI':pl.k):''),'',t=>cmap(1-t),0);}
+  if(vt&&S.opt.vtOn&&vtForMap(v.map)){const pl=vt.params.find(p=>p.k===S.opt.vtParam);bar(S.opt.vtLo,S.opt.vtHi,'Tag.Idx','',tagColor,0);}
   ctx.restore();
 }
 function vtForMap(m){const vt=S.study&&S.study.visitag;return !!vt&&(!vt.mapNames||(m&&vt.mapNames.includes(m.name)));}
@@ -1389,8 +1392,20 @@ function drawHead(v){
   if(az>-0.15){
     const px=-uy,py=ux;const ex=cx+ax*r*0.55,ey=cy-ay*r*0.55;
     ctx.globalAlpha=clamp((az+0.15)*1.6,0,1);ctx.fillStyle='#46c84a';
-    for(const s of [-1,1]){const x=ex+s*px*7-ux*3,y=ey-s*py*7+uy*3;ctx.beginPath();ctx.ellipse(x,y,3.2*Math.max(0.35,Math.abs(az)),4,0,0,7);ctx.fill();}
+    for(const s of [-1,1]){const x=ex+s*px*7+ux*3,y=ey-s*py*7-uy*3;ctx.beginPath();ctx.ellipse(x,y,3.2*Math.max(0.35,Math.abs(az)),4,0,0,7);ctx.fill();}
+    const mx=ex-ux*8,my=ey+uy*8;ctx.strokeStyle='#555';ctx.lineWidth=1.6;ctx.beginPath();ctx.moveTo(mx-px*5,my+py*5);ctx.lineTo(mx+px*5,my-py*5);ctx.stroke();
     ctx.globalAlpha=1;}
+}
+// 画面の左右に R（緑）・L（赤）の矢印（CARTO風）
+function drawRL(v){
+  const c=v.el.querySelector('.rl');if(!c)return;const w=v.el.clientWidth,h=v.el.clientHeight;if(c.width!==w||c.height!==h){c.width=w;c.height=h;}
+  const ctx=c.getContext('2d');ctx.clearRect(0,0,w,h);if(!v.map)return;
+  const sx=v.R[0],sy=-v.R[3],len=Math.hypot(sx,sy);if(len<0.35)return;
+  const dx=sx/len,dy=sy/len,cx=w/2,cy=h*0.52,d=Math.min(w*0.36,h*0.42);
+  const one=(sgn,col,lab)=>{const ux=dx*sgn,uy=dy*sgn,tx=cx+ux*d,ty=cy+uy*d;ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=3;ctx.lineCap='round';ctx.globalAlpha=clamp(len*1.3,0,1);
+    for(const a of [-0.55,0,0.55]){const ca=Math.cos(a),sa=Math.sin(a),ex=ux*ca-uy*sa,ey=ux*sa+uy*ca;ctx.beginPath();ctx.moveTo(tx,ty);ctx.lineTo(tx+ex*38,ty+ey*38);ctx.stroke();}
+    ctx.font='bold 16px Tahoma,Verdana,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(lab,tx+ux*30,ty+uy*30+30);ctx.globalAlpha=1;};
+  one(1,'#ff5a4a','L');one(-1,'#7ee05a','R');
 }
 const GIZ=[[[1,0,0],'L','#ff6b6b'],[[-1,0,0],'R','#7fe37f'],[[0,-1,0],'A','#9fb3c8'],[[0,1,0],'P','#9fb3c8'],[[0,0,1],'S','#ffd27f'],[[0,0,-1],'I','#ffd27f']];
 function viewNameOf(v){let best='',bd=0.995;for(const[k,[back,up]]of Object.entries(VIEWS)){const d=v3.dot(v3.norm(back),[v.R[6],v.R[7],v.R[8]])*0.7+v3.dot(v3.norm(up),[v.R[3],v.R[4],v.R[5]])*0.3;if(d>bd){bd=d;best=k;}}return best;}
@@ -1402,7 +1417,7 @@ function drawGizmo(v){
   ctx.font='bold 11px system-ui,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
   for(const it of items){const ex=cx+it.x*L,ey=cy-it.y*L;ctx.globalAlpha=it.z<-0.2?0.35:1;ctx.strokeStyle=it.col;ctx.lineWidth=it.lab==='L'||it.lab==='R'?3:1.5;ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(ex,ey);ctx.stroke();
     ctx.fillStyle=it.col;ctx.fillText(it.lab,cx+it.x*(L+9),cy-it.y*(L+9));}
-  ctx.globalAlpha=1;drawHead(v);
+  ctx.globalAlpha=1;drawHead(v);drawRL(v);
   const vn=viewNameOf(v);v.el.querySelector('.vname').textContent=vn==='SUP'?'頭側':vn==='INF'?'足側':vn;
   v.el.querySelectorAll('.vviews button').forEach(b=>b.classList.toggle('cur',b.dataset.v===vn));
 }
@@ -1444,7 +1459,7 @@ const S={
   meas:{map:null,pts:[],path:null,results:[],len:0,straight:0},
   snaps:[],gaps:null,rec:null,
   anim:{prop:false,phase:0,rphase:0,rippleT:0},
-  opt:{src:'auto',fill:15,scar:0.05,iso:false,isoSteps:12,opacity:1,showPts:true,showExcl:true,ptSize:0.9,ptColor:'value',
+  opt:{src:'auto',fill:15,scar:0.05,iso:false,isoSteps:12,opacity:1,showPts:true,showExcl:true,ptSize:0.55,ptColor:'white',
     propSpeed:80,propBand:15,ripple:false,rippleScale:6,rippleSpeed:60,cvOn:false,cvSpacing:6,
     vtOn:true,vtChain:true,gapThr:6,vtSize:2.5,vtParam:'ai',vtLo:0,vtHi:1,gapShow:true},
   wch:{map:true,ref:true,ecg:false,other:false}
