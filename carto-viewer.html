@@ -189,8 +189,19 @@ body,button,select,input,textarea{font-family:Tahoma,"Segoe UI",Verdana,"Meiryo 
 .vviews button:hover{color:#fff;text-decoration:underline}
 .vviews button.cur{color:#ff5a4a!important;text-decoration:underline;font-weight:bold}
 .vop{background:transparent;color:#d6dde6;font-size:13px}
-.gizmo{left:auto;right:6px;bottom:30px}
-.vname{left:auto;right:0;width:108px}
+.gizmo{left:50%;right:auto;bottom:20px;width:76px;height:76px;transform:translateX(-340px)}
+.vname{left:50%;right:auto;width:76px;bottom:96px;transform:translateX(-340px);font-weight:bold;font-size:12px}
+.view.narrow .gizmo,.view.narrow .vname{left:8px;transform:none}
+.view.narrow .vname{bottom:96px}
+.view.narrow .gizmo{bottom:34px}
+.view.narrow .vname{bottom:110px}
+.vside{position:absolute;right:6px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:4px;align-items:center;background:linear-gradient(#5d6673,#3a424d);border:1px solid #1d2228;border-radius:7px;padding:5px 4px;z-index:3;box-shadow:inset 0 1px 0 rgba(255,255,255,.2)}
+#views:not(.single) #view1 .vside{right:auto;left:6px}
+.vside button{width:30px;height:27px;padding:0;border-radius:5px;border:1px solid #0f2547;background:linear-gradient(#8fbcf5,#3f7fd6 45%,#2459ad);color:#fff;font-size:13px;line-height:1}
+.vside button.on{background:linear-gradient(#ffb07a,#f47a35 45%,#d24f10);border-color:#7a2d06}
+.vside button[data-a=play]{border-radius:50%;width:32px;height:32px;background:linear-gradient(#a0a8b4,#59616d 50%,#3d444e);border-color:#15181c;margin-top:2px}
+.vside{width:42px}
+.vZoom{writing-mode:vertical-lr;direction:rtl;width:16px;min-width:0;height:84px;margin:2px 0 0;padding:0}
 .rl{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .head{position:absolute;left:50%;top:60px;width:60px;height:60px;transform:translateX(-90px);pointer-events:none}
 .view.narrow .head{left:16px;transform:none;top:88px}
@@ -370,7 +381,7 @@ body,button,select,input,textarea{font-family:Tahoma,"Segoe UI",Verdana,"Meiryo 
     <div class="vtop"><select class="vMap" title="マップ"></select><select class="vType" title="表示"></select><div class="vlabel"></div></div>
     <div class="cbar"><canvas width="340" height="64"></canvas></div>
     <canvas class="gizmo" width="96" height="96"></canvas><div class="vname"></div>
-    <canvas class="rl"></canvas><canvas class="head" width="60" height="60"></canvas>
+    <canvas class="rl"></canvas><div class="vside"><button data-a="fit" title="全体を表示">⛶</button><button data-a="pts" title="ポイントの表示／非表示">⁘</button><button data-a="tag" title="焼灼点の表示／非表示">●</button><button data-a="trans" title="半透明">◐</button><button data-a="play" title="伝播（Propagation）を再生／停止">▶</button><input type="range" class="vZoom" min="-1.2" max="1.6" step="0.05" value="0" title="拡大・縮小"></div><canvas class="head" width="60" height="60"></canvas>
     <div class="vinfo hidden"><button class="x" title="閉じる">×</button><div class="ib"><div class="k">Point</div><div class="v f-pid">—</div></div><div class="ib"><div class="k">LAT</div><div class="v f-lat">—</div></div><div class="ib"><div class="k">CL</div><div class="v f-cl">—</div></div><div class="ib"><div class="k">Bi</div><div class="v f-bi">—</div></div><div class="ib"><div class="k">Uni</div><div class="v f-uni">—</div></div></div>
     <div class="vwm">研究・教育用ビューア（診療には使用しない）</div>
     <div class="vbot"><span class="vviews"><button data-v="AP">AP</button><button data-v="PA">PA</button><button data-v="LAO">LAO</button><button data-v="RAO">RAO</button><button data-v="LL">LL</button><button data-v="RL">RL</button><button data-v="INF">INF</button><button data-v="SUP">SUP</button><button data-v="FIT">全体</button></span>
@@ -381,7 +392,7 @@ body,button,select,input,textarea{font-family:Tahoma,"Segoe UI",Verdana,"Meiryo 
     <div class="vtop"><select class="vMap" title="マップ"></select><select class="vType" title="表示"></select><div class="vlabel"></div></div>
     <div class="cbar"><canvas width="340" height="64"></canvas></div>
     <canvas class="gizmo" width="96" height="96"></canvas><div class="vname"></div>
-    <canvas class="rl"></canvas><canvas class="head" width="60" height="60"></canvas>
+    <canvas class="rl"></canvas><div class="vside"><button data-a="fit" title="全体を表示">⛶</button><button data-a="pts" title="ポイントの表示／非表示">⁘</button><button data-a="tag" title="焼灼点の表示／非表示">●</button><button data-a="trans" title="半透明">◐</button><button data-a="play" title="伝播（Propagation）を再生／停止">▶</button><input type="range" class="vZoom" min="-1.2" max="1.6" step="0.05" value="0" title="拡大・縮小"></div><canvas class="head" width="60" height="60"></canvas>
     <div class="vinfo hidden"><button class="x" title="閉じる">×</button><div class="ib"><div class="k">Point</div><div class="v f-pid">—</div></div><div class="ib"><div class="k">LAT</div><div class="v f-lat">—</div></div><div class="ib"><div class="k">CL</div><div class="v f-cl">—</div></div><div class="ib"><div class="k">Bi</div><div class="v f-bi">—</div></div><div class="ib"><div class="k">Uni</div><div class="v f-uni">—</div></div></div>
     <div class="vwm">研究・教育用ビューア（診療には使用しない）</div>
     <div class="vbot"><span class="vviews"><button data-v="AP">AP</button><button data-v="PA">PA</button><button data-v="LAO">LAO</button><button data-v="RAO">RAO</button><button data-v="LL">LL</button><button data-v="RL">RL</button><button data-v="INF">INF</button><button data-v="SUP">SUP</button><button data-v="FIT">全体</button></span>
@@ -1209,7 +1220,7 @@ class Viewer{
     for(const p of m.points)add(p.x,p.y,p.z);
     if(!fin(mn[0]))return{c:[0,0,0],r:50};
     return{c:v3.sc(v3.add(mn,mx),.5),r:Math.max(5,v3.dist(mn,mx)/2)};}
-  fit(){if(!this.map)return;const b=this.bounds();this.target=b.c;this.dist=b.r/Math.tan(this.fov/2)*0.95;this.dirty=true;}
+  fit(){if(!this.map)return;const b=this.bounds();this.target=b.c;this.dist=b.r/Math.tan(this.fov/2)*0.95;this.fitDist=this.dist;this.dirty=true;}
   setView(name){if(name==='FIT'){this.fit();return;}const[back,up]=VIEWS[name];const r=v3.cross(up,back);this.R=[...v3.norm(r),...v3.norm(up),...v3.norm(back)];this.dirty=true;afterCam(this);}
   matrices(){const w=this.canvas.width,h=this.canvas.height;const near=Math.max(0.5,this.dist*0.02),far=this.dist*6+500;
     const P=M4.persp(this.fov,w/h,near,far);const V=M4.mul(M4.trans(0,0,-this.dist),M4.mul(M4.rot(this.R),M4.trans(-this.target[0],-this.target[1],-this.target[2])));
@@ -1409,14 +1420,26 @@ function drawRL(v){
 }
 const GIZ=[[[1,0,0],'L','#ff6b6b'],[[-1,0,0],'R','#7fe37f'],[[0,-1,0],'A','#9fb3c8'],[[0,1,0],'P','#9fb3c8'],[[0,0,1],'S','#ffd27f'],[[0,0,-1],'I','#ffd27f']];
 function viewNameOf(v){let best='',bd=0.995;for(const[k,[back,up]]of Object.entries(VIEWS)){const d=v3.dot(v3.norm(back),[v.R[6],v.R[7],v.R[8]])*0.7+v3.dot(v3.norm(up),[v.R[3],v.R[4],v.R[5]])*0.3;if(d>bd){bd=d;best=k;}}return best;}
+function heartIcon(){
+  if(heartIcon.m)return heartIcon.m;
+  const ax=v3.norm([0.6,-0.5,-0.62]),u2=v3.norm(v3.cross(ax,[0,0,1])),u3=v3.cross(ax,u2),UV=[ax,u2,u3],I=[[1,0,0],[0,1,0],[0,0,1]];
+  const sdf=p=>{let d=sdEllB(p,[12,-4,-12],UV,[30,18,18]);d=smin(d,sdEllB(p,[-6,-17,-10],UV,[27,13,17]),5);d=smin(d,sdEllB(p,[4,22,12],I,[19,12,14]),5);d=smin(d,sdEllB(p,[-24,2,8],I,[13,14,18]),5);
+    d=smin(d,sdCap(p,[0,-2,12],[2,-5,30],7.5,7),4);d=smin(d,sdCap(p,[2,-5,30],[12,8,36],7,6),3);d=smin(d,sdCap(p,[-8,-18,8],[4,-12,27],7,6.5),4);d=smin(d,sdCap(p,[-24,4,20],[-24,6,34],5,5),3);return d;};
+  return heartIcon.m=sdfMesh(sdf,[-52,-46,-48],[52,44,60],4);
+}
 function drawGizmo(v){
-  const c=v.el.querySelector('.gizmo');if(!c)return;const ctx=c.getContext('2d');ctx.clearRect(0,0,96,96);if(!v.map)return;
-  const R=v.R,cx=48,cy=48,L=30;
-  ctx.fillStyle='rgba(15,20,27,.55)';ctx.beginPath();ctx.arc(cx,cy,44,0,7);ctx.fill();
-  const items=GIZ.map(([a,lab,col])=>({x:R[0]*a[0]+R[1]*a[1]+R[2]*a[2],y:R[3]*a[0]+R[4]*a[1]+R[5]*a[2],z:R[6]*a[0]+R[7]*a[1]+R[8]*a[2],lab,col})).sort((a,b)=>a.z-b.z);
-  ctx.font='bold 11px system-ui,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
-  for(const it of items){const ex=cx+it.x*L,ey=cy-it.y*L;ctx.globalAlpha=it.z<-0.2?0.35:1;ctx.strokeStyle=it.col;ctx.lineWidth=it.lab==='L'||it.lab==='R'?3:1.5;ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(ex,ey);ctx.stroke();
-    ctx.fillStyle=it.col;ctx.fillText(it.lab,cx+it.x*(L+9),cy-it.y*(L+9));}
+  const c=v.el.querySelector('.gizmo');if(!c)return;const ctx=c.getContext('2d');if(!v.map){ctx.clearRect(0,0,96,96);return;}
+  const R=v.R,key=R.map(x=>x.toFixed(2)).join(',');
+  if(c._key!==key){c._key=key;ctx.clearRect(0,0,96,96);
+    const m=heartIcon(),V=m.verts,T=m.tris,N=m.norms,sc=0.86,cx=48,cy=50,n=m.nv,X=new Float32Array(n),Y=new Float32Array(n),Z=new Float32Array(n),NZ=new Float32Array(n);
+    for(let i=0;i<n;i++){const x=V[i*3],y=V[i*3+1],z=V[i*3+2]-4;X[i]=cx+(R[0]*x+R[1]*y+R[2]*z)*sc;Y[i]=cy-(R[3]*x+R[4]*y+R[5]*z)*sc;Z[i]=R[6]*x+R[7]*y+R[8]*z;NZ[i]=R[6]*N[i*3]+R[7]*N[i*3+1]+R[8]*N[i*3+2];}
+    const tl=[];for(let t=0;t<T.length;t+=3){const a=T[t],b=T[t+1],d=T[t+2];if((X[b]-X[a])*(Y[d]-Y[a])-(X[d]-X[a])*(Y[b]-Y[a])>=0)continue;tl.push([Z[a]+Z[b]+Z[d],a,b,d]);}
+    tl.sort((p,q)=>p[0]-q[0]);
+    for(const[,a,b,d]of tl){const s=0.42+0.58*Math.abs((NZ[a]+NZ[b]+NZ[d])/3);const col=`rgb(${Math.round(246*s)},${Math.round(240*s)},${Math.round(188*s)})`;ctx.fillStyle=col;ctx.strokeStyle=col;ctx.lineWidth=0.6;ctx.beginPath();ctx.moveTo(X[a],Y[a]);ctx.lineTo(X[b],Y[b]);ctx.lineTo(X[d],Y[d]);ctx.closePath();ctx.fill();ctx.stroke();}
+  }
+  const zs=v.el.querySelector('.vZoom');if(zs&&document.activeElement!==zs&&v.fitDist)zs.value=Math.log(v.fitDist/v.dist);
+  v.el.querySelector('.vside [data-a=pts]').classList.toggle('on',!S.opt.showPts);v.el.querySelector('.vside [data-a=tag]').classList.toggle('on',!S.opt.vtOn);v.el.querySelector('.vside [data-a=trans]').classList.toggle('on',S.opt.opacity<0.999);
+  const pb=v.el.querySelector('.vside [data-a=play]');pb.textContent=(S.anim.prop&&v.T.kind==='prop')?'❚❚':'▶';
   ctx.globalAlpha=1;drawHead(v);drawRL(v);
   const vn=viewNameOf(v);v.el.querySelector('.vname').textContent=vn==='SUP'?'頭側':vn==='INF'?'足側':vn;
   v.el.querySelectorAll('.vviews button').forEach(b=>b.classList.toggle('cur',b.dataset.v===vn));
@@ -1544,6 +1567,11 @@ function bindPanel(){
     v.el.querySelector('.vType').onchange=e=>{const val=e.target.value;setActive(v.idx);$('#selType').value=val;$('#selType').onchange({target:{value:val}});};
     v.el.querySelectorAll('.vviews button').forEach(b=>b.onclick=()=>{setActive(v.idx);v.setView(b.dataset.v);afterCam(v);});
     v.el.querySelector('.vOp').oninput=e=>{S.opt.opacity=1-(+e.target.value)/100;$('#opacity').value=S.opt.opacity;dirtyAll('');syncViewOverlays();};
+    v.el.querySelector('.vside').onclick=e=>{const b=e.target.closest('button');if(!b)return;setActive(v.idx);const a=b.dataset.a;
+      if(a==='fit'){v.setView('FIT');afterCam(v);}else if(a==='pts')tog('#showPts');else if(a==='tag')tog('#vtOn');else if(a==='trans')$('#tb-trans').click();
+      else if(a==='play'){if(!S.study)return;if(v.T.kind!=='prop'){$('#selType').value='PROP';$('#selType').onchange({target:{value:'PROP'}});if(!S.anim.prop)togglePropPlay(true);}else togglePropPlay();}
+      v.dirty=true;};
+    v.el.querySelector('.vZoom').oninput=e=>{setActive(v.idx);v.dist=clamp((v.fitDist||v.dist)*Math.exp(-(+e.target.value)),5,5000);v.dirty=true;afterCam(v);};
   }
   bindMenus();
   for(const v of S.viewers){const b=v.el.querySelector('.vinfo');let st=null;
