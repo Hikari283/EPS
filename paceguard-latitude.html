@@ -106,6 +106,8 @@
   table.crit th{color:var(--sub);font-weight:600;font-size:10.5px;letter-spacing:.06em;background:var(--tblh)}
   table.crit tr:hover td{background:var(--hov)}
   table.crit tr.lv2 td{background:rgba(251,113,133,.10)} table.crit tr.lv1 td{background:rgba(251,191,36,.08)}
+  .setbox{margin-top:12px;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--inbg)} .setbox.chg{border-color:rgba(251,191,36,.6)}
+  .setbadge{font-size:13px;font-weight:800;margin-left:8px;padding:1px 10px;border-radius:999px;background:rgba(251,191,36,.18);color:var(--warn);vertical-align:middle}
   .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:10px}
   .m{background:var(--inbg);border:1px solid var(--line);border-radius:12px;padding:8px 10px}
   .m .k{font-size:10.5px;color:var(--sub)} .m .v{font-size:18px;font-weight:800;font-family:var(--num)}
@@ -646,7 +648,14 @@ async function loadPDF(file,{forceEval=false,pageNo=0}={}){
     let annotStrs=[];
     try{ const ans=await page.getAnnotations(); annotStrs=ans.map(a=>(a.contentsObj&&a.contentsObj.str)||a.contents||'').filter(s=>s&&s.trim()); }catch(_){}
     extractFields(tc.items.map(it=>({s:it.str,x:it.transform[4],y:it.transform[5]})), annotStrs, rawPdfText); // ID・日付は先に読む
-    {const nid=$('fId').value.trim();if(tl.id&&nid&&tl.id!==nid)tlReset(nid,'読み込み中…');} // 別の患者になったら前の患者のタイムラインを消す
+    {const nid=$('fId').value.trim();if(tl.id&&nid&&tl.id!==nid)tlReset(nid,'読み込み中…');}
+    // 設定：全ページの文字（位置つき）から読む。設定は波形と別のページ（サマリ）に載っていることが多い
+    try{const all=[];const np=Math.min(pdf.numPages||1,30);
+      for(let pg=1;pg<=np;pg++){const tci=pg===pno?tc:await (await pdf.getPage(pg)).getTextContent();
+        for(const it of tci.items)all.push({s:it.str,x:it.transform[4],y:it.transform[5],w:it.width,h:Math.abs(it.transform[3])||it.height,p:pg});}
+      curSettings=parseSettings(all,all.map(x=>x.s).join('')+' '+annotStrs.join(' ')+' '+rawPdfText);}
+    catch(e){curSettings=null;}
+    if($('dbg'))$('dbg').insertAdjacentHTML('beforeend',settingsDebugHtml(curSettings)); // 別の患者になったら前の患者のタイムラインを消す
     curNonSicd=nonSicdOf(tc.items.map(it=>it.str).join(' ')+' '+annotStrs.join(' ')+' '+rawPdfText,$('fDev').value.trim());
     if(curNonSicd){ // S-ICD以外：波形の比較・保存はしない
       curSigs=[];curFeat=[];curNoise=[];curPool=null;$('overlayCard').hidden=true;$('traceMsg').textContent='';
@@ -683,6 +692,99 @@ function headerInfo(t,wt,interro){
   const secg=lab(/S.?ECG表示[(（](\d{4})年(\d{1,2})月(\d{1,2})日(\d{1,2}:\d{2})/)||lab(/ECG[^\d]{0,12}?(\d{4})\D{1,4}?(\d{1,2})\D{1,4}?(\d{1,2})\D{0,6}?(\d{1,2}:\d{2})/);
   return {tx,clinic,implant,events:evs,secg,allDT};
 }
+// ===== デバイス設定の読み取りと、前回との比較 =====
+// レポートの文字（全ページ）から設定を読む。①位置から行・セルを組み立て「項目｜値」の組を拾う ②主な設定は項目名のパターンで特定 ③取れない時は詰めた文字から正規表現で拾う
+// ※実際のLATITUDEのレポートで項目名・値の書き方を確認して SET_KNOWN を調整すること（「🔧 設定の読み取り結果」で確認できる）
+const SET_V={onoff:'(オン|オフ|ON|OFF|On|Off|有効|無効)',zone:'(\\d{3}|オフ|OFF|Off)',sense:'(一次|二次|代替|プライマリ|セカンダリ|オルタネート|Primary|Secondary|Alternate)',gain:'([12]\\s?[xX×]|[12]倍)',pol:'(標準|逆|反転|STD|REV|Standard|Reverse)'};
+const SET_KNOWN=[ // imp:2＝治療に関わる（変わったら強調）／1＝波形の見え方が変わる
+  {k:'therapy',name:'治療',lab:/^(?:頻拍)?治療(?:の設定|モード|設定)?$|^Therapy(?:Mode)?$/i,re:[`(?:頻拍)?治療(?:の設定|モード|設定)?[:：]?${SET_V.onoff}`,`Therapy(?:Mode)?[:：]?${SET_V.onoff}`],imp:2},
+  {k:'shockZone',name:'ショックゾーン',lab:/^(?!.*条件)ショックゾーン$|^ShockZone$/i,re:[`(?<!条件付き|条件付|Conditional)ショックゾーン[:：]?(\\d{3})`,`(?<!Conditional)ShockZone[:：]?(\\d{3})`],unit:'bpm',imp:2},
+  {k:'condZone',name:'条件付きショックゾーン',lab:/^条件付き?ショックゾーン$|^ConditionalShockZone$/i,re:[`条件付き?ショックゾーン[:：]?${SET_V.zone}`,`ConditionalShockZone[:：]?${SET_V.zone}`],unit:'bpm',imp:2},
+  {k:'postShock',name:'ショック後ペーシング',lab:/^ショック後(?:の)?ペーシング$|^Post-?ShockPacing$/i,re:[`ショック後(?:の)?ペーシング[:：]?${SET_V.onoff}`,`Post-?ShockPacing[:：]?${SET_V.onoff}`],imp:2},
+  {k:'polarity',name:'ショック極性',lab:/^ショック(?:の)?極性$|^ShockPolarity$/i,re:[`ショック(?:の)?極性[:：]?${SET_V.pol}`,`ShockPolarity[:：]?${SET_V.pol}`],imp:2},
+  {k:'sensing',name:'センシング構成',lab:/^センシング(?:構成|ベクトル|ベクター)$|^Sensing(?:Configuration|Vector)$/i,re:[`センシング(?:構成|ベクトル|ベクター)[:：]?${SET_V.sense}`,`Sensing(?:Configuration|Vector)[:：]?${SET_V.sense}`],imp:1},
+  {k:'gain',name:'ゲイン設定',lab:/^ゲイン(?:設定)?$|^Gain(?:Setting)?$/i,re:[`ゲイン(?:設定)?[:：]?${SET_V.gain}`,`Gain(?:Setting)?[:：]?${SET_V.gain}`],imp:1},
+  {k:'smartPass',name:'SMART Pass',lab:/^SMART\s?Pass$/i,re:[`SMART\\s?Pass[:：]?${SET_V.onoff}`],imp:1},
+  {k:'afMon',name:'AFモニタ',lab:/^AFモニタ[ー]?$|^AFMonitor$/i,re:[`AFモニタ[ー]?[:：]?${SET_V.onoff}`,`AFMonitor[:：]?${SET_V.onoff}`],imp:0},
+];
+// 設定ではない項目（測定値・日時・個人情報など）は、その他の項目として比べない
+const SET_SKIP=/患者|氏名|ID|ふりがな|生年|性別|日時|日付|年月日|送信|読込|植込み日|最終|前回|次回|電池|バッテリ|残量|インピーダンス|抵抗|心拍数|測定|イベント|件数|エピソード|回数|持続|医師|施設|病院|電話|住所|ページ|レポート|シリアル|型式|モデル|S-?ECG表示|Patient|Name|Date|Battery|Impedance|Serial|Model|Page/i;
+const SET_VAL=/^(オン|オフ|ON|OFF|On|Off|有効|無効|あり|なし|はい|いいえ|一次|二次|代替|プライマリ|セカンダリ|オルタネート|Primary|Secondary|Alternate|標準|逆|反転|Standard|Reverse|[12]\s?[xX×]|[12]倍|[-+]?\d+(?:\.\d+)?\s*(?:bpm|ms|mV|V|J|%|秒|分|時間|日|回|拍|min-1|回\/分)?(?:\s*[\/／~〜-]\s*\d+(?:\.\d+)?\s*(?:bpm|ms|mV|V|J|%)?)?)$/;
+const setNorm=s=>String(s||'').replace(/[Ａ-Ｚａ-ｚ０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/[\s　]+/g,'').replace(/[：:]$/,'');
+function setVal(v,unit){let s=setNorm(v);
+  if(/^(オン|ON|On|有効)$/.test(s))s='オン';else if(/^(オフ|OFF|Off|無効)$/.test(s))s='オフ';
+  else if(/^(プライマリ|Primary)$/i.test(s))s='一次';else if(/^(セカンダリ|Secondary)$/i.test(s))s='二次';else if(/^(オルタネート|Alternate)$/i.test(s))s='代替';
+  else if(/^([12])(?:[xX×]|倍)$/.test(s))s=s[0]+'x';else if(/^(Standard|STD)$/i.test(s))s='標準';else if(/^(Reverse|REV|反転)$/i.test(s))s='逆';
+  else if(unit&&/^\d+$/.test(s))s+=' '+unit;
+  else s=s.replace(/(\d)(bpm|ms|mV|V|J)$/,'$1 $2');
+  return s;}
+// pdf.jsの文字（全ページ、位置つき）から行を作り、間が空いた所でセルに分ける
+function textLines(items){
+  const rows=new Map();
+  for(const it of items){if(!String(it.s||'').trim())continue;const key=it.p+':'+Math.round(it.y/3);if(!rows.has(key))rows.set(key,[]);rows.get(key).push(it);}
+  const out=[];
+  for(const r of rows.values()){r.sort((a,b)=>a.x-b.x);const cells=[];let cur='',endX=null;
+    for(const it of r){const gap=endX==null?0:it.x-endX,fh=it.h||8;if(endX!=null&&gap>fh*1.2){cells.push(cur);cur='';}cur+=it.s;endX=it.x+(it.w||fh*String(it.s).length*0.6);}
+    cells.push(cur);out.push(cells.map(c=>c.replace(/\s+/g,' ').trim()).filter(Boolean));}
+  return out;
+}
+function parseSettings(items,flat){
+  const got={},src={};
+  const put=(k,name,v,g,how,unit)=>{if(got[k])return;const val=setVal(v,unit);if(!val)return;got[k]={l:name,v:val,g};src[k]=how;};
+  const known=lab=>SET_KNOWN.find(K=>K.lab.test(lab));
+  // ①行・セル：「項目｜値」「項目：値」
+  for(const cells of textLines(items||[])){
+    const pairs=[];
+    cells.forEach((c,i)=>{const m=c.match(/^(.{1,30}?)[：:]\s*(.{1,24})$/);if(m)pairs.push([m[1],m[2]]);else if(i+1<cells.length)pairs.push([c,cells[i+1]]);});
+    for(const [l0,v0] of pairs){const lab=setNorm(l0),v=String(v0).trim();
+      if(!lab||lab.length>30||!SET_VAL.test(setNorm(v)))continue;
+      const K=known(lab);
+      if(K){put(K.k,K.name,v,'main','行',K.unit);continue;}
+      if(SET_SKIP.test(lab)||/^[\d.\s\-+\/]+$/.test(lab))continue;
+      put('x:'+lab,setNorm(l0),v,'other','行');}
+  }
+  // ②詰めた文字から（項目と値が離れて並ぶPDFもあるため、行で取れなかった主な設定だけ）
+  const t=setNorm(flat||'');
+  for(const K of SET_KNOWN){if(got[K.k])continue;for(const re of K.re){const m=t.match(new RegExp(re,'i'));if(m){put(K.k,K.name,m[1],'main','文字',K.unit);break;}}}
+  return {items:got,src,n:Object.keys(got).length};
+}
+// 前回の設定と比べる（どちらかで読めなかった項目は「変わった」にしない）
+function compareSettings(prev,cur){
+  if(!prev||!cur)return null;const P=prev.items||prev,C=cur.items||cur;
+  const keys=[...new Set([...Object.keys(P),...Object.keys(C)])];
+  const order=k=>{const i=SET_KNOWN.findIndex(K=>K.k===k);return i<0?99:i;};
+  const changed=[],same=[],onlyPrev=[],onlyCur=[];
+  for(const k of keys.sort((a,b)=>order(a)-order(b))){const p=P[k],c=C[k],K=SET_KNOWN.find(x=>x.k===k),imp=K?K.imp:0;
+    if(p&&c){(p.v===c.v?same:changed).push({k,l:c.l||p.l,p:p.v,c:c.v,imp,main:!!K});}else if(p)onlyPrev.push({k,l:p.l,p:p.v,main:!!K});else onlyCur.push({k,l:c.l,c:c.v,main:!!K});}
+  return {changed,same,onlyPrev,onlyCur};
+}
+// 前回（今回より前の、イベントではない記録で、設定を読めたもの）
+function prevSettingsRec(store,curKey,nowPdf){
+  const sv=((store&&store.saves)||[]).filter(x=>x&&x.settings&&x.settings.n&&!evLike(x)&&x.pdf!==nowPdf&&(curKey?(x.key&&x.key<curKey):true));
+  return sv.sort((a,b)=>a.key<b.key?1:a.key>b.key?-1:(b.ts||0)-(a.ts||0))[0]||null;
+}
+function settingsHtml(cmp,prevRec,cur){
+  const st=x=>`<span class="hint">${escH(x)}</span>`;
+  if(!cur||!cur.n)return `<div class="setbox"><b>⚙ 設定</b>　${st('このレポートから設定を読み取れませんでした（下の「🔧 設定の読み取り結果」で確認できます）。')}</div>`;
+  const list=Object.values(cur.items).filter(x=>x.g==='main').map(x=>`${escH(x.l)} <b>${escH(x.v)}</b>`).join('・');
+  if(!cmp)return `<div class="setbox"><b>⚙ 設定</b>（前回の設定の記録がないため比較なし）<div class="hint" style="margin-top:4px">今回：${list||'主な設定は読めませんでした'}（その他 ${Object.values(cur.items).filter(x=>x.g!=='main').length}項目）</div></div>`;
+  const when=escH(prevRec.secg||prevRec.date||'前回');
+  const ch=cmp.changed;
+  const row=x=>`<tr class="lv${x.imp>=2?2:x.imp>=1?1:0}"><td>${x.imp>=2?'⚠️ ':x.imp>=1?'🟡 ':''}${escH(x.l)}</td><td>${escH(x.p)}</td><td><b>${escH(x.c)}</b></td></tr>`;
+  const miss=cmp.onlyPrev.filter(x=>x.main);
+  return `<div class="setbox ${ch.length?'chg':''}"><b>⚙ 設定（前回 ${when} と比べて）</b>　${ch.length?`<b class="warn-t">${ch.length}項目が変わりました</b>`:'<span class="ok-t">✅ 変更なし</span>'}<span class="hint">（${cmp.same.length+ch.length}項目を比較）</span>
+    ${ch.length?`<table class="crit"><tr><th>項目</th><th>前回</th><th>今回</th></tr>${ch.map(row).join('')}</table>`:''}
+    ${ch.some(x=>x.k==='sensing'||x.k==='gain')?'<div class="cause">ℹ️ センシング構成・ゲインが変わると、S-ECGの形・波高も変わります。波形の判定は設定の変更による違いの可能性があります。</div>':''}
+    ${miss.length?`<div class="hint">今回のレポートで読めなかった設定：${miss.map(x=>escH(x.l)).join('・')}</div>`:''}
+    <details style="margin-top:4px"><summary class="hint" style="cursor:pointer">今回の設定をすべて見る</summary><table class="crit"><tr><th>項目</th><th>前回</th><th>今回</th></tr>${[...ch,...cmp.same].map(x=>`<tr><td>${escH(x.l)}</td><td>${escH(x.p)}</td><td>${escH(x.c)}</td></tr>`).join('')}${cmp.onlyCur.map(x=>`<tr><td>${escH(x.l)}</td><td class="hint">—</td><td>${escH(x.c)}</td></tr>`).join('')}</table></details></div>`;
+}
+function settingsDebugHtml(s){
+  if(!s)return '';
+  const rows=Object.entries(s.items).map(([k,x])=>`<tr><td>${x.g==='main'?'★ ':''}${escH(x.l)}</td><td>${escH(x.v)}</td><td class="hint">${s.src[k]==='行'?'行から':'文字から'}</td></tr>`).join('');
+  const miss=SET_KNOWN.filter(K=>!s.items[K.k]).map(K=>K.name);
+  return `<details style="margin-top:6px"><summary style="cursor:pointer">🔧 設定の読み取り結果（${s.n}項目${miss.length?`／読めなかった主な設定：${miss.join('・')}`:''}）</summary>${rows?`<table class="crit"><tr><th>項目</th><th>値</th><th>読み方</th></tr>${rows}</table>`:'<div>読めた項目はありません。</div>'}<div class="hint">★＝主な設定。項目名や値の書き方が違って読めていない時は、この表と設定の部分の画面（個人情報は隠して）を送ってください。</div></details>`;
+}
+let curSettings=null; // 今回のレポートから読んだ設定
 function extractFields(items, annotStrs, rawPdfText){
   annotStrs=annotStrs||[]; rawPdfText=rawPdfText||'';
   // pdf.jsの文字・注釈・自前抽出（圧縮ストリーム）を合わせて解析
@@ -1506,6 +1608,7 @@ async function loadImageRecord(path,id){
   const r=renderScale/HI;pageCanvas.width=Math.round(hiCanvas.width*r);pageCanvas.height=Math.round(hiCanvas.height*r);pctx.fillStyle='#fff';pctx.fillRect(0,0,pageCanvas.width,pageCanvas.height);pctx.drawImage(hiCanvas,0,0,pageCanvas.width,pageCanvas.height);
   savePageBackup();pdfLoaded=true;lastPdfFile=f;lastPdfDoc=null;curPageNo=sv.page||0;curNonSicd=null;renderPageBtns(1,1,false);
   $('fId').value=id;$('fName').value='';$('fDate').value=sv.date||'';$('fDev').value=(st&&st.device)||'';
+  curSettings=sv.settings||null;
   meta={id,name:'',date:sv.date||'',device:(st&&st.device)||'',tx:sv.tx||'',clinic:sv.clinic||'',implant:'',events:sv.events||[],secg:sv.secg||'',allDT:[]};
   autoTrace();
   reloadArchived=path;try{await runEval('auto');}finally{reloadArchived=null;}
@@ -1755,6 +1858,11 @@ async function runEval(mode){
   const older=reports.filter(r=>!evLike(r)&&(curKey?(r.key&&r.key<curKey):true)); // 以前の記録に混ざったイベントは比較相手にしない
   const baseRep=store&&store.baseline?store.baseline:(reports.filter(r=>!evLike(r)).length?[...reports.filter(r=>!evLike(r))].sort((a,b)=>a.key<b.key?-1:1)[0]:null);
   const prevRep=[...older].sort((a,b)=>a.key<b.key?1:-1)[0]||null;
+  // 設定：波形の比較相手（前回/基準）とは別に、いつも「前回」の設定と比べる
+  const setPrev=prevSettingsRec(store,curKey,reloadArchived),setCur=curSettings&&curSettings.n?curSettings:null;
+  const setCmp=compareSettings(setPrev&&setPrev.settings,setCur),setHtml=settingsHtml(setCmp,setPrev,curSettings);
+  const setChg=setCmp?setCmp.changed:[],setCauseTxt=setChg.length?'設定変更：'+setChg.map(x=>`${x.l} ${x.p}→${x.c}`).join('、'):'';
+  const addSet=()=>{const v=document.querySelector('#result .verdict');if(v)v.insertAdjacentHTML('beforeend',setHtml);};
   if(auto)mode=prevRep?'prev':'base'; // 自動：前の日付があれば前回、なければ基準（同じ日付でも比べられる）
   const ref=mode==='base'?baseRep:prevRep,refLabel=mode==='base'?'基準':'前回';
   const pooledOf=f=>!f?null:Array.isArray(f)?(f.find(Boolean)||null):f; // 以前の保存形式（上段・下段）にも対応
@@ -1781,7 +1889,7 @@ async function runEval(mode){
     // 最初の判定（評価し直しても消さない）と、医師の判断（要確認リストで入力）は引き継ぐ
     const lvNow=histEntry&&histEntry.level!=null?histEntry.level:null;
     const first=old?(old.first||(old.level!=null?{level:old.level,causes:old.causes||null,ref:old.ref||null,mode:old.mode||null,ts:old.ts}:null)):null;
-    saves.push({...(/\.png$/i.test(nowPdf||'')&&lastImgMeta?{imgScale:lastImgMeta.imgScale}:{}),first:first||(lvNow!=null?{level:lvNow,causes:histEntry.causes||null,ref:histEntry.ref||null,mode:histEntry.mode||null,ts:now.ts}:null),review:old&&old.review||null,...(old&&old.rvHidden?{rvHidden:true}:{}),pdf:nowPdf,page:curPageNo,date:now.date,tx:now.tx,clinic:now.clinic,events:now.events,secg:now.secg,key:curKey,feat:poolSave,ts:now.ts,level:histEntry&&histEntry.level!=null?histEntry.level:null,causes:histEntry&&histEntry.causes||null,ref:histEntry&&histEntry.ref||null,mode:histEntry&&histEntry.mode||null});
+    saves.push({...(/\.png$/i.test(nowPdf||'')&&lastImgMeta?{imgScale:lastImgMeta.imgScale}:{}),first:first||(lvNow!=null?{level:lvNow,causes:histEntry.causes||null,ref:histEntry.ref||null,mode:histEntry.mode||null,ts:now.ts}:null),review:old&&old.review||null,...(old&&old.rvHidden?{rvHidden:true}:{}),settings:(curSettings&&curSettings.n?curSettings:old&&old.settings)||null,pdf:nowPdf,page:curPageNo,date:now.date,tx:now.tx,clinic:now.clinic,events:now.events,secg:now.secg,key:curKey,feat:poolSave,ts:now.ts,level:histEntry&&histEntry.level!=null?histEntry.level:null,causes:histEntry&&histEntry.causes||null,ref:histEntry&&histEntry.ref||null,mode:histEntry&&histEntry.mode||null});
     for(const x of extra){const i=saves.findIndex(y=>y.pdf===x.pdf);if(i>=0)saves.splice(i,1);saves.push(x);}
     // イベントのPDF（S-ECGの記録日時がなくイベントの見出しがある）は、その日の比較相手（前回・基準）にしない。PDFごとの記録（saves）にだけ残す
     const rs=isEvent?[...reports]:reports.filter(r=>!(curKey&&r.key===curKey));if(!isEvent)rs.push({date:now.date,key:curKey,feat:poolSave,ts:now.ts,pdf:nowPdf});rs.sort((a,b)=>a.key<b.key?-1:1);
@@ -1829,7 +1937,7 @@ async function runEval(mode){
     const why=isEvent?'イベントの記録として保存しました（基準・前回にはS-ECGのレポートを使います）':first?((store&&store.feat&&!store.reports)?'新しい計測方式で登録しました（この波形が基準になります）':'初回登録しました（この波形が基準になります）'):'比較できる前の日付のレポートがありません';
     $('result').innerHTML=`<div class="verdict info"><h2>${why}</h2>この患者（ID:${id}）の${now.date||'今回'}のレポートとして保存しました。${first?'次から「📌 基準と比較」で、同じ日付のレポートでも比べられます。':'同じ日付どうしを比べるときは「📌 基準と比較」を使ってください。'}${curKey?'':'<br><b>※照会日が読み取れていません。照会日を入力すると前後関係で正しく比較できます。</b>'}${dirHandle?'':'<br><b>※フォルダ未選択のため保存できていません。</b>'}
       <div class="hint" style="margin-top:6px">${measure(pool)}</div>${rowNotes.length?`<div class="cause">記録の中の所見：${rowNotes.map(x=>`${x.info?'ℹ️':ic(x.lv)} ${x.row}：${x.why}`).join('　')}</div>`:''}</div>${rowTable}`;
-    $('overlayCard').hidden=true; showRhythm(); tlAuto(id); rvLoad(); return;
+    addSet();$('overlayCard').hidden=true; showRhythm(); tlAuto(id); rvLoad(); return;
   }
   const r={k:0,b:bp,c:pool,...compareFeat(bp,pool)};
   const sign=v=>(v>0?'+':'')+v;
@@ -1843,9 +1951,9 @@ async function runEval(mode){
     {lv:0,name:'心拍数（参考）',prev:`${r.b.hr??'—'} bpm`,cur:`${r.c.hr??'—'} bpm`,chg:'',rule:'判定には使わない',why:''},
   ];
   const level=Math.max(...crit.map(x=>x.lv),...rowNotes.map(x=>x.lv),0);
-  const cls=['ok','warn','bad'][level],title=[`✅ 変化なし（${refLabel}と同等）`,'🟡 注意 — 変化の兆候・記録内の所見','⚠️ 要確認 — 明らかな変化'][level]+(pvcTag?`<span style="font-size:15px;font-weight:800;color:var(--accent2);margin-left:8px">${pvcTag}</span>`:'')+(auto?'<small style="font-size:12px;font-weight:400;opacity:.7">（自動評価）</small>':'');
+  const cls=['ok','warn','bad'][level],title=[`✅ 変化なし（${refLabel}と同等）`,'🟡 注意 — 変化の兆候・記録内の所見','⚠️ 要確認 — 明らかな変化'][level]+(setChg.length?`<span class="setbadge">⚙ 設定変更 ${setChg.length}項目</span>`:'')+(pvcTag?`<span style="font-size:15px;font-weight:800;color:var(--accent2);margin-left:8px">${pvcTag}</span>`:'')+(auto?'<small style="font-size:12px;font-weight:400;opacity:.7">（自動評価）</small>':'');
   const causes=[...crit.filter(x=>x.lv>0).map(x=>({lv:x.lv,txt:`${x.why}（${x.prev!=='—'?x.prev+'→'+x.cur:x.chg}）`})),...rowNotes.filter(x=>!x.info).map(x=>({lv:x.lv,txt:`${x.row}：${x.why}`}))].sort((a,b)=>b.lv-a.lv);
-  const causeHtml=`<div class="cause">主な原因：${causes.length?causes.slice(0,4).map(x=>`${ic(x.lv)} ${x.txt}`).join('　'):'なし（すべての項目が基準内）'}</div>`;
+  const causeHtml=`<div class="cause">主な原因：${causes.length?causes.slice(0,4).map(x=>`${ic(x.lv)} ${x.txt}`).join('　'):'なし（すべての項目が基準内）'}</div>`+(setCauseTxt?`<div class="cause">⚙ ${escH(setCauseTxt)}</div>`:'');
   $('result').innerHTML=`<div class="verdict ${cls}"><h2>${title}</h2>
     <div>比較：${ref.date||'?'}（${refLabel}） → ${now.date||'?'}（今回）</div>
     ${causeHtml}
@@ -1854,9 +1962,10 @@ async function runEval(mode){
     ${crit.map(x=>`<tr class="lv${x.lv}"><td>${x.name}</td><td>${x.prev}</td><td>${x.cur}</td><td>${x.chg}</td><td class="hint">${x.rule}</td><td>${x.name==='心拍数（参考）'?'—':ic(x.lv)}</td></tr>`).join('')}</table>
     ${rowTable}
     <div class="hint" style="margin-top:6px">下の重ね描きで、形が違う部分を赤く塗っています（青＝${refLabel}、橙＝今回）。</div></div>`;
+  addSet();
   lastEval={id,date:now.date,key:curKey,feat:poolSave,ts:now.ts,name:now.name,device:now.device};
   $('result').insertAdjacentHTML('beforeend','<div style="margin-top:8px"><button id="setBaseBtn">📌 今回の波形を基準にする</button> <span class="hint" id="setBaseMsg"></span></div>');
-  await saveStore({date:now.date,ref:ref.date,mode,level,corr:+r.corr.toFixed(3),amp:pool.amp,ampRatio:+r.ampRatio.toFixed(2),width:pool.width,dW:r.dW,pol:pool.pol,hr:pool.hr,rows:rowsSave,causes:causes.map(x=>x.txt),af:!!(rh&&rh.af)});
+  await saveStore({date:now.date,ref:ref.date,mode,level,corr:+r.corr.toFixed(3),amp:pool.amp,ampRatio:+r.ampRatio.toFixed(2),width:pool.width,dW:r.dW,pol:pool.pol,hr:pool.hr,rows:rowsSave,causes:[...causes.map(x=>x.txt),...(setCauseTxt?['⚙ '+setCauseTxt]:[])],setChg:setChg.map(x=>({l:x.l,p:x.p,c:x.c,imp:x.imp})),af:!!(rh&&rh.af)});
   lastEval.pdf=nowPdf;
   $('overlayCard').hidden=false; // 先に表示してから描く（幅を正しく取るため）
   drawBeat(r);
