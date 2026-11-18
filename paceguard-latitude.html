@@ -1457,7 +1457,7 @@ const TV_RULES=[ // g: ルールの種類／when: このキーに当てはめる
   {g:'pimp',when:TV_LEAD(/:ペーシングインピーダンス/),t:r=>`${r.lo}〜${r.hi} Ωの外で要確認`,f:(n,r)=>(n<r.lo||n>r.hi)?{lv:2,why:`${r.lo}〜${r.hi} Ωの外`}:null},
   {g:'simp',when:k=>/^lead:ショック:|ショックインピーダンス/.test(k),t:r=>`${r.lo}〜${r.hi} Ωの外で要確認`,f:(n,r)=>(n<r.lo||n>r.hi)?{lv:2,why:`${r.lo}〜${r.hi} Ωの外`}:null},
   {g:'bat',when:k=>k==='bat:years',t:r=>`${r.warn}年以下で注意／${r.alert}年以下で要確認`,f:(n,r)=>n<=r.alert?{lv:2,why:`${r.alert}年以下`}:n<=r.warn?{lv:1,why:`${r.warn}年以下`}:null},
-  {g:'af',when:k=>k==='atAf',t:r=>`${r.v}%以上で要確認`,f:(n,r)=>n>=r.v?{lv:2,why:`${r.v}%以上`}:null},
+  {g:'af',when:k=>k==='atAf',t:r=>`${r.v}%以上で${window.PG_CL?'注意':'要確認'}`,f:(n,r)=>n>=r.v?{lv:2,why:`${r.v}%以上`}:null}, // Medtronic（CareLink）は注意（2026-11-18 当院）
 ];
 // 前回から変わったら要確認にする設定
 const TV_CHG=/^set:(心室細動|心室頻拍(-?1)?|VF|FVT|VT(-?1)?|AT\/AF|ATR ?Mode ?Switch|モード|モードスイッチ|基本レート|上限トラッキング|上限センサ|ペースAV|センスAV|下限レート|最大トラッキングレート|Paced AV Delay|Sensed AV Delay|心室ペーシングチャンバー|ペーシングオーダー|LVa-LVbオフセット|LVb-RVオフセット)$/;
@@ -1488,7 +1488,7 @@ function tvAlerts(cur,prev){
       const targets=set&&ch?Object.keys(C).filter(sk=>sk.startsWith(`set:${set} ${ch}`)):[];
       const msg=`${x.l}：記録なし。各種設定確認！${x.clinic?`（医療施設での最後の測定 ${LV(x.clinic)}${x.clinicDate?'・'+x.clinicDate:''}）`:''}${tvIsPt('nodata')?'（この患者のルール）':''}`;
       if(targets.length){for(const sk of targets)out.push({k:sk,lv:1,txt:msg});}else out.push({k,lv:1,txt:msg});}
-    for(const R of TV_RULES){if(!R.when(k)||isNaN(n))continue;const r=TVP(R.g);if(!r)continue;const a=R.f(n,r);if(a)add(k,a.lv,a.why+(tvIsPt(R.g)?'（この患者のルール）':''));}
+    for(const R of TV_RULES){if(!R.when(k)||isNaN(n))continue;const r=TVP(R.g);if(!r)continue;const a=R.f(n,r);if(a&&R.g==='af'&&(cur.mdt||window.PG_CL))a.lv=1;if(a)add(k,a.lv,a.why+(tvIsPt(R.g)?'（この患者のルール）':''));}
     if(chg&&TV_CHG.test(k)&&P[k]&&LV(P[k].v)!==LV(x.v))out.push({k,lv:2,txt:`${x.l}が前回から変更（${LV(P[k].v)}→${LV(x.v)}）`});
     if(rel)for(const R of TV_REL){if(!R.when(k)||!P[k])continue;const a=tvNum(LV(P[k].v)),b=n;if(isNaN(a)||isNaN(b)||a<=0)continue;
       const r=(b-a)/a*100,mag=R.dir===0?Math.abs(r):R.dir>0?r:-r;const lv=mag>=rel.alert?2:mag>=rel.warn?1:0;
