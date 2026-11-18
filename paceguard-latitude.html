@@ -852,6 +852,15 @@ function parseSettings(items,flat){
       if(/[\u0080-\u024f\u02b0-\u02ff\u2000-\u206f\ufffd]/.test(lab))continue; // 文字化けした項目名は「その他」に入れない
       put('x:'+lab,setNorm(l0),v,'other','行');}
   }
+  // ①-2 位置から（値が項目名の行より少し上下にずれて印刷されている時：例 ショック極性の「STD」）
+  //   項目名の右側で、上下に1行分ほどのずれまでの中から、その項目としてありえる値を一番近いものから選ぶ
+  {const its=(items||[]).filter(it=>String(it.s||'').trim());
+   const allowed=(K,val)=>K.ok?K.ok.test(val):(typeof SET_ENUM!=='undefined'&&SET_ENUM[K.k])?SET_ENUM[K.k].includes(val):true;
+   for(const K of SET_KNOWN){if(got[K.k])continue;
+     for(const L of its){if(!K.lab.test(setNorm(L.s)))continue;const h=L.h||8,lx=L.x+(L.w||0);
+       const cand=its.filter(V=>V!==L&&V.p===L.p&&V.x>=lx-1&&V.x-lx<h*40&&Math.abs(V.y-L.y)<=h*1.1&&SET_VAL.test(setNorm(V.s))&&allowed(K,setVal(V.s,K.unit)))
+         .sort((a,b)=>Math.abs(a.y-L.y)-Math.abs(b.y-L.y)||a.x-b.x);
+       if(cand.length){put(K.k,K.name,cand[0].s,'main','位置',K.unit);break;}}}}
   // ②詰めた文字から（項目と値が離れて並ぶPDFもあるため、行で取れなかった主な設定だけ）
   const t=setNorm(flat||'');
   for(const K of SET_KNOWN){if(got[K.k])continue;for(const re of K.re){const m=t.match(new RegExp(re,'i'));if(m){put(K.k,K.name,m[1],'main','文字',K.unit);break;}}}
@@ -890,7 +899,7 @@ function settingsDebugHtml(s){
   const d=s.diag||{};
   const diagHtml=d.err?`<div class="warn-t">読み取り中のエラー：${escH(d.err)}</div>`:`<div class="hint" style="margin-top:6px">手がかり：${d.pages||'?'}ページ／pdf.jsの文字 ${d.pjsLen||0}字（ページごとの項目数 ${escH(JSON.stringify(d.perPage||{}))}）／注釈 ${d.annot||0}／自前抽出 ${d.nRaw||0}項目・${d.rawLen||0}字（日本語 ${d.jp||0}字・文字化けらしい文字 ${d.bad||0}字）</div>`+
     `<div class="hint">設定に関係しそうな言葉の前後（6桁以上の数字は # で伏せています）：</div>`+((d.snips||[]).length?`<table class="crit"><tr><th>どこから</th><th>前後の文字</th></tr>${d.snips.map(x=>`<tr><td>${escH(x.from)}</td><td><code>${escH(x.sn)}</code></td></tr>`).join('')}</table>`:'<div class="warn-t">設定に関係しそうな言葉（ゾーン・インピーダンス・ゲイン・センシング・bpm・Ω など）が、PDFの文字の中に1つも見つかりませんでした。</div>');
-  const rows=Object.entries(s.items).map(([k,x])=>`<tr><td>${x.g==='main'?'★ ':''}${escH(x.l)}</td><td>${escH(x.v)}</td><td class="hint">${s.src[k]==='行'?'行から':'文字から'}</td></tr>`).join('');
+  const rows=Object.entries(s.items).map(([k,x])=>`<tr><td>${x.g==='main'?'★ ':''}${escH(x.l)}</td><td>${escH(x.v)}</td><td class="hint">${s.src[k]==='行'?'行から':s.src[k]==='位置'?'位置から':'文字から'}</td></tr>`).join('');
   const miss=SET_KNOWN.filter(K=>!s.items[K.k]).map(K=>K.name);
   return `<details style="margin-top:6px"><summary style="cursor:pointer">🔧 設定の読み取り結果（${s.n}項目${miss.length?`／読めなかった主な設定：${miss.join('・')}`:''}）</summary>${rows?`<table class="crit"><tr><th>項目</th><th>値</th><th>読み方</th></tr>${rows}</table>`:'<div>読めた項目はありません。</div>'}<div class="hint">★＝主な設定。項目名や値の書き方が違って読めていない時は、この欄（開いた状態）と設定の部分の画面（個人情報は隠して）を送ってください。</div>${diagHtml}</details>`;
 }
