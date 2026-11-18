@@ -1412,24 +1412,39 @@ function mdtEpisodeHeads(items,flat){
   for(const [p,arr] of byP){const t=arr.join(' ');for(const m of t.matchAll(/エピソード\s*#\s*(\d+)\s*[:：]\s*(\d{1,2}-[A-Z][a-z]{2}-\d{4}\s+\d{1,2}:\d{2})/g))out.push({p,no:m[1],dt:mdtDate(m[2]),type:typeOf(m[1])});}
   if(!out.length)for(const m of String(flat||'').matchAll(/エピソード\s*#\s*(\d+)\s*[:：]\s*(\d{1,2}-[A-Z][a-z]{2}-\d{4}\s+\d{1,2}:\d{2})/g))out.push({p:null,no:m[1],dt:mdtDate(m[2]),type:typeOf(m[1])});
   // 「エピソード #」の見出しが無い形（表の行「AT/AF 288 14-Nov-2026 22:06 05:12:46 …」のあとにグラフ・EGMが続く）：その行のページから後ろがそのエピソード
-  if(!out.length)for(const [p,arr] of byP){const t=arr.join(' ');for(const m of t.matchAll(/(AT\/AF|Fast A&V|VT-NS|FVT|VF|VT|SVT|AF|AT)\s+(?:[^\d\s]+\s+){0,3}(\d{1,5})\s+(\d{1,2}-[A-Z][a-z]{2}-\d{4})\s*(\d{1,2}:\d{2})\s+\d{0,2}:\d{2}/g))if(!out.some(o=>o.no===m[2]))out.push({p,no:m[2],dt:mdtDate(m[3]+' '+m[4]),type:m[1],row:true});}
+  for(const [p,arr] of byP){const t=arr.join(' ');for(const m of t.matchAll(/(AT\/AF|Fast A&V|VT-NS|FVT|VF|VT|SVT|AF|AT)\s+(?:[^\d\s]+\s+){0,3}(\d{1,5})\s+(\d{1,2}-[A-Z][a-z]{2}-\d{4})\s*(\d{1,2}:\d{2})\s+\d{0,2}:\d{2}/g))if(!out.some(o=>o.row&&o.no===m[2]))out.push({p,no:m[2],dt:mdtDate(m[3]+' '+m[4]),type:m[1],row:true});}
   return out;
 }
 // MedtronicのEGMのページ（波形は黒い線）：文字「EGM 1」「マーカ」「インターバル(ms)」で見分ける。エピソードは、そのページ以降で最初の見出し
-function mdtEgmPages(items0,raw0){const items=items0||lastAllItems||[],raw=raw0||(items0?[]:lastRawItems)||[];
+function mdtEgmPages(items0,raw0,nPages){const items=items0||lastAllItems||[],raw=raw0||(items0?[]:lastRawItems)||[];
   const byP=new Map();for(const it of items){if(!byP.has(it.p))byP.set(it.p,[]);byP.get(it.p).push(it.s);}
   const flat=items.map(x=>x.s).join(' ')+' '+raw.map(x=>x.s).join(' ');
   const all=mdtEpisodeHeads(items,flat),heads=all.filter(h=>h.p!=null).sort((a,b)=>a.p-b.p);
-  const out=[];for(const [p,arr] of [...byP].sort((a,b)=>a[0]-b[0])){const t=arr.join(' ');
-    if(/EGM\s*\d|マーカ|インターバル\s*\(ms\)/.test(t)){const h=heads.some(h=>h.row)?[...heads].reverse().find(h=>h.p<=p):heads.find(h=>h.p>=p);out.push({page:p,ev:h?{no:h.no,dt:h.dt,type:h.type}:null});}}
+  // ページの一覧：文字の無いページ（波形だけのページ）も入れる
+  const nums=[...byP.keys()].filter(x=>typeof x==='number');const maxP=Math.max(nPages||0,...nums,0);
+  const pageList=maxP&&nums.length===byP.size?Array.from({length:maxP},(_,i)=>i+1):[...byP.keys()].sort((a,b)=>a-b);
+  // エピソードの見出し（エピソードサマリ／表の行）のページから、次の見出しの前までがそのエピソード（サマリ・インターバルのグラフ・EGMの続きのページ）
+  // ただし、ほかのレポートのページ（Quick Look・ヒストグラムなど）は入れない
+  const OTHER=/デバイスステータス|パラメータサマリ|Quick\s*Look|前回チェック(まで|以降)|予測寿命|電池電圧|リードインピーダンス|臨床ステータス/;
+  const SUMMARY=/エピソードサマリ|エピソード\s*#\s*\d+\s*[:：]/; // エピソードサマリのページ（文字だけ）は画像にしない。波形のページだけ
+  const EGMT=/EGM\s*\d|マーカ|インターバル\s*\(ms\)/;
+  // どのエピソードか：表の行（AT/AF 288 …）があれば、その行のページから次の行の前まで。無ければ「エピソード #」の見出しが波形の前か後ろかで決める
+  const rowH=heads.filter(h=>h.row),sumH=heads.filter(h=>!h.row);
+  const firstEgm=pageList.find(p=>EGMT.test((byP.get(p)||[]).join(' '))&&!SUMMARY.test((byP.get(p)||[]).join(' ')));
+  const after=!rowH.length&&sumH.length&&firstEgm!=null&&firstEgm<sumH[0].p; // 見出し（サマリ）が波形の後ろにある形
+  const headOf=p=>rowH.length?[...rowH].reverse().find(h=>h.p<=p):after?sumH.find(h=>h.p>=p):[...sumH].reverse().find(h=>h.p<=p);
+  const out=[];for(const p of pageList){const t=(byP.get(p)||[]).join(' ');if(OTHER.test(t)||SUMMARY.test(t))continue;
+    const h=headOf(p);
+    if(h){out.push({page:p,ev:{no:h.no,dt:h.dt,type:h.type}});continue;}
+    if(EGMT.test(t))out.push({page:p,ev:null});}
   // 見出しのページが分からない時：見出しが1つなら全部そのエピソード、EGMのページと同じ数なら順に対応させる
   if(!heads.length&&all.length&&out.length){const uniq=[...new Map(all.map(h=>[h.no,h])).values()];
     out.forEach((o,i)=>{const h=uniq.length===1?uniq[0]:uniq.length===out.length?uniq[i]:null;if(h)o.ev={no:h.no,dt:h.dt,type:h.type};});}
   return out;
 }
 // Medtronicのページを画像に：上の患者情報（ID・医師・氏名など）の行より下、下の「CareLinkネットワーク」の行より上
-async function mdtPageImage(doc,pno){
-  const pg=await doc.getPage(pno),S=2.5,vp=pg.getViewport({scale:S}),v1=pg.getViewport({scale:1}),c=document.createElement('canvas');c.width=Math.round(vp.width);c.height=Math.round(vp.height);
+async function mdtPageImage(doc,pno,scale){
+  const pg=await doc.getPage(pno),S=scale||2.5,vp=pg.getViewport({scale:S}),v1=pg.getViewport({scale:1}),c=document.createElement('canvas');c.width=Math.round(vp.width);c.height=Math.round(vp.height);
   const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);await pg.render({canvasContext:x,viewport:vp}).promise;
   let top=0,bottom=c.height;
   try{const tc=await pg.getTextContent();for(const it of tc.items){const s=String(it.str||'');if(!s.trim())continue;const [,py]=v1.convertToViewportPoint(it.transform[4],it.transform[5]),h=Math.abs(it.transform[3])||9;
@@ -1442,13 +1457,22 @@ async function mdtPageImage(doc,pno){
 async function saveTvEgm(id,date,opt){opt=opt||{};const doc=opt.doc||lastPdfDoc;
   if(!dirHandle||!doc||!id)return [];
   const isM=opt.doc?true:!!(curTV&&curTV.mdt);let pages,map;
-  if(isM){const r=mdtEgmPages(opt.items);pages=r.map(x=>x.page);map=r.map(x=>({ev:x.ev}));}
+  if(isM){const r=mdtEgmPages(opt.items,null,doc.numPages);pages=r.map(x=>x.page);map=r.map(x=>({ev:x.ev}));}
   else{pages=await tvEgmPages(lastPdfDoc);const evs=tvStreamEvents(lastRawItems);map=evs.length===pages.length?evs:null;}
   if(!pages.length)return [];
   const top=await dirHandle.getDirectoryHandle(PDF_DIR,{create:true}),folder=fileNameFor(id,{device:$('fDev').value}).replace(/\.json$/i,'')||id,pd=await top.getDirectoryHandle(folder,{create:true});
   const m=String(date||'').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})(?:\D+(\d{1,2}):(\d{2}))?/),stem=m?`${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}${m[4]?'_'+m[4].padStart(2,'0')+m[5]:''}`:'EGM';
   const out=[];let k=0;
   const evCnt=new Map();
+  // Medtronic：1つのエピソードのページ（サマリ・グラフ・EGM）は、縦につなげて1枚の画像にする（タイムラインで1エピソード＝1枚）
+  if(isM&&map){const groups=new Map(),single=[];pages.forEach((pg,i)=>{const ev=map[i].ev;if(ev){if(!groups.has(ev.no))groups.set(ev.no,{ev,pages:[]});groups.get(ev.no).pages.push(pg);}else single.push(pg);});
+    for(const {ev,pages:pp} of groups.values()){const fname=`${stem}_イベント${safeName(ev.no)}.png`;
+      try{const cvs=[];for(const pg of pp)cvs.push(await mdtPageImage(doc,pg,pp.length>12?1.1:pp.length>3?1.6:2));
+        const W=Math.max(...cvs.map(c=>c.width)),H=cvs.reduce((a,c)=>a+c.height,0)+(cvs.length-1)*6,o=document.createElement('canvas');o.width=W;o.height=H;
+        const x=o.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,W,H);let y=0;for(const c of cvs){x.drawImage(c,0,y);y+=c.height;x.fillStyle='#bbb';x.fillRect(0,y+2,W,2);x.fillStyle='#fff';y+=6;}
+        const blob=await new Promise(r=>o.toBlob(r,'image/png')),w=await (await pd.getFileHandle(fname,{create:true})).createWritable();await w.write(blob);await w.close();
+        out.push({path:`${PDF_DIR}/${folder}/${fname}`,ev,page:pp[0],pages:pp});}catch(_){}}
+    pages=single;map=single.map(()=>({ev:null}));}
   for(let i=0;i<pages.length;i++){const ev=map&&map[i].ev;let fname;
     if(ev){const c=(evCnt.get(ev.no)||0)+1;evCnt.set(ev.no,c);fname=`${stem}_イベント${safeName(ev.no)}${c>1?'_'+c:''}.png`;}else fname=`${stem}_EGM${++k}.png`;
     try{const cv=isM?await mdtPageImage(doc,pages[i]):await tvEgmImage(doc,pages[i]),blob=await new Promise(r=>cv.toBlob(r,'image/png'));
