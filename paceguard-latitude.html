@@ -716,28 +716,28 @@ function headerInfo(t,wt,interro){
 // ===== デバイス設定の読み取りと、前回との比較 =====
 // レポートの文字（全ページ）から設定を読む。①位置から行・セルを組み立て「項目｜値」の組を拾う ②主な設定は項目名のパターンで特定 ③取れない時は詰めた文字から正規表現で拾う
 // ※実際のLATITUDEのレポートで項目名・値の書き方を確認して SET_KNOWN を調整すること（「🔧 設定の読み取り結果」で確認できる）
-const SET_V={onoff:'(オン|オフ|ON|OFF|On|Off|有効|無効)',zone:'(\\d{3}|オフ|OFF|Off)',sense:'(一次|二次|代替|プライマリ|セカンダリ|オルタネート|Primary|Secondary|Alternate)',gain:'([12]\\s?[xX×]|[12]倍)',pol:'(標準|逆|反転|STD|REV|Standard|Reverse)'};
+const SET_V={onoff:'(オン|オフ|ON|OFF|On|Off|有効|無効)',zone:'(\\d{3}|オフ|OFF|Off)',sense:'(一次|二次|代替|プライマリ|セカンダリ|オルタネイト|オルタネート|Primary|Secondary|Alternate)',gain:'([12]\\s?[xX×]|[xX×]\\s?[12]|[12]倍)',pol:'(標準|逆|反転|STD|REV|Standard|Reverse)'};
 const SET_KNOWN=[ // imp:2＝治療に関わる（変わったら強調）／1＝波形の見え方が変わる
-  {k:'therapy',name:'治療',lab:/^(?:頻拍)?治療(?:の設定|モード|設定)?$|^Therapy(?:Mode)?$/i,re:[`(?:頻拍)?治療(?:の設定|モード|設定)?[:：]?${SET_V.onoff}`,`Therapy(?:Mode)?[:：]?${SET_V.onoff}`],imp:2},
-  {k:'shockZone',name:'ショックゾーン',lab:/^(?!.*条件)ショックゾーン$|^ShockZone$/i,re:[`(?<!条件付き|条件付|Conditional)ショックゾーン[:：]?(\\d{3})`,`(?<!Conditional)ShockZone[:：]?(\\d{3})`],unit:'bpm',imp:2},
-  {k:'condZone',name:'条件付きショックゾーン',lab:/^条件付き?ショックゾーン$|^ConditionalShockZone$/i,re:[`条件付き?ショックゾーン[:：]?${SET_V.zone}`,`ConditionalShockZone[:：]?${SET_V.zone}`],unit:'bpm',imp:2},
+  {k:'therapy',name:'治療',lab:/^(?:頻拍)?治療(?:の設定|モード|設定)?$|^Therapy(?:Mode)?$|^(?:S-?ICD)?(?:パルスジェネレータの)?モード$/i,re:[`(?:頻拍)?治療(?:の設定|モード|設定)?[:：]?${SET_V.onoff}`,`Therapy(?:Mode)?[:：]?${SET_V.onoff}`,`Therapy\\s?(On|Off)`],imp:2},
+  {k:'shockZone',name:'ショックゾーン',lab:/^(?!.*(?:条件|コンディショナル))ショックゾーン$|^ShockZone$/i,re:[`(?<!条件付き|条件付|コンディショナル|Conditional)ショックゾーン[:：]?(\\d{3})`,`(?<!Conditional)ShockZone[:：]?(\\d{3})`],unit:'bpm',imp:2},
+  {k:'condZone',name:'条件付きショックゾーン',lab:/^(?:条件付き?|コンディショナル)(?:ショック)?ゾーン$|^Conditional(?:Shock)?Zone$/i,re:[`(?:条件付き?|コンディショナル)(?:ショック)?ゾーン[:：]?${SET_V.zone}`,`ConditionalShockZone[:：]?${SET_V.zone}`],unit:'bpm',imp:2},
   {k:'postShock',name:'ショック後ペーシング',lab:/^ショック後(?:の)?ペーシング$|^Post-?ShockPacing$/i,re:[`ショック後(?:の)?ペーシング[:：]?${SET_V.onoff}`,`Post-?ShockPacing[:：]?${SET_V.onoff}`],imp:2},
   {k:'polarity',name:'ショック極性',lab:/^ショック(?:の)?極性$|^ShockPolarity$/i,re:[`ショック(?:の)?極性[:：]?${SET_V.pol}`,`ShockPolarity[:：]?${SET_V.pol}`],imp:2},
   {k:'sensing',name:'センシング構成',lab:/^センシング(?:構成|ベクトル|ベクター)$|^Sensing(?:Configuration|Vector)$/i,re:[`センシング(?:構成|ベクトル|ベクター)[:：]?${SET_V.sense}`,`Sensing(?:Configuration|Vector)[:：]?${SET_V.sense}`],imp:1},
-  {k:'gain',name:'ゲイン設定',lab:/^ゲイン(?:設定)?$|^Gain(?:Setting)?$/i,re:[`ゲイン(?:設定)?[:：]?${SET_V.gain}`,`Gain(?:Setting)?[:：]?${SET_V.gain}`],imp:1},
+  {k:'gain',name:'ゲイン設定',lab:/^ゲイン(?:設定)?$|^Gain(?:Setting)?$|^最大センシング範囲$/i,re:[`(?:ゲイン(?:設定)?|最大センシング範囲)[:：]?${SET_V.gain}`,`Gain(?:Setting)?[:：]?${SET_V.gain}`],imp:1},
   {k:'smartPass',name:'SMART Pass',lab:/^SMART\s?Pass$/i,re:[`SMART\\s?Pass[:：]?${SET_V.onoff}`],imp:1},
-  {k:'afMon',name:'AFモニタ',lab:/^AFモニタ[ー]?$|^AFMonitor$/i,re:[`AFモニタ[ー]?[:：]?${SET_V.onoff}`,`AFMonitor[:：]?${SET_V.onoff}`],imp:0},
+  {k:'afMon',name:'AFモニタ',lab:/^AFモニタ(?:ー|リング)?$|^AFMonitor$/i,re:[`AFモニタ(?:ー|リング)?[:：]?${SET_V.onoff}`,`AFMonitor[:：]?${SET_V.onoff}`],imp:0},
 ];
 // 設定ではない項目（測定値・日時・個人情報など）は、その他の項目として比べない
 const SET_SKIP=/患者|氏名|ID|ふりがな|生年|性別|日時|日付|年月日|送信|読込|植込み日|最終|前回|次回|電池|バッテリ|残量|インピーダンス|抵抗|心拍数|測定|イベント|件数|エピソード|回数|持続|医師|施設|病院|電話|住所|ページ|レポート|シリアル|型式|モデル|S-?ECG表示|Patient|Name|Date|Battery|Impedance|Serial|Model|Page/i;
-const SET_VAL=/^(オン|オフ|ON|OFF|On|Off|有効|無効|あり|なし|はい|いいえ|一次|二次|代替|プライマリ|セカンダリ|オルタネート|Primary|Secondary|Alternate|標準|逆|反転|Standard|Reverse|[12]\s?[xX×]|[12]倍|[-+]?\d+(?:\.\d+)?\s*(?:bpm|ms|mV|V|J|%|秒|分|時間|日|回|拍|min-1|回\/分)?(?:\s*[\/／~〜-]\s*\d+(?:\.\d+)?\s*(?:bpm|ms|mV|V|J|%)?)?)$/;
+const SET_VAL=/^(オン|オフ|ON|OFF|On|Off|有効|無効|あり|なし|はい|いいえ|一次|二次|代替|プライマリ|セカンダリ|オルタネイト|オルタネート|Primary|Secondary|Alternate|標準|逆|反転|Standard|Reverse|[12]\s?[xX×]|[xX×]\s?[12]|[12]倍|Therapy\s?(?:On|Off)(?:モード)?|[-+]?\d+(?:\.\d+)?\s*(?:bpm|ms|mV|V|J|%|秒|分|時間|日|回|拍|min-1|回\/分)?(?:\s*[\/／~〜-]\s*\d+(?:\.\d+)?\s*(?:bpm|ms|mV|V|J|%)?)?)$/;
 const setNorm=s=>String(s||'').replace(/[Ａ-Ｚａ-ｚ０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/[\s　]+/g,'').replace(/[：:]$/,'');
 function setVal(v,unit){let s=setNorm(v);
-  if(/^(オン|ON|On|有効)$/.test(s))s='オン';else if(/^(オフ|OFF|Off|無効)$/.test(s))s='オフ';
-  else if(/^(プライマリ|Primary)$/i.test(s))s='一次';else if(/^(セカンダリ|Secondary)$/i.test(s))s='二次';else if(/^(オルタネート|Alternate)$/i.test(s))s='代替';
-  else if(/^([12])(?:[xX×]|倍)$/.test(s))s=s[0]+'x';else if(/^(Standard|STD)$/i.test(s))s='標準';else if(/^(Reverse|REV|反転)$/i.test(s))s='逆';
+  if(/^(オン|ON|On|有効|TherapyOn(?:モード)?)$/i.test(s))s='オン';else if(/^(オフ|OFF|Off|無効|TherapyOff(?:モード)?)$/i.test(s))s='オフ';
+  else if(/^(プライマリ|Primary)$/i.test(s))s='一次';else if(/^(セカンダリ|Secondary)$/i.test(s))s='二次';else if(/^(オルタネイト|オルタネート|Alternate)$/i.test(s))s='代替';
+  else if(/^([12])(?:[xX×]|倍)$/.test(s))s=s[0]+'x';else if(/^[xX×]([12])$/.test(s))s=s.slice(-1)+'x';else if(/^(Standard|STD)$/i.test(s))s='標準';else if(/^(Reverse|REV|反転)$/i.test(s))s='逆';
   else if(unit&&/^\d+$/.test(s))s+=' '+unit;
-  else s=s.replace(/(\d)(bpm|ms|mV|V|J)$/,'$1 $2');
+  else s=s.replace(/(\d)(?:min-?1|回\/分)$/,'$1bpm').replace(/(\d)(bpm|ms|mV|V|J)$/,'$1 $2');
   return s;}
 // pdf.jsの文字（全ページ、位置つき）から行を作り、間が空いた所でセルに分ける
 function textLines(items){
@@ -752,7 +752,8 @@ function textLines(items){
 function parseSettings(items,flat){
   const got={},src={};
   const put=(k,name,v,g,how,unit)=>{if(got[k])return;const val=setVal(v,unit);if(!val)return;got[k]={l:name,v:val,g};src[k]=how;};
-  const known=lab=>SET_KNOWN.find(K=>K.lab.test(lab));
+  // 「Shock Zone (ショックゾーン)」のような英日併記も：括弧の外・中のどちらかで見つける
+  const known=lab=>{const c=[lab,lab.replace(/[(（][^)）]*[)）]/g,''),...[...lab.matchAll(/[(（]([^)）]+)[)）]/g)].map(m=>m[1])];for(const x of c){const K=SET_KNOWN.find(K=>K.lab.test(x));if(K)return K;}return null;};
   // ①行・セル：「項目｜値」「項目：値」
   for(const cells of textLines(items||[])){
     const pairs=[];
