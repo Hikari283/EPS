@@ -291,7 +291,7 @@ body,button,select,input,textarea{font-family:Tahoma,"Segoe UI",Verdana,"Meiryo 
       <div class="row"><span class="lb">透明度</span><input type="range" id="opacity" min="0.1" max="1" step="0.05" value="1"></div>
       <div class="row"><span class="lb">ポイント</span><label><input type="checkbox" id="showPts" checked> 表示</label><label><input type="checkbox" id="showExcl" checked> 除外点も</label></div>
       <div class="row"><span class="lb">点の大きさ</span><input type="range" id="ptSize" min="0.4" max="4" step="0.1" value="0.9"></div>
-      <div class="row"><span class="lb">点の色</span><select id="ptColor"><option value="value">マップの値</option><option value="white" selected>白</option><option value="label">ラベル付きを強調</option></select></div>
+      <div class="row"><span class="lb">点の色</span><select id="ptColor"><option value="value" selected>マップの値</option><option value="white">白</option><option value="label">ラベル付きを強調</option></select></div>
     </fieldset>
     <fieldset><legend>2画面比較</legend>
       <div class="row"><label><input type="checkbox" id="compareOn"> 2画面で並べる</label><label><input type="checkbox" id="syncCam" checked> 視点を連動</label></div>
@@ -377,7 +377,8 @@ body,button,select,input,textarea{font-family:Tahoma,"Segoe UI",Verdana,"Meiryo 
       <div class="muted small">仮想の左房です（架空のデータ）。マップの上でマウスを動かすと、カテーテルがついてきます。ドラッグで回転、ホイールで拡大・縮小。</div>
     </fieldset>
     <fieldset><legend>カテーテル</legend>
-      <div class="row"><label><input type="radio" name="simCath" value="abl" checked> 焼灼カテーテル（先端1か所）</label></div>
+      <div class="row"><label><input type="radio" name="simCath" value="oct" checked> オクタレイ（8本×5＝40点。マッピング用）</label></div>
+      <div class="row"><label><input type="radio" name="simCath" value="abl"> 焼灼カテーテル（先端1か所。通電用）</label></div>
       <div class="row"><label><input type="radio" name="simCath" value="cir"> 円形カテーテル（10極）</label></div>
       <div class="row"><label><input type="checkbox" id="simAuto" checked> 連続取得（カテーテルを動かすと自動で入る）</label></div>
       <div class="row"><span class="lb" style="min-width:auto">点の間隔</span><input type="number" id="simMin" value="3" min="1" max="10" step="0.5"> mm 以上</div>
@@ -1555,7 +1556,7 @@ const S={
   meas:{map:null,pts:[],path:null,results:[],len:0,straight:0},
   snaps:[],gaps:null,rec:null,
   anim:{prop:false,phase:0,rphase:0,rippleT:0},
-  opt:{bg:[0.04,0.05,0.07],bgKey:'navy',clip:0,autoZoom:false,src:'auto',fill:15,scar:0.05,iso:false,isoSteps:12,opacity:1,showPts:true,showExcl:true,ptSize:0.55,ptColor:'white',
+  opt:{bg:[0.04,0.05,0.07],bgKey:'navy',clip:0,autoZoom:false,src:'auto',fill:15,scar:0.05,iso:false,isoSteps:12,opacity:1,showPts:true,showExcl:true,ptSize:0.55,ptColor:'value',
     propSpeed:80,propBand:15,ripple:false,rippleScale:6,rippleSpeed:60,cvOn:false,cvSpacing:6,
     vtOn:true,vtChain:true,gapThr:6,vtSize:2.5,vtParam:'ai',vtLo:0,vtHi:1,gapShow:true},
   wch:{map:true,ref:true,ecg:false,other:false}
@@ -1730,6 +1731,7 @@ function bindPanel(){
   document.addEventListener('keydown',e=>{
     const ae=document.activeElement;if(ae&&ae.matches('input[type=text],input[type=number],textarea,select'))return;if(ae&&ae.matches('input,button'))ae.blur();
     if(!$('#slideOv').classList.contains('hidden')){if(e.key==='ArrowRight')slideGo(1);else if(e.key==='ArrowLeft')slideGo(-1);else if(e.key==='Escape')closeSlides();return;}
+    if(SIM.active&&(e.key==='c'||e.key==='C')&&!e.ctrlKey&&!e.metaKey){const order=['oct','abl','cir'],nx=order[(order.indexOf(SIM.cath)+1)%3],r=document.querySelector(`input[name=simCath][value=${nx}]`);r.checked=true;r.dispatchEvent(new Event('change'));toast('カテーテル：'+(nx==='oct'?'オクタレイ':nx==='abl'?'焼灼カテーテル':'円形カテーテル'));e.preventDefault();return;}
     if(SIM.active&&(e.key==='Enter'||e.key==='a'||e.key==='A')&&!e.ctrlKey&&!e.metaKey){if(e.key==='Enter')simAcquire();else simAblate();e.preventDefault();return;}
     if(e.key==='ArrowRight'){stepPoint(1);e.preventDefault();}else if(e.key==='ArrowLeft'){stepPoint(-1);e.preventDefault();}
     else if(e.key==='Delete'||e.key==='Backspace'){if(S.sel){toggleExclude(S.sel.map,S.sel.p);e.preventDefault();}}
@@ -2509,7 +2511,8 @@ async function buildDiag(){
 /* 仮想の左房（肺静脈4本・左心耳・僧帽弁）に、仮想カテーテルを動かして、その場の電位を見ながらマップを作り、通電して肺静脈を隔離する練習。
    「正解」は内部データ（SIM.T）が持っていて、通電するとブロックが反映され、電気の流れ（LAT）が計算し直される。 */
 const SIM_REF=700,SIM_CL=700,SIM_L=2100;
-const SIM={active:false,map:null,T:null,cath:'abl',sites:[],shaft:[],live:null,ver:0,hv:null,lastHv:null,dirtyLive:true,nextId:1,sess:1,
+const SIM_SPL='ABCDEFGH',SIM_OCT_COL=[[1,0.6,0.24],[0.36,0.45,1],[1,0.88,0.3],[1,0.42,0.54],[0.26,0.72,1],[0.37,0.88,0.48],[0.78,0.49,1],[1,0.75,0.3]];
+const SIM={active:false,map:null,T:null,cath:'oct',octRot:0.3,sites:[],shaft:[],live:null,ver:0,hv:null,lastHv:null,dirtyLive:true,nextId:1,sess:1,
   auto:true,minDist:3,maxJump:9,grid:new Map(),autoPrev:null,autoDirty:false,autoT:0,autoN:0,autoSkip:0,
   cfg:{power:35,time:20,force:12},leads:null,sheath:[-14,-3,-4],sheathOut:[-38,-9,-16]};
 const simHash=i=>{const s=Math.sin(i*12.9898+78.233)*43758.5453;return s-Math.floor(s);};
@@ -2575,15 +2578,59 @@ function simDecodeLa(d){
   mesh.bi=new Uint16Array(b64Bytes(d.bi).buffer);mesh.cvd=new Uint16Array(b64Bytes(d.cv).buffer);mesh.latd=new Uint16Array(b64Bytes(d.lat).buffer);
   return mesh;
 }
-function simBoundaryLoops(mesh){
-  const T=mesh.tris,nv=mesh.nv,cnt=new Map();
-  for(let t=0;t<T.length;t+=3)for(let k=0;k<3;k++){const a=T[t+k],b=T[t+(k+1)%3],kk=a<b?a*nv+b:b*nv+a;cnt.set(kk,(cnt.get(kk)||0)+1);}
+function simBoundaryLoops(mesh){   // 穴のふち（つながったふちの点の集まり。順番にはたどらない：ふちが自分に触れる所があるため）
+  const T=mesh.tris,nv=mesh.nv,cnt=new Map(),key=(a,b)=>a<b?a*nv+b:b*nv+a;
+  for(let t=0;t<T.length;t+=3)for(let k=0;k<3;k++){const kk=key(T[t+k],T[t+(k+1)%3]);cnt.set(kk,(cnt.get(kk)||0)+1);}
   const adj=new Map(),add=(a,b)=>{let l=adj.get(a);if(!l)adj.set(a,l=[]);l.push(b);};
-  for(const[kk,c]of cnt){if(c!==1)continue;const a=Math.floor(kk/nv),b=kk-a*nv;add(a,b);add(b,a);}
+  for(let t=0;t<T.length;t+=3)for(let k=0;k<3;k++){const a=T[t+k],b=T[t+(k+1)%3];if(cnt.get(key(a,b))===1){add(a,b);add(b,a);}}
   const seen=new Set(),loops=[];
   for(const s of adj.keys()){if(seen.has(s))continue;const comp=[],st=[s];seen.add(s);
     while(st.length){const x=st.pop();comp.push(x);for(const y of adj.get(x))if(!seen.has(y)){seen.add(y);st.push(y);}}loops.push(comp);}
   return loops;
+}
+/* 肺静脈の切り口を、筒のように外へ伸ばして、先を丸く閉じる（元データの静脈は短く切れているため）。
+   ふちの点を1つずつ外へ複製して、ふちの辺ごとに帯をつなぐ（ふちが自分に触れていても壊れない）。
+   伸ばした部分の電圧・伝導速度は、切り口の値をそのまま使う。返り値：各肺静脈の先端の点の番号 */
+const SIM_EXT=15,SIM_EXT_STEP=3;
+function simExtendVeins(m,comps,c0){
+  const V0=m.verts,nv0=m.nv,T0=m.tris,NR=Math.round(SIM_EXT/SIM_EXT_STEP),addV=[],addT=[],src=[],tips=[];
+  const vid=()=>nv0+addV.length/3;
+  const geo=simGeoMulti(m,comps.flatMap((L,k)=>L.map(vi=>({vi,lab:k}))));
+  const compOf=new Map();comps.forEach((L,k)=>L.forEach(i=>compOf.set(i,k)));
+  const cnt=new Map(),key=(a,b)=>a<b?a*nv0+b:b*nv0+a;
+  for(let t=0;t<T0.length;t+=3)for(let k=0;k<3;k++){const kk=key(T0[t+k],T0[t+(k+1)%3]);cnt.set(kk,(cnt.get(kk)||0)+1);}
+  const edges=comps.map(()=>[]),nbr=comps.map(()=>new Map()),smooth=new Map();
+  for(let t=0;t<T0.length;t+=3)for(let k=0;k<3;k++){const a=T0[t+k],b=T0[t+(k+1)%3];if(cnt.get(key(a,b))!==1||!compOf.has(a))continue;
+    const q=compOf.get(a);edges[q].push([a,b]);for(const[u,w]of[[a,b],[b,a]]){let l=nbr[q].get(u);if(!l)nbr[q].set(u,l=[]);l.push(w);}}
+  comps.forEach((L,q)=>{
+    const pos=new Map(L.map(i=>[i,[V0[i*3],V0[i*3+1],V0[i*3+2]]]));
+    for(let it=0;it<3;it++){const np=new Map();for(const i of L){const ns=nbr[q].get(i)||[];let a=[0,0,0];for(const j of ns)a=v3.add(a,pos.get(j));np.set(i,ns.length?v3.sc(v3.add(v3.sc(pos.get(i),1),v3.sc(a,1/ns.length)),0.5):pos.get(i));}for(const i of L)pos.set(i,np.get(i));}   // ふちのぎざぎざをならす
+    for(const i of L){const p=pos.get(i);V0[i*3]=p[0];V0[i*3+1]=p[1];V0[i*3+2]=p[2];}
+    let sb=new Map(L.map(i=>[i,m.bi[i]]));   // 伸ばす部分の電圧は、切り口の値をなだらかにしたものを使う（縞を防ぐ）
+    for(let it=0;it<8;it++){const nb=new Map();for(const i of L){const ns=nbr[q].get(i)||[];let a=sb.get(i);for(const j of ns)a+=sb.get(j);nb.set(i,a/(1+ns.length));}sb=nb;}
+    for(const i of L)smooth.set(i,sb.get(i));
+    let c=[0,0,0];for(const i of L)c=v3.add(c,pos.get(i));c=v3.sc(c,1/L.length);
+    // 伸ばす向き：切り口から8〜14 mm内側の点の重心 → 切り口の重心、の向き
+    let cin=[0,0,0],nin=0;for(let i=0;i<nv0;i++){if(geo.lab[i]===q&&geo.d[i]>=8&&geo.d[i]<=14){cin=v3.add(cin,[V0[i*3],V0[i*3+1],V0[i*3+2]]);nin++;}}
+    let d=nin>10?v3.norm(v3.sub(c,v3.sc(cin,1/nin))):v3.norm(v3.sub(c,c0));if(v3.dot(d,v3.sub(c,c0))<0)d=v3.sc(d,-1);
+    let prev=new Map(L.map(i=>[i,i]));
+    for(let r=1;r<=NR;r++){
+      const s=1-0.3*(r/NR)*(r/NR),cr=v3.add(c,v3.sc(d,SIM_EXT_STEP*r)),cur=new Map();
+      for(const i of L){const p=v3.add(cr,v3.sc(v3.sub(pos.get(i),c),s));cur.set(i,vid());addV.push(p[0],p[1],p[2]);src.push(i);}
+      for(const[a,b]of edges[q]){const a1=prev.get(a),b1=prev.get(b),a2=cur.get(a),b2=cur.get(b);addT.push(b1,a1,a2,b1,a2,b2);}
+      prev=cur;
+    }
+    const cp=v3.add(c,v3.sc(d,SIM_EXT_STEP*(NR+0.6))),ci=vid();addV.push(cp[0],cp[1],cp[2]);src.push(L[0]);
+    for(const[a,b]of edges[q])addT.push(prev.get(b),prev.get(a),ci);
+    tips.push([...prev.values(),ci]);
+  });
+  const nv1=nv0+addV.length/3,verts=new Float32Array(nv1*3);verts.set(V0);verts.set(addV,nv0*3);
+  const tris=new Uint32Array(T0.length+addT.length);tris.set(T0);tris.set(addT,T0.length);
+  const ext=a=>{const o=new Uint16Array(nv1);o.set(a);for(let k=0;k<src.length;k++)o[nv0+k]=a[src[k]];return o;};
+  const biOld=m.bi;m.bi=ext(m.bi);for(let k=0;k<src.length;k++){const v=smooth.get(src[k]);if(v!==undefined)m.bi[nv0+k]=Math.round(v);}
+  m.cvd=ext(m.cvd);m.latd=ext(m.latd);m.nv=nv1;m.verts=verts;m.tris=tris;m.adj=null;
+  computeNormals(m);m.used=new Uint8Array(nv1);for(const i of tris)m.used[i]=1;
+  return tips;
 }
 function simGeoMulti(mesh,sources){   // 複数の出発点（ラベル付き）からの、表面に沿った距離
   const adj=meshAdj(mesh),nv=mesh.nv,d=new Float64Array(nv).fill(Infinity),lab=new Int16Array(nv).fill(-1),h=new Heap();   // 32ビットだと丸めで同じ点を何度も計算し直すので、64ビット
@@ -2591,11 +2638,11 @@ function simGeoMulti(mesh,sources){   // 複数の出発点（ラベル付き）
   while(h.size){const[du,u]=h.pop();if(du>d[u])continue;for(let k=adj.off[u];k<adj.off[u+1];k++){const w=adj.nb[k],nd=du+adj.wt[k];if(nd<d[w]){d[w]=nd;lab[w]=lab[u];h.push(nd,w);}}}
   return{d,lab};
 }
-const SIM_GV=30,SIM_GOST=14;   // 肺静脈として扱う範囲（切り口からの距離, mm）／入口（体部との境）とみなす距離
+const SIM_GV=30+SIM_EXT,SIM_GOST=14+SIM_EXT;   // 肺静脈として扱う範囲（伸ばした先端からの距離, mm）／入口（体部との境）とみなす距離
 function simBuildTruthReal(key){
   const D=window.SIM_LA_DATA.meshes[key];if(!D)throw new Error('形のデータがありません：'+key);
-  const m=simDecodeLa(D),nv=m.nv,V=m.verts,P=i=>[V[i*3],V[i*3+1],V[i*3+2]];
-  const loops=simBoundaryLoops(m).sort((a,b)=>b.length-a.length);
+  const m=simDecodeLa(D);let nv=m.nv,V=m.verts,P=i=>[V[i*3],V[i*3+1],V[i*3+2]];
+  const loops=simBoundaryLoops(m).filter(L=>L.length>=8).sort((a,b)=>b.length-a.length);
   if(loops.length<5)throw new Error('肺静脈の切り口を見つけられませんでした');
   let c0=[0,0,0],nu=0;for(let i=0;i<nv;i++){if(!m.used[i])continue;c0[0]+=V[i*3];c0[1]+=V[i*3+1];c0[2]+=V[i*3+2];nu++;}c0=v3.sc(c0,1/nu);
   const lc=L=>{let c=[0,0,0];for(const i of L)c=v3.add(c,P(i));return v3.sc(c,1/L.length);};
@@ -2603,7 +2650,9 @@ function simBuildTruthReal(key){
   const grp=[pvs.slice(0,2).sort((a,b)=>b.c[2]-a.c[2]),pvs.slice(2,4).sort((a,b)=>b.c[2]-a.c[2])];   // [左(+X)の上・下, 右(-X)の上・下]
   const veins=[{n:'LSPV',...grp[0][0]},{n:'LIPV',...grp[0][1]},{n:'RSPV',...grp[1][0]},{n:'RIPV',...grp[1][1]}];
   const mitral=lc(loops[0]);
-  const geo=simGeoMulti(m,veins.flatMap((v,k)=>v.L.map(vi=>({vi,lab:k}))));
+  const tips=simExtendVeins(m,veins.map(v=>v.L),c0);   // 肺静脈を伸ばす（点の数・位置が変わるので、このあとで取り直す）
+  nv=m.nv;V=m.verts;
+  const geo=simGeoMulti(m,tips.flatMap((arr,k)=>arr.map(vi=>({vi,lab:k}))));
   const T={mesh:m,vein:new Uint8Array(nv),axis:new Float32Array(nv*3),hpos:new Float32Array(nv),deep:new Uint8Array(nv),g:geo.d,
     bip:new Float32Array(nv),uni:new Float32Array(nv),cv:new Float32Array(nv),lat:new Float32Array(nv).fill(NaN),blocked:new Uint8Array(nv),q:new Float32Array(nv).fill(1),lat0:-25};
   for(let i=0;i<nv;i++){const g=geo.d[i];if(!m.used[i])continue;
@@ -2620,7 +2669,7 @@ function simBuildTruthReal(key){
     return bs;});
   for(let i=0;i<nv;i++)if(T.vein[i]){const bs=T.bands[T.vein[i]-1],a=bs[Math.min(bs.length-1,Math.floor(geo.d[i]/2))].ax;T.axis[i*3]=a[0];T.axis[i*3+1]=a[1];T.axis[i*3+2]=a[2];}
   // 体部の外向きの向き、洞調律の出発点（実際のLATが最も早い点）
-  let bi=-1,bd=-1;for(let i=0;i<nv;i++){if(!m.used[i])continue;const d=v3.dist(P(i),c0);if(d>bd){bd=d;bi=i;}}
+  let bi=-1,bd=-1;for(let i=0;i<nv;i++){if(!m.used[i]||T.vein[i])continue;const d=v3.dist(P(i),c0);if(d>bd){bd=d;bi=i;}}
   T.outSign=v3.dot([m.norms[bi*3],m.norms[bi*3+1],m.norms[bi*3+2]],v3.sub(P(bi),c0))>=0?1:-1;
   let sv=-1,sl=1e9;for(let i=0;i<nv;i++){if(!m.used[i]||T.vein[i])continue;const l=m.latd[i];if(l<sl){sl=l;sv=i;}}T.src=sv;
   let mx=[-1e9,-1e9,-1e9],mn=[1e9,1e9,1e9];for(let i=0;i<nv;i++)for(let k=0;k<3;k++){if(!m.used[i])continue;mn[k]=Math.min(mn[k],V[i*3+k]);mx[k]=Math.max(mx[k],V[i*3+k]);}
@@ -2652,6 +2701,11 @@ function simPlace(v,cx,cy){
   for(const c of cand){const d=v3.dist(simPos(m,c),h.surf.pos);if(d<bd){bd=d;vi=c;}}
   const sites=[];
   if(SIM.cath==='abl')sites.push({pos:h.surf.pos,vi});
+  else if(SIM.cath==='oct'){   // オクタレイ：中心＋8本のスプライン（A〜H）×5つの双極（中心から 4〜19 mm）を、壁にそって広げる
+    const nrm=simNormal(T,vi),e1=v3.norm(v3.cross(nrm,Math.abs(nrm[2])<0.9?[0,0,1]:[1,0,0])),e2=v3.cross(nrm,e1),C=h.surf.pos;
+    sites.push({pos:C,vi});
+    for(let s=0;s<8;s++){const th=SIM.octRot+s*Math.PI/4;for(let j=0;j<5;j++){const r=4+3.8*j,t=v3.add(C,v3.add(v3.sc(e1,r*Math.cos(th)),v3.sc(e2,r*Math.sin(th)))),vk=simNear(m,t);sites.push({pos:simPos(m,vk),vi:vk});}}
+  }
   else{
     let C,ax,R;
     if(T.vein[vi]&&T.bands){const bs=T.bands[T.vein[vi]-1],bb=bs[Math.min(bs.length-1,Math.floor(T.g[vi]/2))];C=bb.c;ax=bb.ax;R=bb.r;}   // 実際の形：肺静脈の中心線
@@ -2671,6 +2725,10 @@ function simShaftSegs(){
   const segs=[],sh=SIM.shaft,T=SIM.T;if(!T||!sh.length)return segs;
   for(let i=1;i<sh.length;i++)segs.push({a:sh[i-1],b:sh[i],c:[0.86,0.72,0.35,1],w:2.2,depth:false});
   segs.push({a:SIM.sheathOut,b:SIM.sheath,c:[0.72,0.76,0.84,1],w:3.4,depth:false});
+  if(SIM.cath==='oct'&&SIM.sites.length>=41){
+    const inw=s=>v3.add(s.pos,v3.sc(simNormal(T,s.vi),-0.9));
+    for(let s=0;s<8;s++){let a=inw(SIM.sites[0]);for(let j=0;j<5;j++){const b=inw(SIM.sites[1+s*5+j]);segs.push({a,b,c:[...SIM_OCT_COL[s],1],w:0.8,depth:false});a=b;}}
+  }
   if(SIM.cath==='cir'&&SIM.sites.length>1)for(let k=1;k<SIM.sites.length;k++){
     const a=v3.add(SIM.sites[k-1].pos,v3.sc(simNormal(T,SIM.sites[k-1].vi),-0.9)),b=v3.add(SIM.sites[k].pos,v3.sc(simNormal(T,SIM.sites[k].vi),-0.9));
     segs.push({a,b,c:[0.45,0.8,1,1],w:0.9,depth:false});}
@@ -2683,6 +2741,9 @@ function simCatItems(){
     const p=inw(SIM.sites[0]);items.push({x:p[0],y:p[1],z:p[2],r:1.9,c:[0.98,0.8,0.25,1]});
     const n=SIM.shaft.length,d=n>1?v3.norm(v3.sub(SIM.shaft[n-2],SIM.shaft[n-1])):[0,0,1],q=v3.add(p,v3.sc(d,4.2));
     items.push({x:q[0],y:q[1],z:q[2],r:1.4,c:[0.9,0.72,0.3,1]});
+  }else if(SIM.cath==='oct'){
+    const c=inw(SIM.sites[0]);items.push({x:c[0],y:c[1],z:c[2],r:1.4,c:[0.92,0.92,0.96,1]});
+    for(let k=1;k<SIM.sites.length;k++){const p=inw(SIM.sites[k]);items.push({x:p[0],y:p[1],z:p[2],r:0.8,c:[...SIM_OCT_COL[Math.floor((k-1)/5)],1]});}
   }else SIM.sites.forEach((s,k)=>{const p=inw(s);items.push({x:p[0],y:p[1],z:p[2],r:1.6,c:k%2?[0.98,0.9,0.2,1]:[0.2,0.35,0.95,1]});});
   return items;
 }
@@ -2694,6 +2755,7 @@ function simSiteParams(s){
 }
 function simPose(mi){
   if(SIM.cath==='abl')return{cath:'abl',tip:simSiteParams(SIM.sites[0])};
+  if(SIM.cath==='oct')return{cath:'oct',bips:SIM.sites.slice(1).map(simSiteParams),map:mi||0};
   const m=SIM.T.mesh,bips=[];
   for(let j=0;j<9;j++){const mid=v3.sc(v3.add(SIM.sites[j].pos,SIM.sites[j+1].pos),0.5),vm=simNear(m,mid);bips.push(simSiteParams({vi:vm,pos:simPos(m,vm)}));}
   return{cath:'cir',bips,map:mi||0};
@@ -2709,6 +2771,10 @@ function simEGM(P){
   const unip=s=>t=>(s.act?-s.uni*g(t,s.lat+3,7.5)+0.33*s.uni*g(t,s.lat-12,9):0)+0.5*g(t,70,16)-0.35*g(t,60,6);
   let bipCh,uniCh;
   if(P.cath==='abl'){add('ABL 1-2',bipolar(P.tip),1);add('ABL 1',unip(P.tip),2);bipCh='ABL 1-2';uniCh='ABL 1';}
+  else if(P.cath==='oct'){   // チャンネル名は、CARTOの画面のとおり「SPU A1-A2」の形式（8本×5つの双極）
+    for(let s=0;s<8;s++)for(let j=0;j<5;j++)add(`SPU ${SIM_SPL[s]}${j+1}-${SIM_SPL[s]}${j+2}`,bipolar(P.bips[s*5+j]),10+s*5+j);
+    const mi=P.map||0,s0=Math.floor(mi/5),j0=mi%5,nm=`SPU ${SIM_SPL[s0]}${j0+1}`;add(nm,unip(P.bips[mi]),50);bipCh=`${nm}-${SIM_SPL[s0]}${j0+2}`;uniCh=nm;
+  }
   else{
     for(let j=0;j<9;j++)add(`LAS ${j+1}-${j+2}`,bipolar(P.bips[j]),10+j);
     const mi=P.map||0;add(`LAS ${mi+1}`,unip(P.bips[mi]),50);bipCh=`LAS ${mi+1}-${mi+2}`;uniCh=`LAS ${mi+1}`;
@@ -2742,9 +2808,9 @@ function simNearPoint(pos,r){
 function simAcquire(){
   if(!SIM.active)return;if(!SIM.sites.length)return toast('マップの上にマウスを動かして、カテーテルを置いてください');
   let last,n=0;
-  if(SIM.cath==='abl'){last=simAddPoint(simPose(),0);n=1;}else{const P=simPose(0);for(let j=0;j<9;j++){last=simAddPoint(P,j);n++;}}
+  if(SIM.cath==='abl'){last=simAddPoint(simPose(),0);n=1;}else{const P=simPose(0);for(let j=0;j<P.bips.length;j++){last=simAddPoint(P,j);n++;}}
   SIM.map.version++;dirtyAll('cp');selectPoint(SIM.map,last);simRenderPanel();
-  toast(n===1?`ポイント ${last.id} を取得しました`:`円形カテーテルの ${n} 点（P${last.id-n+1}〜P${last.id}）を取得しました`);
+  toast(n===1?`ポイント ${last.id} を取得しました`:`${SIM.cath==='oct'?'オクタレイ':'円形カテーテル'}の ${n} 点（P${last.id-n+1}〜P${last.id}）を取得しました`);
 }
 /* 連続取得：カテーテルを動かすと、条件を満たした点が自動で入る（条件はこちらの簡易想定）
    ・直前のフレームから大きくジャンプしていない（ゆっくり動かしている）
@@ -2755,7 +2821,7 @@ function simAutoStep(){
   if(SIM.autoPrev){const jump=v3.dist(cur,SIM.autoPrev);SIM.autoPrev=cur;if(jump>SIM.maxJump){SIM.autoSkip++;return;}}else{SIM.autoPrev=cur;}
   const r=SIM.minDist;let added=0;
   if(SIM.cath==='abl'){if(!simNearPoint(cur,r)){simAddPoint(simPose(),0);added++;}}
-  else{const P=simPose(0);for(let j=0;j<9;j++){const prm=P.bips[j];if(simNearPoint(prm.pos,r))continue;simAddPoint(P,j);added++;}}
+  else{const P=simPose(0);for(let j=0;j<P.bips.length;j++){const prm=P.bips[j];if(simNearPoint(prm.pos,r))continue;simAddPoint(P,j);added++;}}
   if(added){SIM.autoDirty=true;SIM.autoN+=added;}
 }
 function simAutoFlush(now){
@@ -2770,7 +2836,7 @@ function simClearPoints(){
   SIM.map.points=[];SIM.map.version++;S.sel=null;SIM.nextId=1;simGridRebuild();SIM.autoPrev=null;dirtyAll('cp');renderWave();renderPtList(true);simRenderPanel();
 }
 function simAblate(){
-  if(!SIM.active)return;if(SIM.cath!=='abl')return toast('通電は焼灼カテーテルで行います（「シミュ」タブでカテーテルを切り替えてください）');
+  if(!SIM.active)return;if(SIM.cath!=='abl')return toast('通電は焼灼カテーテルで行います（Cキー、または「シミュ」タブでカテーテルを切り替えてください）');
   const T=SIM.T,s=SIM.sites[0];if(!s)return toast('マップの上にマウスを動かして、カテーテルを置いてください');
   const c=SIM.cfg,F=Math.max(1,c.force+(Math.random()-0.5)*4),Q=(c.power/35)*(c.time/20)*(0.5+F/24),ai=Math.round(Q*420),m=T.mesh;
   const full=Q>=0.93,part=Q>=0.6,rb=full?3.4:0,rq=full?4.2:part?3.2:2.0,fac=full?0.08:part?0.5:0.9;let nb=0;
@@ -2799,7 +2865,7 @@ function simTruth(on){
 function simRenderPanel(){
   const el=$('#simInfo');if(!el)return;
   if(!SIM.active){el.textContent='「症例をはじめる」を押すと始まります。';return;}
-  el.innerHTML=`ポイント <b>${SIM.map.points.length}</b> 点　通電 <b>${S.study.visitag.sites.length}</b> 回　カテーテル：<b>${SIM.cath==='abl'?'焼灼（先端）':'円形（10極）'}</b>`;
+  el.innerHTML=`ポイント <b>${SIM.map.points.length}</b> 点　通電 <b>${S.study.visitag.sites.length}</b> 回　カテーテル：<b>${SIM.cath==='abl'?'焼灼（先端）':SIM.cath==='oct'?'オクタレイ（40点）':'円形（10極）'}</b>`;
 }
 function simFrame(now){
   if(SIM.hv){const h=SIM.hv;SIM.hv=null;SIM.lastHv=h;simPlace(h.v,h.x,h.y);simAutoStep();}
@@ -2823,9 +2889,9 @@ function simStart(){
     setStudy(study);
     if(S.compare)tog('#compareOn');
     const v=S.viewers[0];v.type='Bipolar';v.ranges={Bipolar:{lo:0.08,hi:0.5},LAT:{lo:-25,hi:100}};v.setView('PA');
-    S.opt.fill=8;$('#fillR').value=8;S.opt.src='interp';$('#srcSel').value='interp';$('#simTruth').checked=false;$('#simAblRes').textContent='';$('#simIso').textContent='';
+    S.opt.fill=8;$('#fillR').value=8;S.opt.ptColor='value';$('#ptColor').value='value';S.opt.src='interp';$('#srcSel').value='interp';$('#simTruth').checked=false;$('#simAblRes').textContent='';$('#simIso').textContent='';
     syncPanel();setSel('#wLayout','all');setSide(true);clickTab('t-sim');simRenderPanel();dirtyAll('cpv');
-    toast('シミュレーター開始：マップの上でマウスを動かすとカテーテルがついてきます（Enter：ポイント取得 ／ A：通電）',6000);
+    toast('シミュレーター開始：マップの上でマウスを動かすとカテーテルがついてきます（Enter：ポイント取得 ／ A：通電 ／ C：カテーテルの切り替え）',7000);
   }catch(err){console.error(err);toast('シミュレーターを開始できませんでした：'+err.message,6000);}finally{progress(null);}},30);
 }
 function simBind(){
