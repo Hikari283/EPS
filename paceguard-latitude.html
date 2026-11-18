@@ -114,6 +114,7 @@
   .settab tr>th:first-child{position:sticky;left:0;z-index:1;box-shadow:1px 0 0 var(--line)} .settab tr.oth th{font-weight:400;color:var(--sub)}
   .numdet{margin-top:12px;border:1px solid var(--line);border-radius:10px;padding:6px 10px} .numdet>summary{cursor:pointer;font-weight:700;font-size:13px}
   .settab tr.grp th,table.crit tr.grp th{background:var(--tblh);color:var(--sub);font-size:11px;font-weight:700;letter-spacing:.04em;position:static}
+  body.norule .settab tr>:nth-child(2):not([colspan]),body.norule .rulehint{display:none}
   .setnav{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:0 0 8px} .setnav input[type=range]{flex:1;min-width:120px;max-width:360px} .setnav button{padding:3px 10px}
   .settab table{table-layout:fixed} .settab th:first-child{width:170px} .settab tr:first-child th:nth-child(2),.settab td:nth-child(2){width:190px}
   .ptmark{font-size:10.5px;color:var(--accent2);font-weight:700} .settab td.warnv,.warnk{background:rgba(251,146,60,.28);font-weight:700} .warnk{padding:0 4px;border-radius:4px} .settab td.chg,.chgk{background:rgba(251,191,36,.22)} .settab td.bad,.badk{background:rgba(251,113,133,.22);font-weight:700} .chgk,.badk{padding:0 4px;border-radius:4px}
@@ -311,10 +312,17 @@
     <summary>⚙ 設定・インピーダンスの推移（時系列）<span class="hint" id="setSum" style="margin-left:8px;font-weight:400;letter-spacing:0"></span></summary>
     <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:8px 0">
       <label class="hint"><input type="checkbox" id="setOnlyChg"> 変わった項目・ルール外だけ</label>
+      <label class="hint"><input type="checkbox" id="setShowRule"> 📏 ルールを表示</label>
       <label class="hint"><input type="checkbox" id="setShowOther" checked> その他の項目も表示</label>
       <span class="hint">左＝過去・右＝最新／<span class="chgk">黄</span>＝前の回から変更（アラートではない）・<span class="warnk">橙</span>＝インピーダンス注意・<span class="badk">赤</span>＝ルール（基準値）の範囲外・インピーダンス警告／📌＝基準の回</span>
     </div>
     <div id="setTrend"><div class="hint">患者を読み込むと表示します。</div></div>
+    <details id="tvPtWrap" hidden style="margin-top:10px;padding:8px 10px;border:1px solid var(--line);border-radius:8px">
+      <summary style="cursor:pointer"><b>🔔 この患者だけのルール（経静脈デバイス）</b> <span class="hint" id="tvPtSum"></span></summary>
+      <div class="hint">変えたいルールだけ「この患者は次の値」か「決めない」にしてください。この患者の記録（基準フォルダのJSON）に保存します。</div>
+      <div id="tvPtRules"></div>
+      <div style="margin-top:6px"><button id="tvPtSave">この患者のルールを保存</button> <button id="tvPtClear" class="ghost">全部、全体のルールに戻す</button> <span class="status" id="tvPtMsg"></span></div>
+    </details>
     <details id="ptRulesWrap" hidden style="margin-top:10px;padding:8px 10px;border:1px solid var(--line);border-radius:8px">
       <summary style="cursor:pointer"><b>🔔 この患者だけのルール</b> <span class="hint" id="ptRulesSum"></span></summary>
       <div class="hint">変えたい項目だけ選んでください。「全体のルールのまま」の項目は、⚙ 設定（保存先）の全体のルールを使います。この患者の記録（基準フォルダのJSON）に保存します。</div>
@@ -1046,7 +1054,7 @@ function setAlertHtml(alerts,cur,chg){
 let setTrendLast=null,setTrendView={id:'',n:0,start:0};
 function setTrendRender(id,st){
   setTrendLast=id&&st?{id,st}:null;const box=$('setTrend');if(!box)return;
-  PT_ID=id||'';PT_RULES=st&&st.setRules||null;ptRulesUi();
+  PT_ID=id||'';PT_RULES=st&&st.setRules||null;ptRulesUi();PT_TV=st&&st.tvRules||null;if($('tvPtWrap'))$('tvPtWrap').hidden=true;
   if(!st){box.innerHTML='<div class="hint">患者を読み込むと表示します。</div>';$('setSum').textContent='';return;}
   const basePdf=st.baseline&&st.baseline.pdf;
   // 列＝S-ECGの記録（イベントの記録は列にしない）
@@ -1059,7 +1067,8 @@ function setTrendRender(id,st){
   const badKey=k=>k.startsWith('x:')&&(/\d/.test(k)||/[\u0080-\u024f\u02b0-\u02ff\u2000-\u206f\ufffd]/.test(k));
   const okVal=(k,v)=>{const K=SET_KNOWN.find(x=>x.k===k);return !(K&&K.ok&&!K.ok.test(LV(v)));};
   const isTVp=cols.some(c=>c.tv); // 経静脈デバイス：設定は表にせず、下の「⚙ 設定」の欄で見る
-  if(isTVp&&$('ptRulesWrap'))$('ptRulesWrap').hidden=true; // 患者ごとのルールは今はS-ICDだけ
+  if(isTVp&&$('ptRulesWrap'))$('ptRulesWrap').hidden=true; // 経静脈は専用の「この患者だけのルール」
+  PT_TV=st.tvRules||null;$('tvPtWrap').hidden=!isTVp;if(isTVp)tvPtRulesUi();
   let keys=[...new Set(cols.flatMap(c=>Object.keys(c.settings.items)))].filter(k=>!badKey(k)&&(showOther||order(k)<99)&&!(isTVp&&/^set:/.test(k)));
   const oOf=k=>{let m=1e9;for(const c of cols){const x=c.settings.items[k];if(x&&x.o!=null&&x.o<m)m=x.o;}return m;};
   keys.sort((a,b)=>order(a)-order(b)||oOf(a)-oOf(b)||a.localeCompare(b,'ja'));
@@ -1194,45 +1203,76 @@ async function saveTvEgm(id,date){
 const tvNum=v=>{const m=String(v||'').match(/([<>]?)\s*(-?\d+(?:\.\d+)?)/);if(!m)return NaN;const n=+m[2];return m[1]==='<'?n-1e-6:m[1]==='>'?n+1e-6:n;}; // 「<1」は1未満、「>25.0」は25より大
 const tvCh=k=>{const m=k.match(/^lead:([^:]*):/);return m?m[1]:'';};
 const TV_LEAD=(re)=>k=>/^lead:/.test(k)&&re.test(k);
-const TV_RULES=[ // when: このキーに当てはめる／f: 値→{lv,why}
-  {id:'ampA',txt:'0.5 mV未満で要確認',when:TV_LEAD(/^lead:心房:心内波高値/),f:n=>n<0.5?{lv:2,why:'0.5 mV未満'}:null},
-  {id:'ampV',txt:'3.0 mV未満で要確認',when:TV_LEAD(/^lead:(心室|右心室|右室|左心室|左室):心内波高値/),f:n=>n<3.0?{lv:2,why:'3.0 mV未満'}:null},
-  {id:'thr',txt:'1.5 V以上で要確認',when:TV_LEAD(/:ペーシング閾値/),f:n=>n>=1.5?{lv:2,why:'1.5 V以上'}:null},
-  {id:'pimp',txt:'300〜1000 Ωの外で要確認',when:TV_LEAD(/:ペーシングインピーダンス/),f:n=>(n<300||n>1000)?{lv:2,why:'300〜1000 Ωの外'}:null},
-  {id:'simp',txt:'50〜100 Ωの外で要確認',when:k=>/^lead:ショック:|ショックインピーダンス/.test(k),f:n=>(n<50||n>100)?{lv:2,why:'50〜100 Ωの外'}:null},
-  {id:'bat',txt:'1年以下で注意／0.5年以下で要確認',when:k=>k==='bat:years',f:n=>n<=0.5?{lv:2,why:'0.5年（6か月）以下'}:n<=1?{lv:1,why:'1年以下'}:null},
-  {id:'af',txt:'1.0%以上で要確認',when:k=>k==='atAf',f:n=>n>=1.0?{lv:2,why:'1.0%以上'}:null},
+// ルールの値（全体）。患者ごとに上書きできる（基準JSONの tvRules。{none:true}＝この患者は決めない）
+const TV_DEF={ampA:{v:0.5},ampV:{v:3.0},thr:{v:1.5},pimp:{lo:300,hi:1000},simp:{lo:50,hi:100},bat:{warn:1,alert:0.5},af:{v:1.0},chg:{on:1},margin:{out:2,sens:0.5},rel:{warn:10,alert:20}};
+const TV_NAMES={ampA:'心房 心内波高値',ampV:'心室（右心室・左心室） 心内波高値',thr:'ペーシング閾値',pimp:'ペーシングインピーダンス',simp:'ショックインピーダンス',bat:'交換までの予測期間',af:'%AT/AF',chg:'設定（ゾーン・ATR・モード・レート・AV Delayなど）',margin:'マージン（出力と閾値・感度と波高値）',rel:'前回からの変化（閾値・インピーダンス・波高値）'};
+let PT_TV=null; // 今表示・評価している患者の上書き
+const TVP=g=>{const o=PT_TV&&PT_TV[g];if(o&&o.none)return null;return {...TV_DEF[g],...(o||{})};};
+const tvIsPt=g=>!!(PT_TV&&PT_TV[g]);
+const TV_RULES=[ // g: ルールの種類／when: このキーに当てはめる／t: 説明／f: 値→{lv,why}
+  {g:'ampA',when:TV_LEAD(/^lead:心房:心内波高値/),t:r=>`${r.v} mV未満で要確認`,f:(n,r)=>n<r.v?{lv:2,why:`${r.v} mV未満`}:null},
+  {g:'ampV',when:TV_LEAD(/^lead:(心室|右心室|右室|左心室|左室):心内波高値/),t:r=>`${r.v} mV未満で要確認`,f:(n,r)=>n<r.v?{lv:2,why:`${r.v} mV未満`}:null},
+  {g:'thr',when:TV_LEAD(/:ペーシング閾値/),t:r=>`${r.v} V以上で要確認`,f:(n,r)=>n>=r.v?{lv:2,why:`${r.v} V以上`}:null},
+  {g:'pimp',when:TV_LEAD(/:ペーシングインピーダンス/),t:r=>`${r.lo}〜${r.hi} Ωの外で要確認`,f:(n,r)=>(n<r.lo||n>r.hi)?{lv:2,why:`${r.lo}〜${r.hi} Ωの外`}:null},
+  {g:'simp',when:k=>/^lead:ショック:|ショックインピーダンス/.test(k),t:r=>`${r.lo}〜${r.hi} Ωの外で要確認`,f:(n,r)=>(n<r.lo||n>r.hi)?{lv:2,why:`${r.lo}〜${r.hi} Ωの外`}:null},
+  {g:'bat',when:k=>k==='bat:years',t:r=>`${r.warn}年以下で注意／${r.alert}年以下で要確認`,f:(n,r)=>n<=r.alert?{lv:2,why:`${r.alert}年以下`}:n<=r.warn?{lv:1,why:`${r.warn}年以下`}:null},
+  {g:'af',when:k=>k==='atAf',t:r=>`${r.v}%以上で要確認`,f:(n,r)=>n>=r.v?{lv:2,why:`${r.v}%以上`}:null},
 ];
 // 前回から変わったら要確認にする設定
-const TV_CHG=/^set:(心室細動|心室頻拍(-?1)?|VF|VT(-?1)?|ATR ?Mode ?Switch|モード|下限レート|最大トラッキングレート|Paced AV Delay|Sensed AV Delay|心室ペーシングチャンバー|ペーシングオーダー|LV[ab]?-?(RV|LV[ab]?)?オフセット|LVa-LVbオフセット|LVb-RVオフセット)$/;
+const TV_CHG=/^set:(心室細動|心室頻拍(-?1)?|VF|VT(-?1)?|ATR ?Mode ?Switch|モード|下限レート|最大トラッキングレート|Paced AV Delay|Sensed AV Delay|心室ペーシングチャンバー|ペーシングオーダー|LVa-LVbオフセット|LVb-RVオフセット)$/;
 // 前回からの変化（変化率）：閾値は上がった時、インピーダンスは上下どちらも、波高値は下がった時
 const TV_REL=[
-  {txt:'前回から上昇（10%以上で注意／20%以上で要確認）',when:k=>/^lead:.*ペーシング閾値/.test(k),dir:+1,name:'ペーシング閾値の上昇'},
-  {txt:'前回から変化（10%以上で注意／20%以上で要確認）',when:k=>/^lead:.*インピーダンス/.test(k),dir:0,name:'インピーダンスの変化'},
-  {txt:'前回から低下（10%以上で注意／20%以上で要確認）',when:k=>/^lead:.*心内波高値/.test(k),dir:-1,name:'心内波高値の低下'},
+  {when:k=>/^lead:.*ペーシング閾値/.test(k),dir:+1,name:'ペーシング閾値の上昇',w:'上昇'},
+  {when:k=>/^lead:.*インピーダンス/.test(k),dir:0,name:'インピーダンスの変化',w:'変化'},
+  {when:k=>/^lead:.*心内波高値/.test(k),dir:-1,name:'心内波高値の低下',w:'低下'},
 ];
-function tvRuleText(k){const a=[];for(const R of TV_RULES)if(R.when(k))a.push(R.txt);if(TV_CHG.test(k))a.push('前回から変わったら要確認');for(const R of TV_REL)if(R.when(k))a.push(R.txt);
-  if(/^set:ペーシング出力/.test(k))a.push('閾値の2倍未満で要確認');if(/^set:感度/.test(k))a.push('波高値の1/2を超えたら要確認');return a.join('／');}
+function tvRuleText(k){const a=[],mk=g=>tvIsPt(g)?'（この患者）':'';
+  for(const R of TV_RULES)if(R.when(k)){const r=TVP(R.g);a.push(r?R.t(r)+mk(R.g):`決めない${mk(R.g)}`);}
+  if(TV_CHG.test(k)){a.push(TVP('chg')?'前回から変わったら要確認'+mk('chg'):'決めない'+mk('chg'));}
+  for(const R of TV_REL)if(R.when(k)){const r=TVP('rel');if(r)a.push(`前回から${R.w}（${r.warn}%以上で注意／${r.alert}%以上で要確認）${mk('rel')}`);}
+  const m=TVP('margin');if(m){if(/^set:ペーシング出力/.test(k))a.push(`閾値の${m.out}倍未満で要確認${mk('margin')}`);if(/^set:感度/.test(k))a.push(`波高値の${m.sens}倍を超えたら要確認${mk('margin')}`);}
+  return a.join('／');}
 // 1つの記録（items）と前回（prevItems）から、項目ごとのアラートを作る
 function tvAlerts(cur,prev){
   const C=cur&&cur.items||{},P=prev&&prev.items||{},out=[];
   const add=(k,lv,why)=>out.push({k,lv,txt:`${(C[k]||{}).l||k} ${LV((C[k]||{}).v)}：${why}`});
+  const rel=TVP('rel'),chg=TVP('chg'),mg=TVP('margin');
   for(const [k,x] of Object.entries(C)){const n=tvNum(LV(x.v));
-    for(const R of TV_RULES)if(R.when(k)&&!isNaN(n)){const a=R.f(n);if(a)add(k,a.lv,a.why);}
-    if(TV_CHG.test(k)&&P[k]&&LV(P[k].v)!==LV(x.v))out.push({k,lv:2,txt:`${x.l}が前回から変更（${LV(P[k].v)}→${LV(x.v)}）`});
-    for(const R of TV_REL){if(!R.when(k)||!P[k])continue;const a=tvNum(LV(P[k].v)),b=n;if(isNaN(a)||isNaN(b)||a<=0)continue;
-      const r=(b-a)/a*100,mag=R.dir===0?Math.abs(r):R.dir>0?r:-r;const lv=mag>=20?2:mag>=10?1:0;
+    for(const R of TV_RULES){if(!R.when(k)||isNaN(n))continue;const r=TVP(R.g);if(!r)continue;const a=R.f(n,r);if(a)add(k,a.lv,a.why+(tvIsPt(R.g)?'（この患者のルール）':''));}
+    if(chg&&TV_CHG.test(k)&&P[k]&&LV(P[k].v)!==LV(x.v))out.push({k,lv:2,txt:`${x.l}が前回から変更（${LV(P[k].v)}→${LV(x.v)}）`});
+    if(rel)for(const R of TV_REL){if(!R.when(k)||!P[k])continue;const a=tvNum(LV(P[k].v)),b=n;if(isNaN(a)||isNaN(b)||a<=0)continue;
+      const r=(b-a)/a*100,mag=R.dir===0?Math.abs(r):R.dir>0?r:-r;const lv=mag>=rel.alert?2:mag>=rel.warn?1:0;
       if(lv)out.push({k,lv,txt:`${x.l} ${R.name}（${LV(P[k].v)}→${LV(x.v)}、${r>0?'+':''}${Math.round(r)}%）`});}}
-  // マージン：ペーシング出力が閾値の2倍以上か／感度が波高値の1/2以下か（部屋ごと）
-  const chOf=lab=>{const m=String(lab).match(/(心房|右心室|右室|左心室|左室|心室)/);return m?m[1].replace('右室','右心室').replace('左室','左心室'):'';};
-  const leadV=(ch,metric)=>{const k=Object.keys(C).find(k=>k.startsWith(`lead:${ch}:`)&&k.includes(metric));return k?{k,n:tvNum(LV(C[k].v))}:null;};
-  for(const [k,x] of Object.entries(C)){
-    if(/^set:ペーシング出力/.test(k)){const ch=chOf(k.slice(4).replace('ペーシング出力',''));const t=ch&&leadV(ch,'ペーシング閾値'),o=tvNum(LV(x.v));
-      if(t&&!isNaN(t.n)&&!isNaN(o)&&o<2*t.n)out.push({k,lv:2,txt:`${x.l} ${LV(x.v)}：閾値（${LV(C[t.k].v)}）の2倍に足りない`});}
-    if(/^set:感度/.test(k)){const ch=chOf(k.slice(4).replace('感度',''));const a=ch&&leadV(ch,'心内波高値'),sv=tvNum(LV(x.v));
-      if(a&&!isNaN(a.n)&&!isNaN(sv)&&sv>a.n/2)out.push({k,lv:2,txt:`${x.l} ${LV(x.v)}：波高値（${LV(C[a.k].v)}）の1/2を超えている`});}
-  }
+  // マージン：ペーシング出力が閾値の○倍以上か／感度が波高値の○倍以下か（部屋ごと）
+  if(mg){const chOf=lab=>{const m=String(lab).match(/(心房|右心室|右室|左心室|左室|心室)/);return m?m[1].replace('右室','右心室').replace('左室','左心室'):'';};
+    const leadV=(ch,metric)=>{const k=Object.keys(C).find(k=>k.startsWith(`lead:${ch}:`)&&k.includes(metric));return k?{k,n:tvNum(LV(C[k].v))}:null;};
+    for(const [k,x] of Object.entries(C)){
+      if(/^set:ペーシング出力/.test(k)){const ch=chOf(k.slice(4).replace('ペーシング出力',''));const t=ch&&leadV(ch,'ペーシング閾値'),o=tvNum(LV(x.v));
+        if(t&&!isNaN(t.n)&&!isNaN(o)&&o<mg.out*t.n)out.push({k,lv:2,txt:`${x.l} ${LV(x.v)}：閾値（${LV(C[t.k].v)}）の${mg.out}倍に足りない`});}
+      if(/^set:感度/.test(k)){const ch=chOf(k.slice(4).replace('感度',''));const a=ch&&leadV(ch,'心内波高値'),sv=tvNum(LV(x.v));
+        if(a&&!isNaN(a.n)&&!isNaN(sv)&&sv>a.n*mg.sens)out.push({k,lv:2,txt:`${x.l} ${LV(x.v)}：波高値（${LV(C[a.k].v)}）の${mg.sens}倍を超えている`});}}}
   return out.sort((a,b)=>b.lv-a.lv);
+}
+// この患者だけのルール（経静脈）：画面と保存
+const TV_FIELDS={ampA:[['v','mV未満']],ampV:[['v','mV未満']],thr:[['v','V以上']],pimp:[['lo','Ω（下限）'],['hi','Ω（上限）']],simp:[['lo','Ω（下限）'],['hi','Ω（上限）']],bat:[['warn','年以下で注意'],['alert','年以下で要確認']],af:[['v','%以上']],chg:[],margin:[['out','倍（出力÷閾値がこれ未満で要確認）'],['sens','倍（感度÷波高値がこれを超えたら要確認）']],rel:[['warn','%以上で注意'],['alert','%以上で要確認']]};
+function tvPtRulesUi(){
+  const box=$('tvPtRules');if(!box)return;const R=PT_TV||{};
+  $('tvPtSum').textContent=Object.keys(R).length?`（${Object.keys(R).length}項目を変更中：${Object.keys(R).map(g=>TV_NAMES[g]).join('・')}）`:'（全体のルールのまま）';
+  box.innerHTML=`<table class="crit"><tr><th>ルール</th><th>この患者</th></tr>${Object.keys(TV_DEF).map(g=>{const r=R[g],d=TV_DEF[g],v={...d,...(r&&!r.none?r:{})};
+    const sel=`<select data-tg="${g}" data-tt="mode"><option value="__inh"${!r?' selected':''}>全体のルールのまま</option>${TV_FIELDS[g].length?`<option value="__set"${r&&!r.none?' selected':''}>この患者は次の値</option>`:''}<option value="__none"${r&&r.none?' selected':''}>決めない</option></select>`;
+    const ins=TV_FIELDS[g].map(([f,u])=>`<input class="inp" style="width:70px" data-tg="${g}" data-tt="${f}" value="${hasN(v[f])?v[f]:''}"> <span class="hint">${u}</span>`).join(' ');
+    const keep=PT_TV;PT_TV=null;const gtxt=(()=>{const rr=TVP(g);if(!rr)return '決めない';const T=TV_RULES.find(x=>x.g===g);return T?T.t(rr):g==='chg'?'前回から変わったら要確認':g==='margin'?`出力が閾値の${rr.out}倍未満／感度が波高値の${rr.sens}倍超で要確認`:`${rr.warn}%以上で注意／${rr.alert}%以上で要確認`;})();PT_TV=keep;
+    return `<tr><td>${TV_NAMES[g]}<div class="hint">全体：${escH(gtxt)}</div></td><td>${sel} ${ins}</td></tr>`;}).join('')}</table>`;
+}
+async function tvPtRulesSave(clear){
+  if(!PT_ID)return;const R={};
+  if(!clear){const box=$('tvPtRules');const modes={};box.querySelectorAll('[data-tt="mode"]').forEach(e=>modes[e.dataset.tg]=e.value);
+    for(const [g,m] of Object.entries(modes)){if(m==='__inh')continue;if(m==='__none'){R[g]={none:true};continue;}
+      const o={};box.querySelectorAll(`[data-tg="${g}"]:not([data-tt="mode"])`).forEach(e=>{if(hasN(e.value.trim()))o[e.dataset.tt]=+e.value.trim();});R[g]=o;}}
+  const st=await readBaseline(PT_ID);if(!st){$('tvPtMsg').innerHTML='<span class="warn-t">この患者の記録が見つかりません（フォルダに接続してください）</span>';return;}
+  if(Object.keys(R).length)st.tvRules=R;else delete st.tvRules;
+  if(!(await writeBaseline(PT_ID,st))){$('tvPtMsg').innerHTML='<span class="warn-t">保存できませんでした（フォルダの許可を確認してください）</span>';return;}
+  setTrendRender(PT_ID,st);$('tvPtMsg').innerHTML=`<span class="ok-t">${clear?'全体のルールに戻しました':'この患者のルールを保存しました'}（表の色はすぐ、判定は次の評価から変わります）</span>`;
 }
 // 経静脈デバイスの設定：時系列にせず、開いた時だけ見る欄（最新のレポートの設定。前回から変わった所は黄色）
 function tvSetBox(cur,prev,when){
@@ -1241,7 +1281,7 @@ function tvSetBox(cur,prev,when){
   const nChg=ks.filter(k=>P[k]&&LV(P[k].v)!==LV(C[k].v)).length,nAl=ks.filter(k=>alv(k)>0).length;
   return `<details class="numdet tvset"><summary>⚙ 設定（${escH(when||'最新のレポート')}・${ks.length}項目${prev?(nChg?`／<span class="warn-t">前回から${nChg}項目変更</span>`:'／前回から変更なし'):''}${nAl?`／<span class="warn-t">⚠️ アラート ${nAl}項目</span>`:''}）</summary>
     <table class="crit"><tr><th>項目</th><th>前回</th><th>今回</th></tr>${ks.map(k=>{const x=C[k],p=P[k],chg=p&&LV(p.v)!==LV(x.v);
-      const lv=alv(k),rt=tvRuleText(k);return `<tr class="${lv?'lv'+lv:chg?'lv1':''}"><td>${escH(x.l)}${rt?`<div class="hint">${escH(rt)}</div>`:''}</td><td>${p?escH(LV(p.v)):'<span class="hint">—</span>'}</td><td>${lv>=2?'⚠️ ':lv===1?'🟡 ':''}${escH(LV(x.v))}${chg?' <span class="hint">◀変</span>':''}</td></tr>`;}).join('')}</table></details>`;
+      const lv=alv(k),rt=tvRuleText(k);return `<tr class="${lv?'lv'+lv:chg?'lv1':''}"><td>${escH(x.l)}${rt?`<div class="hint rulehint">${escH(rt)}</div>`:''}</td><td>${p?escH(LV(p.v)):'<span class="hint">—</span>'}</td><td>${lv>=2?'⚠️ ':lv===1?'🟡 ':''}${escH(LV(x.v))}${chg?' <span class="hint">◀変</span>':''}</td></tr>`;}).join('')}</table></details>`;
 }
 // 経静脈デバイスのレポートを記録して、前回と比べる（波形の比較はしない）
 const tvDateKey=d=>{const m=String(d||'').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})(?:\D+(\d{1,2}):(\d{2}))?/);return m?m[1]+m[2].padStart(2,'0')+m[3].padStart(2,'0')+(m[4]||'0').padStart(2,'0')+(m[5]||'00'):'';};
@@ -1251,7 +1291,7 @@ async function runTV(){
   const id=$('fId').value.trim(),date=$('fDate').value,key=tvDateKey(date),ts=Date.now();
   if(!id){$('result').innerHTML='<div class="verdict info"><h2>患者IDを決めてください</h2>IDを自動で読み取れませんでした。上の候補を押すかIDを入力してから、「🔍 前回と比較」を押してください。</div>';return;}
   const store=dirHandle?await readBaseline(id):null;
-  PT_ID=id;PT_RULES=store&&store.setRules||null;
+  PT_ID=id;PT_RULES=store&&store.setRules||null;PT_TV=store&&store.tvRules||null;
   const saves=((store&&store.saves)||[]).filter(x=>!(x.tv&&x.key===key&&key)); // 同じ日付のレポートを読み直した時は置き換える
   const prev=saves.filter(x=>x.tv&&x.settings&&x.settings.n&&(key?(x.key&&x.key<key):true)).sort((a,b)=>a.key<b.key?1:a.key>b.key?-1:(b.ts||0)-(a.ts||0))[0]||null;
   const cmp=compareSettings(prev&&prev.settings,tv),al=tvAlerts(tv,prev&&prev.settings),lv=al.length?Math.max(...al.map(a=>a.lv)):0;
@@ -2281,7 +2321,11 @@ function tlReset(id,msg){setTrendRender(null,null);tl.id=id||'';tl.items=[];tl.c
 try{const v=localStorage.getItem('pg_lat_tlopen');if(v)$('tlCard').open=v==='1';}catch(_){}
 setRulesUi();
 $('setRulesSave').onclick=setRulesSave;
-$('ptRulesSave').onclick=()=>ptRulesSave(false);$('ptRulesClear').onclick=()=>ptRulesSave(true);
+$('ptRulesSave').onclick=()=>ptRulesSave(false);
+$('tvPtSave').onclick=()=>tvPtRulesSave(false);$('tvPtClear').onclick=()=>tvPtRulesSave(true);
+// ルールの欄（推移表のルールの列・⚙設定の欄のルールの説明）：最初は隠す。チェックで表示（覚えておく）
+{let on=false;try{on=localStorage.getItem('pg_lat_showrule')==='1';}catch(_){}$('setShowRule').checked=on;document.body.classList.toggle('norule',!on);
+ $('setShowRule').onchange=()=>{const v=$('setShowRule').checked;document.body.classList.toggle('norule',!v);try{localStorage.setItem('pg_lat_showrule',v?'1':'0');}catch(_){}};}$('ptRulesClear').onclick=()=>ptRulesSave(true);
 $('setRulesDef').onclick=()=>{SET_RULES=cloneDef();try{localStorage.removeItem(SET_RULES_KEY);}catch(_){}setRulesUi();$('setRulesMsg').innerHTML='<span class="ok-t">最初の設定に戻しました</span>';if(setTrendLast)setTrendRender(setTrendLast.id,setTrendLast.st);};
 for(const k of ['setOnlyChg','setShowOther'])$(k).onchange=()=>{try{localStorage.setItem('pg_lat_'+k,$(k).checked?'1':'0');}catch(_){}if(setTrendLast)setTrendRender(setTrendLast.id,setTrendLast.st);};
 try{for(const k of ['setOnlyChg','setShowOther']){const v=localStorage.getItem('pg_lat_'+k);if(v!==null)$(k).checked=v==='1';}}catch(_){}
