@@ -4,7 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PaceGuard LATITUDE 自動モード（β）</title>
-<script>try{document.documentElement.dataset.theme=localStorage.getItem('pg_lat_theme')||'light';}catch(_){document.documentElement.dataset.theme='light';}</script>
+<script>
+// CareLink用（ファイル名に carelink を含む）：同じファイルでも、覚える場所（localStorage・IndexedDB）を別にする
+window.PG_CL=/carelink/i.test(decodeURIComponent(location.pathname||''));
+if(window.PG_CL){try{const P=Storage.prototype,m=k=>typeof k==='string'&&k.startsWith('pg_lat')?'pg_cl'+k.slice(6):k;
+  for(const f of ['getItem','removeItem']){const o=P[f];P[f]=function(k){return o.call(this,m(k));};}
+  const os=P.setItem;P.setItem=function(k,v){return os.call(this,m(k),v);};}catch(_){}
+  document.title='PaceGuard CareLink（β）';}
+try{document.documentElement.dataset.theme=localStorage.getItem('pg_lat_theme')||'light';}catch(_){document.documentElement.dataset.theme='light';}</script>
 <style>
   /* PaceGuard LATITUDE — 心電図モニターの世界観（暗い画面に光る緑の線）。重要な判定ほど上・大きく */
   :root{
@@ -212,7 +219,7 @@
 <header class="appbar">
   <div class="brand">
     <svg viewBox="0 0 40 40" aria-hidden="true"><rect x="1" y="1" width="38" height="38" rx="11" fill="#0b1a1a" stroke="rgba(62,230,168,.45)"/><path class="base" d="M4 22h8l3-5 4 13 4-21 3 13h10" fill="none" stroke="#3ee6a8" stroke-opacity=".35" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path class="run" d="M4 22h8l3-5 4 13 4-21 3 13h10" fill="none" stroke="#3ee6a8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    <h1>PaceGuard <span style="color:var(--accent)">LATITUDE</span><small>S-ICD WAVEFORM MONITOR · β</small></h1>
+    <h1>PaceGuard <span style="color:var(--accent)" id="brandName">LATITUDE</span><small id="brandSub">S-ICD WAVEFORM MONITOR · β</small></h1>
   </div>
   <div class="chips">
     <button class="chip" id="rvChip" title="医師がまだ確認していない、注意・要確認の記録（押すと一覧へ）" hidden style="cursor:pointer"></button>
@@ -913,6 +920,86 @@ function parseTV(items){
   const type=has(/^lead:左心室|^pace:左心室/)?(has(/^lead:ショック/)?'CRT-D':'CRT-P'):has(/^lead:ショック/)?'ICD':'PM';
   return {items:got,src:{},n,tv:type};
 }
+// ===== Medtronic（CareLink の Quick Look II）：レポートの測定値・設定を読む =====
+// Bostonの経静脈デバイスと同じキー（lead:/set:/pace:/bat:...）にそろえて、推移の表・ルール・アラートを共通にする
+const MDT_MON={Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12'};
+const mdtDate=s=>{const m=String(s||'').match(/(\d{1,2})-([A-Z][a-z]{2})-(\d{4})(?:\s+(\d{1,2}:\d{2}))?/);return m&&MDT_MON[m[2]]?`${m[3]}年${MDT_MON[m[2]]}月${m[1].padStart(2,'0')}日${m[4]?' '+m[4]:''}`:'';};
+const mdtCh=s=>{const t=String(s||'').replace(/\s/g,'');if(/^(RA|A)(\(|$)/i.test(t))return '心房';if(/^RV(\(|$)/i.test(t))return '右心室';if(/^LV(\(|$)/i.test(t))return '左心室';return '';};
+const mdtVal=v=>tvUnit(String(v||'').replace(/\s*\((\d+(?:\.\d+)?)\s*ms\)/,' @ $1 ms').replace(/\s*\/\s*(\d+(?:\.\d+)?)\s*ms/,' @ $1 ms').replace(/(\d)\s*sec\b/,'$1 s').replace(/(\d)\s*bpm\b/,'$1 bpm'));
+function isMedtronic(text){return /Medtronic|CareLink|Quick\s*Look/i.test(String(text||''));}
+function parseMDT(items,flat){
+  const rows=tvRows(items),got={};let o=0;
+  const put=(k,l,v,extra)=>{v=mdtVal(v);if(!v||got[k])return;got[k]={l,v,g:'tv',o:o++,...(extra||{})};};
+  const T=String(flat||'');
+  // 患者ID・送信日時（右上）
+  const id=(T.match(/(?:^|[^A-Za-z])ID\s*[:：]\s*(\d{6,10})/)||[])[1]||'';
+  const sent=mdtDate((T.match(/送信日時\s*[:：]?\s*(\d{1,2}-[A-Z][a-z]{2}-\d{4}\s+\d{1,2}:\d{2})/)||[])[1]);
+  let sec='',cols={},chDef='右心室',lastThr=null,rightX=null,rightSec='',lastShock=[];
+  const near=x=>{let b='',bd=1e9;for(const [k,cx] of Object.entries(cols)){const d=Math.abs(cx-x);if(d<bd){bd=d;b=k;}}return b;};
+  for(const r of rows){const cells=r.cells,c0=tvClean(cells[0].s),all=cells.map(c=>c.s).join(' ');
+    // 見出しでセクションを切り替える
+    const H=(re,name)=>{if(re.test(c0)){sec=name;return true;}return false;};
+    if(H(/^デバイスステータス/,'dev')){cols={};continue;}
+    if(H(/^パラメータサマリ/,'param'))continue;
+    if(H(/^検出$/,'detect'))continue;
+    if(H(/^臨床ステータス/,'clin')){const g=cells.find(c=>/Cardiac Compass/i.test(c.s));rightX=g?g.x0-3:null;continue;}
+    if(/^治療済みのイベント/.test(c0)){sec='evTx';continue;}
+    if(/^モニタ済みイベント/.test(c0)){sec='evMon';continue;}
+    if(H(/^身体機能/,'act'))continue;
+    if(H(/^治療サマリ/,'txsum')){const g=cells.find(c=>/^ペーシング$/.test(tvClean(c.s)));rightX=g?g.x0-3:null;rightSec='pace';continue;}
+    if(H(/^オブザベーション/,'obs'))continue;
+    if(/^予測寿命/.test(c0)&&!/months?|years?/i.test(all)){sec='life';continue;} // 値の付いた「予測寿命 9 months」は見出しではない
+    if(/^電池電圧/.test(c0)&&!/\d\s*V\b/.test(all)){sec='volt';continue;}
+    if(H(/^前回のチャージ/,'charge'))continue;
+    if(H(/^センシング・?インテグリティ/,'sic'))continue;
+    if(H(/^リードインピーダンス/,'limp'))continue;
+    if(H(/^センシング$/,'sense'))continue;
+    if(H(/^前回のショック治療/,'shock')){const d=mdtDate(all);lastShock=d?[d]:[];continue;}
+    if(H(/^(CareLink|Copyright|患者個人情報)/,''))continue;
+    // 右の列（Cardiac Compass のグラフ／ペーシングの表）はここで分ける
+    let L=cells,R=[];if(rightX!=null&&(sec==='clin'||sec==='evTx'||sec==='evMon'||sec==='act'||sec==='txsum')){L=cells.filter(c=>c.x0<rightX);R=cells.filter(c=>c.x0>=rightX);}
+    if(R.length>=2&&rightSec==='pace'&&sec==='txsum'){const k=tvClean(R[0].s);if(/^(AS|AP|VS|VP|AS-VS|AS-VP|AP-VS|AP-VP)$/.test(k)){const m=R.slice(1).map(c=>c.s).join(' ').match(/([<>]?\s*[\d.]+)\s*%/);if(m)put(`pace:${k}`,`ペーシング率 ${k}`,m[1].replace(/\s/g,'')+'%');}}
+    if(!L.length)continue;let l0=tvClean(L[0].s),rest=L.slice(1).map(c=>c.s).join(' ').trim();
+    // 件数の表で、項目名と数字の間が狭くてくっついた時（例「VT-NS (>4 beat, >200 bpm)0」）は、最後の数字を値にする
+    if(!rest&&/^(evTx|evMon|txsum|sic)$/.test(sec)){const m=l0.match(/^(.*?[^\d\s])\s*(\d+)$/);if(m&&!/[~\-]$/.test(m[1])){l0=m[1].trim();rest=m[2];}}
+    if(sec==='dev'){
+      // 列見出し（RV(6935M) / RA / LV）
+      const hd=cells.filter(c=>mdtCh(c.s));if(hd.length&&hd.length===cells.length){cols={};for(const c of hd)cols[mdtCh(c.s)]=(c.x0+c.x1)/2;if(hd.length===1)chDef=mdtCh(hd[0].s);continue;}
+      if(/^予測寿命/.test(l0)){const m=rest.match(/([<>]?\s*\d+(?:\.\d+)?\s*(?:months?|years?))/i);if(m)put('bat:years','電池 予測寿命',m[1]);continue;}
+      const vals=L.slice(1);if(!vals.length)continue;
+      const each=fn=>{if(Object.keys(cols).length>1){for(const c of vals){const ch=near((c.x0+c.x1)/2);if(ch)fn(ch,c.s);}}else fn(chDef,vals.map(c=>c.s).join(' '));};
+      if(/ペーシングインピーダンス/.test(l0)){each((ch,v)=>put(`lead:${ch}:ペーシングインピーダンス`,`${ch} ペーシングインピーダンス`,v));continue;}
+      if(/除細動インピーダンス/.test(l0)){const v=rest.replace(/^(RV|SVC)\s*/,'');put('lead:ショック:ショックインピーダンス','ショックインピーダンス（RV除細動）',v);continue;}
+      if(/ペーシング閾値/.test(l0)){each((ch,v)=>{put(`lead:${ch}:ペーシング閾値`,`${ch} ペーシング閾値`,v);lastThr=`lead:${ch}:ペーシング閾値`;});continue;}
+      if(/^測定日/.test(l0)&&lastThr&&got[lastThr]){got[lastThr].measDate=mdtDate(rest);continue;}
+      if(/電圧\/?パルス幅|出力/.test(l0)){each((ch,v)=>put(`set:ペーシング出力 ${ch}`,`ペーシング出力 ${ch}`,v));continue;}
+      if(/[PR]波|波高|測定値/.test(l0)&&/mV/.test(rest)){each((ch,v)=>put(`lead:${ch}:心内波高値`,`${ch} 心内波高値`,v));continue;}
+      if(/感度/.test(l0)){each((ch,v)=>put(`set:感度 ${ch}`,`感度 ${ch}`,v));continue;}
+      continue;}
+    if(sec==='param'){ // 「モード VVI 基本レート 40 bpm」のように1行に2組
+      for(let i=0;i+1<L.length;i+=2){const lab=tvClean(L[i].s),v=L[i+1].s;if(lab&&!/\d/.test(lab))put(`set:${lab}`,lab,v);}continue;}
+    if(sec==='detect'){if(/^レート|^治療/.test(l0))continue;
+      if(/^(VF|FVT|VT|AT\/AF|ATR)$/i.test(l0)){put(`set:${l0}`,`検出 ${l0}`,L.slice(1).map(c=>c.s).join(' / '));}else if(/^Onになっている/.test(l0))put('set:検出強化機能','検出強化機能',rest);continue;}
+    if(sec==='evTx'||sec==='evMon'){if(rest!==''&&/^\d+$/.test(rest.replace(/\s/g,''))){const pre=sec==='evTx'?'治療済み':'モニタ';put(`ev:${pre}:${l0}`,`${pre} ${l0}`,rest+'件');}continue;}
+    if(sec==='act'){if(/アクティビティ/.test(l0)&&rest)put('act','患者アクティビティ',rest);continue;}
+    if(sec==='txsum'){if(rest&&/^\d+$/.test(rest.replace(/\s/g,'')))put(`ev:治療:${l0}`,l0,rest+'件');continue;}
+    if(sec==='obs'){const t=all.replace(/^[•・\s]+/,'').trim();if(t){const k='obs';if(got[k])got[k].v+=' ／ '+t;else put(k,'オブザベーション',t);}continue;}
+    if(sec==='life'){const m=rest.match(/([<>]?\s*\d+(?:\.\d+)?\s*(?:months?|years?))/i);if(/^推定値/.test(l0)&&m)put('bat:years','電池 予測寿命',m[1]);else if(/^最小/.test(l0)&&m)put('bat:min','電池 予測寿命（最小）',m[1]);else if(/^最大/.test(l0)&&m)put('bat:max','電池 予測寿命（最大）',m[1]);continue;}
+    if(sec==='volt'){if(/^電圧/.test(l0)&&rest)put('bat:volt','電池電圧',rest);else if(/RRT/.test(all)&&got['bat:volt'])got['bat:volt'].v+=' '+all.trim();continue;}
+    if(sec==='charge'){if(/^充電時間/.test(l0)&&rest)put('charge','充電時間',rest);continue;}
+    if(sec==='sic'){if(/V-?V/.test(l0)&&rest)put('ev:短いV-Vインターバル','短いV-Vインターバル',rest.split(/\s/)[0]+'件');continue;}
+    if(sec==='limp'){const v=rest.replace(/\s+\d{1,2}-[A-Z][a-z]{2}-\d{4}$/,'');const ch=mdtCh(l0.replace(/(ペーシング|除細動).*/,''));
+      if(/ペーシング/.test(l0)&&ch)put(`lead:${ch}:ペーシングインピーダンス`,`${ch} ペーシングインピーダンス`,v.replace(/^\(.*?\)\s*/,''));
+      else if(/^RV除細動/.test(l0))put('lead:ショック:ショックインピーダンス','ショックインピーダンス（RV除細動）',v);
+      else if(/^SVC除細動/.test(l0))put('lead:ショック:SVC除細動インピーダンス','SVC除細動インピーダンス',v);continue;}
+    if(sec==='sense'){if(/波高/.test(l0)&&rest){const ch=/^P/.test(l0)?'心房':chDef;put(`lead:${ch}:心内波高値`,`${ch} 心内波高値`,rest.replace(/\s+\d{1,2}-[A-Z][a-z]{2}-\d{4}$/,''));}continue;}
+    if(sec==='shock'){if(rest)lastShock.push(`${l0} ${rest}`);continue;}
+  }
+  if(lastShock.length)put('shock','前回のショック治療',lastShock.join(' ／ '));
+  const has=re=>Object.keys(got).some(k=>re.test(k));
+  const type=has(/左心室/)?(has(/ショック/)?'CRT-D':'CRT-P'):has(/ショック/)?'ICD':'PM';
+  return {items:got,src:{},n:Object.keys(got).length,tv:'Medtronic '+type,mdt:true,id,sent};
+}
 // ===== デバイス設定の読み取りと、前回との比較 =====
 // レポートの文字（全ページ）から設定を読む。①位置から行・セルを組み立て「項目｜値」の組を拾う ②主な設定は項目名のパターンで特定 ③取れない時は詰めた文字から正規表現で拾う
 // ※実際のLATITUDEのレポートで項目名・値の書き方を確認して SET_KNOWN を調整すること（「🔧 設定の読み取り結果」で確認できる）
@@ -1390,6 +1477,7 @@ function tlAutoOpen(sicd){placeSetCard(!sicd);let want;if(sicd){want=true;try{co
   document.addEventListener('mouseover',e=>{const el=e.target.closest('[data-why]');if(el)show(el);});
   document.addEventListener('mouseout',e=>{const el=e.target.closest('[data-why]');if(el&&!el.contains(e.relatedTarget))tip.hidden=true;});
   window.addEventListener('scroll',()=>{tip.hidden=true;},{passive:true});})();
+if(window.PG_CL){try{$('brandName').textContent='CareLink';$('brandSub').textContent='MEDTRONIC REMOTE MONITOR · β';}catch(_){}}
 let curSettings=null; // 今回のレポートから読んだ設定
 function extractFields(items, annotStrs, rawPdfText){
   annotStrs=annotStrs||[]; rawPdfText=rawPdfText||'';
@@ -1528,7 +1616,7 @@ drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('over'
 // ===== データフォルダ（File System Access）=====
 let dirHandle=null, savedHandle=null;
 // 選んだフォルダをIndexedDBに記憶し、次回から選び直さずに使う（ブラウザが再許可を求めることがある）
-function idb(mode,fn){return new Promise((res,rej)=>{const o=indexedDB.open('pg_lat',1);o.onupgradeneeded=()=>o.result.createObjectStore('kv');
+function idb(mode,fn){return new Promise((res,rej)=>{const o=indexedDB.open(window.PG_CL?'pg_cl':'pg_lat',1);o.onupgradeneeded=()=>o.result.createObjectStore('kv');
   o.onerror=()=>rej(o.error);o.onsuccess=()=>{let tx,r;try{tx=o.result.transaction('kv',mode);r=fn(tx.objectStore('kv'));}catch(e){rej(e);return;}tx.oncomplete=()=>res(r&&r.result);tx.onerror=()=>rej(tx.error);};});}
 const setFolderStatus=(html)=>{$('folderStatus').innerHTML=html;if(dirHandle){showBaseDirStatus();setTimeout(()=>rvLoad(),300);if(!KEEP_PDF&&!purgeAutoDone){purgeAutoDone=true;setTimeout(()=>purgePdfs(true),800);}}};
 $('settings').addEventListener('toggle',()=>{if($('settings').open)showBaseDirStatus();});
