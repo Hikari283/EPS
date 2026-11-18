@@ -2907,7 +2907,7 @@ function simStart(){
     setStudy(study);
     if(S.compare)tog('#compareOn');
     const v=S.viewers[0];v.type='Bipolar';v.ranges={Bipolar:{lo:0.08,hi:0.5},LAT:{lo:-25,hi:100}};v.setView('PA');
-    S.opt.fill=8;$('#fillR').value=8;S.opt.ptColor='value';$('#ptColor').value='value';S.opt.src='interp';$('#srcSel').value='interp';$('#simTruth').checked=false;$('#simAblRes').textContent='';$('#simIso').textContent='';
+    S.opt.fill=8;$('#fillR').value=8;S.opt.vtSize=3;$('#vtSize').value=3;S.opt.ptColor='value';$('#ptColor').value='value';S.opt.src='interp';$('#srcSel').value='interp';$('#simTruth').checked=false;$('#simAblRes').textContent='';$('#simIso').textContent='';
     simFamInit();
     syncPanel();setSel('#wLayout','all');setSide(true);clickTab('t-sim');simRenderPanel();dirtyAll('cpv');
     toast('シミュレーター開始：マップの上でマウスを動かすとカテーテルがついてきます（Enter：ポイント取得 ／ A：通電 ／ C：カテーテルの切り替え）',7000);
@@ -2953,7 +2953,7 @@ function simBind(){
   $('#simAcq').onclick=simAcquire;$('#simClear').onclick=simClearPoints;$('#simAbl').onclick=simAblate;$('#simChk').onclick=simCheck;
   const num=(id,k)=>$(id).addEventListener('input',e=>{const x=+e.target.value;if(fin(x))SIM.cfg[k]=x;});num('#simP','power');num('#simT','time');num('#simF','force');
   $('#simTruth').onchange=e=>{if(SIM.active)simTruth(e.target.checked);};
-  $('#simOctCfg').onchange=e=>{SIM.octCfg=e.target.value;SIM.octR=simOctRadii(SIM.octCfg);SIM.sites=[];SIM.shaft=[];if(SIM.lastHv)SIM.hv=SIM.lastHv;SIM.ver++;dirtyAll('');toast('オクタレイの電極の並び：'+SIM.octCfg+'（製品ページの3種類。単位は書かれていないので、mmと想定）',5000);};
+  $('#simOctCfg').onchange=e=>{SIM.octCfg=e.target.value;SIM.octR=simOctRadii(SIM.octCfg);SIM.sites=[];SIM.shaft=[];if(SIM.lastHv)SIM.hv=SIM.lastHv;SIM.ver++;dirtyAll('');toast('オクタレイの電極の並び：'+SIM.octCfg+'（取説：電極の間隔はmm。スパインの長さは 2 cm、2-2-2-2-2 のみ 1.5 cm）',5000);};
   $('#simAuto').onchange=e=>{SIM.auto=e.target.checked;SIM.autoPrev=null;toast(SIM.auto?'連続取得：オン（カテーテルをゆっくり動かすと、点が入ります）':'連続取得：オフ（Enterキーで1点ずつ取ります）');};
   $('#simMin').addEventListener('input',e=>{const x=+e.target.value;if(fin(x)&&x>=1)SIM.minDist=x;});
 }
