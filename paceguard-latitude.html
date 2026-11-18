@@ -121,6 +121,7 @@ try{document.documentElement.dataset.theme=localStorage.getItem('pg_lat_theme')|
   .settab tr:first-child th{font-size:11px;color:var(--sub);background:var(--tblh);vertical-align:bottom} .settab tr:first-child th.base{color:var(--accent2)}
   .settab tr>th:first-child{position:sticky;left:0;z-index:1;box-shadow:1px 0 0 var(--line)} .settab tr.oth th{font-weight:400;color:var(--sub)}
   .numdet{margin-top:12px;border:1px solid var(--line);border-radius:10px;padding:6px 10px} .numdet>summary{cursor:pointer;font-weight:700;font-size:13px}
+  tr.grp.fold th{cursor:pointer;user-select:none} tr.grp.fold th::before{content:'▼ ';font-size:10px} tr.grp.fold.closed th::before{content:'▶ '} tr.gclosed{display:none}
   .settab tr.grp th,table.crit tr.grp th{background:var(--tblh);color:var(--sub);font-size:11px;font-weight:700;letter-spacing:.04em;position:static}
   body.norule .settab tr>:nth-child(2):not([colspan]),body.norule .rulehint{display:none}
   .setnav{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:0 0 8px} .setnav input[type=range]{flex:1;min-width:120px;max-width:360px} .setnav button{padding:3px 10px}
@@ -1312,8 +1313,8 @@ function setTrendRender(id,st){
   const head=vis.map(c=>`<th class="${c.pdf&&c.pdf===basePdf?'base':''}" title="${escH(c.secg||c.date||'')}">${c.pdf&&c.pdf===basePdf?'📌 ':''}${short(c.secg||c.date)}<br><span class="hint">${ic(c.level)}</span></th>`).join('');
   let gPrev='';
   const body=keys.map((k,i)=>{const imp=setImp(k),main=order(k)<99||!k.startsWith('x:');
-    const g=mIdx&&mIdx.has(k)?mIdx.get(k).g:typeof TV_GRP==='function'?TV_GRP(k):'',gh=g&&g!==gPrev?`<tr class="grp"><th colspan="${2+vis.length}">${escH(g)}</th></tr>`:'';if(g)gPrev=g;
-    return gh+`<tr${main?'':' class="oth"'}><th>${escH(name(k))}</th><td class="hint">${escH(isTVp?tvRuleText(k):(ruleText(k)||(isPt(k)?'決めない':'')))}${!isTVp&&isPt(k)?' <b class="ptmark">この患者</b>':''}</td>${grid[i].map(c=>c.v==null?'<td class="hint">—</td>':`<td class="${c.rb?'bad':c.wn?'warnv':c.chg?'chg':''}" title="${escH(c.rb||c.wn||(c.chg?'前の回から変更':''))}"${c.rb||c.wn?` data-why="${escH(c.rb||c.wn)}"`:''}>${c.rb?'⚠️ ':c.wn?'🟡 ':''}${escH(c.v)}${c.chg?' <span class="hint">◀変</span>':''}${c.note||''}</td>`).join('')}</tr>`;}).join('');
+    const g=mIdx&&mIdx.has(k)?mIdx.get(k).g:typeof TV_GRP==='function'?TV_GRP(k):'',fd=!!mIdx&&GRP_FOLD.test(g),cl=fd&&grpClosed(g),gh=g&&g!==gPrev?`<tr class="grp${fd?' fold'+(cl?' closed':''):''}" data-gk="${escH(g)}"><th colspan="${2+vis.length}">${escH(g)}${fd?`<span class="hint grpsum" data-gs="${escH(g)}"></span>`:''}</th></tr>`:'';if(g)gPrev=g;
+    return gh+`<tr class="${main?'':'oth'}${cl?' gclosed':''}" data-g="${escH(g)}"><th>${escH(name(k))}</th><td class="hint">${escH(isTVp?tvRuleText(k):(ruleText(k)||(isPt(k)?'決めない':'')))}${!isTVp&&isPt(k)?' <b class="ptmark">この患者</b>':''}</td>${grid[i].map(c=>c.v==null?'<td class="hint">—</td>':`<td class="${c.rb?'bad':c.wn?'warnv':c.chg?'chg':''}" title="${escH(c.rb||c.wn||(c.chg?'前の回から変更':''))}"${c.rb||c.wn?` data-why="${escH(c.rb||c.wn)}"`:''}>${c.rb?'⚠️ ':c.wn?'🟡 ':''}${escH(c.v)}${c.chg?' <span class="hint">◀変</span>':''}${c.note||''}</td>`).join('')}</tr>`;}).join('');
   const nav=n>WIN?`<div class="setnav"><button class="ghost" data-sn="-${WIN}" ${s0<=0?'disabled':''} title="5回前へ">⏮</button><button class="ghost" data-sn="-1" ${s0<=0?'disabled':''} title="1回前へ">◀ 古い</button>
       <input type="range" id="setNavR" min="0" max="${maxS}" value="${s0}" step="1"><button class="ghost" data-sn="1" ${s0>=maxS?'disabled':''} title="1回後へ">新しい ▶</button><button class="ghost" data-sn="${WIN}" ${s0>=maxS?'disabled':''} title="最新へ">⏭</button>
       <span class="hint">${s0+1}〜${Math.min(n,s0+WIN)}回目を表示／全${n}回${s0>=maxS?'（最新）':''}</span></div>`:'';
@@ -1634,6 +1635,16 @@ const PG_BRAND=window.PG_CL?'PaceGuard CareLink':'PaceGuard LATITUDE';
 let mdtPendNote='',mdtPendSerial='',mdtKeepId='',mdtPendEgm=[]; // mdtPendEgm：待っていたPDFから作った波形の画像（runTVで記録に入れる） // mdtKeepId：記録する項目は無いが患者が分かるMedtronicのPDF（グラフだけのページなど）→ その患者のフォルダへ
 const tvDateKey=d=>{const m=String(d||'').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})(?:\D+(\d{1,2}):(\d{2}))?/);return m?m[1]+m[2].padStart(2,'0')+m[3].padStart(2,'0')+(m[4]||'0').padStart(2,'0')+(m[5]||'00'):'';};
 const tvClinic=x=>x&&x.clinic?`<div class="hint">医療施設での最後の測定：${escH(LV(x.clinic))}${x.clinicDate?`（${escH(String(x.clinicDate).replace(/(\d{4})年(\d{1,2})月(\d{1,2})日/,'$1/$2/$3'))}）`:''}</div>`:'';
+// Medtronic：イベントの欄は、最初は閉じておく（見出しを押すと開く・閉じる。開閉はこのPCに覚える）
+const GRP_FOLD=/^イベント/;
+const grpClosed=g=>{try{const o=JSON.parse(localStorage.getItem('pg_lat_grpfold')||'{}');return o[g]!==undefined?!!o[g]:true;}catch(_){return true;}};
+function grpSums(root){(root||document).querySelectorAll('.grpsum').forEach(sp=>{const g=sp.dataset.gs,tb=sp.closest('table');if(!tb)return;const rows=[...tb.querySelectorAll('tr[data-g]')].filter(r=>r.dataset.g===g);
+  const n2=rows.filter(r=>r.classList.contains('lv2')||r.querySelector('td.bad')).length,n1=rows.filter(r=>r.classList.contains('lv1')||r.querySelector('td.warnv')).length;
+  const t=`　${rows.length}項目${n2?`　⚠️ ${n2}`:''}${n1?`　🟡 ${n1}`:''}`;if(sp.textContent!==t)sp.textContent=t;});} // 同じ時は書かない（書くと見張りがまた動くため）
+document.addEventListener('click',e=>{const th=e.target.closest('tr.grp.fold th');if(!th)return;const tr=th.parentElement,g=tr.dataset.gk,tb=tr.closest('table');const closed=!tr.classList.contains('closed');
+  tr.classList.toggle('closed',closed);tb.querySelectorAll('tr[data-g]').forEach(r=>{if(r.dataset.g===g)r.classList.toggle('gclosed',closed);});
+  try{const o=JSON.parse(localStorage.getItem('pg_lat_grpfold')||'{}');o[g]=closed?1:0;localStorage.setItem('pg_lat_grpfold',JSON.stringify(o));}catch(_){}});
+new MutationObserver(()=>grpSums()).observe(document.body,{childList:true,subtree:true});
 const TV_GRP=k=>/^lead:/.test(k)?'リード（最新の日常測定）':/^(pace|atAf)/.test(k)?'ペーシング率・AT/AF':/^(bat|charge)/.test(k)?'電池':/^set:/.test(k)?'設定':/^(evTotal|ev:)/.test(k)?'イベント':/^(act|obs|shock|leadpos)/.test(k)?'そのほか':'';
 // 同じ送信の記録を足し合わせる：同じ項目は、優先度（pr：日付つきの詳しいページ＞Quick Look）の高い方。同じなら新しく読んだ方。PDFを読む順番は関係ない
 function tvMerge(a,b){const out={...(a||{})};for(const [k,x] of Object.entries(b||{})){const o=out[k];if(!o||(x.pr||1)>=(o.pr||1))out[k]=x;}
@@ -1668,9 +1679,10 @@ async function runTV(){
   const alv=k=>Math.max(0,...al.filter(a=>a.k===k).map(a=>a.lv)),awhy=k=>al.filter(a=>a.k===k).map(a=>(a.lv>=2?'⚠️ ':'🟡 ')+a.txt).join('\n');
   const mv=(k,x)=>k==='bat:volt'?String(x.v).replace(/\s*\(.*$/,''):LV(x.v); // 電池電圧の (RRT=…) は下に小さく
   let g0='';const rows=keys.map((k,i)=>{const x=tv.items[k],p=P[k],L=LAY?LAY[i]:null,g=L?L.g:TV_GRP(k),changed=p&&LV(p.v)!==LV(x.v)&&!isMeas(k),lvk=alv(k);
-    const head=g!==g0?`<tr class="grp"><th colspan="3">${escH(g)}</th></tr>`:'';g0=g;
+    const fd=!!L&&GRP_FOLD.test(g),cl=fd&&grpClosed(g);
+    const head=g!==g0?`<tr class="grp${fd?' fold'+(cl?' closed':''):''}" data-gk="${escH(g)}"><th colspan="3">${escH(g)}${fd?`<span class="hint grpsum" data-gs="${escH(g)}"></span>`:''}</th></tr>`:'';g0=g;
     const S=L?mdtShow(k,x):null,PS=L&&p?mdtShow(k,p):null,sm=t=>t?`<div class="hint" style="font-size:11px">${escH(t)}</div>`:'';
-    return head+`<tr class="${lvk?'lv'+lvk:changed?'chgrow':''}"><td>${escH(L?L.name:x.l)}</td><td>${p?(PS?escH(PS.v)+sm(PS.sub):escH(mv(k,p))+tvClinic(p)):'<span class="hint">—</span>'}</td><td${lvk?` data-why="${escH(awhy(k))}" title="${escH(awhy(k))}"`:''}>${lvk>=2?'⚠️ ':lvk===1?'🟡 ':''}${escH(S?S.v:mv(k,x))}${changed?' <span class="hint">◀変</span>':''}${S?sm(S.sub):tvClinic(x)}</td></tr>`;}).join('');
+    return head+`<tr class="${lvk?'lv'+lvk:changed?'chgrow':''}${cl?' gclosed':''}" data-g="${escH(g)}"><td>${escH(L?L.name:x.l)}</td><td>${p?(PS?escH(PS.v)+sm(PS.sub):escH(mv(k,p))+tvClinic(p)):'<span class="hint">—</span>'}</td><td${lvk?` data-why="${escH(awhy(k))}" title="${escH(awhy(k))}"`:''}>${lvk>=2?'⚠️ ':lvk===1?'🟡 ':''}${escH(S?S.v:mv(k,x))}${changed?' <span class="hint">◀変</span>':''}${S?sm(S.sub):tvClinic(x)}</td></tr>`;}).join('');
   const cls=lv>=2?'bad':lv===1?'warn':prev?'ok':'info';
   const title=lv>=2?'⚠️ 要確認 — 設定・測定値のアラート':lv===1?'🟡 注意 — 設定・測定値のアラート':prev?(chg.length?`✅ アラートなし（設定が${chg.length}項目変わりました）`:'✅ アラートなし（前回と同じ設定）'):'記録しました（この患者の初めての記録）';
   $('result').innerHTML=`<div class="verdict ${cls}"><h2>${title}</h2>
