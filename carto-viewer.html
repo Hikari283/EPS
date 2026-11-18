@@ -865,17 +865,24 @@ function clipMesh(mesh,drop){
   mesh.used=new Uint8Array(mesh.nv);for(const i of mesh.tris)mesh.used[i]=1;return mesh;
 }
 const capOf=(a,dir,len)=>v3.add(a,v3.sc(v3.norm(dir),len));
+/* 左房の形（座標：+X=患者左、+Y=後方、+Z=頭側。単位mm）。
+   横に広い体部（約60×40×46 mm）に、付け根が太く先に向かって細くなる肺静脈4本（漏斗状）、左心耳、僧帽弁の開口。
+   実際のCARTOの画像を参考にした簡易の形で、解剖学的な実測値ではありません。 */
 function laAnatomy(){
-  const mk=(n,a,dir,r0,r1,keep)=>({n,a,b:capOf(a,dir,48),r:[r0,r1],keep});
-  const veins=[mk('LSPV',[16,13,11],[0.62,0.55,0.55],8,6.5,26),mk('LIPV',[16,14,-6],[0.7,0.55,-0.45],7.5,6,22),mk('RSPV',[-15,14,11],[-0.55,0.62,0.55],8,6.5,24),mk('RIPV',[-15,15,-6],[-0.62,0.62,-0.45],7.5,6,20)];
-  const laa=[[[16,-8,9],[27,-19,15],6.5,4.8],[[27,-19,15],[31,-26,7],4.8,2.6]];
-  const mitral={c:[0,-9,-13],n:v3.norm([0,-0.62,-0.78]),r:14.5};
-  const U=[[1,0,0],[0,1,0],[0,0,1]],center=[0,2,0];
-  const sdf=p=>{let d=sdEllB(p,center,U,[26,19,21]);for(const v of veins)d=smin(d,sdCap(p,v.a,v.b,v.r[0],v.r[1]),5);for(const s of laa)d=smin(d,sdCap(p,s[0],s[1],s[2],s[3]),4);return d;};
-  const mesh=sdfMesh(sdf,[-62,-40,-48],[62,58,56],1.4);
-  clipMesh(mesh,c=>{for(const v of veins){const h=segH(c,v.a,v.b);if(h*48>v.keep&&sdCap(c,v.a,v.b,v.r[0]+4,v.r[1]+4)<0)return true;}
+  const U=[[1,0,0],[0,1,0],[0,0,1]],center=[0,0,0],body=[30,19,23];
+  const mk=(n,a,b,r0,r1)=>({n,a,b,r:[r0,r1],len:v3.dist(a,b)});
+  const veins=[mk('LSPV',[17,6,13],[43,12,30],10.5,7),mk('LIPV',[17,7,-5],[44,12,-17],10,7),mk('RSPV',[-17,6,12],[-44,10,30],11.5,8),mk('RIPV',[-17,7,-8],[-46,11,-24],11,7.5)];
+  const laa=[[[18,-10,10],[30,-21,15],7,5],[[30,-21,15],[35,-28,6],5,3]];
+  const mitral={c:[0,-13,-17],n:v3.norm([0,-0.6,-0.8]),r:14};
+  const sdf=p=>{let d=smin(sdEllB(p,center,U,body),sdEllB(p,[0,6,-5],U,[25,15,19]),6);
+    for(const v of veins)d=smin(d,sdCap(p,v.a,v.b,v.r[0],v.r[1]),7);for(const s of laa)d=smin(d,sdCap(p,s[0],s[1],s[2],s[3]),4);return d;};
+  const mesh=sdfMesh(sdf,[-64,-40,-44],[64,44,50],1.4);
+  clipMesh(mesh,c=>{for(const v of veins){const h=segH(c,v.a,v.b);if(h>0.93&&sdCap(c,v.a,v.b,v.r[0]+4,v.r[1]+4)<0)return true;}
     const d=v3.sub(c,mitral.c),ax=v3.dot(d,mitral.n);if(ax>-1.5&&v3.len(v3.sub(d,v3.sc(mitral.n,ax)))<mitral.r)return true;return false;});
-  return{mesh,veins,mitral,center};
+  // 肺静脈の入口（体部から出るところ）の位置と半径
+  const ostiumAt=k=>{const v=veins[k],ax=v3.norm(v3.sub(v.b,v.a));let t=0;while(t<v.len&&sdEllB(v3.add(v.a,v3.sc(ax,t)),center,U,body)<=0)t+=0.5;t+=2;
+    return{C:v3.add(v.a,v3.sc(ax,t)),ax,R:v.r[0]+(v.r[1]-v.r[0])*t/v.len,t};};
+  return{mesh,veins,mitral,center,body,ostiumAt};
 }
 function lvAnatomy(){
   const ax=v3.norm([0.5,-0.55,-0.65]),u2=v3.norm(v3.cross(ax,[0,0,1])),u3=v3.cross(ax,u2);
@@ -928,11 +935,10 @@ function makeDemoStudy(){
   // PVIの焼灼点（左右の肺静脈を同側ごとに囲む）
   const sites=[];let sidx=1;
   const ring=(c,nrm,R,N,skip,ses)=>{const e1=v3.norm(v3.cross(nrm,[0,0,1])),e2=v3.cross(nrm,e1);
-    for(let k=0;k<N;k++){if(skip.includes(k))continue;const th=2*Math.PI*k/N;const t=v3.add(c,v3.add(v3.sc(e1,R*Math.cos(th)),v3.sc(e2,R*1.25*Math.sin(th))));
-      let bi=0,bd=Infinity;for(let i=0;i<lm.nv;i++){if(!lm.used[i]||veinOf(i))continue;const dd=v3.dist(P(lm,i),t);if(dd<bd){bd=dd;bi=i;}}
+    for(let k=0;k<N;k++){if(skip.includes(k))continue;const th=2*Math.PI*k/N;const t=v3.add(c,v3.add(v3.sc(e1,R*Math.cos(th)),v3.sc(e2,R*Math.sin(th))));
+      let bi=0,bd=Infinity;for(let i=0;i<lm.nv;i++){if(!lm.used[i])continue;const dd=v3.dist(P(lm,i),t);if(dd<bd){bd=dd;bi=i;}}
       const q=P(lm,bi);sites.push({x:q[0],y:q[1],z:q[2],session:ses,idx:sidx++,v:{ai:Math.round(380+180*rnd()),fti:Math.round(250+300*rnd()),dur:Math.round(10+25*rnd()),force:+(7+16*rnd()).toFixed(1),power:Math.round(35+15*rnd()),temp:Math.round(38+6*rnd()),impDrop:+(4+12*rnd()).toFixed(1),imp:Math.round(95+30*rnd())}});}};
-  ring([21,15,2],v3.norm([1,0.55,0]),13,26,[7,8],'1');
-  ring([-21,15,2],v3.norm([-1,0.55,0]),13,26,[],'2');
+  [[0,[4,5,6]],[1,[]],[2,[]],[3,[]]].forEach(([k,skip])=>{const o=LA.ostiumAt(k);ring(o.C,o.ax,o.R+1.5,24,skip,String(k+1));});
   // ---- 左室（VT基質） ----
   const LV=lvAnatomy(),vm=LV.mesh;
   const scarC=v3.norm([0.85,-0.45,-0.1]),isth=v3.norm([0.9,-0.35,0.25]);
@@ -2497,7 +2503,7 @@ async function buildDiag(){
 const SIM_REF=700,SIM_CL=700,SIM_L=2100;
 const SIM={active:false,map:null,T:null,cath:'abl',sites:[],shaft:[],live:null,ver:0,hv:null,lastHv:null,dirtyLive:true,nextId:1,sess:1,
   auto:true,minDist:3,maxJump:9,grid:new Map(),autoPrev:null,autoDirty:false,autoT:0,autoN:0,autoSkip:0,
-  cfg:{power:35,time:20,force:12},leads:null,sheath:[-20,-3,-6],sheathOut:[-40,-10,-16]};
+  cfg:{power:35,time:20,force:12},leads:null,sheath:[-14,-3,-4],sheathOut:[-38,-9,-16]};
 const simHash=i=>{const s=Math.sin(i*12.9898+78.233)*43758.5453;return s-Math.floor(s);};
 const simPos=(m,i)=>[m.verts[i*3],m.verts[i*3+1],m.verts[i*3+2]];
 function simNear(m,pos){
@@ -2515,32 +2521,30 @@ function simBuildTruth(){
   LA.veins.forEach((vv,k)=>{
     const ax=v3.norm(v3.sub(vv.b,vv.a));
     for(let i=0;i<nv;i++){if(!used[i]||T.vein[i])continue;const q=P(i),h=segH(q,vv.a,vv.b);
-      if(h>0.12&&sdCap(q,vv.a,vv.b,vv.r[0]+3,vv.r[1]+3)<0){T.vein[i]=k+1;T.axis[i*3]=ax[0];T.axis[i*3+1]=ax[1];T.axis[i*3+2]=ax[2];T.hpos[i]=h*48;}}
+      if(h>0.12&&sdCap(q,vv.a,vv.b,vv.r[0]+3,vv.r[1]+3)<0){T.vein[i]=k+1;T.axis[i*3]=ax[0];T.axis[i*3+1]=ax[1];T.axis[i*3+2]=ax[2];T.hpos[i]=h*vv.len;}}
   });
   for(let i=0;i<nv;i++){
     if(!used[i])continue;const q=P(i);
-    if(T.vein[i]&&sdEllB(q,LA.center,U,[26,19,21])>3)T.deep[i]=1;
+    const od=sdEllB(q,LA.center,U,LA.body);   // 体部の楕円体の外側までの距離（mm）
+    if(T.vein[i]&&od>3)T.deep[i]=1;
     // 電圧（こちらの簡易モデル。実際のCARTOのBipolarマップの見え方を参考にした想定で、実測値ではありません）
     //  ・左房の体部：広くなだらかに高電位（約1.6〜3.8 mV＝0.5 mV以上なので、0.08〜0.50 mV表示では紫）
     //  ・肺静脈：体部より低め（約0.3〜1.0 mV）。体部との境目は細い帯になる
     //  ・「後壁に低電位域あり」の症例：後壁を中心に、広い低電位域（約0.1〜0.4 mV）。境目は細い帯
     const sm=(a,b2,x)=>{const t=clamp((x-a)/(b2-a),0,1);return t*t*(3-2*t);};
     const s=0.5+0.5*Math.sin(0.23*q[0]+1.3)*Math.sin(0.19*q[1]-0.7)*Math.cos(0.21*q[2]+0.4);
-    let b;
-    if(T.vein[i])b=(0.45+0.55*s)*(1-0.35*sm(6,26,T.hpos[i]));
-    else{
-      b=1.6+2.2*s;
-      if(vcase==='low'){
-        const post=sm(5,15,q[1]),blob=0.5+0.5*Math.sin(0.2*q[0]+0.9)*Math.cos(0.17*q[2]-0.4);
-        const lw=sm(0.25,0.5,post*(0.55+0.6*blob)-0.1);
-        b=b*(1-lw)+(0.06+0.12*s)*lw;
-      }
+    let b=1.6+2.2*s;
+    if(vcase==='low'){
+      const post=sm(5,15,q[1]),blob=0.5+0.5*Math.sin(0.2*q[0]+0.9)*Math.cos(0.17*q[2]-0.4);
+      const lw=sm(0.25,0.5,post*(0.55+0.6*blob)-0.1);
+      b=b*(1-lw)+(0.06+0.12*s)*lw;
     }
-    b*=0.985+0.03*simHash(i);T.bip[i]=b;T.uni[i]=2*b+2+1.5*simHash(i+991);T.cv[i]=T.vein[i]?0.6:0.9;
+    if(T.vein[i]){const f=sm(0,5,od),bv=(0.45+0.55*s)*(1-0.35*sm(10,34,T.hpos[i]));b=b*(1-f)+bv*f;}   // 体部との境目は細い帯
+    b*=0.985+0.03*simHash(i);T.bip[i]=b;T.uni[i]=2*b+2+1.5*simHash(i+991);T.cv[i]=T.deep[i]?0.6:0.9;
   }
   let bi=-1,bd=-1;for(let i=0;i<nv;i++){if(!used[i])continue;const d=v3.dist(P(i),LA.center);if(d>bd){bd=d;bi=i;}}
   const nrm=[m.norms[bi*3],m.norms[bi*3+1],m.norms[bi*3+2]];T.outSign=v3.dot(nrm,v3.sub(P(bi),LA.center))>=0?1:-1;
-  T.src=simNear(m,[-12,-8,12]);
+  T.src=simNear(m,[-8,-13,14]);
   return T;
 }
 // 電気の流れ（LAT）の計算。ブロックされた点は通れない
