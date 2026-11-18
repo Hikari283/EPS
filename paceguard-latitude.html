@@ -2972,6 +2972,8 @@ function notifyResult(title,body,level){
 const escH=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 async function startWatch(dir,{processExisting=false}={}){
   watchDir=dir;
+  // 「今あるPDFも処理する」：前に「始めた時からあったPDF（existing）」として飛ばしたものも、もう一度処理する
+  if(processExisting){for(const [k,v] of [...watchSeen])if(v==='existing')watchSeen.delete(k);saveSeen();}
   if(!processExisting){for await(const [name,h] of dir.entries()){if(h.kind!=='file'||!/\.pdf$/i.test(name))continue;try{const f=await h.getFile();if(!watchSeen.has(wkey(f)))watchSeen.set(wkey(f),'existing');}catch(_){}}saveSeen();}
   try{if(window.Notification&&Notification.permission==='default')await Notification.requestPermission();}catch(_){}
   clearInterval(watchTimer);watchTimer=setInterval(pollWatch,3000);pollWatch();
