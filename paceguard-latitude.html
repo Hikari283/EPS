@@ -693,6 +693,7 @@ async function loadPDF(file,{forceEval=false,pageNo=0}={}){
     catch(e){curSettings={items:{},src:{},n:0,diag:{err:String(e&&e.message||e)}};}
     if($('dbg'))$('dbg').insertAdjacentHTML('beforeend',settingsDebugHtml(curSettings)); // 別の患者になったら前の患者のタイムラインを消す
     curNonSicd=nonSicdOf(tc.items.map(it=>it.str).join(' ')+' '+annotStrs.join(' ')+' '+rawPdfText,$('fDev').value.trim());
+    tlAutoOpen(!curNonSicd); // S-ICD以外はタイムラインを閉じる
     if(curNonSicd){ // S-ICD以外：Bostonの経静脈デバイス（ICD・CRTなど）のレポートなら、測定値・設定を読んで記録する
       try{const t1=parseTV(lastRawItems),t2=parseTV(lastAllItems),tv=t2.n>t1.n?t2:t1; // 自前で取り出した文字とpdf.jsの文字の、多く読めた方
         if(tv.n>=6&&Object.keys(tv.items).some(k=>/^(lead|pace):/.test(k)))curTV=tv;}catch(_){curTV=null;}
@@ -846,7 +847,7 @@ function parseTV(items){
         const pick=name=>{const x=cols[name];if(x==null)return null;let best=null,bd=1e9;for(const c of r.cells.slice(1)){const d=Math.abs((c.x0+c.x1)/2-x);if(d<bd){bd=d;best=c;}}
           if(!best)return null;const other=Object.entries(cols).filter(([k])=>k!==name).some(([,ox])=>Math.abs((best.x0+best.x1)/2-ox)<bd);return other?null:best.s;};
         const daily=pick('daily'),clinic=pick('clinic'),ok=v=>v&&!/記録なし/.test(v);
-        const v=ok(daily)?daily:ok(clinic)?clinic+'（医療施設）':(daily||clinic||'');
+        const v=ok(daily)?daily:ok(clinic)?clinic:(daily||clinic||'');
         if(v)put(`lead:${ch}:${c0}`,`${ch&&!c0.startsWith(ch)?ch+' ':''}${c0}`,v,{daily:daily||'',clinic:clinic||''});}
       continue;}
     if(sec==='brady'&&r.cells.length>1){const v=r.cells.slice(1).map(c=>c.s).join(' ');const m=v.match(/([<>]?\s*[\d.]+)\s*%/);if(m)put(`pace:${c0}`,`ペーシング率 ${c0}`,m[1].replace(/\s/g,'')+'%');continue;}
@@ -882,7 +883,8 @@ function parseTV(items){
 // ※実際のLATITUDEのレポートで項目名・値の書き方を確認して SET_KNOWN を調整すること（「🔧 設定の読み取り結果」で確認できる）
 const SET_V={onoff:'(オン|オフ|ON|OFF|On|Off|有効|無効)',zone:'(\\d{3}|オフ|OFF|Off)',sense:'(一次|二次|代替|プライマリ|セカンダリ|オルタネイト|オルタネート|Primary|Secondary|Alternate)',gain:'([12]\\s?[xX×]|[xX×]\\s?[12]|[12]倍)',pol:'(標準|逆|反転|STD|REV|Standard|Reverse)'};
 // 表示はレポートと同じ書き方（2026-11-18 ユーザー指示）。前に「一次」「標準」などで保存した記録・ルールも同じ値として扱う
-const LV=v=>({'一次':'プライマリ','二次':'セカンダリ','代替':'オルタネイト','標準':'STD','逆':'REV','1x':'1倍','2x':'2倍'}[v]||String(v??'').replace(/^(\d+) bpm$/,'$1 min⁻¹').replace(/^(\d+) ?W((?:（医療施設）)?)$/,'$1 Ω$2')||v);
+const LV=v0=>{const v=typeof v0==='string'?v0.replace(/（医療施設）$/,''):v0;return LV0(v);}; // 前の版で付けていた「（医療施設）」は表示しない
+const LV0=v=>({'一次':'プライマリ','二次':'セカンダリ','代替':'オルタネイト','標準':'STD','逆':'REV','1x':'1倍','2x':'2倍'}[v]||String(v??'').replace(/^(\d+) bpm$/,'$1 min⁻¹').replace(/^(\d+) ?W((?:（医療施設）)?)$/,'$1 Ω$2')||v);
 const SET_KNOWN=[ // imp:2＝治療に関わる（変わったら強調）／1＝波形の見え方が変わる
   {k:'therapy',name:'治療',lab:/^(?:頻拍)?治療(?:の設定|モード|設定)?$|^Therapy(?:Mode)?$|^(?:S-?ICD)?(?:パルスジェネレータの)?モード$/i,re:[`(?:頻拍)?治療(?:の設定|モード|設定)?[:：]?${SET_V.onoff}`,`Therapy(?:Mode)?[:：]?${SET_V.onoff}`,`Therapy\\s?(On|Off)`],imp:2},
   {k:'shockZone',name:'ショックゾーン',ok:/^\d{3}( min⁻¹)?$/,lab:/^(?!.*(?:条件|コンディショナル))ショックゾーン$|^ShockZone$/i,re:[`(?<!条件付き|条件付|コンディショナル|Conditional)ショックゾーン[:：]?(\\d{3})`,`(?<!Conditional)ShockZone[:：]?(\\d{3})`],unit:'min⁻¹',imp:2},
@@ -1196,7 +1198,7 @@ function tvSetBox(cur,prev,when){
 }
 // 経静脈デバイスのレポートを記録して、前回と比べる（波形の比較はしない）
 const tvDateKey=d=>{const m=String(d||'').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})(?:\D+(\d{1,2}):(\d{2}))?/);return m?m[1]+m[2].padStart(2,'0')+m[3].padStart(2,'0')+(m[4]||'0').padStart(2,'0')+(m[5]||'00'):'';};
-const TV_GRP=k=>/^lead:/.test(k)?'リード（最新の日常測定。記録なしの時は医療施設での測定）':/^(pace|atAf)/.test(k)?'ペーシング率・AT/AF':/^(bat|charge)/.test(k)?'電池':/^set:/.test(k)?'設定':/^evTotal/.test(k)?'イベント':'';
+const TV_GRP=k=>/^lead:/.test(k)?'リード（最新の日常測定。記録なしの時は医療施設での最後の測定）':/^(pace|atAf)/.test(k)?'ペーシング率・AT/AF':/^(bat|charge)/.test(k)?'電池':/^set:/.test(k)?'設定':/^evTotal/.test(k)?'イベント':'';
 async function runTV(){
   const tv=curTV;if(!tv)return;await ensureDir();
   const id=$('fId').value.trim(),date=$('fDate').value,key=tvDateKey(date),ts=Date.now();
@@ -1232,6 +1234,10 @@ async function runTV(){
     ${dirHandle?(saved?'':'<div class="warn-t">保存できませんでした（フォルダの許可を確認してください）</div>'):'<div class="warn-t">※フォルダ未選択のため保存できていません。</div>'}</div>`;
   tlAuto(id);rvLoad();
 }
+// タイムラインの開閉：S-ICD以外の機種の時は自動で閉じる（覚えている開閉は変えない）。S-ICDの時は覚えている開閉に戻す
+let tlAutoSet=false;
+function tlAutoOpen(sicd){let want;if(sicd){want=true;try{const v=localStorage.getItem('pg_lat_tlopen');if(v)want=v==='1';}catch(_){}}else want=false;
+  if($('tlCard').open!==want){tlAutoSet=true;$('tlCard').open=want;}}
 let curSettings=null; // 今回のレポートから読んだ設定
 function extractFields(items, annotStrs, rawPdfText){
   annotStrs=annotStrs||[]; rawPdfText=rawPdfText||'';
@@ -2231,7 +2237,7 @@ $('ptRulesSave').onclick=()=>ptRulesSave(false);$('ptRulesClear').onclick=()=>pt
 $('setRulesDef').onclick=()=>{SET_RULES=cloneDef();try{localStorage.removeItem(SET_RULES_KEY);}catch(_){}setRulesUi();$('setRulesMsg').innerHTML='<span class="ok-t">最初の設定に戻しました</span>';if(setTrendLast)setTrendRender(setTrendLast.id,setTrendLast.st);};
 for(const k of ['setOnlyChg','setShowOther'])$(k).onchange=()=>{try{localStorage.setItem('pg_lat_'+k,$(k).checked?'1':'0');}catch(_){}if(setTrendLast)setTrendRender(setTrendLast.id,setTrendLast.st);};
 try{for(const k of ['setOnlyChg','setShowOther']){const v=localStorage.getItem('pg_lat_'+k);if(v!==null)$(k).checked=v==='1';}}catch(_){}
-$('tlCard').addEventListener('toggle',()=>{try{localStorage.setItem('pg_lat_tlopen',$('tlCard').open?'1':'0');}catch(_){}});
+$('tlCard').addEventListener('toggle',()=>{if(tlAutoSet){tlAutoSet=false;return;}try{localStorage.setItem('pg_lat_tlopen',$('tlCard').open?'1':'0');}catch(_){}});
 async function tlThumbs(){ // サムネイルは後から順番に読み込む
   const id=tl.id,mode=tlFull,bt=$('tlBaseTh');
   // 一番左に固定：基準の波形（時系列の中にも📌付きで入る）
