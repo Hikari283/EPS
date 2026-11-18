@@ -2715,7 +2715,7 @@ function simPlace(v,cx,cy){
     if(T.vein[vi]&&T.bands){const bs=T.bands[T.vein[vi]-1],bb=bs[Math.min(bs.length-1,Math.floor(T.g[vi]/2))];C=bb.c;ax=bb.ax;R=bb.r;}   // 実際の形：肺静脈の中心線
     else if(T.vein[vi]){ax=[T.axis[vi*3],T.axis[vi*3+1],T.axis[vi*3+2]];const vv=T.LA.veins[T.vein[vi]-1],t=clamp(segH(h.surf.pos,vv.a,vv.b),0,1);C=v3.add(vv.a,v3.sc(v3.sub(vv.b,vv.a),t));R=v3.dist(C,h.surf.pos);}
     else{ax=simNormal(T,vi);C=h.surf.pos;R=9;}
-    R=clamp(R,5,12);
+    R=clamp(R,7.5,12.5);   // LASSO：輪の直径は15〜25 mm（J&J製品ページ）
     const e1=v3.norm(v3.cross(ax,Math.abs(ax[2])<0.9?[0,0,1]:[1,0,0])),e2=v3.cross(ax,e1),d0=v3.sub(h.surf.pos,C),a0=Math.atan2(v3.dot(d0,e2),v3.dot(d0,e1));
     for(let k=0;k<10;k++){const th=a0+k*2*Math.PI/10,t=v3.add(C,v3.add(v3.sc(e1,R*Math.cos(th)),v3.sc(e2,R*Math.sin(th)))),vk=simNear(m,t);sites.push({pos:simPos(m,vk),vi:vk});}
   }
