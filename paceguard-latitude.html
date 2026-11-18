@@ -965,7 +965,7 @@ function parseTV(items){
 const MDT_MON={Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12'};
 const mdtDate=s=>{const t=String(s||'');const d=t.match(/(\d{4})\.(\d{1,2})\.(\d{1,2})(?:\s+(\d{1,2}:\d{2}))?/);if(d)return `${d[1]}年${d[2].padStart(2,'0')}月${d[3].padStart(2,'0')}日${d[4]?' '+d[4]:''}`; // 日本語版の「2026.11.19」
   const m=t.match(/(\d{1,2})-([A-Z][a-z]{2})-(\d{4})(?:\s+(\d{1,2}:\d{2}))?/);return m&&MDT_MON[m[2]]?`${m[3]}年${MDT_MON[m[2]]}月${m[1].padStart(2,'0')}日${m[4]?' '+m[4]:''}`:'';};
-const mdtCh=s=>{const t=String(s||'').replace(/\s/g,'');if(/^(RA|A)(\(|$)/i.test(t))return '心房';if(/^RV(\(|$)/i.test(t))return '右心室';if(/^LV(\(|$)/i.test(t))return '左心室';return '';};
+const mdtCh=s=>{const t=String(s||'').replace(/\s/g,'');if(/^(RA|A|心房)(\(|$)/i.test(t))return '心房';if(/^(RV|右心室|右室)(\(|$)/i.test(t))return '右心室';if(/^(LV|左心室|左室)(\(|$)/i.test(t))return '左心室';return '';}; // 日本語版の「心房(4574)」も
 const mdtVal=v=>tvUnit(String(v||'').replace(/([\d.]+)\s*ms\s*で\s*([\d.]+)\s*V/,'$2 V @ $1 ms').replace(/\s*\((\d+(?:\.\d+)?)\s*ms\)/,' @ $1 ms').replace(/\s*\/\s*(\d+(?:\.\d+)?)\s*ms/,' @ $1 ms').replace(/(\d)\s*sec\b/,'$1 s').replace(/(\d)\s*bpm\b/,'$1 bpm'));
 function isMedtronic(text){return /Medtronic|CareLink|Quick\s*Look/i.test(String(text||''));}
 function parseMDT(items,flat){
@@ -976,7 +976,7 @@ function parseMDT(items,flat){
   const mdD=s=>{const m=String(s||'').match(/((?:\d{1,2}-[A-Z][a-z]{2}-\d{4}|\d{4}\.\d{1,2}\.\d{1,2}))\s*$/);return m?mdtDate(m[1]):'';};
   const durSec=d=>{const a=String(d).split(':').map(x=>+x||0);return a.length>=3?a[0]*3600+a[1]*60+a[2]:a.length===2?a[0]*60+a[1]:a[0];};
   const durTxt=n=>n<60?`${n}秒`:n<3600?`${Math.floor(n/60)}分${n%60?n%60+'秒':''}`:`${Math.floor(n/3600)}時間${Math.floor(n%3600/60)}分`;
-  let sicStart='',voltRRT='';
+  let sicStart='',voltRRT='',chargeDate='',txCols=[];
   // 患者ID・送信日時（右上）
   const id=(T.match(/(?:^|[^A-Za-z])ID\s*[:：]\s*(\d{6,10})/)||[])[1]||'';
   const model=((T.match(/デバイス\s*[:：]\s*(.+?)\s+シリアル番号/)||[])[1]||'').trim();
@@ -998,11 +998,11 @@ function parseMDT(items,flat){
     if(/^治療済み(の)?(イベント)?$/.test(c0)||/^治療済み(の)?イベント/.test(c0)){sec='evTx';continue;}
     if(/^モニタ済み(の)?(イベント)?$/.test(c0)||/^モニタ済み(の)?イベント/.test(c0)){sec='evMon';continue;}
     if(H(/^身体機能/,'act'))continue;
-    if(H(/^治療サマリ/,'txsum')){const g=cells.find(c=>/ペーシング/.test(c.s)&&!/^治療サマリ/.test(c.s))||cells.find(c=>/ペーシング/.test(c.s));rightX=g?xOf(g,/ペーシング/)-3:null;rightSec='pace';continue;}
+    if(H(/^治療サマリ/,'txsum')){txCols=cells.filter(c=>/^(VT\/VF|AT\/AF)$/.test(tvClean(c.s))).map(c=>tvClean(c.s));const g=cells.find(c=>/ペーシング/.test(c.s)&&!/^治療サマリ/.test(c.s))||cells.find(c=>/ペーシング/.test(c.s));rightX=g?xOf(g,/ペーシング/)-3:null;rightSec='pace';continue;}
     if(H(/^オブザベーション/,'obs'))continue;
     if(/^予測(電池)?寿命/.test(c0)&&!/months?|years?|\d\s*(年|か月|ヶ月)/i.test(all)){sec='life';continue;} // 値の付いた「予測寿命 9 months」は見出しではない
     if(/^電池電圧/.test(c0)&&!/\d\s*V\b/.test(all)){sec='volt';continue;}
-    if(H(/^前回のチャージ/,'charge'))continue;
+    if(H(/^前回のチャージ/,'charge')){const d=all.match(/(\d{1,2}-[A-Z][a-z]{2}-\d{4}|\d{4}\.\d{1,2}\.\d{1,2})/);chargeDate=d?mdtDate(d[1]):'';continue;}
     if(H(/^センシング・?インテグリティ/,'sic')){const d=all.match(/(?:開始日\s*[:：]?\s*|(?=\d{4}\.\d{1,2}\.\d{1,2}\s*以降))((?:\d{1,2}-[A-Z][a-z]{2}-\d{4}|\d{4}\.\d{1,2}\.\d{1,2}))/);sicStart=d?mdtDate(d[1]):'';continue;}
     if(sec!=='dev'&&H(/^リードインピーダンス/,'limp'))continue;
     if(H(/^心房リードポジションチェック/,'apc'))continue;
@@ -1031,7 +1031,7 @@ function parseMDT(items,flat){
       if(/ペーシングインピーダンス|^リードインピーダンス/.test(l0)){each((ch,v)=>put(`lead:${ch}:ペーシングインピーダンス`,`${ch} ペーシングインピーダンス`,v));continue;}
       if(/除細動インピーダンス/.test(l0)){const v=rest.replace(/^(RV|SVC)\s*=?\s*/,'');put(/^SVC/.test(rest)?'lead:ショック:SVC除細動インピーダンス':'lead:ショック:ショックインピーダンス',/^SVC/.test(rest)?'SVC除細動インピーダンス':'ショックインピーダンス（RV除細動）',v);continue;}
       if(/^SVC\s*=/.test(l0+' '+rest)){put('lead:ショック:SVC除細動インピーダンス','SVC除細動インピーダンス',(l0+' '+rest).replace(/^SVC\s*=\s*/,''));continue;}
-      if(/ペーシング極性/.test(l0)&&rest){put('set:ペーシング極性','ペーシング極性',rest);continue;}
+      if(/ペーシング極性/.test(l0)&&rest){each((ch,v)=>put(`set:ペーシング極性 ${ch}`,`ペーシング極性 ${ch}`,v));continue;}
       if(/ペーシング閾値|キャプチャ閾値/.test(l0)){each((ch,v)=>{put(`lead:${ch}:ペーシング閾値`,`${ch} ペーシング閾値`,v);lastThr=`lead:${ch}:ペーシング閾値`;});continue;}
       if(/^測定日/.test(l0)){if(Object.keys(cols).length>1){for(const c of L.slice(1)){const ch=near((c.x0+c.x1)/2),k=`lead:${ch}:ペーシング閾値`;if(got[k])got[k].measDate=mdtDate(c.s);}}else if(lastThr&&got[lastThr])got[lastThr].measDate=mdtDate(rest);continue;}
       if(/電圧\/?パルス幅|出力/.test(l0)){each((ch,v)=>put(`set:ペーシング出力 ${ch}`,`ペーシング出力 ${ch}`,v));continue;}
@@ -1049,12 +1049,12 @@ function parseMDT(items,flat){
       const n1=L.slice(1).map(c=>c.s.trim()).find(v=>/^\d+$/.test(v))??(/^\d+$/.test(rest)?rest:null);
       if(n1!=null){const pre=sec==='evTx'?'治療済み':'モニタ';put(`ev:${pre}:${l0}`,`${pre} ${l0}`,n1+'件');}continue;}
     if(sec==='act'){if(/アクティビティ/.test(l0)&&L[1])put('act','患者アクティビティ',L[1].s);continue;}
-    if(sec==='txsum'){let n1=L.slice(1).map(c=>c.s.trim()).filter(v=>/^\d+$/.test(v));if(!n1.length&&/^\d+$/.test(rest))n1=[rest];if(n1.length)put(`ev:治療:${l0}`,l0,n1.join(' / ')+'件');continue;}
+    if(sec==='txsum'){let n1=L.slice(1).map(c=>c.s.trim()).filter(v=>/^\d+$/.test(v));if(!n1.length&&/^\d+$/.test(rest))n1=[rest];if(n1.length)put(`ev:治療:${l0}`,l0,n1.length>1&&n1.length===txCols.length?n1.map((n,i)=>`${txCols[i]} ${n}件`).join(' ／ '):n1.join(' / ')+'件');continue;}
     if(sec==='apc'){if(/ポジションチェック/.test(l0)&&rest)put('leadpos','心房リード ポジションチェック',rest,{pr:2});continue;}
     if(sec==='obs'){const t=all.replace(/^[•・\s]+/,'').trim();if(t){const k='obs';if(got[k])got[k].v+=' ／ '+t;else put(k,'オブザベーション',t);}continue;}
     if(sec==='life'){const m=rest.match(/([<>]?\s*\d+(?:\.\d+)?\s*(?:months?|years?|年|か月|ヶ月))/i);if(/^推定値/.test(l0)&&m)put('bat:years','電池 予測寿命',m[1],{pr:2});else if(/^最小/.test(l0)&&m)put('bat:min','電池 予測寿命（最小）',m[1],{pr:2});else if(/^最大/.test(l0)&&m)put('bat:max','電池 予測寿命（最大）',m[1],{pr:2});continue;}
     if(sec==='volt'){if(/^電圧/.test(l0)&&rest){put('bat:volt','電池電圧',rest+(voltRRT?' '+voltRRT:''),{pr:2});voltRRT='';}else if(/RRT/.test(all)){if(got['bat:volt']&&!/RRT/.test(got['bat:volt'].v))got['bat:volt'].v+=' '+all.trim();else voltRRT=all.trim();}continue;} // RRTが電圧より先に書かれる形もある
-    if(sec==='charge'){if(/^充電時間/.test(l0)&&rest)put('charge','充電時間',rest);continue;}
+    if(sec==='charge'){if(/^充電時間/.test(l0)&&rest)put('charge','充電時間',rest,{pr:2,measDate:chargeDate});else if(/^エネルギー/.test(l0)&&rest&&got.charge)got.charge.energy=rest;continue;}
     if(sec==='sic'){{const d=all.match(/開始日\s*[:：]?\s*((?:\d{1,2}-[A-Z][a-z]{2}-\d{4}|\d{4}\.\d{1,2}\.\d{1,2}))/);if(d){sicStart=mdtDate(d[1]);if(got.sic)got.sic.start=sicStart;continue;}}
       if(/V-?V/.test(l0)&&rest)put('sic','SIC（短いV-Vインターバル）',rest.split(/\s/)[0],{pr:2,start:sicStart});continue;}
     if(sec==='limp'){const v=rest.replace(/\s*(?:\d{1,2}-[A-Z][a-z]{2}-\d{4}|\d{4}\.\d{1,2}\.\d{1,2})$/,''),E={pr:2,measDate:mdD(rest)};const ch=mdtCh(l0.replace(/(ペーシング|除細動).*/,''));
@@ -1099,7 +1099,7 @@ const mdtYmd=d=>String(d||'').replace(/(\d{4})年(\d{1,2})月(\d{1,2})日/,'$1/$
 function mdtShow(k,x){if(!x)return {v:'',sub:''};let v=LV(x.v),sub='';
   const m=String(v).match(/^(.*?)\s*[（(]\s*(\d{4}年\d{1,2}月\d{1,2}日[^）)]*)[）)]\s*$/);if(m){v=m[1];sub=mdtYmd(m[2]);}
   if(k==='bat:volt'){const r=String(x.v).match(/RRT\s*=?\s*([\d.]+)\s*V/);v=String(x.v).replace(/\s*\(.*$/,'');if(r)sub='RRT '+r[1]+' V';}
-  if(x.measDate&&!sub)sub='測定日 '+mdtYmd(x.measDate);if(k==='sic'&&x.start)sub='開始日 '+mdtYmd(x.start);if(k==='atAf'&&x.hr)sub=x.hr;
+  if(x.measDate&&!sub)sub='測定日 '+mdtYmd(x.measDate);if(k==='sic'&&x.start)sub='開始日 '+mdtYmd(x.start);if(k==='atAf'&&x.hr)sub=x.hr;if(k==='charge'&&x.energy)sub=(sub?sub+'／':'')+'エネルギー '+x.energy;
   return {v,sub};}
 const mdtIsAF=t=>/AT\/AF|^AF|^AT\b|心房/.test(String(t||''));
 // Medtronicの設定の並び
