@@ -132,15 +132,22 @@ main.noside #sideSplit{display:none}
 .wfs button{padding:2px 8px;font-size:12px}
 .wfb{min-width:96px;font-weight:600;background:linear-gradient(#3a4350,#262c35)}
 .wfb.on{background:linear-gradient(#ff8a3d,#d8571c);border-color:#ffb27d;color:#fff}
-#menuDrop{position:absolute;z-index:70;background:#1d242d;border:1px solid #3a4552;border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.5);padding:4px 0;min-width:240px;max-height:70vh;overflow:auto}
-#menuDrop.hidden{display:none}
-#menuDrop .it{padding:5px 14px 5px 26px;cursor:pointer;position:relative;white-space:nowrap}
-#menuDrop .it:hover{background:#2a5d93}
-#menuDrop .it.dis{opacity:.4;pointer-events:none}
-#menuDrop .it.chk:before{content:"✓";position:absolute;left:9px;color:#7fd3ff}
-#menuDrop .sep{border-top:1px solid #333d49;margin:4px 0}
-#menuDrop .hd{padding:4px 12px;color:var(--muted);font-size:11px}
-#menuDrop .kb{float:right;color:var(--muted);margin-left:18px;font-size:11px}
+#menuDrop,#menuSub{position:absolute;z-index:70;background:linear-gradient(#363a40,#25282c);border:1px solid #858b94;box-shadow:0 6px 18px rgba(0,0,0,.7);padding:3px 0;min-width:250px;max-height:calc(100vh - 90px);overflow:auto;font-family:Tahoma,"Segoe UI",Verdana,"Meiryo UI",sans-serif}
+#menuDrop.hidden,#menuSub.hidden{display:none}
+#menuDrop .it,#menuSub .it{padding:4px 34px;cursor:pointer;position:relative;white-space:nowrap;font-size:15px;font-weight:bold;color:#f2f5f8;text-shadow:0 1px 1px #000}
+#menuDrop .it:hover,#menuSub .it:hover{background:linear-gradient(#ff8a3d,#e9601c);color:#fff}
+#menuDrop .it.na,#menuSub .it.na{color:#9aa4b2;font-weight:normal}
+#menuDrop .it.na:hover,#menuSub .it.na:hover{background:#3a3f46;color:#cfd8e3}
+#menuDrop .it.dis,#menuSub .it.dis{color:#7f8a9e;font-weight:normal;pointer-events:none}
+#menuDrop .it.chk:before,#menuSub .it.chk:before{content:"✓";position:absolute;left:11px;color:#ff8a3d;font-weight:bold}
+#menuDrop .it.chk:hover:before,#menuSub .it.chk:hover:before{color:#fff}
+#menuDrop .it.sub:after,#menuSub .it.sub:after{content:"▸";position:absolute;right:11px;color:#cfd8e3}
+#menuDrop .sep,#menuSub .sep{border-top:1px solid #6a717c;margin:3px 6px}
+#menuDrop .hd,#menuSub .hd{padding:3px 12px;color:#ffb27d;font-size:11px;font-weight:bold}
+#menuDrop .kb,#menuSub .kb{float:right;color:#aab4c2;margin-left:18px;font-size:12px;font-weight:normal}
+#waveCanvas.hidden{display:none}
+#ptList.noHead #pvHead{display:none}
+#ptList.noBody #pvBody{display:none}
 .vtop{position:absolute;left:8px;top:6px;display:flex;flex-direction:column;gap:3px;align-items:flex-start;max-width:46%}
 .vtop select{background:rgba(25,45,70,.85);border:1px solid #3d6a99;color:#cfe6ff;font-size:12px;padding:2px 4px;max-width:100%}
 .vtop .vlabel{position:static;color:#9fb3c8;font-size:11px}
@@ -176,7 +183,7 @@ body,button,select,input,textarea{font-family:Tahoma,"Segoe UI",Verdana,"Meiryo 
 #menubar{padding:2px 8px}
 #menubar .brand{font-weight:bold;letter-spacing:.3px;color:#dce9f8}
 .mi{font-size:15px;font-weight:bold;color:#eef3f8;text-shadow:0 1px 1px #000;padding:2px 10px}
-.mi:hover,.mi.open{background:linear-gradient(#5d7fa8,#3b5b82)}
+.mi:hover,.mi.open{background:linear-gradient(#ff8a3d,#e9601c)}
 .wfg{background:linear-gradient(#4b5462,#2c323b);border:1px solid #1a1e24;border-radius:7px;box-shadow:inset 0 1px 0 rgba(255,255,255,.18)}
 .wft{font-weight:bold;color:#e6ecf2;font-size:12px;text-shadow:0 1px 1px #000}
 .wfs button{background:linear-gradient(#5a6472,#363d47);border:1px solid #1a1e24;color:#fff;font-weight:bold;border-radius:4px;text-shadow:0 1px 1px #000}
@@ -248,7 +255,7 @@ body,button,select,input,textarea{font-family:Tahoma,"Segoe UI",Verdana,"Meiryo 
     <button id="btnDiag" title="読み込んだデータの中身を確認（患者情報なし）">読み込み診断</button>
     <button id="btnHelp">使い方</button>
   </div>
-  <div id="menuDrop" class="hidden"></div>
+  <div id="menuDrop" class="hidden"></div><div id="menuSub" class="hidden"></div>
 </header>
 <main>
 <aside>
@@ -700,7 +707,7 @@ function parseVisiTag(text){
 }
 
 /* ===================== スタディの組み立て ===================== */
-function initPoint(p){p.lat0=p.lat;p.excluded=false;p.latEdited=false;p.label='';p.loaded=!!p.egm;p.metrics=null;}
+function initPoint(p){p.lat0=p.lat;p.excluded=false;p.latEdited=false;p.label='';p.loaded=!!p.egm;p.metrics=null;p.woiOrig=p.woi?p.woi.slice():null;}
 function newMap(name){return{name,mesh:null,points:[],version:0,edited:false,cache:{},notified:false};}
 async function buildStudy(vfs,studyName){
   const names=new Set();
@@ -737,7 +744,7 @@ async function loadPointDetail(map,p){
   p._loading=(async()=>{
     const vfs=S.study&&S.study.vfs;
     if(vfs){
-      try{const xt=await vfs.text(p.xmlFile);if(xt){const r=parsePointXml(xt);p.ref=r.ref;p.mapAnn=r.mapAnn;p.woi=r.woi;}}catch(e){console.warn(e);}
+      try{const xt=await vfs.text(p.xmlFile);if(xt){const r=parsePointXml(xt);p.ref=r.ref;p.mapAnn=r.mapAnn;p.woi=r.woi;p.woiOrig=r.woi?r.woi.slice():null;if(p.woiApplied)p.woi=p.woiApplied.slice();}}catch(e){console.warn(e);}
       try{const et=await vfs.text(p.ecgFile);if(et)p.egm=parseECG(et);}catch(e){console.warn(p.ecgFile,e);}
     }
     if(p.egmGen&&!p.egm)p.egm=p.egmGen();
@@ -1305,7 +1312,7 @@ class Viewer{
   }
   render(){
     this.resize();const gl=this.gl;gl.viewport(0,0,this.canvas.width,this.canvas.height);
-    gl.clearColor(0.04,0.05,0.07,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+    gl.clearColor(S.opt.bg[0],S.opt.bg[1],S.opt.bg[2],1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
     this.dirty=false;if(!this.map)return;
     if(this.colDirty)this.updateColors();if(this.ptsDirty)this.updatePoints();if(this.vtDirty)this.updateVT();
     const{V,MVP}=this.matrices();gl.enable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
@@ -1482,7 +1489,7 @@ const S={
   meas:{map:null,pts:[],path:null,results:[],len:0,straight:0},
   snaps:[],gaps:null,rec:null,
   anim:{prop:false,phase:0,rphase:0,rippleT:0},
-  opt:{src:'auto',fill:15,scar:0.05,iso:false,isoSteps:12,opacity:1,showPts:true,showExcl:true,ptSize:0.55,ptColor:'white',
+  opt:{bg:[0.04,0.05,0.07],bgKey:'navy',clip:0,autoZoom:false,src:'auto',fill:15,scar:0.05,iso:false,isoSteps:12,opacity:1,showPts:true,showExcl:true,ptSize:0.55,ptColor:'white',
     propSpeed:80,propBand:15,ripple:false,rippleScale:6,rippleSpeed:60,cvOn:false,cvSpacing:6,
     vtOn:true,vtChain:true,gapThr:6,vtSize:2.5,vtParam:'ai',vtLo:0,vtHi:1,gapShow:true},
   wch:{map:true,ref:true,ecg:false,other:false}
@@ -1506,7 +1513,7 @@ async function openSources(list,name){
 function setStudy(study){
   RT.map=null;RT.p=null;RT.idx=-1;
   S.study=study;S.sel=null;S.gaps=null;S.meas={map:null,pts:[],path:null,results:[],len:0,straight:0};
-  $('#studyName').textContent=study.name+`（${study.maps.length}マップ）`;$('#dropHint').classList.add('hidden');
+  updateStudyName();$('#dropHint').classList.add('hidden');
   restoreState();
   const m0=study.maps.find(m=>m.points.length)||study.maps[0];
   S.viewers[0].type=m0.mesh&&m0.mesh.colors.LAT||m0.points.some(p=>fin(p.lat))?'LAT':'Bipolar';
@@ -1619,7 +1626,7 @@ function bindPanel(){
   $('#btnResetEdits').onclick=()=>{if(!S.study||!confirm('LATの修正と除外をすべて元に戻しますか？'))return;for(const m of S.study.maps){for(const p of m.points){p.lat=p.lat0;p.latEdited=false;p.excluded=false;}m.edited=false;m.version++;}dirtyAll('cp');renderWave();saveSoon();};
   // ヘッダ
   $$('#modeSeg button').forEach(b=>b.onclick=()=>setMode(b.dataset.mode));
-  $('#btnDiag').onclick=async()=>{if(!S.study)return toast('先にデータを読み込んでください');progress('診断中…');try{$('#diagText').textContent=await buildDiag();}finally{progress(null);}$('#diagOv').classList.remove('hidden');};
+  $('#btnDiag').onclick=async()=>{if(!S.study)return toast('先にデータを読み込んでください');progress('診断中…');try{$('#diagText').textContent=await buildDiag();$('#diagOv h2').textContent='読み込み診断';$('#diagOv p').style.display='';}finally{progress(null);}$('#diagOv').classList.remove('hidden');};
   $('#diagClose').onclick=()=>$('#diagOv').classList.add('hidden');
   $('#diagCopy').onclick=async()=>{try{await navigator.clipboard.writeText($('#diagText').textContent);toast('コピーしました');}catch(_){const r=document.createRange();r.selectNodeContents($('#diagText'));getSelection().removeAllRanges();getSelection().addRange(r);toast('選択しました。Ctrl+Cでコピーしてください');}};
   $('#diagSave').onclick=()=>download(`carto_diag_${stamp()}.txt`,new Blob([$('#diagText').textContent],{type:'text/plain'}));
@@ -1725,67 +1732,271 @@ const isOn=id=>$(id).checked;
 const setSel=(id,val)=>{const el=$(id);el.value=val;el.dispatchEvent(new Event('change'));};
 const need=()=>!S.study;
 const VIEW_LABELS=[['AP','AP'],['PA','PA'],['LAO','LAO'],['RAO','RAO'],['LL','LL'],['RL','RL'],['SUP','SUP（頭側）'],['INF','INF（足側）']];
+const U=(l,o={})=>({l,na:1,...o});            // ビューア未対応（グレー。押すと「未対応」と表示）
+const D=(l,o={})=>({l,na:1,d:()=>true,...o});  // CARTOでも無効（グレー・押せない）
+const SEP='-';
+const viewerHd={h:'ビューア独自の機能（CARTOにはありません）'};
+const viewMenu=()=>[...VIEW_LABELS.map(([k,l])=>({l,a:()=>{const v=av();v.setView(k);afterCam(v);}})),{l:'全体を表示',a:()=>{const v=av();v.setView('FIT');afterCam(v);}}];
+const BG_OPTS=[['black','Black',[0,0,0]],['navy','Dark Navy',[0.04,0.05,0.07]],['gray','Dark Gray',[0.17,0.18,0.20]],['blue','Blue',[0.06,0.14,0.28]]];
+const CLIP_OPTS=[[0,'Off'],[1,'1 mV'],[2,'2 mV'],[5,'5 mV'],[10,'10 mV'],[20,'20 mV']];
+
+/* --- メニューの中身で使う機能 --- */
+function showText(title,text){
+  $('#diagOv h2').textContent=title;const p=$('#diagOv p');if(p)p.style.display='none';
+  $('#diagText').textContent=text;$('#diagOv').classList.remove('hidden');
+}
+function updateStudyName(){const st=S.study;$('#studyName').textContent=st?(st.title||st.name)+`（${st.maps.length}マップ）`:'';}
+function renameStudy(){const st=S.study;if(!st)return;const n=prompt('症例の名前（患者名・IDは入れないでください）',st.title||st.name);if(n==null)return;st.title=n.trim()||st.name;updateStudyName();}
+function csvOf(maps){
+  const cell=v=>{if(typeof v==='number')return Number.isFinite(v)?String(+v.toFixed(3)):'';const s=String(v==null?'':v);return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;};
+  const rows=[['map','point','x_mm','y_mm','z_mm','lat_ms','bipolar_mV','unipolar_mV','impedance_ohm','excluded','lat_edited','label']];
+  for(const m of maps)for(const p of m.points)rows.push([m.name,p.id,p.x,p.y,p.z,p.lat,p.bip,p.uni,p.imp,p.excluded?1:0,p.latEdited?1:0,p.label||'']);
+  return '﻿'+rows.map(r=>r.map(cell).join(',')).join('\r\n');
+}
+function downloadCSV(maps){if(!S.study)return;download(`carto_points_${stamp()}.csv`,new Blob([csvOf(maps)],{type:'text/csv'}));toast(`ポイント ${maps.reduce((s,m)=>s+m.points.length,0)} 点をCSVで保存しました`);}
+function studyStats(){
+  const st=S.study;if(!st)return;const L=[`症例：${st.title||st.name}`,`マップ：${st.maps.length}`,''];
+  for(const m of st.maps){
+    const pts=m.points,act=pts.filter(p=>!p.excluded),lat=act.map(p=>p.lat).filter(fin),bip=act.map(p=>p.bip).filter(fin),uni=act.map(p=>p.uni).filter(fin);
+    L.push(`■ ${m.name}`,`  ポイント ${pts.length}（除外 ${pts.length-act.length}、LAT修正 ${pts.filter(p=>p.latEdited).length}）　メッシュ頂点 ${m.mesh?m.mesh.nv:0}`,
+      `  LAT　　　${lat.length?`${Math.min(...lat)}〜${Math.max(...lat)} ms（中央値 ${fmt(percentile(lat,0.5),0)}）`:'—'}`,
+      `  Bipolar　 ${bip.length?`中央値 ${fmt(percentile(bip,0.5),2)} mV（${fmt(percentile(bip,0.05),2)}〜${fmt(percentile(bip,0.95),2)}）`:'—'}`,
+      `  Unipolar　${uni.length?`中央値 ${fmt(percentile(uni,0.5),2)} mV`:'—'}`,'');
+  }
+  if(st.visitag)L.push(`■ 焼灼点（Tag）　${st.visitag.sites.length} 個`);
+  showText('Study Statistics',L.join('\n'));
+}
+function printScreen(){
+  if(!S.study)return toast('先に症例を開いてください');
+  const url=composite().toDataURL('image/png'),f=document.createElement('iframe');f.style.cssText='position:fixed;right:0;bottom:0;width:0;height:0;border:0';document.body.appendChild(f);
+  const d=f.contentWindow.document;d.open();d.write(`<html><head><title>CARTO Viewer</title></head><body style="margin:0"><img src="${url}" style="width:100%"></body></html>`);d.close();
+  const img=d.querySelector('img'),go=()=>{try{f.contentWindow.focus();f.contentWindow.print();}catch(e){toast('印刷できませんでした：'+e.message);}setTimeout(()=>f.remove(),3000);};
+  if(img.complete)go();else img.onload=go;
+}
+function exitApp(){
+  if(!confirm('CARTO Viewer を終了しますか？\n（LATの修正や除外は、このブラウザに自動保存されています）'))return;
+  window.close();setTimeout(()=>toast('ウィンドウを閉じられませんでした。ブラウザのタブ（ウィンドウ）を直接閉じてください',5000),400);
+}
+function remap(){
+  const v=av();if(!v||!v.map)return;S.opt.src='interp';$('#srcSel').value='interp';v.map.version++;dirtyAll('cp');
+  toast('ポイントから、マップの色を再計算しました（設定パネルの「色の計算」で元に戻せます）',4500);
+}
+function replayMap(){
+  const v=av();if(!v||!v.map)return;if($('#wave').classList.contains('collapsed'))$('#waveToggle').click();
+  if(!RT.on)toggleRT();RT.map=v.map;RT.idx=-1;W.chain=true;$('#wChain').checked=true;setPlay(true);rtNext();toast('ポイントを取った順に、記録を再生します（左の波形）');
+}
+function toggleRT(){RT.on=!RT.on;RT.cv.classList.toggle('hidden',!RT.on);dirtyAll('p');setTimeout(renderWave,30);}
+function latHistogram(){
+  const v=av();if(!v||!v.map)return;const pts=v.map.points.filter(p=>!p.excluded&&fin(p.lat));if(!pts.length)return toast('LATのあるポイントがありません');
+  const vals=pts.map(p=>p.lat),mn=Math.min(...vals),mx=Math.max(...vals),lo=Math.floor(mn/10)*10,hi=Math.ceil((mx+1)/10)*10,bins=[];
+  for(let a=lo;a<hi;a+=10)bins.push([a,0]);for(const x of vals)bins[Math.min(bins.length-1,Math.floor((x-lo)/10))][1]++;
+  const top=Math.max(...bins.map(b=>b[1])),L=[`${v.map.name}　LATヒストグラム（10 msごと、${vals.length}点）`,''];
+  for(const[a,n]of bins)L.push(`${String(a).padStart(5)} 〜 ${String(a+10).padStart(5)} ms │${'█'.repeat(Math.round(n/top*40))} ${n}`);
+  L.push('',`中央値 ${fmt(percentile(vals,0.5),0)} ms　範囲 ${mn}〜${mx} ms`);showText('LAT Histogram',L.join('\n'));
+}
+async function earlyMeetsLate(){
+  const v=av();if(!v||!v.map)return;const map=v.map,pts=map.points.filter(p=>!p.excluded&&fin(p.lat));if(pts.length<10)return toast('LATのあるポイントが足りません');
+  await Promise.all(pts.slice(0,12).map(p=>loadPointDetail(map,p)));
+  const cls=pts.map(p=>p.egm?computeCL(p.egm):NaN).filter(fin),cl=cls.length?percentile(cls,0.5):NaN;
+  const lats=pts.map(p=>p.lat),mn=Math.min(...lats),mx=Math.max(...lats),span=mx-mn,q1=percentile(lats,0.1),q9=percentile(lats,0.9);
+  const early=pts.filter(p=>p.lat<=q1),late=pts.filter(p=>p.lat>=q9);let best=null;
+  for(const a of early)for(const b of late){const d=v3.dist([a.x,a.y,a.z],[b.x,b.y,b.z]);if(!best||d<best.d)best={a,b,d};}
+  const pe=pts.find(p=>p.lat===mn),pl=pts.find(p=>p.lat===mx);
+  const L=[`${map.name}　Early Meets Late（参考値）`,'',`最早期　P${pe.id}　${mn} ms`,`最遅　　P${pl.id}　${mx} ms`,`LATの幅　${span} ms`,`CL（周期長）　${fin(cl)?cl+' ms':'—（電位ファイルがないため不明）'}`];
+  if(fin(cl))L.push(`幅 ÷ CL　${(span/cl*100).toFixed(0)} %`);
+  if(best)L.push('',`「早い側10%」と「遅い側10%」で、最も近い2点`,`　P${best.a.id}（${best.a.lat} ms）と P${best.b.id}（${best.b.lat} ms）　距離 ${best.d.toFixed(1)} mm`);
+  L.push('','※ 点のLATだけから出した簡易計算です。リエントリーかどうかは、マップ全体と波形を見て判断してください。LATの付け間違いで大きく変わります。');
+  showText('Early Meets Late',L.join('\n'));
+}
+function applyWOI(){
+  if(!S.sel)return;const{map,p}=S.sel;if(!p.woi)return toast('選択したポイントにWOIがありません');let n=0;
+  for(const q of map.points){if(q===p)continue;q.woiApplied=p.woi.slice();q.woi=p.woi.slice();n++;}
+  dirtyAll('p');renderWave();toast(`WOI（${p.woi[0]}〜${p.woi[1]} ms）を ${n} 点に適用しました（電位解析の範囲に使われます）`,4500);
+}
+function restoreWOI(){
+  if(!S.sel)return;for(const q of S.sel.map.points){delete q.woiApplied;q.woi=q.woiOrig?q.woiOrig.slice():undefined;}
+  dirtyAll('p');renderWave();toast('WOIを元に戻しました');
+}
+function pointTag(){
+  if(!S.sel)return;const p=S.sel.p,t=prompt('ポイントのタグ（例：LAVA、至適部位）',p.label||'');if(t==null)return;
+  p.label=t.trim();$('#ptLabel').value=p.label;dirtyAll('p');renderWave();renderPtList(true);saveSoon();
+}
+async function cfae(){
+  if(!S.study)return toast('先に症例を開いてください');clickTab('t-ana');await runEGM();
+  const sel=$('#selType');if([...sel.options].some(o=>o.value==='m_defl')){sel.value='m_defl';sel.onchange({target:{value:'m_defl'}});}
+}
+const plVisible=()=>!$('#ptList').classList.contains('hidden');
+const plHead=()=>plVisible()&&!$('#ptList').classList.contains('noHead');
+const plBody=()=>plVisible()&&!$('#ptList').classList.contains('noBody');
+function setPl(h,b){
+  const el=$('#ptList');el.classList.toggle('noHead',!h&&b);el.classList.toggle('noBody',!b&&h);el.classList.toggle('hidden',!h&&!b);
+  $('#wList').classList.toggle('on',h||b);renderPtList(true);setTimeout(()=>{dirtyAll('');renderWave();},30);
+}
+function shortcutsText(){
+  return ['【キーボード】','  ← →　　　　　前・次のポイント','  Delete　　　　選択ポイントを除外／戻す','  Space　　　　Propagation（伝播）の再生／停止','  Esc　　　　　　メニューを閉じる、計測を中止','',
+    '【3Dマップ】','  左ドラッグ　　回転','  右ドラッグ　　移動（Shiftを押しながら左ドラッグでも可）','  ホイール　　　拡大・縮小','  クリック　　　上の「クリック操作」で選んだ動作（選択・除外・距離・ライン）','',
+    '【波形】','  赤い線をドラッグ　LATの付け直し','  ダブルクリック　　その位置にLATを移動','  ホイール　　　　　電極が多いとき上下にスクロール、Shift+ホイールで時間軸の拡大・縮小','  ドラッグ　　　　　時間軸の移動'].join('\n');
+}
+function aboutText(){
+  return ['CARTO Viewer（研究・教育用）','','CARTO 3 のExportデータ（.mesh / _car.txt / ECG Export / VisiTag）を、このPCのブラウザだけで表示・解析します。','データは外部に送信されません。','',
+    'これはBiosense Websterの製品ではありません。CARTO本体の代わりにはならず、診療の最終判断には使わないでください。','色の補間・伝導速度・電位解析は独自の簡易計算で、CARTOの表示とは一致しません。','',
+    '各メニューの項目のうち、グレーで表示しているものは、Exportのデータにないため未対応です（カテーテル位置、透視・CT画像の重ね合わせ、ペースマップなど）。'].join('\n');
+}
+
 const MENUS={
   study:()=>[
-    {l:'症例フォルダを開く…',a:()=>$('#inDir').click()},{l:'ZIP・ファイルを開く…',a:()=>$('#inFiles').click()},{l:'デモデータを開く',a:()=>$('#btnDemo').click()},'-',
-    {l:'読み込み診断',a:()=>$('#btnDiag').click(),d:need},{l:'症例メモ・タグ',a:()=>{clickTab('t-rec');$('#caseNotes').focus();},d:need},'-',
-    {l:'編集内容を書き出す（JSON）',a:()=>$('#btnExportJSON').click(),d:need},{l:'編集内容を読み込む…',a:()=>$('#inJSON').click(),d:need},{l:'LAT修正・除外を全部元に戻す',a:()=>$('#btnResetEdits').click(),d:need}],
-  map:()=>{const v=av(),st=S.study;if(!st)return[{h:'症例が開かれていません'}];
-    return[{h:`マップ（${S.compare?(S.active?'右':'左'):'表示中'}の画面）`},...st.maps.map((m,i)=>({l:`${m.name}（${m.points.length}点）`,c:()=>v.map===m,a:()=>$('#selMap').onchange({target:{value:i}})})),'-',
-      {h:'表示'},...typesForMap(v.map).map(t=>({l:t.label,c:()=>v.type===t.k,a:()=>{$('#selType').value=t.k;$('#selType').onchange({target:{value:t.k}});}})),'-',
-      {l:'範囲を自動にする',a:()=>$('#rAuto').click()},{l:'等時線（段階表示）',c:()=>isOn('#isoOn'),a:()=>tog('#isoOn')},
-      {l:'色：CARTOのメッシュ値',c:()=>S.opt.src==='auto',a:()=>setSel('#srcSel','auto')},{l:'色：ポイントから再計算',c:()=>S.opt.src==='interp',a:()=>setSel('#srcSel','interp')},'-',
-      {l:'2画面で比較',c:()=>S.compare,a:()=>tog('#compareOn')},{l:'マップの詳しい設定…',a:()=>clickTab('t-view')}];},
-  point:()=>[{l:'前のポイント',k:'←',a:()=>stepPoint(-1),d:need},{l:'次のポイント',k:'→',a:()=>stepPoint(1),d:need},'-',
+    D('Continue Study'),{l:'Rename Study',a:renameStudy,d:need},
+    {l:'Edit Patient Details...',a:()=>{clickTab('t-rec');setTimeout(()=>$('#caseNotes').focus(),60);toast('このビューアは患者情報を扱いません。代わりに症例メモ・タグを開きました',4000);},d:need},
+    D('Load Maps From Previous Study'),SEP,
+    {l:'Print...',a:printScreen,d:need},SEP,
+    {l:'Study Statistics',a:studyStats,d:need},{l:'Export Study Data...',a:()=>downloadCSV(S.study.maps),d:need},{l:'Export Media',a:()=>$('#btnShot').click(),d:need},
+    {l:'Save Template As...',a:()=>$('#btnExportJSON').click(),d:need},{l:'Exit',a:exitApp},
+    SEP,viewerHd,
+    {l:'症例フォルダを開く…',a:()=>$('#inDir').click()},{l:'ZIP・ファイルを開く…',a:()=>$('#inFiles').click()},{l:'デモデータを開く',a:()=>$('#btnDemo').click()},
+    {l:'読み込み診断',a:()=>$('#btnDiag').click(),d:need},{l:'症例メモ・タグ',a:()=>{clickTab('t-rec');$('#caseNotes').focus();},d:need},
+    {l:'編集内容を読み込む…',a:()=>$('#inJSON').click(),d:need},{l:'LAT修正・除外を全部元に戻す',a:()=>$('#btnResetEdits').click(),d:need}],
+  map:()=>[
+    U('New Map'),SEP,
+    {l:'Remap',a:remap,d:need},{l:'Map Replay',a:replayMap,d:need},{l:'Save Map As...',a:()=>downloadCSV([av().map]),d:need},SEP,
+    U('Adjust FAM Point-by-Point'),SEP,
+    {l:'Fill & Color  Threshold...',a:()=>{clickTab('t-view');setTimeout(()=>$('#fillR').focus(),60);},d:need},SEP,
+    U('Anatomical Structure...'),SEP,
+    {l:'Design Line...',a:()=>{setMode('line');clickTab('t-meas');},d:need},
+    {l:'Distance Measurement – Standard',a:()=>{setMode('dist');clickTab('t-meas');},d:need},U('Distance Measurement – Catheter'),
+    {l:'Area Measurement...',a:()=>{clickTab('t-ana');$('#btnArea').click();},d:need},SEP,
+    {l:'Propagation',a:()=>{const s=$('#selType');s.value='PROP';s.onchange({target:{value:'PROP'}});},d:need},
+    {l:'Ripple Map',c:()=>isOn('#rippleOn'),a:()=>tog('#rippleOn'),d:need},{l:'LAT Histogram',a:latHistogram,d:need},SEP,
+    {l:'Early Meets Late...',a:earlyMeetsLate,d:need},D('Surface Reconstruction'),SEP,
+    {l:'LAO/RAO Orientation...',sub:viewMenu},SEP,
+    U('Pattern Bank'),U('Auto Pattern Bank'),U('Filtering'),SEP,
+    {l:'Apply LAT WOI of Selected Point to...',sub:()=>[{l:'All Points',a:applyWOI}],d:()=>!S.sel},
+    {l:'Restore WOI for All Points',a:restoreWOI,d:()=>!S.sel},
+    SEP,viewerHd,
+    {l:'マップの選択',sub:()=>S.study?S.study.maps.map((m,i)=>({l:`${m.name}（${m.points.length}点）`,c:()=>av().map===m,a:()=>$('#selMap').onchange({target:{value:i}})})):[],d:need},
+    {l:'表示する値',sub:()=>typesForMap(av().map).map(t=>({l:t.label,c:()=>av().type===t.k,a:()=>{$('#selType').value=t.k;$('#selType').onchange({target:{value:t.k}});}})),d:need},
+    {l:'範囲を自動にする',a:()=>$('#rAuto').click(),d:need},{l:'等時線（段階表示）',c:()=>isOn('#isoOn'),a:()=>tog('#isoOn')},
+    {l:'色の計算',sub:()=>[{l:'CARTOのメッシュ値',c:()=>S.opt.src==='auto',a:()=>setSel('#srcSel','auto')},{l:'ポイントから再計算',c:()=>S.opt.src==='interp',a:()=>setSel('#srcSel','interp')}]},
+    {l:'2画面で比較',c:()=>S.compare,a:()=>tog('#compareOn')},{l:'マップの詳しい設定…',a:()=>clickTab('t-view')}],
+  maps:()=>{const v=av(),st=S.study;if(!st)return[{h:'症例が開かれていません'}];
+    return[{h:'マップ'},...st.maps.map((m,i)=>({l:`${m.name}（${m.points.length}点）`,c:()=>v.map===m,a:()=>$('#selMap').onchange({target:{value:i}})})),SEP,
+      {h:'表示'},...typesForMap(v.map).map(t=>({l:t.label,c:()=>v.type===t.k,a:()=>{$('#selType').value=t.k;$('#selType').onchange({target:{value:t.k}});}}))];},
+  point:()=>[
+    U('Copy Point To'),U('Move Point To'),SEP,
+    {l:'Delete Point',a:()=>toggleExclude(S.sel.map,S.sel.p),d:()=>!S.sel||S.sel.p.excluded},{l:'Restore Point',a:()=>toggleExclude(S.sel.map,S.sel.p),d:()=>!S.sel||!S.sel.p.excluded},SEP,
+    {l:'Point Tag & Type...',a:pointTag,d:()=>!S.sel},{l:'Restore Annotation',a:()=>$('#latRevert').click(),d:()=>!S.sel},
+    SEP,viewerHd,
+    {l:'前のポイント',k:'←',a:()=>stepPoint(-1),d:need},{l:'次のポイント',k:'→',a:()=>stepPoint(1),d:need},
     {l:'クリックで選択',c:()=>S.mode==='select',a:()=>setMode('select')},{l:'クリックで除外',c:()=>S.mode==='exclude',a:()=>setMode('exclude')},
-    {l:'選択点を除外／戻す',k:'Delete',a:()=>$('#pExcl').click(),d:()=>!S.sel},'-',
-    {l:'LATを吸着',a:latSnap,d:()=>!S.sel},{l:'LATを元に戻す',a:()=>$('#latRevert').click(),d:()=>!S.sel},{l:'ラベルを付ける…',a:()=>{clickTab('t-rec');$('#ptLabel').focus();},d:()=>!S.sel},'-',
-    {l:'ポイント一覧',c:()=>!$('#ptList').classList.contains('hidden'),a:()=>$('#wList').click()},
-    {l:'ポイントを表示',c:()=>isOn('#showPts'),a:()=>tog('#showPts')},{l:'除外した点も表示',c:()=>isOn('#showExcl'),a:()=>tog('#showExcl')}],
-  catheter:()=>[{h:'カテーテル位置はExportに含まれないため、3D表示はできません'},'-',{h:'電極の表示'},
-    {l:'マッピング電極（Bi/Uni/Ref）',c:()=>W.layout==='map',a:()=>setSel('#wLayout','map')},{l:'全電極（CARTO風）',c:()=>W.layout==='all',a:()=>setSel('#wLayout','all')}],
-  ecg:()=>[{h:'掃引速度'},...[['0','WOIに合わせる'],['50','50 mm/s'],['100','100 mm/s'],['200','200 mm/s'],['400','400 mm/s']].map(([v,l])=>({l,c:()=>String(W.speed)===v,a:()=>setSel('#wSpeed',v)})),'-',
+    {l:'LATを吸着',a:latSnap,d:()=>!S.sel},{l:'ポイントを表示',c:()=>isOn('#showPts'),a:()=>tog('#showPts')},{l:'除外した点も表示',c:()=>isOn('#showExcl'),a:()=>tog('#showExcl')}],
+  catheter:()=>[
+    D('Create Snapshot'),U('Snapshot Settings'),SEP,
+    U('Catheter Projection'),U('Catheter Projection Settings',{arrow:1}),
+    {l:'Reset Visualization',a:()=>{const v=av();v.setView('FIT');afterCam(v);},d:need},
+    U('Reset TPI'),U('VARIPULSE™ TPI Calibration',{arrow:1}),D('Reset Sheath Pairing'),SEP,
+    U('Launch Catheter Definition Tool'),
+    SEP,viewerHd,
+    {l:'電極の表示',sub:()=>[{l:'マッピング電極（Bi/Uni/Ref）',c:()=>W.layout==='map',a:()=>setSel('#wLayout','map')},{l:'全電極',c:()=>W.layout==='all',a:()=>setSel('#wLayout','all')}]},
+    {h:'カテーテルの位置はExportに含まれないため、3D表示はできません'}],
+  ecg:()=>[
+    U('Stimulation',{arrow:1}),U('Stimulation End Configuration'),U('Stimulation Routing Presets',{c:()=>true}),SEP,
+    U('ICEG Unipolar Configuration...'),U('Filters Configuration...'),
+    {l:`Signal Clipping – ${S.opt.clip?S.opt.clip+' mV':'Off'}`,sub:()=>CLIP_OPTS.map(([v,l])=>({l,c:()=>S.opt.clip===v,a:()=>{S.opt.clip=v;renderWave();}}))},
+    SEP,viewerHd,
+    {l:'掃引速度',sub:()=>[['0','WOIに合わせる'],['50','50 mm/s'],['100','100 mm/s'],['200','200 mm/s'],['400','400 mm/s']].map(([v,l])=>({l,c:()=>String(W.speed)===v,a:()=>setSel('#wSpeed',v)}))},
     {l:RT.playing?'リアルタイムを一時停止':'リアルタイムを再生',a:()=>setPlay(!RT.playing)},{l:'次の点へ続けて再生',c:()=>W.chain,a:()=>tog('#wChain')},
-    ...[['1','×1'],['0.5','×0.5'],['0.25','×0.25']].map(([v,l])=>({l:'再生速度 '+l,c:()=>String(W.rate)===v,a:()=>setSel('#wRate',v)})),'-',
+    {l:'再生速度',sub:()=>[['1','×1'],['0.5','×0.5'],['0.25','×0.25']].map(([v,l])=>({l,c:()=>String(W.rate)===v,a:()=>setSel('#wRate',v)}))},
     {l:'12誘導',c:()=>isOn('#chEcg'),a:()=>tog('#chEcg')},{l:'Ref',c:()=>isOn('#chRef'),a:()=>tog('#chRef')},{l:'その他のチャンネル',c:()=>isOn('#chOther'),a:()=>tog('#chOther')},
     {l:'振幅を大きく',a:()=>$('#gUp').click()},{l:'振幅を小さく',a:()=>$('#gDown').click()}],
-  display:()=>[{h:'透明度'},...[0,25,50,75].map(o=>({l:o+'%',c:()=>Math.round((1-S.opt.opacity)*100)===o,a:()=>{S.opt.opacity=1-o/100;$('#opacity').value=S.opt.opacity;dirtyAll('');syncViewOverlays();}})),'-',
-    {h:'点の色'},...[['value','マップの値'],['white','白'],['label','ラベル付きを強調']].map(([v,l])=>({l,c:()=>S.opt.ptColor===v,a:()=>setSel('#ptColor',v)})),'-',
-    {l:S.anim.prop?'Propagationを停止':'Propagationを再生',a:()=>togglePropPlay(),d:need},{l:'Ripple風表示',c:()=>isOn('#rippleOn'),a:()=>tog('#rippleOn'),d:need},
-    {l:'伝導速度の矢印',c:()=>isOn('#cvOn'),a:()=>tog('#cvOn'),d:need},{l:'焼灼点（Tag）',c:()=>isOn('#vtOn'),a:()=>tog('#vtOn')},{l:'焼灼点を線でつなぐ',c:()=>isOn('#vtChain'),a:()=>tog('#vtChain')},'-',
-    {h:'向き'},...VIEW_LABELS.map(([k,l])=>({l,a:()=>{const v=av();v.setView(k);afterCam(v);}})),{l:'全体を表示',a:()=>{const v=av();v.setView('FIT');afterCam(v);}}],
-  imaging:()=>[{l:'画像を保存（PNG）',a:()=>$('#btnShot').click(),d:need},'-',
-    ...(S.rec?[{l:'録画を停止',a:stopRec}]:[['rotate','動画：360°回転'],['prop','動画：伝播を1周'],['manual','動画：手動で停止']].map(([k,l])=>({l,a:()=>{$('#recKind').value=k;startRec(k);},d:need}))),'-',
-    {l:'今の画面をスライドに追加',a:addSnap,d:need},{l:'スライドショー',a:()=>openSlides(0)},{l:'スライドをHTMLで書き出す',a:exportSlides},'-',
-    {h:'透視・CT・エコー画像の重ね合わせはExportに含まれないため未対応'}],
-  window:()=>[{l:'2画面で比較',c:()=>S.compare,a:()=>tog('#compareOn')},{l:'視点を連動',c:()=>S.sync,a:()=>tog('#syncCam')},'-',
-    {l:'設定パネル（左）',c:()=>!!LAY.sideOpen,a:()=>setSide(!LAY.sideOpen)},
+  display:()=>[
+    {l:'Set Background Color',sub:()=>BG_OPTS.map(([k,l,rgb])=>({l,c:()=>S.opt.bgKey===k,a:()=>{S.opt.bgKey=k;S.opt.bg=rgb;dirtyAll('');}}))},SEP,
+    D('Anatomical Structure'),
+    {l:'Enable Auto Zoom',c:()=>S.opt.autoZoom,a:()=>{S.opt.autoZoom=!S.opt.autoZoom;if(S.opt.autoZoom)toast('ポイントを選ぶと、その点へ自動で拡大します');else{const v=av();v.setView('FIT');afterCam(v);}}},
+    SEP,viewerHd,
+    {l:'透明度',sub:()=>[0,25,50,75].map(o=>({l:o+'%',c:()=>Math.round((1-S.opt.opacity)*100)===o,a:()=>{S.opt.opacity=1-o/100;$('#opacity').value=S.opt.opacity;dirtyAll('');syncViewOverlays();}}))},
+    {l:'点の色',sub:()=>[['value','マップの値'],['white','白'],['label','ラベル付きを強調']].map(([v,l])=>({l,c:()=>S.opt.ptColor===v,a:()=>setSel('#ptColor',v)}))},
+    {l:S.anim.prop?'Propagationを停止':'Propagationを再生',a:()=>togglePropPlay(),d:need},
+    {l:'伝導速度の矢印',c:()=>isOn('#cvOn'),a:()=>tog('#cvOn'),d:need},{l:'焼灼点（Tag）',c:()=>isOn('#vtOn'),a:()=>tog('#vtOn')},{l:'焼灼点を線でつなぐ',c:()=>isOn('#vtChain'),a:()=>tog('#vtChain')},
+    {l:'向き',sub:viewMenu}],
+  imaging:()=>[
+    U('Begin CARTOMERGE® Study'),D('Show Registration Toolbar'),SEP,
+    U('Manual Registration',{arrow:1}),U('Landmark Registration'),U('Surface Registration'),SEP,
+    U('Show Landmarks',{c:()=>true}),U('Show Match Statistics'),SEP,
+    U('Multi Cavity Registration'),SEP,
+    U('Undo'),U('Redo'),U('Reset'),SEP,
+    U('Project Color'),U('Project Catheter'),U('Project Tags'),
+    SEP,viewerHd,
+    {l:'画像を保存（PNG）',a:()=>$('#btnShot').click(),d:need},
+    ...(S.rec?[{l:'録画を停止',a:stopRec}]:[{l:'動画を録画',sub:()=>[['rotate','360°回転'],['prop','伝播を1周'],['manual','手動で停止']].map(([k,l])=>({l,a:()=>{$('#recKind').value=k;startRec(k);}})),d:need}]),
+    {l:'今の画面をスライドに追加',a:addSnap,d:need},{l:'スライドショー',a:()=>openSlides(0)},{l:'スライドをHTMLで書き出す',a:exportSlides},
+    {h:'透視・CT・エコー画像の重ね合わせは、Exportに含まれないため未対応です'}],
+  window:()=>[
+    {l:'Monitor',c:()=>RT.on,a:toggleRT},
+    {l:'Main Map Viewer',c:()=>true,a:()=>setActive(0)},
+    {l:'Additional Map Viewer',c:()=>S.compare,a:()=>tog('#compareOn')},
+    {l:'Annotation Viewer',c:()=>!W.cv.classList.contains('hidden'),a:()=>{W.cv.classList.toggle('hidden');dirtyAll('');setTimeout(renderWave,30);}},
+    {l:'Selected Point Viewer',c:plHead,a:()=>setPl(!plHead(),plBody())},
+    U('Baseline Point Viewer'),U('Ultrasound Window'),
+    {l:'Point List',c:plBody,a:()=>setPl(plHead(),!plBody())},
+    U('Graphs Viewer'),{l:'Ripple Viewer',c:()=>isOn('#rippleOn'),a:()=>tog('#rippleOn'),d:need},
+    SEP,viewerHd,
+    {l:'視点を連動',c:()=>S.sync,a:()=>tog('#syncCam')},{l:'設定パネル（左）',c:()=>!!LAY.sideOpen,a:()=>setSide(!LAY.sideOpen)},
     {l:'波形パネル',c:()=>!$('#wave').classList.contains('collapsed'),a:()=>$('#waveToggle').click()},
-    {l:'リアルタイム波形（左半分）',c:()=>RT.on,a:()=>{RT.on=!RT.on;RT.cv.classList.toggle('hidden',!RT.on);dirtyAll('p');setTimeout(renderWave,30);}},
-    {l:'ポイント一覧',c:()=>!$('#ptList').classList.contains('hidden'),a:()=>$('#wList').click()},'-',
-    {l:'マップを大きく',a:()=>layoutPreset('map')},{l:'電位を大きく',a:()=>layoutPreset('egm')},{l:'枠の大きさを元に戻す',a:()=>layoutPreset('reset')},'-',
+    {l:'マップを大きく',a:()=>layoutPreset('map')},{l:'電位を大きく',a:()=>layoutPreset('egm')},{l:'枠の大きさを元に戻す',a:()=>layoutPreset('reset')},
     {l:'全画面表示',a:()=>{document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen();}}],
-  tools:()=>[{l:'距離を測る（2点）',c:()=>S.mode==='dist',a:()=>{setMode('dist');clickTab('t-meas');},d:need},{l:'ラインの長さを測る',c:()=>S.mode==='line',a:()=>{setMode('line');clickTab('t-meas');},d:need},
-    {l:'計測をすべて消す',a:()=>$('#measClear').click()},'-',
+  tools:()=>[
+    {l:'Preferences...',a:()=>clickTab('t-view')},
+    {l:'CFAE On',a:cfae,d:need},U('PASO™ Module On'),U('CARTOFINDER™ Module On'),
+    D('EP Recording',{arrow:1}),{l:'Screen Capture Parameters...',a:()=>clickTab('t-rec')},
+    U('Administration Tools',{arrow:1}),{l:'Add Bookmark',a:()=>{addSnap();},d:need},
+    U('VISITAG Stability Algorithm',{arrow:1}),U('ACCURESP™ Module',{arrow:1}),
+    U('Repeater Monitor On (Monitor Display)'),U('Hot Corners Settings...'),
+    {l:'Scar Settings...',a:()=>{clickTab('t-view');setTimeout(()=>$('#scarThr').focus(),60);}},
+    U('Enhanced ECG recording'),D('Generators'),
+    SEP,viewerHd,
+    {l:'距離を測る（2点）',c:()=>S.mode==='dist',a:()=>{setMode('dist');clickTab('t-meas');},d:need},{l:'ラインの長さを測る',c:()=>S.mode==='line',a:()=>{setMode('line');clickTab('t-meas');},d:need},
+    {l:'計測をすべて消す',a:()=>$('#measClear').click()},
     {l:'低電位領域の面積',a:()=>{clickTab('t-ana');$('#btnArea').click();},d:need},{l:'伝導速度',a:()=>{clickTab('t-ana');$('#btnCV').click();},d:need},
-    {l:'電位解析（分裂・遅延電位・LAVA）',a:()=>{clickTab('t-ana');$('#btnEGM').click();},d:need},'-',
+    {l:'電位解析（分裂・遅延電位・LAVA）',a:()=>{clickTab('t-ana');$('#btnEGM').click();},d:need},
     {l:'焼灼点の隙間チェック',a:()=>{clickTab('t-abl');$('#btnGap').click();},d:()=>!(S.study&&S.study.visitag)}],
-  help:()=>[{l:'使い方',a:()=>$('#btnHelp').click()},{l:'読み込み診断',a:()=>$('#btnDiag').click(),d:need},'-',{h:'研究・教育用のビューアです。診療の最終判断には使わないでください。'}]
+  help:()=>[
+    {l:'Online Help',a:()=>$('#btnHelp').click()},{l:'Keyboard Shortcuts...',a:()=>showText('Keyboard Shortcuts',shortcutsText())},SEP,
+    U('Product Documentation'),U('VISITAG SURPOINT™ ODP'),SEP,
+    U('Set ScreenTips Language...'),SEP,
+    {l:'Troubleshooting...',a:()=>$('#btnDiag').click(),d:need},U('Show Visualization Matrix'),SEP,
+    {l:'About CARTO Viewer',a:()=>showText('About CARTO Viewer',aboutText())}]
 };
-let openMenu=null;
-function showMenu(key,anchor){
-  const dd=$('#menuDrop'),items=MENUS[key]();openMenu=key;
-  $$('.mi').forEach(m=>m.classList.toggle('open',m.dataset.m===key));
-  dd.innerHTML=items.map((it,i)=>it==='-'?'<div class="sep"></div>':it.h?`<div class="hd">${esc(it.h)}</div>`:
-    `<div class="it${it.c&&it.c()?' chk':''}${it.d&&it.d()?' dis':''}" data-i="${i}">${esc(it.l)}${it.k?`<span class="kb">${esc(it.k)}</span>`:''}</div>`).join('');
-  const r=anchor.getBoundingClientRect(),hr=$('#topbar').getBoundingClientRect();
-  dd.style.left=Math.min(r.left-hr.left,window.innerWidth-260)+'px';dd.style.top=(r.bottom-hr.top+2)+'px';dd.classList.remove('hidden');
-  dd.onclick=e=>{const el=e.target.closest('.it');if(!el)return;const it=items[+el.dataset.i];closeMenu();try{it.a&&it.a();}catch(err){console.error(err);toast('エラー：'+err.message);}};
+let openMenu=null,menuItems=[];
+const rowsHTML=items=>items.map((it,i)=>it==='-'?'<div class="sep"></div>':it.h?`<div class="hd">${esc(it.h)}</div>`:
+  `<div class="it${it.c&&it.c()?' chk':''}${it.d&&it.d()?' dis':''}${it.na?' na':''}${it.sub||it.arrow?' sub':''}" data-i="${i}">${esc(it.l)}${it.k?`<span class="kb">${esc(it.k)}</span>`:''}</div>`).join('');
+function hideSub(){const s=$('#menuSub');s.classList.add('hidden');s.innerHTML='';s._items=null;}
+function showSub(it,el){
+  const sd=$('#menuSub'),dd=$('#menuDrop'),sub=typeof it.sub==='function'?it.sub():it.sub;if(!sub||!sub.length){hideSub();return;}
+  sd._items=sub;sd.innerHTML=rowsHTML(sub);sd.classList.remove('hidden');
+  const hr=$('#topbar').getBoundingClientRect(),er=el.getBoundingClientRect(),dr=dd.getBoundingClientRect();
+  let left=dr.right-hr.left-2;if(dr.right+sd.offsetWidth>window.innerWidth)left=dr.left-hr.left-sd.offsetWidth+2;
+  const top=Math.max(0,Math.min(er.top-hr.top-3,window.innerHeight-hr.top-sd.offsetHeight-8));
+  sd.style.left=left+'px';sd.style.top=top+'px';
 }
-function closeMenu(){openMenu=null;$('#menuDrop').classList.add('hidden');$$('.mi').forEach(m=>m.classList.remove('open'));}
+function runItem(it){
+  closeMenu();
+  if(it.na&&!it.a){toast(`「${it.l}」はCARTO本体の機能で、このビューアでは未対応です`,3500);return;}
+  try{it.a&&it.a();}catch(err){console.error(err);toast('エラー：'+err.message);}
+}
+function showMenu(key,anchor){
+  const dd=$('#menuDrop'),items=MENUS[key]();openMenu=key;menuItems=items;hideSub();
+  $$('.mi').forEach(m=>m.classList.toggle('open',m.dataset.m===key));
+  dd.innerHTML=rowsHTML(items);
+  const r=anchor.getBoundingClientRect(),hr=$('#topbar').getBoundingClientRect();
+  dd.style.left=Math.max(0,Math.min(r.left-hr.left,window.innerWidth-dd.offsetWidth-8))+'px';dd.style.top=(r.bottom-hr.top+2)+'px';dd.classList.remove('hidden');
+  dd.style.left=Math.max(0,Math.min(r.left-hr.left,window.innerWidth-dd.offsetWidth-8))+'px';
+  dd.onmouseover=e=>{const el=e.target.closest('.it');if(!el)return;const it=menuItems[+el.dataset.i];if(it&&it.sub&&!(it.d&&it.d()))showSub(it,el);else hideSub();};
+  dd.onclick=e=>{const el=e.target.closest('.it');if(!el)return;const it=menuItems[+el.dataset.i];if(!it||it.sub)return;runItem(it);};
+  const sd=$('#menuSub');sd.onclick=e=>{const el=e.target.closest('.it');if(!el||!sd._items)return;const it=sd._items[+el.dataset.i];if(it)runItem(it);};
+}
+function closeMenu(){openMenu=null;$('#menuDrop').classList.add('hidden');hideSub();$$('.mi').forEach(m=>m.classList.remove('open'));}
 function bindMenus(){
   $$('.mi').forEach(m=>{m.onclick=e=>{e.stopPropagation();openMenu===m.dataset.m?closeMenu():showMenu(m.dataset.m,m);};m.onmouseenter=()=>{if(openMenu&&openMenu!==m.dataset.m)showMenu(m.dataset.m,m);};});
-  document.addEventListener('pointerdown',e=>{if(openMenu&&!e.target.closest('#menuDrop')&&!e.target.closest('.mi'))closeMenu();});
+  document.addEventListener('pointerdown',e=>{if(openMenu&&!e.target.closest('#menuDrop')&&!e.target.closest('#menuSub')&&!e.target.closest('.mi'))closeMenu();});
   document.addEventListener('keydown',e=>{if(e.key==='Escape')closeMenu();});
   $$('[data-wf]').forEach(b=>b.onclick=e=>setWF(b.dataset.wf,b));
   $('#tb-fit').onclick=()=>{const v=av();v.setView('FIT');afterCam(v);};
@@ -1801,7 +2012,7 @@ function bindMenus(){
 function setWF(k,btn){
   if(k==='study')return $('#inDir').click();
   if(k==='check')return $('#btnDiag').click();
-  if(k==='map'){openMenu==='map'?closeMenu():showMenu('map',btn);return;}
+  if(k==='map'){openMenu==='maps'?closeMenu():showMenu('maps',btn);return;}
   if(!S.study)return toast('先に症例を開いてください（デモデータでも試せます）');
   $$('.wfb').forEach(x=>x.classList.toggle('on',x.dataset.wf===k));
   if($('#wave').classList.contains('collapsed'))$('#waveToggle').click();
@@ -1826,7 +2037,7 @@ function onViewClick(v,cx,cy){
 }
 async function selectPoint(map,p,focus){
   S.sel={map,p};for(const v of S.viewers){const b=v.el.querySelector('.vinfo');if(b)b._closed=false;}dirtyAll('p');
-  if(focus){const v=S.viewers.find(x=>x.map===map)||av();v.target=[p.x,p.y,p.z];v.dirty=true;afterCam(v);}
+  if(focus||S.opt.autoZoom){const v=S.viewers.find(x=>x.map===map)||av();v.target=[p.x,p.y,p.z];if(S.opt.autoZoom&&v.fitDist)v.dist=v.fitDist*0.55;v.dirty=true;afterCam(v);}
   $('#ptLabel').value=p.label||'';
   renderWave();await loadPointDetail(map,p);
   if(S.sel&&S.sel.p===p){W.fitTo(p);renderWave();}
@@ -1942,14 +2153,14 @@ function drawWave(st,p){
   const kmax={};for(const sk of ['ecg','cs','cat']){const a=rows.filter(r=>r.sk===sk).map(r=>r.mx);if(a.length)kmax[sk]=sk==='ecg'?Math.max(...a):Math.max(1e-3,percentile(a,0.75));}
   const wi0=Math.round(ref+(p.woi?p.woi[0]:st.t0)),wi1=Math.round(ref+(p.woi?p.woi[1]:st.t1));
   rows.forEach((r,k)=>{
-    const mid=Tp+rh*(k+0.5),mx=(r.sk&&kmax[r.sk])||r.mx;const sc=(rh*0.45/(mx||1))*W.gain;
+    const mid=Tp+rh*(k+0.5);let mx=(r.sk&&kmax[r.sk])||r.mx;const clipV=S.opt.clip;if(clipV)mx=Math.min(mx,clipV);const sc=(rh*0.45/(mx||1))*W.gain;
     if(r.bold){ctx.fillStyle='rgba(255,255,255,.08)';ctx.fillRect(0,Tp+rh*k,w,rh);}
     if(rh>=30){ctx.fillStyle=r.c;ctx.fillText(r.n,6,mid-6);ctx.fillStyle='#6d7a88';ctx.fillText(mx.toFixed(mx<1?2:1)+' mV',6,mid+7);}
     else{ctx.font=`${Math.max(8,Math.min(11,rh-2))}px system-ui,sans-serif`;ctx.fillStyle=r.c;ctx.fillText(r.n,6,mid);ctx.fillStyle='#6d7a88';ctx.textAlign='right';ctx.fillText(mx.toFixed(mx<1?2:1),Lw-4,mid);ctx.textAlign='left';ctx.font='11px system-ui,sans-serif';}
     ctx.save();ctx.beginPath();ctx.rect(Lw,Tp+rh*k,w-Lw-Rw,rh);ctx.clip();
     ctx.strokeStyle=r.c;ctx.lineWidth=r.bold?2:1.1;ctx.beginPath();
     const i0=Math.max(0,Math.floor(ref+st.t0)),i1=Math.min(r.d.length-1,Math.ceil(ref+st.t1));
-    for(let i=i0;i<=i1;i++){const x=X(i-ref),y=mid-(r.d[i]-r.base)*sc;i===i0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+    for(let i=i0;i<=i1;i++){let dv=r.d[i]-r.base;if(clipV)dv=clamp(dv,-clipV,clipV);const x=X(i-ref),y=mid-dv*sc;i===i0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
     ctx.stroke();
     if(r.dot&&!isRT){let bi=-1,bd=0;for(let i=Math.max(1,wi0);i<=Math.min(r.d.length-2,wi1);i++){const dd=Math.abs(r.d[i+1]-r.d[i-1]);if(dd>bd){bd=dd;bi=i;}}
       if(bi>=0&&bd>0.004){ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(X(bi-ref),mid-(r.d[bi]-r.base)*sc,Math.max(1.5,Math.min(3,rh*0.2)),0,7);ctx.fill();}}

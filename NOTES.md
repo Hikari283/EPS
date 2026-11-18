@@ -356,3 +356,4 @@ CARTO 3 の Export データ（フォルダ/ZIP）をブラウザだけで表示
 - 波形パネル: 「全電極（CARTO風）」でII/V1・CS・多電極カテーテル（スプライン別に色分け、電極ごとの局所興奮点）、CL自動計算、掃引速度(mm/s)、記録の実時間再生（次の点へ連続）、右側にポイント一覧。リアルタイム電位はExportに無いので、各点の2.5秒記録で代用。
 - 「デモデータ」ボタンで架空の左室VT症例を生成（`makeDemoStudy()`）。
 - 起動用: `carto-viewer.bat`（同じフォルダの carto-viewer.html を Edge/Chrome の `--app` で専用ウィンドウとして開く。どちらも無ければ既定のブラウザ）。
+- メニューバー: CARTO 3 の実メニュー（Study/Map/Point/Catheter/ECG/Display/Imaging/Window/Tools/Help）と同じ項目・順で `MENUS`（サブメニュー対応）。機能のある項目は動作、ビューア未対応は `U()`（グレー、押すと未対応表示）、CARTOでも無効なものは `D()`。各メニューの下に「ビューア独自の機能」を残している。
