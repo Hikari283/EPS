@@ -112,6 +112,7 @@
   .settab th,.settab td{padding:6px 10px;border-bottom:1px solid var(--line);white-space:nowrap;text-align:left;background:var(--card2)}
   .settab tr:first-child th{font-size:11px;color:var(--sub);background:var(--tblh);vertical-align:bottom} .settab tr:first-child th.base{color:var(--accent2)}
   .settab tr>th:first-child{position:sticky;left:0;z-index:1;box-shadow:1px 0 0 var(--line)} .settab tr.oth th{font-weight:400;color:var(--sub)}
+  .numdet{margin-top:12px;border:1px solid var(--line);border-radius:10px;padding:6px 10px} .numdet>summary{cursor:pointer;font-weight:700;font-size:13px}
   .ptmark{font-size:10.5px;color:var(--accent2);font-weight:700} .settab td.warnv,.warnk{background:rgba(251,146,60,.28);font-weight:700} .warnk{padding:0 4px;border-radius:4px} .settab td.chg,.chgk{background:rgba(251,191,36,.22)} .settab td.bad,.badk{background:rgba(251,113,133,.22);font-weight:700} .chgk,.badk{padding:0 4px;border-radius:4px}
   .setbadge{font-size:13px;font-weight:800;margin-left:8px;padding:1px 10px;border-radius:999px;background:rgba(251,191,36,.18);color:var(--warn);vertical-align:middle}
   .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:10px}
@@ -308,7 +309,7 @@
     <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:8px 0">
       <label class="hint"><input type="checkbox" id="setOnlyChg"> 変わった項目・ルール外だけ</label>
       <label class="hint"><input type="checkbox" id="setShowOther" checked> その他の項目も表示</label>
-      <span class="hint">左＝過去・右＝最新・⚡＝ショックインピーダンスを読めたイベント／<span class="chgk">黄</span>＝前の回から変更（アラートではない）・<span class="warnk">橙</span>＝インピーダンス注意・<span class="badk">赤</span>＝ルール（基準値）の範囲外・インピーダンス警告／📌＝基準の回</span>
+      <span class="hint">左＝過去・右＝最新／<span class="chgk">黄</span>＝前の回から変更（アラートではない）・<span class="warnk">橙</span>＝インピーダンス注意・<span class="badk">赤</span>＝ルール（基準値）の範囲外・インピーダンス警告／📌＝基準の回</span>
     </div>
     <div id="setTrend"><div class="hint">患者を読み込むと表示します。</div></div>
     <details id="ptRulesWrap" hidden style="margin-top:10px;padding:8px 10px;border:1px solid var(--line);border-radius:8px">
@@ -404,7 +405,7 @@
       <b>🔔 設定アラートのルール（基準値）</b>
       <div class="hint">ここで決めた条件に当てはまったら、アラートを出します（⚠️要確認、インピーダンスの注意は🟡）。条件にしていない設定は、前回から変わってもアラートにしません（推移の表で黄色になります）。このPCに保存します。</div>
       <div id="setRules"></div>
-      <div class="hint" style="margin-top:4px">インピーダンスの最初の値は添付文書（EMBLEM MRI S-ICD）の表2・表3の値です。ゲイン設定はルールの対象にしていません。</div>
+      <div class="hint" style="margin-top:4px">システムインピーダンスの最初の値は 40〜100Ω（外なら⚠️要確認）です。ショックインピーダンスは遠隔では読めないため対象外です。ゲイン設定はルールの対象にしていません。</div>
       <div style="margin-top:6px"><button id="setRulesSave">保存</button> <button id="setRulesDef" class="ghost">最初の設定に戻す</button> <span class="status" id="setRulesMsg"></span></div>
     </div>
   </details>
@@ -736,7 +737,6 @@ const SET_KNOWN=[ // imp:2＝治療に関わる（変わったら強調）／1�
   {k:'gain',name:'ゲイン設定',lab:/^ゲイン(?:設定)?$|^Gain(?:Setting)?$|^最大センシング範囲$/i,re:[`(?:ゲイン(?:設定)?|最大センシング範囲)[:：]?${SET_V.gain}`,`Gain(?:Setting)?[:：]?${SET_V.gain}`],imp:1},
   {k:'smartPass',name:'SMART Pass',lab:/^SMART\s?Pass$/i,re:[`SMART\\s?Pass[:：]?${SET_V.onoff}`],imp:1},
   {k:'sysImp',name:'システムインピーダンス',meas:true,lab:/^(?:システム|電極|リード)インピーダンス$|^(?:System|Electrode|Lead)Impedance$/i,re:[`(?:システム|電極)インピーダンス[:：]?(\\d{2,3})\\s?(?:Ω|ohms?|オーム)`,`(?:System|Electrode)Impedance[:：]?(\\d{2,3})\\s?(?:Ω|ohms?)`],unit:'Ω',imp:0},
-  {k:'shockImp',name:'ショックインピーダンス',meas:true,lab:/^ショック(?:電極)?インピーダンス$|^ShockImpedance$/i,re:[`ショック(?:電極)?インピーダンス[:：]?(\\d{1,3})\\s?(?:Ω|ohms?|オーム)`,`ShockImpedance[:：]?(\\d{1,3})\\s?(?:Ω|ohms?)`],unit:'Ω',imp:0},
   {k:'battery',name:'電池',meas:true,lab:/^(?:電池|バッテリ[ー]?)(?:残量|の状態|状態|残存容量)?$|^Battery(?:Status|Remaining|Life|Capacity)?$/i,re:[`(?:電池|バッテリ[ー]?)(?:残量|の状態|状態|残存容量)?[:：]?(\\d{1,3}\\s?%|ERI|EOL|選択的交換指標|寿命末期)`,`Battery(?:Status|Remaining|Life|Capacity)?[:：]?(\\d{1,3}\\s?%|ERI|EOL)`],imp:0},
   {k:'afMon',name:'AFモニタ',lab:/^AFモニタ(?:ー|リング)?$|^AFMonitor$/i,re:[`AFモニタ(?:ー|リング)?[:：]?${SET_V.onoff}`,`AFMonitor[:：]?${SET_V.onoff}`],imp:0},
 ];
@@ -825,10 +825,12 @@ const SET_ENUM={therapy:['オン','オフ'],postShock:['オン','オフ'],smartP
 const SET_NUM={shockZone:'bpm',condZone:'bpm'};
 // 最初の値（2026-11-18 ユーザー指定）。ゲインはルールにしない。センシング構成は「前回から変わったら」。インピーダンスは添付文書の値
 const SET_RULES_DEF={therapy:{eq:'オン'},shockZone:{min:170,max:250},condZone:{min:170,max:240},postShock:{eq:'オン'},polarity:{eq:'標準'},sensing:{chg:true},smartPass:{eq:'オン'},afMon:{eq:'オン'},
-  sysImp:{warn:200,alert:400},shockImp:{lo:25,warn:110,alert:200},battery:{alert:20}};
-const SET_RULES_KEY='pg_lat_setrules2'; // 最初の値を変えたので保存先を変える（前の保存は使わない）
+  sysImp:{lo:40,hi:100},battery:{alert:20}};
+const SET_RULES_KEY='pg_lat_setrules3'; // インピーダンスの決め方を変えたので保存先を変える（前の保存から、インピーダンス以外は引き継ぐ）
 const cloneDef=()=>JSON.parse(JSON.stringify(SET_RULES_DEF));
-let SET_RULES=(()=>{try{localStorage.removeItem('pg_lat_setrules');const v=localStorage.getItem(SET_RULES_KEY);return v?JSON.parse(v):cloneDef();}catch(_){return cloneDef();}})();
+let SET_RULES=(()=>{try{localStorage.removeItem('pg_lat_setrules');const v=localStorage.getItem(SET_RULES_KEY);if(v)return JSON.parse(v);
+  const old=localStorage.getItem('pg_lat_setrules2');if(old){const o=JSON.parse(old),d=cloneDef();delete o.sysImp;delete o.shockImp;localStorage.removeItem('pg_lat_setrules2');const m={...o,sysImp:d.sysImp};if(!('battery' in o))m.battery=d.battery;localStorage.setItem(SET_RULES_KEY,JSON.stringify(m));return m;}
+  return cloneDef();}catch(_){return cloneDef();}})();
 const NO_RULE=new Set(['gain']); // ルールの対象にしない項目
 // 患者ごとのルール（基準JSONの setRules）。項目ごとに全体のルールを上書きする。{none:true}＝この患者は決めない
 let PT_RULES=null,PT_ID='';
@@ -845,10 +847,8 @@ const IR=k=>k==='battery'?{...(RL(k)||SET_RULES_DEF[k])}:({...SET_RULES_DEF[k],.
 const IMP_RULES={
   battery:{txt:()=>{const r=IR('battery'),a=['ERI・EOLで要確認'];if(hasN(r.warn))a.push(`${r.warn}%以下 注意`);if(hasN(r.alert))a.push(`${r.alert}%以下 要確認`);return a.join('／');},
     f:n=>{const r=IR('battery');return hasN(r.alert)&&n<=+r.alert?{lv:2,why:`残量 ${r.alert}%以下`}:hasN(r.warn)&&n<=+r.warn?{lv:1,why:`残量 ${r.warn}%以下`}:null;}},
-  sysImp:{txt:()=>{const r=IR('sysImp');return `≤${r.warn}Ω（${r.warn}超 注意／${r.alert}超 要確認）`;},
-    f:n=>{const r=IR('sysImp');return n>r.alert?{lv:2,why:`${r.alert}Ω超（電極の高電圧導体の破損・開放、ヘッダ接続の問題などの可能性）`}:n>r.warn?{lv:1,why:`${r.warn}Ω超（配置が最適でない可能性）`}:null;}},
-  shockImp:{txt:()=>{const r=IR('shockImp');return `${r.lo}〜${r.warn}Ω（${r.warn}超 注意／${r.alert}超・${r.lo}未満 要確認）`;},
-    f:n=>{const r=IR('shockImp');return n<r.lo?{lv:2,why:`${r.lo}Ω未満（高電圧導体の短絡、電極の外れ・ずれなどの可能性）`}:n>r.alert?{lv:2,why:`${r.alert}Ω超（高電圧導体の破損・開放、ヘッダ接続の問題などの可能性）`}:n>r.warn?{lv:1,why:`${r.warn}Ω超（配置が最適でない可能性）`}:null;}},
+  sysImp:{txt:()=>{const r=IR('sysImp');return `${r.lo}〜${r.hi}Ω（外なら要確認）`;},
+    f:n=>{const r=IR('sysImp');return hasN(r.lo)&&n<+r.lo?{lv:2,why:`${r.lo}Ω未満（範囲 ${r.lo}〜${r.hi}Ω の外）`}:hasN(r.hi)&&n>+r.hi?{lv:2,why:`${r.hi}Ω超（範囲 ${r.lo}〜${r.hi}Ω の外）`}:null;}},
 };
 const isMeas=k=>!!IMP_RULES[k];
 function alertOf(k,v){const rb=ruleBreak(k,v);if(rb)return {lv:2,why:rb};const R=IMP_RULES[k];if(!R||v==null)return null;
@@ -875,8 +875,8 @@ function setTrendRender(id,st){
   PT_ID=id||'';PT_RULES=st&&st.setRules||null;ptRulesUi();
   if(!st){box.innerHTML='<div class="hint">患者を読み込むと表示します。</div>';$('setSum').textContent='';return;}
   const basePdf=st.baseline&&st.baseline.pdf;
-  // 列＝S-ECGの記録。イベントの記録は、ショックインピーダンスを読めたものだけ⚡の列にする（ショックを出した時に測る値のため）
-  const cols=(st.saves||[]).filter(x=>x&&x.settings&&x.settings.n&&(!evLike(x)||x.settings.items.shockImp)).sort((a,b)=>a.key<b.key?-1:a.key>b.key?1:(a.ts||0)-(b.ts||0));
+  // 列＝S-ECGの記録（イベントの記録は列にしない）
+  const cols=(st.saves||[]).filter(x=>x&&x.settings&&x.settings.n&&!evLike(x)).sort((a,b)=>a.key<b.key?-1:a.key>b.key?1:(a.ts||0)-(b.ts||0));
   $('setSum').textContent=`ID ${id}・${cols.length}回分`;
   if(!cols.length){box.innerHTML='<div class="hint">設定を読めた記録がまだありません（この機能を入れた後に読み込んだレポートから記録されます）。</div>';return;}
   const onlyChg=$('setOnlyChg').checked,showOther=$('setShowOther').checked;
@@ -884,11 +884,11 @@ function setTrendRender(id,st){
   let keys=[...new Set(cols.flatMap(c=>Object.keys(c.settings.items)))].filter(k=>showOther||order(k)<99).sort((a,b)=>order(a)-order(b)||a.localeCompare(b,'ja'));
   const name=k=>{for(let i=cols.length-1;i>=0;i--){const x=cols[i].settings.items[k];if(x)return x.l;}return k;};
   // セルの状態：前の回（その項目を読めた一番近い回）と違えば変更
-  const grid=keys.map(k=>{let prev=null;return cols.map(c=>{const x=c.settings.items[k];if(!x||(evLike(c)&&k!=='shockImp'))return {v:null};const chg=!isMeas(k)&&prev!=null&&prev!==x.v;prev=x.v;const a=alertOf(k,x.v)||(chg&&!NO_RULE.has(k)&&RL(k)&&RL(k).chg?{lv:2,why:'前回から変更（ルール：前回から変わったらアラート）'}:null);return {v:x.v,chg,rb:a&&a.lv>=2?a.why:'',wn:a&&a.lv===1?a.why:''};});});
+  const grid=keys.map(k=>{let prev=null;return cols.map(c=>{const x=c.settings.items[k];if(!x)return {v:null};const chg=!isMeas(k)&&prev!=null&&prev!==x.v;prev=x.v;const a=alertOf(k,x.v)||(chg&&!NO_RULE.has(k)&&RL(k)&&RL(k).chg?{lv:2,why:'前回から変更（ルール：前回から変わったらアラート）'}:null);return {v:x.v,chg,rb:a&&a.lv>=2?a.why:'',wn:a&&a.lv===1?a.why:''};});});
   if(onlyChg){const keep=keys.map((k,i)=>grid[i].some(c=>c.chg||c.rb||c.wn));keys=keys.filter((_,i)=>keep[i]);grid.splice(0,grid.length,...grid.filter((_,i)=>keep[i]));}
   const short=d=>escH(String(d||'?').replace(/(\d{4})年(\d{2})月(\d{2})日\s*/,'$1/$2/$3 ').replace(/\s*(JST|ＪＳＴ)/g,'').replace(/\s+\d{1,2}:\d{2}$/,''));
   const ic=l=>l===2?'⚠️':l===1?'🟡':l===0?'✅':'';
-  const head=cols.map(c=>`<th class="${c.pdf&&c.pdf===basePdf?'base':''}" title="${escH(c.secg||c.date||'')}">${c.pdf&&c.pdf===basePdf?'📌 ':''}${evLike(c)?'⚡ ':''}${short(evLike(c)?(((c.events||[])[0]||{}).dt||c.secg||c.date):(c.secg||c.date))}<br><span class="hint">${ic(c.level)}</span></th>`).join('');
+  const head=cols.map(c=>`<th class="${c.pdf&&c.pdf===basePdf?'base':''}" title="${escH(c.secg||c.date||'')}">${c.pdf&&c.pdf===basePdf?'📌 ':''}${short(c.secg||c.date)}<br><span class="hint">${ic(c.level)}</span></th>`).join('');
   const body=keys.map((k,i)=>{const imp=setImp(k),main=order(k)<99;
     return `<tr${main?'':' class="oth"'}><th>${escH(name(k))}</th><td class="hint">${escH(ruleText(k)||(isPt(k)?'決めない':''))}${isPt(k)?' <b class="ptmark">この患者</b>':''}</td>${grid[i].map(c=>c.v==null?'<td class="hint">—</td>':`<td class="${c.rb?'bad':c.wn?'warnv':c.chg?'chg':''}" title="${escH(c.rb||c.wn||(c.chg?'前の回から変更':''))}">${c.rb?'⚠️ ':c.wn?'🟡 ':''}${escH(c.v)}${c.chg?' <span class="hint">◀変</span>':''}</td>`).join('')}</tr>`;}).join('');
   box.innerHTML=keys.length?`<div class="settab"><table><tr><th>項目</th><th>ルール</th>${head}</tr>${body}</table></div>`:'<div class="hint">変わった項目・ルール外の項目はありません。</div>';
@@ -907,8 +907,8 @@ function rulesTableHtml(R,pt){
     if(SET_NUM[k]){const v=pt?(r&&!r.none?r:{}):g;return `<tr><td>${K.name}</td><td>${pt?mode(k,r,true):''}${num(k,'min',v.min,'下限')} 〜 ${num(k,'max',v.max,'上限')} ${SET_NUM[k]} <span class="hint">の外なら⚠️アラート${pt?'':'（空欄＝決めない）'}</span>${glob(k)}</td></tr>`;}
     if(k==='battery'){const q=pt?(r?{...r}:IR(k)):{...g};
       return `<tr><td>${K.name}</td><td>${pt?mode(k,r,false):''}残量 ${num(k,'warn',q.warn,'注意')} %以下で🟡注意／${num(k,'alert',q.alert,'要確認')} %以下で⚠️要確認 <span class="hint">（空欄＝決めない。ERI・EOLの表示はいつも⚠️要確認）</span>${glob(k)}</td></tr>`;}
-    if(k==='sysImp'||k==='shockImp'){const q=pt?(r?{...SET_RULES_DEF[k],...r}:IR(k)):{...SET_RULES_DEF[k],...g};
-      const body=k==='sysImp'?`${num(k,'warn',q.warn,'注意')} Ω超で🟡注意／${num(k,'alert',q.alert,'要確認')} Ω超で⚠️要確認`:`${num(k,'lo',q.lo,'下限')} Ω未満で⚠️要確認／${num(k,'warn',q.warn,'注意')} Ω超で🟡注意／${num(k,'alert',q.alert,'要確認')} Ω超で⚠️要確認`;
+    if(k==='sysImp'){const q=pt?(r?{...SET_RULES_DEF[k],...r}:IR(k)):{...SET_RULES_DEF[k],...g};
+      const body=`${num(k,'lo',q.lo,'下限')} 〜 ${num(k,'hi',q.hi,'上限')} Ω の外なら⚠️要確認`;
       return `<tr><td>${K.name}</td><td>${pt?mode(k,r,false):''}${body}${glob(k)}</td></tr>`;}
     return '';}).join('')}</table>`;
 }
@@ -942,6 +942,10 @@ async function ptRulesSave(clear){
   if(!(await writeBaseline(PT_ID,st))){$('ptRulesMsg').innerHTML='<span class="warn-t">保存できませんでした（フォルダの許可を確認してください）</span>';return;}
   setTrendRender(PT_ID,st);$('ptRulesMsg').innerHTML=`<span class="ok-t">${clear?'全体のルールに戻しました':'この患者のルールを保存しました'}（次の評価から使います）</span>`;
 }
+// 詳しい数値の表：最初は閉じる（開いた・閉じたは覚える）
+const numDetOpen=()=>{try{return localStorage.getItem('pg_lat_numdet')==='1';}catch(_){return false;}};
+const numDet=h=>`<details class="numdet"${numDetOpen()?' open':''}><summary>📊 詳しい数値（段ごとの記録）</summary>${h}</details>`;
+document.addEventListener('toggle',e=>{if(e.target&&e.target.classList&&e.target.classList.contains('numdet')){try{localStorage.setItem('pg_lat_numdet',e.target.open?'1':'0');}catch(_){}}},true);
 let curSettings=null; // 今回のレポートから読んだ設定
 function extractFields(items, annotStrs, rawPdfText){
   annotStrs=annotStrs||[]; rawPdfText=rawPdfText||'';
@@ -1980,7 +1984,7 @@ async function doPrint(withResult){
   if(!pdfLoaded||!lastPdfDoc){alertMsg('印刷するPDFがありません。先にPDFを読み込んでください。');return;}
   let h='';
   if(withResult){
-    const res=$('result').cloneNode(true);res.querySelectorAll('button,#setBaseMsg').forEach(e=>e.remove());
+    const res=$('result').cloneNode(true);res.querySelectorAll('button,#setBaseMsg').forEach(e=>e.remove());res.querySelectorAll('details').forEach(d=>d.setAttribute('open','')); // 印刷では全部開く
     const ov=!$('overlayCard').hidden?['overlay','diff'].map(id=>{try{return `<img class="ov" src="${$(id).toDataURL()}">`;}catch(_){return '';}}).join(''):'';
     h+=`<div class="pp" style="text-align:left"><div class="prhead"><b>PaceGuard LATITUDE　比較結果</b><span>印刷 ${new Date().toLocaleString('ja-JP')}</span></div>
       <div>患者ID：<b>${escH($('fId').value||'—')}</b>　照会日：${escH($('fDate').value||'—')}　機種：${escH($('fDev').value||'—')}</div>
@@ -2089,14 +2093,14 @@ async function runEval(mode){
       const lv=u.used?0:1;return `<tr class="lv${lv}"><td>${k+1}</td><td>${f.nBeats}</td><td>${f.hr??'—'} bpm</td><td>${f.amp.toFixed(2)} mV</td><td>${f.width} ms</td><td>${u.corr!=null?u.corr.toFixed(2):'—'}</td><td>${nz.max}/${nz.thr}</td><td>${u.used?'✅ 使用':'🟡 除外：'+u.reason}</td></tr>`;}).join('')}</table>
     <div class="hint">全段の拍をまとめて代表拍を作り、頻拍・ノイズ・形が大きく違う段は代表拍から外しています。</div>`;
   const measure=f=>`代表拍（${pool.usedRows.length}段・${f.nBeats}拍）：心拍 ${f.hr??'—'}bpm・波高 ${f.amp.toFixed(2)}mV（呼吸のゆれ ±${Math.round(f.ampVar*100)}%）・QRS幅 ${f.width}ms・向き ${f.pol>0?'上':'下'}`;
-  if(!pool){$('result').innerHTML=`<div class="verdict bad"><h2>代表拍を作れませんでした</h2>${curPool&&curPool.error||'波形を読み取れませんでした'}</div>${rowTable}`;$('overlayCard').hidden=true;return;}
+  if(!pool){$('result').innerHTML=`<div class="verdict bad"><h2>代表拍を作れませんでした</h2>${curPool&&curPool.error||'波形を読み取れませんでした'}</div>${numDet(rowTable)}`;$('overlayCard').hidden=true;return;}
   // イベントのPDF：不整脈のときの記録なので、基準・前回とは比べない（判定を出さない）。保存してタイムラインで見られるようにする
   if(isEvent){
     await saveStore({date:now.date,note:'イベント'});
     const evAl=settingsAlerts(curSettings&&curSettings.n?curSettings:null);
     const evs=(now.events||[]).map(e=>`${escH(e.no)}：${escH(String(e.dt).replace(/\s*JST/,''))}${e.type?`（${escH(e.type)}）`:''}`).join('、');
     $('result').innerHTML=`<div class="verdict info"><h2>⚡ イベントの記録（比較の対象外）</h2>イベント ${evs||'—'} の波形を保存しました。イベントの波形は不整脈のときの記録なので、基準・前回とは比べません。タイムラインの「⚡ イベントだけ」で見られます。
-      <div class="hint" style="margin-top:6px">${measure(pool)}</div>${rowNotes.length?`<div class="cause">記録の中の所見：${rowNotes.map(x=>`${x.info?'ℹ️':ic(x.lv)} ${x.row}：${x.why}`).join('　')}</div>`:''}</div>${rowTable}`;
+      <div class="hint" style="margin-top:6px">${measure(pool)}</div>${rowNotes.length?`<div class="cause">記録の中の所見：${rowNotes.map(x=>`${x.info?'ℹ️':ic(x.lv)} ${x.row}：${x.why}`).join('　')}</div>`:''}</div>${numDet(rowTable)}`;
     if(evAl.length){const v=document.querySelector('#result .verdict');if(v)v.querySelector('h2').insertAdjacentHTML('afterend',setAlertHtml(evAl,curSettings,[]));}
     $('overlayCard').hidden=true;showRhythm();tlAuto(id);rvLoad();return;
   }
@@ -2105,7 +2109,7 @@ async function runEval(mode){
     const first=!baseRep;
     const why=isEvent?'イベントの記録として保存しました（基準・前回にはS-ECGのレポートを使います）':first?((store&&store.feat&&!store.reports)?'新しい計測方式で登録しました（この波形が基準になります）':'初回登録しました（この波形が基準になります）'):'比較できる前の日付のレポートがありません';
     $('result').innerHTML=`<div class="verdict info"><h2>${why}</h2>この患者（ID:${id}）の${now.date||'今回'}のレポートとして保存しました。${first?'次から「📌 基準と比較」で、同じ日付のレポートでも比べられます。':'同じ日付どうしを比べるときは「📌 基準と比較」を使ってください。'}${curKey?'':'<br><b>※照会日が読み取れていません。照会日を入力すると前後関係で正しく比較できます。</b>'}${dirHandle?'':'<br><b>※フォルダ未選択のため保存できていません。</b>'}
-      <div class="hint" style="margin-top:6px">${measure(pool)}</div>${rowNotes.length?`<div class="cause">記録の中の所見：${rowNotes.map(x=>`${x.info?'ℹ️':ic(x.lv)} ${x.row}：${x.why}`).join('　')}</div>`:''}</div>${rowTable}`;
+      <div class="hint" style="margin-top:6px">${measure(pool)}</div>${rowNotes.length?`<div class="cause">記録の中の所見：${rowNotes.map(x=>`${x.info?'ℹ️':ic(x.lv)} ${x.row}：${x.why}`).join('　')}</div>`:''}</div>${numDet(rowTable)}`;
     addSet('top');if(setLv){const v=document.querySelector('#result .verdict');v.classList.remove('info');v.classList.add(setLv>=2?'bad':'warn');}
     $('overlayCard').hidden=true; showRhythm(); tlAuto(id); rvLoad(); return;
   }
@@ -2127,10 +2131,11 @@ async function runEval(mode){
   $('result').innerHTML=`<div class="verdict ${cls}"><h2>${title}</h2>
     <div>比較：${ref.date||'?'}（${refLabel}） → ${now.date||'?'}（今回）</div>
     ${causeHtml}
+    <details class="numdet"${numDetOpen()?' open':''}><summary>📊 詳しい数値（4つの物差し・段ごとの記録）</summary>
     <div style="margin-top:12px"><b>総合（全段の代表拍どうし）</b>　${ic(Math.max(...crit.map(x=>x.lv)))}　<span class="hint">今回 ${pool.usedRows.length}段・${pool.nBeats}拍／${refLabel} ${r.b.nBeats??'—'}拍</span></div>
     <table class="crit"><tr><th>項目</th><th>${refLabel}</th><th>今回</th><th>変化</th><th>判定基準</th><th>判定</th></tr>
     ${crit.map(x=>`<tr class="lv${x.lv}"><td>${x.name}</td><td>${x.prev}</td><td>${x.cur}</td><td>${x.chg}</td><td class="hint">${x.rule}</td><td>${x.name==='心拍数（参考）'?'—':ic(x.lv)}</td></tr>`).join('')}</table>
-    ${rowTable}
+    ${rowTable}</details>
     <div class="hint" style="margin-top:6px">下の重ね描きで、形が違う部分を赤く塗っています（青＝${refLabel}、橙＝今回）。</div></div>`;
   addSet('top');
   lastEval={id,date:now.date,key:curKey,feat:poolSave,ts:now.ts,name:now.name,device:now.device};
