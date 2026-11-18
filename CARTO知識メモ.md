@@ -177,3 +177,4 @@ Export_Study-…/
 2. TRUPULSE Generator（VARIPULSEの発生装置）：https://www.e-ifu.com/ja/shared-document/52419/1/3/shared?langcode=ja&country=7501 　期待：PFAの通電の仕組み・寸法。
 3. THERMOCOOL SMARTTOUCH SF：https://www.e-ifu.com/ja/shared-document/52335/1/0/shared?langcode=ja&country=7501 　期待：接触力・RFの条件。
 4. FDA 510(k) K231207（V8.0）：https://www.accessdata.fda.gov/cdrh_docs/pdf23/K231207.pdf 　PDFが圧縮されていて自動では読めなかった。先生がブラウザで開いて保存すれば読める可能性あり。
+- **取説からの実装（2026-11-18）**：OCTARAYのTPIフィルター（Either/Distal/Both。取得される電極の数が 40→34→28 に減ることを確認）、Tag Index の3段階の色（Low/High）、LVV の矢印の大きさ（1〜11、既定5）、通電タグの既定 3 mm。

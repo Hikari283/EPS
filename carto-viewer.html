@@ -319,6 +319,7 @@ body,button,select,input,textarea{font-family:Tahoma,"Segoe UI",Verdana,"Meiryo 
     </fieldset>
     <fieldset><legend>伝導速度</legend>
       <div class="row"><label><input type="checkbox" id="cvOn"> 矢印を表示</label><span class="lb" style="min-width:auto">間隔</span><input type="number" id="cvSpacing" value="6" min="2" max="30"> mm</div>
+      <div class="row"><span class="lb" style="min-width:auto">大きさ（1〜11）</span><input type="range" id="cvSize" min="1" max="11" step="1" value="5"></div>
       <div class="row"><span class="lb">遅い伝導</span><input type="number" id="cvSlow" value="0.3" step="0.05"> m/s未満</div>
       <div class="row"><button id="btnCV" class="primary">計算する</button></div>
       <div class="res" id="cvRes"></div>
@@ -343,6 +344,7 @@ body,button,select,input,textarea{font-family:Tahoma,"Segoe UI",Verdana,"Meiryo 
       <div id="vtNone" class="muted">VisiTagのデータがありません（Exportの VisiTagExport フォルダ内の Sites.txt を読みます）。</div>
       <div id="vtUI">
         <div class="row"><label><input type="checkbox" id="vtOn" checked> 表示</label><span class="lb" style="min-width:auto">大きさ</span><input type="range" id="vtSize" min="1" max="5" step="0.25" value="2.5"><span class="muted small">mm</span></div>
+        <div class="row"><label><input type="checkbox" id="vt3" checked> 3段階の色（Tag Index：Low未満＝薄い／Low〜High＝中間／High超＝濃い）</label></div>
         <div class="row"><label><input type="checkbox" id="vtChain" checked> 隣の焼灼点を線でつなぐ（CARTO風）</label></div>
         <div class="row"><span class="lb">色分け</span><select id="vtParam"></select></div>
         <div class="row"><span class="lb">範囲</span><input type="number" id="vtLo" step="any"> 〜 <input type="number" id="vtHi" step="any"><button id="vtAuto">自動</button></div>
@@ -384,6 +386,8 @@ body,button,select,input,textarea{font-family:Tahoma,"Segoe UI",Verdana,"Meiryo 
     </fieldset>
     <fieldset><legend>カテーテル</legend>
       <div class="row"><label><input type="radio" name="simCath" value="oct" checked> オクタレイ（8本×5＝40点。マッピング用）</label></div>
+      <div class="row"><label><input type="checkbox" id="simTpi"> TPIフィルター（組織近接）</label><select id="simTpiMode"><option value="either">Either Electrode</option><option value="distal">Distal Electrode</option><option value="both">Both Electrodes</option></select></div>
+      <div class="small">取説：TPIフィルターがオンのとき、B・C・E・F・G・H の5〜6番の電極（B5, B6, C5, C6, E5, E6, F5, F6, G5, G6, H5, H6）はTPIが使えず、その電極を含むバイポーラは取得されません。</div>
       <div class="row"><span class="lb" style="min-width:auto">オクタレイの電極の並び</span><select id="simOctCfg"><option value="3-3-3-3-3" selected>3-3-3-3-3</option><option value="2-2-2-2-2">2-2-2-2-2</option><option value="2-5-2-5-2">2-5-2-5-2</option></select></div>
       <div class="row"><label><input type="radio" name="simCath" value="abl"> 焼灼カテーテル（先端1か所。通電用）</label></div>
       <div class="row"><label><input type="radio" name="simCath" value="cir"> 円形カテーテル（10極）</label></div>
@@ -1103,7 +1107,7 @@ function cvArrows(map){
   const cv=computeCV(map),sp=Math.max(1,S.opt.cvSpacing),seen=new Set(),segs=[];
   for(const t of cv.tri){
     const k=Math.floor(t.cen[0]/sp)+','+Math.floor(t.cen[1]/sp)+','+Math.floor(t.cen[2]/sp);if(seen.has(k))continue;seen.add(k);
-    const L=sp*0.6,c=v3.add(t.cen,v3.sc(t.n,0.6)),a=v3.sub(c,v3.sc(t.dir,L/2)),b=v3.add(c,v3.sc(t.dir,L/2));
+    const L=sp*0.6*(S.opt.cvSize/5),c=v3.add(t.cen,v3.sc(t.n,0.6)),a=v3.sub(c,v3.sc(t.dir,L/2)),b=v3.add(c,v3.sc(t.dir,L/2));
     const col=cmap(clamp((t.speed-0.15)/1.2,0,1));col.push(1);
     const side=v3.norm(v3.cross(t.dir,t.n));const hb=v3.sub(b,v3.sc(t.dir,L*0.35));
     segs.push({a,b,c:col,w:0.35},{a:b,b:v3.add(hb,v3.sc(side,L*0.22)),c:col,w:0.35},{a:b,b:v3.sub(hb,v3.sc(side,L*0.22)),c:col,w:0.35});
@@ -1343,7 +1347,7 @@ class Viewer{
   updateVT(){
     const vt=S.study&&S.study.visitag;let items=[];
     if(vt&&S.opt.vtOn&&vtForMap(this.map)){const k=S.opt.vtParam,lo=S.opt.vtLo,hi=S.opt.vtHi;
-      items=vt.sites.map(s=>{const v=s.v[k];const c=fin(v)?tagColor((v-lo)/((hi-lo)||1)):[0.8,0.8,0.8];return{x:s.x,y:s.y,z:s.z,r:S.opt.vtSize,c:[...c,1]};});}
+      items=vt.sites.map(s=>{const v=s.v[k];const c=fin(v)?tagColor(S.opt.vt3?(v<lo?0.1:v<=hi?0.55:1):(v-lo)/((hi-lo)||1)):[0.8,0.8,0.8];return{x:s.x,y:s.y,z:s.z,r:S.opt.vtSize,c:[...c,1]};});}
     const s=buildSpheres(items);this.upload('vP',s.P);this.upload('vN',s.N);this.upload('vC',s.C);this.vtCount=s.count;this.vtDirty=false;
   }
   segments(){
@@ -1564,8 +1568,8 @@ const S={
   snaps:[],gaps:null,rec:null,
   anim:{prop:false,phase:0,rphase:0,rippleT:0},
   opt:{bg:[0.04,0.05,0.07],bgKey:'navy',clip:0,autoZoom:false,src:'auto',fill:15,scar:0.05,iso:false,isoSteps:12,opacity:1,showPts:true,showExcl:true,ptSize:0.55,ptColor:'value',
-    propSpeed:80,propBand:15,ripple:false,rippleScale:6,rippleSpeed:60,cvOn:false,cvSpacing:6,
-    vtOn:true,vtChain:true,gapThr:6,vtSize:2.5,vtParam:'ai',vtLo:0,vtHi:1,gapShow:true},
+    propSpeed:80,propBand:15,ripple:false,rippleScale:6,rippleSpeed:60,cvOn:false,cvSpacing:6,cvSize:5,
+    vtOn:true,vt3:true,vtChain:true,gapThr:6,vtSize:2.5,vtParam:'ai',vtLo:0,vtHi:1,gapShow:true},
   wch:{map:true,ref:true,ecg:false,other:false}
 };
 const av=()=>S.viewers[S.active];
@@ -1671,7 +1675,7 @@ function bindPanel(){
   // 解析
   $('#btnArea').onclick=()=>{const v=av();if(!v.map||!v.map.mesh)return toast('メッシュがありません');const thr=+$('#lvThr').value,sc=+$('#lvScar').value;const r=computeArea(v.map,thr,sc);
     $('#areaRes').textContent=`${v.map.name}\n全表面積　　　 ${r.total.toFixed(1)} cm²\nマップ済み　　 ${r.mapped.toFixed(1)} cm²（${(r.mapped/r.total*100).toFixed(0)}%）\n低電位 <${thr}mV　${r.low.toFixed(1)} cm²（マップ済みの ${(r.low/(r.mapped||1)*100).toFixed(1)}%）\n瘢痕 <${sc}mV　 ${r.scar.toFixed(1)} cm²（${(r.scar/(r.mapped||1)*100).toFixed(1)}%）\n※Bipolarの値（${S.opt.src==='auto'&&!v.map.edited&&v.map.mesh.colors.Bipolar?'CARTOのメッシュ値':'ポイントから補間'}）で計算`;};
-  $('#cvOn').onchange=e=>{S.opt.cvOn=e.target.checked;dirtyAll('');};num('#cvSpacing','cvSpacing','');
+  $('#cvOn').onchange=e=>{S.opt.cvOn=e.target.checked;dirtyAll('');};num('#cvSpacing','cvSpacing','');num('#cvSize','cvSize','');$('#vt3').onchange=e=>{S.opt.vt3=e.target.checked;dirtyAll('v');};
   $('#btnCV').onclick=()=>{const v=av();if(!v.map||!v.map.mesh)return toast('メッシュがありません');const cv=computeCV(v.map);const sp=cv.tri.map(t=>t.speed);if(!sp.length){$('#cvRes').textContent='LATの値が足りません';return;}
     const slow=+$('#cvSlow').value;let A=0,As=0;for(const t of cv.tri){A+=t.area;if(t.speed<slow)As+=t.area;}
     $('#cvRes').textContent=`${v.map.name}\n中央値　${percentile(sp,0.5).toFixed(2)} m/s\n10〜90%　${percentile(sp,0.1).toFixed(2)} 〜 ${percentile(sp,0.9).toFixed(2)} m/s\n遅い伝導 <${slow} m/s　${(As/100).toFixed(1)} cm²（${(As/A*100).toFixed(0)}%）`;
@@ -2522,7 +2526,7 @@ const SIM_SPL='ABCDEFGH',SIM_OCT_COL=[[1,0.6,0.24],[0.36,0.45,1],[1,0.88,0.3],[1
 /* オクタレイの電極の並び：製品ページ（J&J）に載っている3種類「2-2-2-2-2 / 2-5-2-5-2 / 3-3-3-3-3」（単位の記載はなく、電極の間隔 mm と想定）。
    1本のスプラインに電極6つ＝双極5つ。最初の電極の位置（中心から 3 mm）は私の想定。 */
 function simOctRadii(cfg){const gaps=String(cfg).split('-').map(Number);let x=3;const e=[x];for(const g of gaps){x+=g;e.push(x);}return e.slice(0,5).map((v,j)=>(v+e[j+1])/2);}
-const SIM={active:false,map:null,T:null,cath:'oct',octRot:0.3,octCfg:'3-3-3-3-3',octR:[4.5,7.5,10.5,13.5,16.5],sites:[],shaft:[],live:null,ver:0,hv:null,lastHv:null,dirtyLive:true,nextId:1,sess:1,
+const SIM={tpi:false,tpiMode:'either',active:false,map:null,T:null,cath:'oct',octRot:0.3,octCfg:'3-3-3-3-3',octR:[4.5,7.5,10.5,13.5,16.5],sites:[],shaft:[],live:null,ver:0,hv:null,lastHv:null,dirtyLive:true,nextId:1,sess:1,
   auto:true,minDist:3,maxJump:9,grid:new Map(),autoPrev:null,autoDirty:false,autoT:0,autoN:0,autoSkip:0,
   cfg:{power:35,time:20,force:12},leads:null,sheath:[-14,-3,-4],sheathOut:[-38,-9,-16]};
 const simHash=i=>{const s=Math.sin(i*12.9898+78.233)*43758.5453;return s-Math.floor(s);};
@@ -2815,10 +2819,16 @@ function simNearPoint(pos,r){
     for(const p of g)if((p.x-pos[0])**2+(p.y-pos[1])**2+(p.z-pos[2])**2<r*r)return true;}
   return false;
 }
+/* TPIフィルター（OCTARAY取説）：Distal/Either は B5-6, C5-6, E5-6, F5-6, G5-6, H5-6、Both はさらに B4-B5 など（4-5も）を取得しない */
+function simTpiBlocked(mi){
+  if(SIM.cath!=='oct'||!SIM.tpi)return false;
+  const s=Math.floor(mi/5),j=mi%5;if(!'BCEFGH'.includes(SIM_SPL[s]))return false;
+  return SIM.tpiMode==='both'?(j>=3):(j===4);
+}
 function simAcquire(){
   if(!SIM.active)return;if(!SIM.sites.length)return toast('マップの上にマウスを動かして、カテーテルを置いてください');
   let last,n=0;
-  if(SIM.cath==='abl'){last=simAddPoint(simPose(),0);n=1;}else{const P=simPose(0);for(let j=0;j<P.bips.length;j++){last=simAddPoint(P,j);n++;}}
+  if(SIM.cath==='abl'){last=simAddPoint(simPose(),0);n=1;}else{const P=simPose(0);for(let j=0;j<P.bips.length;j++){if(simTpiBlocked(j))continue;last=simAddPoint(P,j);n++;}if(!n)return toast('TPIフィルターのため、取得できる電極がありませんでした');}
   SIM.map.version++;dirtyAll('cp');selectPoint(SIM.map,last);simRenderPanel();
   toast(n===1?`ポイント ${last.id} を取得しました`:`${SIM.cath==='oct'?'オクタレイ':'円形カテーテル'}の ${n} 点（P${last.id-n+1}〜P${last.id}）を取得しました`);
 }
@@ -2831,7 +2841,7 @@ function simAutoStep(){
   if(SIM.autoPrev){const jump=v3.dist(cur,SIM.autoPrev);SIM.autoPrev=cur;if(jump>SIM.maxJump){SIM.autoSkip++;return;}}else{SIM.autoPrev=cur;}
   const r=SIM.minDist;let added=0;
   if(SIM.cath==='abl'){if(!simNearPoint(cur,r)){simAddPoint(simPose(),0);added++;}}
-  else{const P=simPose(0);for(let j=0;j<P.bips.length;j++){const prm=P.bips[j];if(simNearPoint(prm.pos,r))continue;simAddPoint(P,j);added++;}}
+  else{const P=simPose(0);for(let j=0;j<P.bips.length;j++){const prm=P.bips[j];if(simTpiBlocked(j)||simNearPoint(prm.pos,r))continue;simAddPoint(P,j);added++;}}
   if(added){SIM.autoDirty=true;SIM.autoN+=added;}
 }
 function simAutoFlush(now){
@@ -2950,6 +2960,7 @@ function simBind(){
   $('#btnSim').onclick=simStart;$('#simStart').onclick=simStart;
   $$('input[name=simCath]').forEach(r=>r.onchange=e=>{if(!e.target.checked)return;SIM.cath=e.target.value;SIM.sites=[];SIM.shaft=[];if(SIM.lastHv)SIM.hv=SIM.lastHv;SIM.ver++;dirtyAll('');simRenderPanel();});
   $('#simFamGo').onclick=simFamGo;$('#simFamDone').onclick=simFamDone;$('#simFamAng').oninput=e=>{if(SIM.fam){if(SIM.fam.timer){clearInterval(SIM.fam.timer);SIM.fam.timer=null;}SIM.fam.ang=+e.target.value;simFamApply();}};
+  $('#simTpi').onchange=e=>{SIM.tpi=e.target.checked;toast(SIM.tpi?'TPIフィルター：オン（B・C・E・F・G・H の5-6番電極を含むバイポーラは取得されません）':'TPIフィルター：オフ');};$('#simTpiMode').onchange=e=>{SIM.tpiMode=e.target.value;};
   $('#simAcq').onclick=simAcquire;$('#simClear').onclick=simClearPoints;$('#simAbl').onclick=simAblate;$('#simChk').onclick=simCheck;
   const num=(id,k)=>$(id).addEventListener('input',e=>{const x=+e.target.value;if(fin(x))SIM.cfg[k]=x;});num('#simP','power');num('#simT','time');num('#simF','force');
   $('#simTruth').onchange=e=>{if(SIM.active)simTruth(e.target.checked);};
