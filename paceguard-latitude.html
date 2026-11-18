@@ -747,7 +747,7 @@ async function loadPDF(file,{forceEval=false,pageNo=0}={}){
           if(md.sent){$('fDate').value=md.sent;meta.date=md.sent;}if(md.model)$('fDev').value=md.model;
           mdtDiag.n=md.n;mdtDiag.id=md.id||'';mdtDiag.sent=md.sent||'';mdtDiag.keys=Object.keys(md.items).slice(0,12).join('・');
           /* 分けたPDFの一部（ヒストグラム・エピソードなど）も、患者が分かれば同じ送信の記録に足す */ if(md.id&&md.n>=1)curTV=md;else if(lastPdfDoc&&mdtEpisodeHeads(lastAllItems,flatM).length)curTV={tv:'Medtronic',evOnly:true,mdt:true,items:{},n:0};}}catch(_){}
-      if(!curTV)try{const t1=parseTV(lastRawItems),t2=parseTV(lastAllItems),tv=t2.n>t1.n?t2:t1; // 自前で取り出した文字とpdf.jsの文字の、多く読めた方
+      if(!curTV&&!window.PG_CL)try{const t1=parseTV(lastRawItems),t2=parseTV(lastAllItems),tv=t2.n>t1.n?t2:t1; // 自前で取り出した文字とpdf.jsの文字の、多く読めた方
         if(tv.n>=6&&Object.keys(tv.items).some(k=>/^(lead|pace):/.test(k)))curTV=tv;
         // リードの表は無いが、経静脈デバイスのイベントのEGM（見出し「RVAT-603: 日時, 種類」）があるPDF：波形の画像だけ記録する
         else if(lastPdfDoc&&tvStreamEvents(lastRawItems).some(e=>e.ev))curTV={tv:'経静脈',evOnly:true,items:{},n:0};}catch(_){curTV=null;}
@@ -765,7 +765,7 @@ async function loadPDF(file,{forceEval=false,pageNo=0}={}){
           tlAuto(mdtKeepId);return;}}
       // それ以外：波形の比較・保存はしない
       curSigs=[];curFeat=[];curNoise=[];curPool=null;$('overlayCard').hidden=true;$('traceMsg').textContent='';
-      $('result').innerHTML=`<div class="verdict info"><h2>${mdtPendNote?'⏳ 同じ送信のほかのPDFを待っています':'S-ICD以外のPDFです（対象外）'}</h2>${mdtPendNote?`<div>${escH(mdtPendNote)}</div>`:''}機種：${escH(curNonSicd)}　患者ID：${escH($('fId').value||'—')}<br>${mdtDiag?`<div class="hint">手がかり：Medtronic/CareLinkの文字 ${mdtDiag.found?'あり':'なし'}／Medtronicとして読めた項目 ${mdtDiag.n}（6以上で記録）${mdtDiag.keys?'：'+escH(mdtDiag.keys):''}／pdf.jsの文字項目 ${mdtDiag.pjs}・自前抽出 ${mdtDiag.raw}</div>`:''}<span class="hint">このツールはS-ICDのS-ECGだけを比較します。このPDFは比較・保存しません。</span></div>`;
+      $('result').innerHTML=`<div class="verdict info"><h2>${mdtPendNote?'⏳ 同じ送信のほかのPDFを待っています':window.PG_CL?'MedtronicのレポートとしてPDFを読めませんでした（対象外）':'S-ICD以外のPDFです（対象外）'}</h2>${mdtPendNote?`<div>${escH(mdtPendNote)}</div>`:''}機種：${escH(curNonSicd)}　患者ID：${escH($('fId').value||'—')}<br>${mdtDiag?`<div class="hint">手がかり：Medtronic/CareLinkの文字 ${mdtDiag.found?'あり':'なし'}／Medtronicとして読めた項目 ${mdtDiag.n}（6以上で記録）${mdtDiag.keys?'：'+escH(mdtDiag.keys):''}／pdf.jsの文字項目 ${mdtDiag.pjs}・自前抽出 ${mdtDiag.raw}</div>`:''}<span class="hint">${window.PG_CL?'このツールはMedtronic（CareLink）のレポートだけを記録します。BostonのPDFはLATITUDEのツールで開いてください。':'このツールはS-ICDのS-ECGだけを比較します。'}このPDFは比較・保存しません。</span></div>`;
       tlReset($('fId').value.trim(),'S-ICD以外のため対象外');return;}
     // 計測用に高解像度でも描く（1px≒3.5ms）。時間がかかっても他の処理を止めないよう、最大15秒で打ち切る
     try{const vh=page.getViewport({scale:HI});hiCanvas.width=vh.width;hiCanvas.height=vh.height;
@@ -1697,6 +1697,14 @@ if(window.PG_CL){try{$('brandName').textContent='CareLink';$('brandSub').textCon
   const ft=document.querySelector('footer');if(ft)ft.innerHTML='PaceGuard CareLink β — Medtronic CareLink のレポート（測定値・設定・イベントの波形）を読み、前回と比べて記録します。pdf.jsをCDNから読み込みます（初回のみ要ネット）。<br>データフォルダの「基準」フォルダに <code>&lt;患者ID&gt;.json</code>、「患者PDF」フォルダの患者ごとのフォルダにPDFと波形の画像を保存します。医療機器ではありません。';
   const rb=$('setRules')&&$('setRules').parentElement;if(rb){const h=rb.querySelector('.hint');if(h)h.textContent='Medtronic（ペースメーカー・ICD・CRT-D）の測定値・設定のアラートの条件です。ここで決めた条件に当てはまったら、アラートを出します（⚠️要確認・🟡注意）。患者ごとに変える時は、推移の表の下の「この患者だけのルール」で変えます。このPCに保存します。';
     const n2=rb.querySelectorAll('.hint')[1];if(n2&&/システムインピーダンス/.test(n2.textContent))n2.textContent='基準値は当院のシート（Bostonと同じ）。SIC・心房リードポジションチェック・AF持続時間はMedtronicだけの項目です。';}
+  // S-ICDだけの機能（基準と比較・段の読み取り・IDの位置・動作デモ・解析の裏側）は出さない
+  for(const id of ['evalBaseBtn','baseInfo','teachId','demoBtn','inside','overlayCard'])if($(id))$(id).hidden=true;
+  {const ae=$('autoEval');if(ae&&ae.parentElement)ae.parentElement.lastChild.nodeValue=' PDFを開いたら自動で記録する（前回の送信と比べる）';}
+  {const n=$('keepPdfNo'),y=$('keepPdfYes');if(n&&n.parentElement)n.parentElement.lastChild.nodeValue=' 残さない：数値の記録とイベントの波形の画像だけを残す（IDの無いPDFを待つこともできない）';
+    if(y&&y.parentElement)y.parentElement.lastChild.nodeValue=' 残す（CareLinkの標準）：元のPDFを患者ごとのフォルダに保存';}
+  {const pb=$('purgePdf');if(pb&&pb.parentElement)pb.parentElement.hidden=true;} // 「元のPDFを波形の画像に置き換える」はS-ICDの機能
+  {const sm=document.querySelector('#pdfSec>summary');if(sm)sm.textContent='📄 読み込んだPDF';}
+  {const l=$('fDate')&&$('fDate').previousElementSibling;if(l)l.textContent='送信日時';}
   const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);const fix=[];while(walker.nextNode())fix.push(walker.currentNode);
   for(const t of fix){const v=t.nodeValue;if(!/LATITUDE|S-ICD|S-ECG|今日の波形比較/.test(v))continue;
     t.nodeValue=v.replace(/今日の波形比較を開始/g,'今日の比較を開始').replace(/S-ICD以外/g,'Medtronic').replace(/〰 S-ECGだけ/g,'〰 EGMだけ').replace(/〰 S-ECG/g,'〰 EGM').replace(/LATITUDE/g,'CareLink');}
@@ -1903,7 +1911,8 @@ $('watchMove').addEventListener('change',()=>{try{localStorage.setItem('pg_lat_w
 let lastPdfFile=null,lastPdfBytes=null,lastArchive=null,curNonSicd=null;
 // S-ICD以外（ペースメーカー・ICDなど）のPDFは比較しない。文字が読めない時は判断しない（S-ICDとして扱う）
 function nonSicdOf(text,dev){const t=String(text||'');
-  if(isMedtronic(t))return dev||'Medtronic'; // Medtronic（CareLink）は文字が少ないページ（ヒストグラムだけなど）でも S-ICD ではない
+  if(isMedtronic(t))return dev||'Medtronic';
+  if(window.PG_CL)return dev||'Medtronic以外'; // CareLink版：Medtronic以外のPDFは扱わない（S-ICDとして読まない） // Medtronic（CareLink）は文字が少ないページ（ヒストグラムだけなど）でも S-ICD ではない
   if(t.replace(/\s+/g,'').length<200)return null;
   return /S-?ICD|S-?ECG|EMBLEM|SQ-?RX|A209|A219/i.test(t)?null:(dev||'機種不明');}
 // S-ICD以外のPDFを、患者PDF\_対象外 に移す（元の名前のまま）
@@ -2583,6 +2592,7 @@ async function purgeRun(auto){
   for await(const [folder,fh] of top.entries()){if(fh.kind!=='directory')continue;const pd=await top.getDirectoryHandle(folder);
     const names=[];for await(const [n,h] of pd.entries())if(h.kind==='file'&&/\.pdf$/i.test(n))names.push(n);
     for(const n of names){const path=`${PDF_DIR}/${folder}/${n}`;msg(`処理中：${folder}/${n}`);
+      if(folder==='_待ち')continue; // IDの無いCareLinkのPDF：患者が分かるまで消さない
       if(folder.startsWith('_')||/_(書類|経静脈)\d/.test(n)){toDel.push([pd,n]);continue;} // 経静脈の元のPDF：数値と波形の画像は記録済み
       try{const f=await (await pd.getFileHandle(n)).getFile(),doc=await lib.getDocument({data:new Uint8Array(await f.arrayBuffer()),isEvalSupported:false}).promise;
         const png=n.replace(/\.pdf$/i,'.png'),newPath=`${PDF_DIR}/${folder}/${png}`;
