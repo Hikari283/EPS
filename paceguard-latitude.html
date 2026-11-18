@@ -729,6 +729,10 @@ async function loadPDF(file,{forceEval=false,pageNo=0}={}){
       // Medtronic（CareLink）：測定値・設定を読んで記録する。患者ID・送信日時・機種名もここで決める
       try{const flatM=lastAllItems.map(x=>x.s).join(' ')+' '+lastRawItems.map(x=>x.s).join(' ')+' '+rawPdfText;
         if(isMedtronic(flatM)){const m1=parseMDT(lastRawItems,flatM),m2=parseMDT(lastAllItems,flatM),md=m2.n>m1.n?m2:m1;
+          // 同じ送信を何枚かのPDFに分けた時：IDの無いPDFは、シリアル番号から患者IDを決める（IDとシリアル番号の両方があるPDFで覚える）
+          let smap={};try{smap=JSON.parse(localStorage.getItem('pg_lat_mdtserial')||'{}')||{};}catch(_){}
+          if(md.id&&md.serial&&smap[md.serial]!==md.id){smap[md.serial]=md.id;try{localStorage.setItem('pg_lat_mdtserial',JSON.stringify(smap));}catch(_){}}
+          if(!md.id&&md.serial&&smap[md.serial])md.id=smap[md.serial];
           if(md.id)$('fId').value=md.id;if(md.sent){$('fDate').value=md.sent;meta.date=md.sent;}if(md.model)$('fDev').value=md.model;
           if(md.n>=6)curTV=md;else if(lastPdfDoc&&mdtEpisodeHeads(lastAllItems,flatM).length)curTV={tv:'Medtronic',evOnly:true,mdt:true,items:{},n:0};}}catch(_){}
       if(!curTV)try{const t1=parseTV(lastRawItems),t2=parseTV(lastAllItems),tv=t2.n>t1.n?t2:t1; // 自前で取り出した文字とpdf.jsの文字の、多く読めた方
@@ -951,6 +955,7 @@ function parseMDT(items,flat){
   // 患者ID・送信日時（右上）
   const id=(T.match(/(?:^|[^A-Za-z])ID\s*[:：]\s*(\d{6,10})/)||[])[1]||'';
   const model=((T.match(/デバイス\s*[:：]\s*(.+?)\s+シリアル番号/)||[])[1]||'').trim();
+  const serial=((T.match(/シリアル番号\s*[:：]\s*([A-Z0-9]{6,})/)||[])[1]||'');
   const sent=mdtDate((T.match(/送信日時\s*[:：]?\s*(\d{1,2}-[A-Z][a-z]{2}-\d{4}\s+\d{1,2}:\d{2})/)||[])[1]);
   let sec='',cols={},chDef='右心室',lastThr=null,rightX=null,rightSec='',lastShock=[];
   const xOf=(c,re)=>{const i=c.s.search(re);return i<=0?c.x0:c.x0+(c.x1-c.x0)*i/Math.max(1,c.s.length);}; // くっついたセルの中で、その言葉が始まる位置
@@ -1027,7 +1032,7 @@ function parseMDT(items,flat){
   if(lastShock.length)put('shock','前回のショック治療',lastShock.join(' ／ '));
   const has=re=>Object.keys(got).some(k=>re.test(k));
   const type=has(/左心室/)?(has(/ショック/)?'CRT-D':'CRT-P'):has(/ショック/)?'ICD':'PM';
-  return {items:got,src:{},n:Object.keys(got).length,tv:'Medtronic '+type,mdt:true,id,sent,model};
+  return {items:got,src:{},n:Object.keys(got).length,tv:'Medtronic '+type,mdt:true,id,sent,model,serial};
 }
 // ===== デバイス設定の読み取りと、前回との比較 =====
 // レポートの文字（全ページ）から設定を読む。①位置から行・セルを組み立て「項目｜値」の組を拾う ②主な設定は項目名のパターンで特定 ③取れない時は詰めた文字から正規表現で拾う
@@ -1497,7 +1502,10 @@ async function runTV(){
   if(!id){$('result').innerHTML='<div class="verdict info"><h2>患者IDを決めてください</h2>IDを自動で読み取れませんでした。上の候補を押すかIDを入力してから、「🔍 前回と比較」を押してください。</div>';return;}
   const store=dirHandle?await readBaseline(id):null;
   PT_ID=id;PT_RULES=store&&store.setRules||null;PT_TV=store&&store.tvRules||null;
-  const saves=((store&&store.saves)||[]).filter(x=>!(x.tv&&x.settings&&x.key===key&&key)); // 同じ日付のレポート（測定値・設定の記録）を読み直した時は置き換える。イベントの記録は残す
+  // 同じ日付（同じ送信）の記録がある時：前に読んだ項目に、今回読んだ項目を足し合わせる（PDFを何枚かに分けた時・読み直した時）
+  const same=((store&&store.saves)||[]).find(x=>x.tv&&x.settings&&x.key===key&&key);
+  if(same&&same.settings&&same.settings.items){const mergedItems={...same.settings.items,...tv.items};tv.items=mergedItems;tv.n=Object.keys(mergedItems).length;}
+  const saves=((store&&store.saves)||[]).filter(x=>!(x.tv&&x.settings&&x.key===key&&key)); // 同じ日付のレポート（測定値・設定の記録）は、足し合わせたものに置き換える。イベントの記録は残す
   const prev=saves.filter(x=>x.tv&&x.settings&&x.settings.n&&(key?(x.key&&x.key<key):true)).sort((a,b)=>a.key<b.key?1:a.key>b.key?-1:(b.ts||0)-(a.ts||0))[0]||null;
   const cmp=compareSettings(prev&&prev.settings,tv),al=tvAlerts(tv,prev&&prev.settings),lv=al.length?Math.max(...al.map(a=>a.lv)):0;
   const chg=(cmp?cmp.changed:[]).filter(x=>!isMeas(x.k));
