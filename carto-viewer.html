@@ -371,7 +371,9 @@ body,button,select,input,textarea{font-family:Tahoma,"Segoe UI",Verdana,"Meiryo 
   <div class="tabpane" id="t-sim">
     <fieldset><legend>AF 初回PVI（シミュレーター）</legend>
       <div class="small" id="simInfo">「症例をはじめる」を押すと始まります。</div>
+      <div class="row"><span class="lb" style="min-width:auto">症例</span><select id="simCase"><option value="normal">電圧：ほぼ正常（体部は高電位）</option><option value="low">電圧：後壁に低電位域あり</option></select></div>
       <div class="row"><button id="simStart" class="primary">症例をはじめる／やり直す</button></div>
+      <div class="muted small">症例の種類を変えたら、「症例をはじめる」を押すと反映されます。電圧の値は簡易の想定で、実際の症例とは違います。</div>
       <div class="muted small">仮想の左房です（架空のデータ）。マップの上でマウスを動かすと、カテーテルがついてきます。ドラッグで回転、ホイールで拡大・縮小。</div>
     </fieldset>
     <fieldset><legend>カテーテル</legend>
@@ -2506,6 +2508,7 @@ function simNear(m,pos){
 const simNormal=(T,i)=>{const n=T.mesh.norms;return v3.sc([n[i*3],n[i*3+1],n[i*3+2]],T.outSign);};   // 外向きの法線
 
 function simBuildTruth(){
+  const vcase=($('#simCase')&&$('#simCase').value)||'normal';
   const LA=laAnatomy(),m=LA.mesh,nv=m.nv,used=m.used,P=i=>simPos(m,i),U=[[1,0,0],[0,1,0],[0,0,1]];
   const T={mesh:m,LA,vein:new Uint8Array(nv),axis:new Float32Array(nv*3),hpos:new Float32Array(nv),deep:new Uint8Array(nv),
     bip:new Float32Array(nv),uni:new Float32Array(nv),cv:new Float32Array(nv),lat:new Float32Array(nv).fill(NaN),blocked:new Uint8Array(nv),q:new Float32Array(nv).fill(1),lat0:-25};
@@ -2517,13 +2520,23 @@ function simBuildTruth(){
   for(let i=0;i<nv;i++){
     if(!used[i])continue;const q=P(i);
     if(T.vein[i]&&sdEllB(q,LA.center,U,[26,19,21])>3)T.deep[i]=1;
-    // 電圧：なだらかに変わる正常域（約0.8〜3.2 mV）の中に、低電位の斑（約0.1〜0.4 mV）が点々とある（動画のようなAFの左房を想定した、こちらの簡易モデル）
+    // 電圧（こちらの簡易モデル。実際のCARTOのBipolarマップの見え方を参考にした想定で、実測値ではありません）
+    //  ・左房の体部：広くなだらかに高電位（約1.6〜3.8 mV＝0.5 mV以上なので、0.08〜0.50 mV表示では紫）
+    //  ・肺静脈：体部より低め（約0.3〜1.0 mV）。体部との境目は細い帯になる
+    //  ・「後壁に低電位域あり」の症例：後壁を中心に、広い低電位域（約0.1〜0.4 mV）。境目は細い帯
+    const sm=(a,b2,x)=>{const t=clamp((x-a)/(b2-a),0,1);return t*t*(3-2*t);};
     const s=0.5+0.5*Math.sin(0.23*q[0]+1.3)*Math.sin(0.19*q[1]-0.7)*Math.cos(0.21*q[2]+0.4);
-    const patch=Math.sin(0.55*q[0]+0.41*q[1])*Math.sin(0.47*q[2]-0.29*q[0]+2.0)+0.5*Math.sin(0.23*q[0]+1.3)*Math.sin(0.19*q[1]-0.7);
-    let w=clamp((0.5-patch)/0.35,0,1);w=w*w*(3-2*w);
-    let b=(0.09+0.32*simHash(i+313))*(1-w)+(0.8+2.4*s)*w;
-    if(T.vein[i])b*=T.hpos[i]<14?0.6:0.35;
-    b*=0.9+0.2*simHash(i);T.bip[i]=b;T.uni[i]=2*b+2+1.5*simHash(i+991);T.cv[i]=T.vein[i]?0.6:0.9;
+    let b;
+    if(T.vein[i])b=(0.45+0.55*s)*(1-0.35*sm(6,26,T.hpos[i]));
+    else{
+      b=1.6+2.2*s;
+      if(vcase==='low'){
+        const post=sm(5,15,q[1]),blob=0.5+0.5*Math.sin(0.2*q[0]+0.9)*Math.cos(0.17*q[2]-0.4);
+        const lw=sm(0.25,0.5,post*(0.55+0.6*blob)-0.1);
+        b=b*(1-lw)+(0.06+0.12*s)*lw;
+      }
+    }
+    b*=0.985+0.03*simHash(i);T.bip[i]=b;T.uni[i]=2*b+2+1.5*simHash(i+991);T.cv[i]=T.vein[i]?0.6:0.9;
   }
   let bi=-1,bd=-1;for(let i=0;i<nv;i++){if(!used[i])continue;const d=v3.dist(P(i),LA.center);if(d>bd){bd=d;bi=i;}}
   const nrm=[m.norms[bi*3],m.norms[bi*3+1],m.norms[bi*3+2]];T.outSign=v3.dot(nrm,v3.sub(P(bi),LA.center))>=0?1:-1;
@@ -2590,7 +2603,7 @@ function simCatItems(){
 /* --- 電位の生成（位置→波形） --- */
 function simSiteParams(s){
   const T=SIM.T,vi=s.vi,act=Number.isFinite(T.lat[vi]);
-  return{vi,pos:s.pos,act,lat:act?T.lat[vi]:NaN,bip:act?T.bip[vi]*T.q[vi]:0.03,uni:act?T.uni[vi]*T.q[vi]:0.3,sig:T.vein[vi]?4.4:3.2,pv:(T.vein[vi]&&T.deep[vi])?1:0};
+  return{vi,pos:s.pos,act,lat:act?T.lat[vi]:NaN,bip:act?T.bip[vi]*T.q[vi]:0.06+0.03*simHash(vi+77),uni:act?T.uni[vi]*T.q[vi]:0.3,sig:T.vein[vi]?4.4:3.2,pv:(T.vein[vi]&&T.deep[vi])?1:0};
 }
 function simPose(mi){
   if(SIM.cath==='abl')return{cath:'abl',tip:simSiteParams(SIM.sites[0])};
@@ -2673,7 +2686,7 @@ function simAblate(){
   if(!SIM.active)return;if(SIM.cath!=='abl')return toast('通電は焼灼カテーテルで行います（「シミュ」タブでカテーテルを切り替えてください）');
   const T=SIM.T,s=SIM.sites[0];if(!s)return toast('マップの上にマウスを動かして、カテーテルを置いてください');
   const c=SIM.cfg,F=Math.max(1,c.force+(Math.random()-0.5)*4),Q=(c.power/35)*(c.time/20)*(0.5+F/24),ai=Math.round(Q*420),m=T.mesh;
-  const full=Q>=0.93,part=Q>=0.6,rb=full?3.4:0,rq=full?4.2:part?3.2:2.0,fac=full?0.15:part?0.55:0.9;let nb=0;
+  const full=Q>=0.93,part=Q>=0.6,rb=full?3.4:0,rq=full?4.2:part?3.2:2.0,fac=full?0.08:part?0.5:0.9;let nb=0;
   for(let i=0;i<m.nv;i++){if(!m.used[i])continue;const d=v3.dist(simPos(m,i),s.pos);if(d<=rq){T.q[i]=Math.min(T.q[i],fac);if(d<=rb){T.blocked[i]=1;nb++;}}}
   const vt=S.study.visitag,prev=vt.sites[vt.sites.length-1];if(prev&&v3.dist([prev.x,prev.y,prev.z],s.pos)>15)SIM.sess++;
   vt.sites.push({x:s.pos[0],y:s.pos[1],z:s.pos[2],session:String(SIM.sess),idx:vt.sites.length+1,v:{ai,fti:Math.round(ai*0.9),dur:c.time,force:+F.toFixed(1),power:c.power,temp:Math.round(36+c.power/6),impDrop:+(4+Q*6).toFixed(1),imp:Math.round(100+10*Math.random())}});
@@ -2691,7 +2704,7 @@ function simCheck(){
 }
 function simTruth(on){
   const m=SIM.map.mesh,T=SIM.T;
-  if(on){const lat=new Float32Array(T.lat),bip=new Float32Array(m.nv);for(let i=0;i<m.nv;i++)bip[i]=Number.isFinite(T.lat[i])?T.bip[i]*T.q[i]:0.03;
+  if(on){const lat=new Float32Array(T.lat),bip=new Float32Array(m.nv);for(let i=0;i<m.nv;i++)bip[i]=Number.isFinite(T.lat[i])?T.bip[i]*T.q[i]:0.06+0.03*simHash(i+77);
     m.colors={LAT:lat,Bipolar:bip};m.colorNames=['LAT','Bipolar'];S.opt.src='auto';$('#srcSel').value='auto';}
   else{m.colors={};m.colorNames=[];S.opt.src='interp';$('#srcSel').value='interp';}
   SIM.map.version++;dirtyAll('cp');
@@ -2717,7 +2730,7 @@ function simStart(){
     setStudy(study);
     if(S.compare)tog('#compareOn');
     const v=S.viewers[0];v.type='Bipolar';v.ranges={Bipolar:{lo:0.08,hi:0.5},LAT:{lo:-25,hi:100}};v.setView('PA');
-    S.opt.fill=10;$('#fillR').value=10;S.opt.src='interp';$('#srcSel').value='interp';$('#simTruth').checked=false;$('#simAblRes').textContent='';$('#simIso').textContent='';
+    S.opt.fill=8;$('#fillR').value=8;S.opt.src='interp';$('#srcSel').value='interp';$('#simTruth').checked=false;$('#simAblRes').textContent='';$('#simIso').textContent='';
     syncPanel();setSel('#wLayout','all');setSide(true);clickTab('t-sim');simRenderPanel();dirtyAll('cpv');
     toast('シミュレーター開始：マップの上でマウスを動かすとカテーテルがついてきます（Enter：ポイント取得 ／ A：通電）',6000);
   }catch(err){console.error(err);toast('シミュレーターを開始できませんでした：'+err.message,6000);}finally{progress(null);}},30);
