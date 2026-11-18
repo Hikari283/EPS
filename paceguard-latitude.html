@@ -794,6 +794,8 @@ async function extractRawItems(ab){
 // レポートの文字（全ページ）から設定を読む。①位置から行・セルを組み立て「項目｜値」の組を拾う ②主な設定は項目名のパターンで特定 ③取れない時は詰めた文字から正規表現で拾う
 // ※実際のLATITUDEのレポートで項目名・値の書き方を確認して SET_KNOWN を調整すること（「🔧 設定の読み取り結果」で確認できる）
 const SET_V={onoff:'(オン|オフ|ON|OFF|On|Off|有効|無効)',zone:'(\\d{3}|オフ|OFF|Off)',sense:'(一次|二次|代替|プライマリ|セカンダリ|オルタネイト|オルタネート|Primary|Secondary|Alternate)',gain:'([12]\\s?[xX×]|[xX×]\\s?[12]|[12]倍)',pol:'(標準|逆|反転|STD|REV|Standard|Reverse)'};
+// 表示はレポートと同じ書き方（2026-11-18 ユーザー指示）。前に「一次」「標準」などで保存した記録・ルールも同じ値として扱う
+const LV=v=>({'一次':'プライマリ','二次':'セカンダリ','代替':'オルタネイト','標準':'STD','逆':'REV'}[v]||v);
 const SET_KNOWN=[ // imp:2＝治療に関わる（変わったら強調）／1＝波形の見え方が変わる
   {k:'therapy',name:'治療',lab:/^(?:頻拍)?治療(?:の設定|モード|設定)?$|^Therapy(?:Mode)?$|^(?:S-?ICD)?(?:パルスジェネレータの)?モード$/i,re:[`(?:頻拍)?治療(?:の設定|モード|設定)?[:：]?${SET_V.onoff}`,`Therapy(?:Mode)?[:：]?${SET_V.onoff}`,`Therapy\\s?(On|Off)`],imp:2},
   {k:'shockZone',name:'ショックゾーン',ok:/^\d{3}( bpm)?$/,lab:/^(?!.*(?:条件|コンディショナル))ショックゾーン$|^ShockZone$/i,re:[`(?<!条件付き|条件付|コンディショナル|Conditional)ショックゾーン[:：]?(\\d{3})`,`(?<!Conditional)ShockZone[:：]?(\\d{3})`],unit:'bpm',imp:2},
@@ -813,8 +815,8 @@ const SET_VAL=/^(オン|オフ|ON|OFF|On|Off|有効|無効|あり|なし|はい|
 const setNorm=s=>String(s||'').replace(/[Ａ-Ｚａ-ｚ０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/[\s　]+/g,'').replace(/[：:]$/,'');
 function setVal(v,unit){let s=setNorm(v);
   if(/^(オン|ON|On|有効|TherapyOn(?:モード)?)$/i.test(s))s='オン';else if(/^(オフ|OFF|Off|無効|TherapyOff(?:モード)?)$/i.test(s))s='オフ';
-  else if(/^(プライマリ|Primary)$/i.test(s))s='一次';else if(/^(セカンダリ|Secondary)$/i.test(s))s='二次';else if(/^(オルタネイト|オルタネート|Alternate)$/i.test(s))s='代替';
-  else if(/^([12])(?:[xX×]|倍)$/.test(s))s=s[0]+'x';else if(/^[xX×]([12])$/.test(s))s=s.slice(-1)+'x';else if(/^(Standard|STD)$/i.test(s))s='標準';else if(/^(Reverse|REV|反転)$/i.test(s))s='逆';
+  else if(/^(プライマリ|Primary|一次)$/i.test(s))s='プライマリ';else if(/^(セカンダリ|Secondary|二次)$/i.test(s))s='セカンダリ';else if(/^(オルタネイト|オルタネート|Alternate|代替)$/i.test(s))s='オルタネイト';
+  else if(/^([12])(?:[xX×]|倍)$/.test(s))s=s[0]+'x';else if(/^[xX×]([12])$/.test(s))s=s.slice(-1)+'x';else if(/^(Standard|STD|標準)$/i.test(s))s='STD';else if(/^(Reverse|REV|反転|逆)$/i.test(s))s='REV';
   else if(unit&&/^\d+$/.test(s))s+=' '+unit;
   else if(/^(選択的交換指標)$/.test(s))s='ERI';else if(/^(寿命末期)$/.test(s))s='EOL';
   else s=s.replace(/(\d)(?:min(?:-?1|⁻¹)?|回\/分)$/,'$1bpm').replace(/(\d)(?:ohms?|オーム)$/i,'$1Ω').replace(/(\d)(bpm|ms|mV|V|J|Ω)$/,'$1 $2');
@@ -873,7 +875,7 @@ function compareSettings(prev,cur){
   const order=k=>{const i=SET_KNOWN.findIndex(K=>K.k===k);return i<0?99:i;};
   const changed=[],same=[],onlyPrev=[],onlyCur=[];
   for(const k of keys.sort((a,b)=>order(a)-order(b))){const p=P[k],c=C[k],K=SET_KNOWN.find(x=>x.k===k),imp=K?K.imp:0;
-    if(p&&c){(p.v===c.v?same:changed).push({k,l:c.l||p.l,p:p.v,c:c.v,imp,main:!!K});}else if(p)onlyPrev.push({k,l:p.l,p:p.v,main:!!K});else onlyCur.push({k,l:c.l,c:c.v,main:!!K});}
+    if(p&&c){(LV(p.v)===LV(c.v)?same:changed).push({k,l:c.l||p.l,p:LV(p.v),c:LV(c.v),imp,main:!!K});}else if(p)onlyPrev.push({k,l:p.l,p:LV(p.v),main:!!K});else onlyCur.push({k,l:c.l,c:LV(c.v),main:!!K});}
   return {changed,same,onlyPrev,onlyCur};
 }
 // 前回（今回より前の、イベントではない記録で、設定を読めたもの）
@@ -904,10 +906,10 @@ function settingsDebugHtml(s){
   return `<details style="margin-top:6px"><summary style="cursor:pointer">🔧 設定の読み取り結果（${s.n}項目${miss.length?`／読めなかった主な設定：${miss.join('・')}`:''}）</summary>${rows?`<table class="crit"><tr><th>項目</th><th>値</th><th>読み方</th></tr>${rows}</table>`:'<div>読めた項目はありません。</div>'}<div class="hint">★＝主な設定。項目名や値の書き方が違って読めていない時は、この欄（開いた状態）と設定の部分の画面（個人情報は隠して）を送ってください。</div>${diagHtml}</details>`;
 }
 // ===== 設定のアラート（前回から変わった・基準と違う・ルールの範囲外） =====
-const SET_ENUM={therapy:['オン','オフ'],postShock:['オン','オフ'],smartPass:['オン','オフ'],afMon:['オン','オフ'],sensing:['一次','二次','代替'],gain:['1x','2x'],polarity:['標準','逆']};
+const SET_ENUM={therapy:['オン','オフ'],postShock:['オン','オフ'],smartPass:['オン','オフ'],afMon:['オン','オフ'],sensing:['プライマリ','セカンダリ','オルタネイト'],gain:['1x','2x'],polarity:['STD','REV']};
 const SET_NUM={shockZone:'bpm',condZone:'bpm'};
 // 最初の値（2026-11-18 ユーザー指定）。ゲインはルールにしない。センシング構成は「前回から変わったら」。インピーダンスは添付文書の値
-const SET_RULES_DEF={therapy:{eq:'オン'},shockZone:{min:170,max:250},condZone:{min:170,max:240},postShock:{eq:'オン'},polarity:{eq:'標準'},sensing:{chg:true},smartPass:{eq:'オン'},afMon:{eq:'オン'},
+const SET_RULES_DEF={therapy:{eq:'オン'},shockZone:{min:170,max:250},condZone:{min:170,max:240},postShock:{eq:'オン'},polarity:{eq:'STD'},sensing:{chg:true},smartPass:{eq:'オン'},afMon:{eq:'オン'},
   sysImp:{lo:40,hi:100},battery:{alert:20}};
 const SET_RULES_KEY='pg_lat_setrules3'; // インピーダンスの決め方を変えたので保存先を変える（前の保存から、インピーダンス以外は引き継ぐ）
 const cloneDef=()=>JSON.parse(JSON.stringify(SET_RULES_DEF));
@@ -920,8 +922,8 @@ let PT_RULES=null,PT_ID='';
 const RL=k=>{if(PT_RULES&&PT_RULES[k]!==undefined)return PT_RULES[k]&&PT_RULES[k].none?null:PT_RULES[k];return SET_RULES[k];};
 const isPt=k=>!!(PT_RULES&&PT_RULES[k]!==undefined);
 const hasN=x=>x!=null&&x!==''&&!isNaN(+x);
-function ruleText(k){if(IMP_RULES[k])return IMP_RULES[k].txt();if(NO_RULE.has(k))return '';const r=RL(k);if(!r)return '';if(r.chg)return '前回から変わったらアラート';if(r.eq)return `${r.eq}であること`;const a=[];if(hasN(r.min))a.push(`${r.min}以上`);if(hasN(r.max))a.push(`${r.max}以下`);return a.join('・');}
-function ruleBreak(k,v){if(NO_RULE.has(k)||IMP_RULES[k])return '';const r=RL(k);if(!r||v==null)return '';if(r.eq)return v!==r.eq?`ルール外（${r.eq}であること）`:'';
+function ruleText(k){if(IMP_RULES[k])return IMP_RULES[k].txt();if(NO_RULE.has(k))return '';const r=RL(k);if(!r)return '';if(r.chg)return '前回から変わったらアラート';if(r.eq&&LV(r.eq)!==r.eq)return `${LV(r.eq)}であること`;if(r.eq)return `${r.eq}であること`;const a=[];if(hasN(r.min))a.push(`${r.min}以上`);if(hasN(r.max))a.push(`${r.max}以下`);return a.join('・');}
+function ruleBreak(k,v){if(NO_RULE.has(k)||IMP_RULES[k])return '';const r=RL(k);if(!r||v==null)return '';if(r.eq)return LV(v)!==LV(r.eq)?`ルール外（${LV(r.eq)}であること）`:'';
   const n=parseFloat(v);if(isNaN(n))return '';if(hasN(r.min)&&n<+r.min)return `ルール外（${r.min}以上であること）`;if(hasN(r.max)&&n>+r.max)return `ルール外（${r.max}以下であること）`;return '';}
 const setImp=k=>{const K=SET_KNOWN.find(x=>x.k===k);return K?K.imp:0;};
 // 今回の設定について、アラートを作る：ルール（基準値）の範囲から外れた設定だけ＝要確認（前回から変わっただけではアラートにしない）
@@ -938,8 +940,8 @@ function alertOf(k,v){const rb=ruleBreak(k,v);if(rb)return {lv:2,why:rb};const R
   if(k==='battery'){if(/EOL/i.test(v))return {lv:2,why:'EOL（バッテリ寿命末期：速やかに交換。治療は担保されない）'};if(/ERI/i.test(v))return {lv:2,why:'ERI（選択的交換指標：交換を予定。3か月以上は治療できる）'};}const n=parseFloat(v);return isNaN(n)?null:R.f(n);}
 function settingsAlerts(cur,prev){
   const out=[];if(!cur||!cur.n)return out;const P=prev&&prev.items||{};
-  for(const [k,x] of Object.entries(cur.items)){const a=alertOf(k,x.v);if(a)out.push({lv:a.lv,k,txt:`${x.l} ${x.v}：${a.why}${isPt(k)?'（この患者のルール）':''}`});
-    else if(!NO_RULE.has(k)&&RL(k)&&RL(k).chg&&P[k]&&P[k].v!==x.v)out.push({lv:2,k,txt:`${x.l}が前回から変更（${P[k].v}→${x.v}）`});}
+  for(const [k,x0] of Object.entries(cur.items)){const x={...x0,v:LV(x0.v)};const a=alertOf(k,x.v);if(a)out.push({lv:a.lv,k,txt:`${x.l} ${x.v}：${a.why}${isPt(k)?'（この患者のルール）':''}`});
+    else if(!NO_RULE.has(k)&&RL(k)&&RL(k).chg&&P[k]&&LV(P[k].v)!==x.v)out.push({lv:2,k,txt:`${x.l}が前回から変更（${LV(P[k].v)}→${x.v}）`});}
   return out.sort((a,b)=>b.lv-a.lv||setImp(b.k)-setImp(a.k));
 }
 function setAlertHtml(alerts,cur,chg){
@@ -970,7 +972,7 @@ function setTrendRender(id,st){
   let keys=[...new Set(cols.flatMap(c=>Object.keys(c.settings.items)))].filter(k=>!badKey(k)&&(showOther||order(k)<99)).sort((a,b)=>order(a)-order(b)||a.localeCompare(b,'ja'));
   const name=k=>{for(let i=cols.length-1;i>=0;i--){const x=cols[i].settings.items[k];if(x)return x.l;}return k;};
   // セルの状態：前の回（その項目を読めた一番近い回）と違えば変更
-  const grid=keys.map(k=>{let prev=null;return cols.map(c=>{const x=c.settings.items[k];if(!x||!okVal(k,x.v))return {v:null};const chg=!isMeas(k)&&prev!=null&&prev!==x.v;prev=x.v;const a=alertOf(k,x.v)||(chg&&!NO_RULE.has(k)&&RL(k)&&RL(k).chg?{lv:2,why:'前回から変更（ルール：前回から変わったらアラート）'}:null);return {v:x.v,chg,rb:a&&a.lv>=2?a.why:'',wn:a&&a.lv===1?a.why:''};});});
+  const grid=keys.map(k=>{let prev=null;return cols.map(c=>{const x0=c.settings.items[k];if(!x0||!okVal(k,x0.v))return {v:null};const x={...x0,v:LV(x0.v)};const chg=!isMeas(k)&&prev!=null&&prev!==x.v;prev=x.v;const a=alertOf(k,x.v)||(chg&&!NO_RULE.has(k)&&RL(k)&&RL(k).chg?{lv:2,why:'前回から変更（ルール：前回から変わったらアラート）'}:null);return {v:x.v,chg,rb:a&&a.lv>=2?a.why:'',wn:a&&a.lv===1?a.why:''};});});
   // 表に出すのは5回分。古い回はバー／◀▶で戻る（変更の判定は、表に出ない回も含めた前の回と比べる）
   const WIN=5,n=cols.length,maxS=Math.max(0,n-WIN);
   if(setTrendView.id!==id||setTrendView.n!==n)setTrendView={id,n,start:maxS}; // 患者が変わった・記録が増えた時は最新5回へ
@@ -997,7 +999,7 @@ function rulesTableHtml(R,pt){
   const glob=k=>pt?`<div class="hint">全体：${escH((()=>{const keep=PT_RULES;PT_RULES=null;const t=ruleText(k)||'決めない';PT_RULES=keep;return t;})())}</div>`:'';
   return `<table class="crit"><tr><th>項目</th><th>アラートを出す条件</th></tr>${SET_KNOWN.map(K=>{const k=K.k,r=R?R[k]:undefined,g=pt?(r||{}):(R[k]||{});
     if(NO_RULE.has(k))return '';
-    if(SET_ENUM[k]){const sel=v=>pt?(v==='__inh'?r===undefined:v===''?!!(r&&r.none):v==='__chg'?!!(r&&r.chg):!!(r&&r.eq===v)):(v===''?!(g.chg||g.eq):v==='__chg'?!!g.chg:g.eq===v);
+    if(SET_ENUM[k]){const sel=v=>pt?(v==='__inh'?r===undefined:v===''?!!(r&&r.none):v==='__chg'?!!(r&&r.chg):!!(r&&LV(r.eq)===v)):(v===''?!(g.chg||g.eq):v==='__chg'?!!g.chg:LV(g.eq)===v);
       return `<tr><td>${K.name}</td><td><select data-rk="${k}" data-rt="eq">${pt?`<option value="__inh"${sel('__inh')?' selected':''}>全体のルールのまま</option>`:''}<option value=""${sel('')?' selected':''}>決めない</option><option value="__chg"${sel('__chg')?' selected':''}>前回から変わったら</option>${SET_ENUM[k].map(o=>`<option value="${o}"${sel(o)?' selected':''}>${o} 以外なら</option>`).join('')}</select> <span class="hint">⚠️アラート</span>${glob(k)}</td></tr>`;}
     if(SET_NUM[k]){const v=pt?(r&&!r.none?r:{}):g;return `<tr><td>${K.name}</td><td>${pt?mode(k,r,true):''}${num(k,'min',v.min,'下限')} 〜 ${num(k,'max',v.max,'上限')} ${SET_NUM[k]} <span class="hint">の外なら⚠️アラート${pt?'':'（空欄＝決めない）'}</span>${glob(k)}</td></tr>`;}
     if(k==='battery'){const q=pt?(r?{...r}:IR(k)):{...g};
