@@ -396,9 +396,9 @@
     <div class="hint" style="margin-top:6px">新しい患者のファイルを作るときの名前です。使える項目：<code>{ID}</code>（患者ID）・<code>{機種}</code>　例：<code>{ID}.json</code>、<code>{ID}_{機種}.json</code>。<br>既にあるファイルは今の名前のまま使います。ファイル名を手で変えても、ファイルの中に書かれた患者IDで自動的に見つけます。</div>
     <div style="margin-top:10px;padding:8px 10px;border:1px solid var(--line);border-radius:8px">
       <b>🔔 設定アラートのルール（基準値）</b>
-      <div class="hint">ここで決めた範囲から外れた設定だけ、⚠️要確認のアラートを出します。前回から変わっただけではアラートにしません（設定の推移の表で黄色になります）。このPCに保存します。</div>
+      <div class="hint">ここで決めた条件に当てはまったら、アラートを出します（⚠️要確認、インピーダンスの注意は🟡）。条件にしていない設定は、前回から変わってもアラートにしません（推移の表で黄色になります）。このPCに保存します。</div>
       <div id="setRules"></div>
-      <div class="hint" style="margin-top:4px">インピーダンスは添付文書（EMBLEM MRI S-ICD）の範囲で固定：システムインピーダンス 201〜400Ω＝🟡注意・400Ω超＝⚠️要確認／ショックインピーダンス 111〜200Ω＝🟡注意・200Ω超または25Ω未満＝⚠️要確認。前回からの変化ではアラートを出しません。</div>
+      <div class="hint" style="margin-top:4px">インピーダンスの最初の値は添付文書（EMBLEM MRI S-ICD）の表2・表3の値です。ゲイン設定はルールの対象にしていません。</div>
       <div style="margin-top:6px"><button id="setRulesSave">保存</button> <button id="setRulesDef" class="ghost">最初の設定に戻す</button> <span class="status" id="setRulesMsg"></span></div>
     </div>
   </details>
@@ -815,24 +815,33 @@ function settingsDebugHtml(s){
 // ===== 設定のアラート（前回から変わった・基準と違う・ルールの範囲外） =====
 const SET_ENUM={therapy:['オン','オフ'],postShock:['オン','オフ'],smartPass:['オン','オフ'],afMon:['オン','オフ'],sensing:['一次','二次','代替'],gain:['1x','2x'],polarity:['標準','逆']};
 const SET_NUM={shockZone:'bpm',condZone:'bpm'};
-const SET_RULES_DEF={therapy:{eq:'オン'}};
-let SET_RULES=(()=>{try{const v=localStorage.getItem('pg_lat_setrules');return v?JSON.parse(v):{...SET_RULES_DEF};}catch(_){return {...SET_RULES_DEF};}})();
+// 最初の値（2026-11-18 ユーザー指定）。ゲインはルールにしない。センシング構成は「前回から変わったら」。インピーダンスは添付文書の値
+const SET_RULES_DEF={therapy:{eq:'オン'},shockZone:{min:170,max:250},condZone:{min:170,max:240},postShock:{eq:'オン'},polarity:{eq:'標準'},sensing:{chg:true},smartPass:{eq:'オン'},afMon:{eq:'オン'},
+  sysImp:{warn:200,alert:400},shockImp:{lo:25,warn:110,alert:200}};
+const SET_RULES_KEY='pg_lat_setrules2'; // 最初の値を変えたので保存先を変える（前の保存は使わない）
+const cloneDef=()=>JSON.parse(JSON.stringify(SET_RULES_DEF));
+let SET_RULES=(()=>{try{localStorage.removeItem('pg_lat_setrules');const v=localStorage.getItem(SET_RULES_KEY);return v?JSON.parse(v):cloneDef();}catch(_){return cloneDef();}})();
+const NO_RULE=new Set(['gain']); // ルールの対象にしない項目
 const hasN=x=>x!=null&&x!==''&&!isNaN(+x);
-function ruleText(k){if(IMP_RULES[k])return IMP_RULES[k].txt;const r=SET_RULES[k];if(!r)return '';if(r.eq)return `${r.eq}であること`;const a=[];if(hasN(r.min))a.push(`${r.min}以上`);if(hasN(r.max))a.push(`${r.max}以下`);return a.join('・');}
-function ruleBreak(k,v){const r=SET_RULES[k];if(!r||v==null)return '';if(r.eq)return v!==r.eq?`ルール外（${r.eq}であること）`:'';
+function ruleText(k){if(IMP_RULES[k])return IMP_RULES[k].txt();if(NO_RULE.has(k))return '';const r=SET_RULES[k];if(!r)return '';if(r.chg)return '前回から変わったらアラート';if(r.eq)return `${r.eq}であること`;const a=[];if(hasN(r.min))a.push(`${r.min}以上`);if(hasN(r.max))a.push(`${r.max}以下`);return a.join('・');}
+function ruleBreak(k,v){if(NO_RULE.has(k)||IMP_RULES[k])return '';const r=SET_RULES[k];if(!r||v==null)return '';if(r.eq)return v!==r.eq?`ルール外（${r.eq}であること）`:'';
   const n=parseFloat(v);if(isNaN(n))return '';if(hasN(r.min)&&n<+r.min)return `ルール外（${r.min}以上であること）`;if(hasN(r.max)&&n>+r.max)return `ルール外（${r.max}以下であること）`;return '';}
 const setImp=k=>{const K=SET_KNOWN.find(x=>x.k===k);return K?K.imp:0;};
 // 今回の設定について、アラートを作る：ルール（基準値）の範囲から外れた設定だけ＝要確認（前回から変わっただけではアラートにしない）
 // インピーダンス（測定値）：添付文書（EMBLEM MRI S-ICD）の表2・表3の範囲で判定。前回からの変化では判定しない
+const IR=k=>({...SET_RULES_DEF[k],...(SET_RULES[k]||{})});
 const IMP_RULES={
-  sysImp:{txt:'≤200Ω（201〜400 注意／400超 警告）',f:n=>n>400?{lv:2,why:'400Ω超（警告：電極の高電圧導体の破損・開放、ヘッダ接続の問題などの可能性）'}:n>200?{lv:1,why:'201〜400Ω（注意：配置が最適でない可能性）'}:null},
-  shockImp:{txt:'25〜110Ω（111〜200 注意／200超・25未満 警告）',f:n=>n<25?{lv:2,why:'25Ω未満（警告：高電圧導体の短絡、電極の外れ・ずれなどの可能性）'}:n>200?{lv:2,why:'200Ω超（警告：高電圧導体の破損・開放、ヘッダ接続の問題などの可能性）'}:n>110?{lv:1,why:'111〜200Ω（注意：配置が最適でない可能性）'}:null},
+  sysImp:{txt:()=>{const r=IR('sysImp');return `≤${r.warn}Ω（${r.warn}超 注意／${r.alert}超 要確認）`;},
+    f:n=>{const r=IR('sysImp');return n>r.alert?{lv:2,why:`${r.alert}Ω超（電極の高電圧導体の破損・開放、ヘッダ接続の問題などの可能性）`}:n>r.warn?{lv:1,why:`${r.warn}Ω超（配置が最適でない可能性）`}:null;}},
+  shockImp:{txt:()=>{const r=IR('shockImp');return `${r.lo}〜${r.warn}Ω（${r.warn}超 注意／${r.alert}超・${r.lo}未満 要確認）`;},
+    f:n=>{const r=IR('shockImp');return n<r.lo?{lv:2,why:`${r.lo}Ω未満（高電圧導体の短絡、電極の外れ・ずれなどの可能性）`}:n>r.alert?{lv:2,why:`${r.alert}Ω超（高電圧導体の破損・開放、ヘッダ接続の問題などの可能性）`}:n>r.warn?{lv:1,why:`${r.warn}Ω超（配置が最適でない可能性）`}:null;}},
 };
 const isMeas=k=>!!IMP_RULES[k];
 function alertOf(k,v){const rb=ruleBreak(k,v);if(rb)return {lv:2,why:rb};const R=IMP_RULES[k];if(!R||v==null)return null;const n=parseFloat(v);return isNaN(n)?null:R.f(n);}
-function settingsAlerts(cur){
-  const out=[];if(!cur||!cur.n)return out;
-  for(const [k,x] of Object.entries(cur.items)){const a=alertOf(k,x.v);if(a)out.push({lv:a.lv,k,txt:`${x.l} ${x.v}：${a.why}`});}
+function settingsAlerts(cur,prev){
+  const out=[];if(!cur||!cur.n)return out;const P=prev&&prev.items||{};
+  for(const [k,x] of Object.entries(cur.items)){const a=alertOf(k,x.v);if(a)out.push({lv:a.lv,k,txt:`${x.l} ${x.v}：${a.why}`});
+    else if(!NO_RULE.has(k)&&SET_RULES[k]&&SET_RULES[k].chg&&P[k]&&P[k].v!==x.v)out.push({lv:2,k,txt:`${x.l}が前回から変更（${P[k].v}→${x.v}）`});}
   return out.sort((a,b)=>b.lv-a.lv||setImp(b.k)-setImp(a.k));
 }
 function setAlertHtml(alerts,cur,chg){
@@ -858,7 +867,7 @@ function setTrendRender(id,st){
   let keys=[...new Set(cols.flatMap(c=>Object.keys(c.settings.items)))].filter(k=>showOther||order(k)<99).sort((a,b)=>order(a)-order(b)||a.localeCompare(b,'ja'));
   const name=k=>{for(let i=cols.length-1;i>=0;i--){const x=cols[i].settings.items[k];if(x)return x.l;}return k;};
   // セルの状態：前の回（その項目を読めた一番近い回）と違えば変更
-  const grid=keys.map(k=>{let prev=null;return cols.map(c=>{const x=c.settings.items[k];if(!x)return {v:null};const chg=!isMeas(k)&&prev!=null&&prev!==x.v;prev=x.v;const a=alertOf(k,x.v);return {v:x.v,chg,rb:a&&a.lv>=2?a.why:'',wn:a&&a.lv===1?a.why:''};});});
+  const grid=keys.map(k=>{let prev=null;return cols.map(c=>{const x=c.settings.items[k];if(!x)return {v:null};const chg=!isMeas(k)&&prev!=null&&prev!==x.v;prev=x.v;const a=alertOf(k,x.v)||(chg&&!NO_RULE.has(k)&&SET_RULES[k]&&SET_RULES[k].chg?{lv:2,why:'前回から変更（ルール：前回から変わったらアラート）'}:null);return {v:x.v,chg,rb:a&&a.lv>=2?a.why:'',wn:a&&a.lv===1?a.why:''};});});
   if(onlyChg){const keep=keys.map((k,i)=>grid[i].some(c=>c.chg||c.rb||c.wn));keys=keys.filter((_,i)=>keep[i]);grid.splice(0,grid.length,...grid.filter((_,i)=>keep[i]));}
   const short=d=>escH(String(d||'?').replace(/(\d{4})年(\d{2})月(\d{2})日\s*/,'$1/$2/$3 ').replace(/\s*(JST|ＪＳＴ)/g,'').replace(/\s+\d{1,2}:\d{2}$/,''));
   const ic=l=>l===2?'⚠️':l===1?'🟡':l===0?'✅':'';
@@ -870,15 +879,19 @@ function setTrendRender(id,st){
 }
 // ===== ルールの編集（⚙ 設定） =====
 function setRulesUi(){
-  const box=$('setRules');if(!box)return;
+  const box=$('setRules');if(!box)return;const num=(k,t,v,ph)=>`<input class="inp" style="width:72px" data-rk="${k}" data-rt="${t}" value="${hasN(v)?v:''}" placeholder="${ph}">`;
   box.innerHTML=`<table class="crit"><tr><th>項目</th><th>アラートを出す条件</th></tr>${SET_KNOWN.map(K=>{const r=SET_RULES[K.k]||{};
-    if(SET_ENUM[K.k])return `<tr><td>${K.name}</td><td><select data-rk="${K.k}" data-rt="eq"><option value="">決めない</option>${SET_ENUM[K.k].map(o=>`<option${r.eq===o?' selected':''}>${o}</option>`).join('')}</select> <span class="hint">以外ならアラート</span></td></tr>`;
-    if(SET_NUM[K.k])return `<tr><td>${K.name}</td><td><input class="inp" style="width:80px" data-rk="${K.k}" data-rt="min" value="${hasN(r.min)?r.min:''}" placeholder="下限"> 〜 <input class="inp" style="width:80px" data-rk="${K.k}" data-rt="max" value="${hasN(r.max)?r.max:''}" placeholder="上限"> ${SET_NUM[K.k]} <span class="hint">の外ならアラート（空欄＝決めない）</span></td></tr>`;
+    if(NO_RULE.has(K.k))return '';
+    if(SET_ENUM[K.k])return `<tr><td>${K.name}</td><td><select data-rk="${K.k}" data-rt="eq"><option value="">決めない</option><option value="__chg"${r.chg?' selected':''}>前回から変わったら</option>${SET_ENUM[K.k].map(o=>`<option value="${o}"${r.eq===o?' selected':''}>${o} 以外なら</option>`).join('')}</select> <span class="hint">⚠️アラート</span></td></tr>`;
+    if(SET_NUM[K.k])return `<tr><td>${K.name}</td><td>${num(K.k,'min',r.min,'下限')} 〜 ${num(K.k,'max',r.max,'上限')} ${SET_NUM[K.k]} <span class="hint">の外なら⚠️アラート（空欄＝決めない）</span></td></tr>`;
+    if(K.k==='sysImp'){const q=IR('sysImp');return `<tr><td>${K.name}</td><td>${num(K.k,'warn',q.warn,'注意')} Ω超で🟡注意／${num(K.k,'alert',q.alert,'要確認')} Ω超で⚠️要確認</td></tr>`;}
+    if(K.k==='shockImp'){const q=IR('shockImp');return `<tr><td>${K.name}</td><td>${num(K.k,'lo',q.lo,'下限')} Ω未満で⚠️要確認／${num(K.k,'warn',q.warn,'注意')} Ω超で🟡注意／${num(K.k,'alert',q.alert,'要確認')} Ω超で⚠️要確認</td></tr>`;}
     return '';}).join('')}</table>`;
 }
 function setRulesSave(){
-  const R={};document.querySelectorAll('#setRules [data-rk]').forEach(e=>{const k=e.dataset.rk,t=e.dataset.rt,v=e.value.trim();if(!v)return;if(t!=='eq'&&!hasN(v))return;(R[k]=R[k]||{})[t]=t==='eq'?v:+v;});
-  SET_RULES=R;try{localStorage.setItem('pg_lat_setrules',JSON.stringify(R));}catch(_){}
+  const R={};document.querySelectorAll('#setRules [data-rk]').forEach(e=>{const k=e.dataset.rk,t=e.dataset.rt,v=e.value.trim();if(!v)return;
+    if(t==='eq'){(R[k]=R[k]||{});if(v==='__chg')R[k].chg=true;else R[k].eq=v;return;}if(!hasN(v))return;(R[k]=R[k]||{})[t]=+v;});
+  SET_RULES=R;try{localStorage.setItem(SET_RULES_KEY,JSON.stringify(R));}catch(_){}
   $('setRulesMsg').innerHTML='<span class="ok-t">保存しました（次の評価から使います）</span>';if(setTrendLast)setTrendRender(setTrendLast.id,setTrendLast.st);
 }
 let curSettings=null; // 今回のレポートから読んだ設定
@@ -1875,7 +1888,7 @@ function tlReset(id,msg){setTrendRender(null,null);tl.id=id||'';tl.items=[];tl.c
 try{const v=localStorage.getItem('pg_lat_tlopen');if(v)$('tlCard').open=v==='1';}catch(_){}
 setRulesUi();
 $('setRulesSave').onclick=setRulesSave;
-$('setRulesDef').onclick=()=>{SET_RULES={...SET_RULES_DEF};try{localStorage.removeItem('pg_lat_setrules');}catch(_){}setRulesUi();$('setRulesMsg').innerHTML='<span class="ok-t">最初の設定（治療＝オン）に戻しました</span>';if(setTrendLast)setTrendRender(setTrendLast.id,setTrendLast.st);};
+$('setRulesDef').onclick=()=>{SET_RULES=cloneDef();try{localStorage.removeItem(SET_RULES_KEY);}catch(_){}setRulesUi();$('setRulesMsg').innerHTML='<span class="ok-t">最初の設定に戻しました</span>';if(setTrendLast)setTrendRender(setTrendLast.id,setTrendLast.st);};
 for(const k of ['setOnlyChg','setShowOther'])$(k).onchange=()=>{try{localStorage.setItem('pg_lat_'+k,$(k).checked?'1':'0');}catch(_){}if(setTrendLast)setTrendRender(setTrendLast.id,setTrendLast.st);};
 try{for(const k of ['setOnlyChg','setShowOther']){const v=localStorage.getItem('pg_lat_'+k);if(v!==null)$(k).checked=v==='1';}}catch(_){}
 $('tlCard').addEventListener('toggle',()=>{try{localStorage.setItem('pg_lat_tlopen',$('tlCard').open?'1':'0');}catch(_){}});
@@ -1963,7 +1976,7 @@ async function runEval(mode){
   // 設定：波形の比較相手（前回/基準）とは別に、いつも「前回」の設定と比べる
   const setPrev=prevSettingsRec(store,curKey,reloadArchived),setCur=curSettings&&curSettings.n?curSettings:null;
   const setCmp=compareSettings(setPrev&&setPrev.settings,setCur),setChg=setCmp?setCmp.changed:[];
-  const setAl=settingsAlerts(setCur);
+  const setAl=settingsAlerts(setCur,setPrev&&setPrev.settings);
   const setLv=setAl.length?Math.max(...setAl.map(a=>a.lv)):0;
   const setHtml=setAlertHtml(setAl,curSettings,setChg);
   const addSet=(where)=>{const v=document.querySelector('#result .verdict');if(!v)return;const h2=v.querySelector('h2');where==='top'&&h2?h2.insertAdjacentHTML('afterend',setHtml):v.insertAdjacentHTML('beforeend',setHtml);};
