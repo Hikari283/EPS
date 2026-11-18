@@ -987,7 +987,7 @@ function parseMDT(items,flat){
   const near=x=>{let b='',bd=1e9;for(const [k,cx] of Object.entries(cols)){const d=Math.abs(cx-x);if(d<bd){bd=d;b=k;}}return b;};
   let lastP=null;
   for(const r of rows){const cells=r.cells,c0=tvClean(cells[0].s),all=cells.map(c=>c.s).join(' ');
-    if(r.p!==lastP){lastP=r.p;if(sec==='obs'||sec==='txsum')sec='';}
+    if(r.p!==lastP){lastP=r.p;if(/^(obs|txsum|shock|charge|apc)$/.test(sec))sec='';} // ページが変わったら、次のページの見出し（ヒストグラムなど）を前の欄の値として拾わない
     if(/^前回のインテロゲーション/.test(c0)){sec='';continue;}
     // 見出しでセクションを切り替える
     const H=(re,name)=>{if(re.test(c0)){sec=name;return true;}return false;};
@@ -1043,7 +1043,7 @@ function parseMDT(items,flat){
       const tok=[];for(const c of L){const t=c.s.trim(),m=t.match(/^([^\d<>]*?[^\d\s<>])\s*([<>]?\d.*)$/);if(m&&!isVal(t))tok.push(m[1].trim(),m[2].trim());else tok.push(t);}
       let lab=null;for(const t of tok){if(isVal(t)&&lab){put(`set:${lab}`,lab,t);lab=null;}else if(!isVal(t))lab=tvClean(t);}continue;}
     if(sec==='detect'){if(/^レート|^治療/.test(l0))continue;
-      if(/^(VF|FVT|VT|AT\/AF|AF|ATR)$/i.test(l0)){put(`set:${l0}`,`検出 ${l0}`,L.slice(1).map(c=>c.s).join(' / '));}else if(/^Onになっている/.test(l0))put('set:検出強化機能','検出強化機能',rest);continue;}
+      if(/^(VF|FVT|VT|AT\/AF|AF|ATR)$/i.test(l0)){put(`set:${l0}`,`検出 ${l0}`,L.slice(1).map(c=>c.s).join(' / '));}else if(/^Onになっている/.test(l0))put('set:検出強化機能','検出強化機能',rest||all.replace(/^.*?検出強化機能\s*[:：]\s*/,''));continue;}
     if(sec==='evTx'||sec==='evMon'){
       if(/^(AT\/AF|AF)時間/.test(l0)){const m=rest.match(/\(\s*([<>]?\s*[\d.]+)\s*%\s*\)/);put('atAf',`%AT/AF（AT/AF時間 ${rest.replace(/\s*\(.*$/,'')}）`,(m?m[1].replace(/\s/g,''):'')+'%',{hr:rest.replace(/\s*\(.*$/,''),lab:l0.replace(/\s.*$/,'')});continue;}
       const n1=L.slice(1).map(c=>c.s.trim()).find(v=>/^\d+$/.test(v))??(/^\d+$/.test(rest)?rest:null);
@@ -1062,7 +1062,7 @@ function parseMDT(items,flat){
       else if(/^RV除細動/.test(l0))put('lead:ショック:ショックインピーダンス','ショックインピーダンス（RV除細動）',v,E);
       else if(/^SVC除細動/.test(l0))put('lead:ショック:SVC除細動インピーダンス','SVC除細動インピーダンス',v,E);continue;}
     if(sec==='sense'){if(/波高/.test(l0)&&rest){const ch=/^P/.test(l0)?'心房':chDef;put(`lead:${ch}:心内波高値`,`${ch} 心内波高値`,rest.replace(/\s*(?:\d{1,2}-[A-Z][a-z]{2}-\d{4}|\d{4}\.\d{1,2}\.\d{1,2})$/,''),{pr:2,measDate:mdD(rest)});}continue;}
-    if(sec==='shock'){if(rest)lastShock.push(`${l0} ${rest}`);continue;}
+    if(sec==='shock'){if(rest)lastShock.push(`${l0} ${rest}`);else if(/測定値がありません/.test(l0))lastShock.push('リセット以降の測定値なし');continue;}
   }
   if(lastShock.length)put('shock','前回のショック治療',lastShock.join(' ／ '));
   mdtEri(got);
