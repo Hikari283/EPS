@@ -737,17 +737,19 @@ const SET_KNOWN=[ // imp:2＝治療に関わる（変わったら強調）／1�
   {k:'smartPass',name:'SMART Pass',lab:/^SMART\s?Pass$/i,re:[`SMART\\s?Pass[:：]?${SET_V.onoff}`],imp:1},
   {k:'sysImp',name:'システムインピーダンス',meas:true,lab:/^(?:システム|電極|リード)インピーダンス$|^(?:System|Electrode|Lead)Impedance$/i,re:[`(?:システム|電極)インピーダンス[:：]?(\\d{2,3})\\s?(?:Ω|ohms?|オーム)`,`(?:System|Electrode)Impedance[:：]?(\\d{2,3})\\s?(?:Ω|ohms?)`],unit:'Ω',imp:0},
   {k:'shockImp',name:'ショックインピーダンス',meas:true,lab:/^ショック(?:電極)?インピーダンス$|^ShockImpedance$/i,re:[`ショック(?:電極)?インピーダンス[:：]?(\\d{1,3})\\s?(?:Ω|ohms?|オーム)`,`ShockImpedance[:：]?(\\d{1,3})\\s?(?:Ω|ohms?)`],unit:'Ω',imp:0},
+  {k:'battery',name:'電池',meas:true,lab:/^(?:電池|バッテリ[ー]?)(?:残量|の状態|状態|残存容量)?$|^Battery(?:Status|Remaining|Life|Capacity)?$/i,re:[`(?:電池|バッテリ[ー]?)(?:残量|の状態|状態|残存容量)?[:：]?(\\d{1,3}\\s?%|ERI|EOL|選択的交換指標|寿命末期)`,`Battery(?:Status|Remaining|Life|Capacity)?[:：]?(\\d{1,3}\\s?%|ERI|EOL)`],imp:0},
   {k:'afMon',name:'AFモニタ',lab:/^AFモニタ(?:ー|リング)?$|^AFMonitor$/i,re:[`AFモニタ(?:ー|リング)?[:：]?${SET_V.onoff}`,`AFMonitor[:：]?${SET_V.onoff}`],imp:0},
 ];
 // 設定ではない項目（測定値・日時・個人情報など）は、その他の項目として比べない
 const SET_SKIP=/患者|氏名|ID|ふりがな|生年|性別|日時|日付|年月日|送信|読込|植込み日|最終|前回|次回|電池|バッテリ|残量|インピーダンス|抵抗|心拍数|測定|イベント|件数|エピソード|回数|持続|医師|施設|病院|電話|住所|ページ|レポート|シリアル|型式|モデル|S-?ECG表示|Patient|Name|Date|Battery|Impedance|Serial|Model|Page/i;
-const SET_VAL=/^(オン|オフ|ON|OFF|On|Off|有効|無効|あり|なし|はい|いいえ|一次|二次|代替|プライマリ|セカンダリ|オルタネイト|オルタネート|Primary|Secondary|Alternate|標準|逆|反転|Standard|Reverse|[12]\s?[xX×]|[xX×]\s?[12]|[12]倍|Therapy\s?(?:On|Off)(?:モード)?|[-+]?\d+(?:\.\d+)?\s*(?:bpm|ms|mV|V|J|Ω|ohms?|オーム|%|秒|分|時間|日|回|拍|min-1|回\/分)?(?:\s*[\/／~〜-]\s*\d+(?:\.\d+)?\s*(?:bpm|ms|mV|V|J|%)?)?)$/;
+const SET_VAL=/^(オン|オフ|ON|OFF|On|Off|有効|無効|あり|なし|はい|いいえ|一次|二次|代替|プライマリ|セカンダリ|オルタネイト|オルタネート|Primary|Secondary|Alternate|標準|逆|反転|Standard|Reverse|[12]\s?[xX×]|[xX×]\s?[12]|[12]倍|Therapy\s?(?:On|Off)(?:モード)?|ERI|EOL|BOL|OK|良好|正常|選択的交換指標|寿命末期|[-+]?\d+(?:\.\d+)?\s*(?:bpm|ms|mV|V|J|Ω|ohms?|オーム|%|秒|分|時間|日|回|拍|min-1|回\/分)?(?:\s*[\/／~〜-]\s*\d+(?:\.\d+)?\s*(?:bpm|ms|mV|V|J|%)?)?)$/;
 const setNorm=s=>String(s||'').replace(/[Ａ-Ｚａ-ｚ０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/[\s　]+/g,'').replace(/[：:]$/,'');
 function setVal(v,unit){let s=setNorm(v);
   if(/^(オン|ON|On|有効|TherapyOn(?:モード)?)$/i.test(s))s='オン';else if(/^(オフ|OFF|Off|無効|TherapyOff(?:モード)?)$/i.test(s))s='オフ';
   else if(/^(プライマリ|Primary)$/i.test(s))s='一次';else if(/^(セカンダリ|Secondary)$/i.test(s))s='二次';else if(/^(オルタネイト|オルタネート|Alternate)$/i.test(s))s='代替';
   else if(/^([12])(?:[xX×]|倍)$/.test(s))s=s[0]+'x';else if(/^[xX×]([12])$/.test(s))s=s.slice(-1)+'x';else if(/^(Standard|STD)$/i.test(s))s='標準';else if(/^(Reverse|REV|反転)$/i.test(s))s='逆';
   else if(unit&&/^\d+$/.test(s))s+=' '+unit;
+  else if(/^(選択的交換指標)$/.test(s))s='ERI';else if(/^(寿命末期)$/.test(s))s='EOL';
   else s=s.replace(/(\d)(?:min-?1|回\/分)$/,'$1bpm').replace(/(\d)(?:ohms?|オーム)$/i,'$1Ω').replace(/(\d)(bpm|ms|mV|V|J|Ω)$/,'$1 $2');
   return s;}
 // pdf.jsの文字（全ページ、位置つき）から行を作り、間が空いた所でセルに分ける
@@ -823,7 +825,7 @@ const SET_ENUM={therapy:['オン','オフ'],postShock:['オン','オフ'],smartP
 const SET_NUM={shockZone:'bpm',condZone:'bpm'};
 // 最初の値（2026-11-18 ユーザー指定）。ゲインはルールにしない。センシング構成は「前回から変わったら」。インピーダンスは添付文書の値
 const SET_RULES_DEF={therapy:{eq:'オン'},shockZone:{min:170,max:250},condZone:{min:170,max:240},postShock:{eq:'オン'},polarity:{eq:'標準'},sensing:{chg:true},smartPass:{eq:'オン'},afMon:{eq:'オン'},
-  sysImp:{warn:200,alert:400},shockImp:{lo:25,warn:110,alert:200}};
+  sysImp:{warn:200,alert:400},shockImp:{lo:25,warn:110,alert:200},battery:{alert:20}};
 const SET_RULES_KEY='pg_lat_setrules2'; // 最初の値を変えたので保存先を変える（前の保存は使わない）
 const cloneDef=()=>JSON.parse(JSON.stringify(SET_RULES_DEF));
 let SET_RULES=(()=>{try{localStorage.removeItem('pg_lat_setrules');const v=localStorage.getItem(SET_RULES_KEY);return v?JSON.parse(v):cloneDef();}catch(_){return cloneDef();}})();
@@ -839,15 +841,18 @@ function ruleBreak(k,v){if(NO_RULE.has(k)||IMP_RULES[k])return '';const r=RL(k);
 const setImp=k=>{const K=SET_KNOWN.find(x=>x.k===k);return K?K.imp:0;};
 // 今回の設定について、アラートを作る：ルール（基準値）の範囲から外れた設定だけ＝要確認（前回から変わっただけではアラートにしない）
 // インピーダンス（測定値）：添付文書（EMBLEM MRI S-ICD）の表2・表3の範囲で判定。前回からの変化では判定しない
-const IR=k=>({...SET_RULES_DEF[k],...(RL(k)||{})});
+const IR=k=>k==='battery'?{...(RL(k)||SET_RULES_DEF[k])}:({...SET_RULES_DEF[k],...(RL(k)||{})});
 const IMP_RULES={
+  battery:{txt:()=>{const r=IR('battery'),a=['ERI・EOLで要確認'];if(hasN(r.warn))a.push(`${r.warn}%以下 注意`);if(hasN(r.alert))a.push(`${r.alert}%以下 要確認`);return a.join('／');},
+    f:n=>{const r=IR('battery');return hasN(r.alert)&&n<=+r.alert?{lv:2,why:`残量 ${r.alert}%以下`}:hasN(r.warn)&&n<=+r.warn?{lv:1,why:`残量 ${r.warn}%以下`}:null;}},
   sysImp:{txt:()=>{const r=IR('sysImp');return `≤${r.warn}Ω（${r.warn}超 注意／${r.alert}超 要確認）`;},
     f:n=>{const r=IR('sysImp');return n>r.alert?{lv:2,why:`${r.alert}Ω超（電極の高電圧導体の破損・開放、ヘッダ接続の問題などの可能性）`}:n>r.warn?{lv:1,why:`${r.warn}Ω超（配置が最適でない可能性）`}:null;}},
   shockImp:{txt:()=>{const r=IR('shockImp');return `${r.lo}〜${r.warn}Ω（${r.warn}超 注意／${r.alert}超・${r.lo}未満 要確認）`;},
     f:n=>{const r=IR('shockImp');return n<r.lo?{lv:2,why:`${r.lo}Ω未満（高電圧導体の短絡、電極の外れ・ずれなどの可能性）`}:n>r.alert?{lv:2,why:`${r.alert}Ω超（高電圧導体の破損・開放、ヘッダ接続の問題などの可能性）`}:n>r.warn?{lv:1,why:`${r.warn}Ω超（配置が最適でない可能性）`}:null;}},
 };
 const isMeas=k=>!!IMP_RULES[k];
-function alertOf(k,v){const rb=ruleBreak(k,v);if(rb)return {lv:2,why:rb};const R=IMP_RULES[k];if(!R||v==null)return null;const n=parseFloat(v);return isNaN(n)?null:R.f(n);}
+function alertOf(k,v){const rb=ruleBreak(k,v);if(rb)return {lv:2,why:rb};const R=IMP_RULES[k];if(!R||v==null)return null;
+  if(k==='battery'){if(/EOL/i.test(v))return {lv:2,why:'EOL（バッテリ寿命末期：速やかに交換。治療は担保されない）'};if(/ERI/i.test(v))return {lv:2,why:'ERI（選択的交換指標：交換を予定。3か月以上は治療できる）'};}const n=parseFloat(v);return isNaN(n)?null:R.f(n);}
 function settingsAlerts(cur,prev){
   const out=[];if(!cur||!cur.n)return out;const P=prev&&prev.items||{};
   for(const [k,x] of Object.entries(cur.items)){const a=alertOf(k,x.v);if(a)out.push({lv:a.lv,k,txt:`${x.l} ${x.v}：${a.why}${isPt(k)?'（この患者のルール）':''}`});
@@ -900,6 +905,8 @@ function rulesTableHtml(R,pt){
     if(SET_ENUM[k]){const sel=v=>pt?(v==='__inh'?r===undefined:v===''?!!(r&&r.none):v==='__chg'?!!(r&&r.chg):!!(r&&r.eq===v)):(v===''?!(g.chg||g.eq):v==='__chg'?!!g.chg:g.eq===v);
       return `<tr><td>${K.name}</td><td><select data-rk="${k}" data-rt="eq">${pt?`<option value="__inh"${sel('__inh')?' selected':''}>全体のルールのまま</option>`:''}<option value=""${sel('')?' selected':''}>決めない</option><option value="__chg"${sel('__chg')?' selected':''}>前回から変わったら</option>${SET_ENUM[k].map(o=>`<option value="${o}"${sel(o)?' selected':''}>${o} 以外なら</option>`).join('')}</select> <span class="hint">⚠️アラート</span>${glob(k)}</td></tr>`;}
     if(SET_NUM[k]){const v=pt?(r&&!r.none?r:{}):g;return `<tr><td>${K.name}</td><td>${pt?mode(k,r,true):''}${num(k,'min',v.min,'下限')} 〜 ${num(k,'max',v.max,'上限')} ${SET_NUM[k]} <span class="hint">の外なら⚠️アラート${pt?'':'（空欄＝決めない）'}</span>${glob(k)}</td></tr>`;}
+    if(k==='battery'){const q=pt?(r?{...r}:IR(k)):{...g};
+      return `<tr><td>${K.name}</td><td>${pt?mode(k,r,false):''}残量 ${num(k,'warn',q.warn,'注意')} %以下で🟡注意／${num(k,'alert',q.alert,'要確認')} %以下で⚠️要確認 <span class="hint">（空欄＝決めない。ERI・EOLの表示はいつも⚠️要確認）</span>${glob(k)}</td></tr>`;}
     if(k==='sysImp'||k==='shockImp'){const q=pt?(r?{...SET_RULES_DEF[k],...r}:IR(k)):{...SET_RULES_DEF[k],...g};
       const body=k==='sysImp'?`${num(k,'warn',q.warn,'注意')} Ω超で🟡注意／${num(k,'alert',q.alert,'要確認')} Ω超で⚠️要確認`:`${num(k,'lo',q.lo,'下限')} Ω未満で⚠️要確認／${num(k,'warn',q.warn,'注意')} Ω超で🟡注意／${num(k,'alert',q.alert,'要確認')} Ω超で⚠️要確認`;
       return `<tr><td>${K.name}</td><td>${pt?mode(k,r,false):''}${body}${glob(k)}</td></tr>`;}
@@ -910,6 +917,7 @@ function rulesRead(box,pt){
   box.querySelectorAll('[data-rk]').forEach(e=>{const k=e.dataset.rk,t=e.dataset.rt,v=e.value.trim();if(t==='mode')return;
     if(t==='eq'){if(v==='__inh')return;if(v===''){if(pt)R[k]={none:true};return;}R[k]=v==='__chg'?{chg:true}:{eq:v};return;}
     if(pt){const m=modes[k];if(m==='__inh')return;if(m===''){R[k]={none:true};return;}}
+    if(!pt&&k==='battery')R[k]=R[k]||{}; // 電池は空欄＝決めない（最初の値に戻さない）
     if(!hasN(v))return;(R[k]=R[k]||{})[t]=+v;});
   if(pt)for(const [k,m] of Object.entries(modes))if(m==='__set'&&!R[k])R[k]={}; // 値を空にした時：最初の値（インピーダンス）／ゾーンは制限なし
   return R;
