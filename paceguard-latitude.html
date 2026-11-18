@@ -930,6 +930,7 @@ const SET_KNOWN=[ // imp:2＝治療に関わる（変わったら強調）／1�
   {k:'smartPass',name:'SMART Pass',lab:/^SMART\s?Pass$/i,re:[`SMART\\s?Pass[:：]?${SET_V.onoff}`],imp:1},
   {k:'sysImp',name:'システムインピーダンス',ok:/^\d{1,4}( Ω)?$/,meas:true,lab:/^(?:システム|電極|リード)インピーダンス$|^(?:System|Electrode|Lead)Impedance$/i,re:[`(?:システム|電極)インピーダンス[:：]?(\\d{2,3})\\s?(?:Ω|ohms?|オーム)`,`(?:System|Electrode)Impedance[:：]?(\\d{2,3})\\s?(?:Ω|ohms?)`],unit:'Ω',imp:0},
   {k:'battery',name:'電池',ok:/^(\d{1,3}%|ERI|EOL)$/,meas:true,lab:/^(?:ERIまでの)?(?:電池|バッテリ[ー]?)(?:残量|の状態|状態|残存容量)?$|^Battery(?:Status|Remaining|Life|Capacity)?$|^(?:Remaining)?Battery(?:toERI)?$/i,re:[`(?:ERIまでの)?(?:電池|バッテリ[ー]?)(?:残量|の状態|状態|残存容量)?[:：]?(\\d{1,3}\\s?%|ERI|EOL|選択的交換指標|寿命末期)`,`Battery(?:Status|Remaining|Life|Capacity)?[:：]?(\\d{1,3}\\s?%|ERI|EOL)`],imp:0},
+  {k:'afDays',name:'AFが検出された日数',meas:true,ok:/^\d+\s?日$/,lab:/^AFが検出された日数$/,re:[`AFが検出された日数[:：]?(\\d+\\s?日)`],imp:0},
   {k:'afMon',name:'AFモニタ',lab:/^AFモニタ(?:ー|リング)?$|^AFMonitor$/i,re:[`AFモニタ(?:ー|リング)?[:：]?${SET_V.onoff}`,`AFMonitor[:：]?${SET_V.onoff}`],imp:0},
 ];
 // 設定ではない項目（測定値・日時・個人情報など）は、その他の項目として比べない
@@ -975,6 +976,7 @@ function parseSettings(items,flat){
       if(K){put(K.k,K.name,v,'main','行',K.unit);continue;}
       if(SET_SKIP.test(lab)||/\d/.test(lab))continue; // 数字が入った項目名（グラフの日付・目盛り「0.0秒」など）は設定ではない
       if(/[\u0080-\u024f\u02b0-\u02ff\u2000-\u206f\ufffd]/.test(lab))continue; // 文字化けした項目名は「その他」に入れない
+      if(/^AF$/i.test(lab))continue; // AFのグラフの目盛り
       put('x:'+lab,setNorm(l0),v,'other','行');}
   }
   // ①-2 位置から（値が項目名の行より少し上下にずれて印刷されている時：例 ショック極性の「STD」）
@@ -1058,7 +1060,7 @@ const IMP_RULES={
   sysImp:{txt:()=>{const r=IR('sysImp');return `${r.lo}〜${r.hi}Ω（外なら要確認）`;},
     f:n=>{const r=IR('sysImp');return hasN(r.lo)&&n<+r.lo?{lv:2,why:`${r.lo}Ω未満（範囲 ${r.lo}〜${r.hi}Ω の外）`}:hasN(r.hi)&&n>+r.hi?{lv:2,why:`${r.hi}Ω超（範囲 ${r.lo}〜${r.hi}Ω の外）`}:null;}},
 };
-const isMeas=k=>!!IMP_RULES[k]||TV_MEAS_KEY.test(k); // 測定値（毎回変わる）は「◀変」を付けない
+const isMeas=k=>!!IMP_RULES[k]||TV_MEAS_KEY.test(k)||k==='afDays'; // 測定値（毎回変わる）は「◀変」を付けない
 function alertOf(k,v){const rb=ruleBreak(k,v);if(rb)return {lv:2,why:rb};const R=IMP_RULES[k];if(!R||v==null)return null;
   if(k==='battery'){if(/EOL/i.test(v))return {lv:2,why:'EOL（バッテリ寿命末期：速やかに交換。治療は担保されない）'};if(/ERI/i.test(v))return {lv:2,why:'ERI（選択的交換指標：交換を予定。3か月以上は治療できる）'};}const n=parseFloat(v);return isNaN(n)?null:R.f(n);}
 function settingsAlerts(cur,prev){
@@ -1090,7 +1092,7 @@ function setTrendRender(id,st){
   const onlyChg=$('setOnlyChg').checked,showOther=$('setShowOther').checked;
   const order=k=>{const i=SET_KNOWN.findIndex(K=>K.k===k);return i<0?99:i;};
   // 前の版で保存した記録の読み違い（グラフの日付・目盛りの「その他」、ゾーンの -1 など）は表に出さない
-  const badKey=k=>k.startsWith('x:')&&(/\d/.test(k)||/[\u0080-\u024f\u02b0-\u02ff\u2000-\u206f\ufffd]/.test(k));
+  const badKey=k=>k==='x:AF'||k.startsWith('x:')&&(/\d/.test(k)||/[\u0080-\u024f\u02b0-\u02ff\u2000-\u206f\ufffd]/.test(k));
   const okVal=(k,v)=>{const K=SET_KNOWN.find(x=>x.k===k);return !(K&&K.ok&&!K.ok.test(LV(v)));};
   const isTVp=cols.some(c=>c.tv); // 経静脈デバイス：設定は表にせず、下の「⚙ 設定」の欄で見る
   if(isTVp&&$('ptRulesWrap'))$('ptRulesWrap').hidden=true; // 経静脈は専用の「この患者だけのルール」
