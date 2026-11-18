@@ -737,12 +737,12 @@ const SET_KNOWN=[ // imp:2＝治療に関わる（変わったら強調）／1�
   {k:'gain',name:'ゲイン設定',lab:/^ゲイン(?:設定)?$|^Gain(?:Setting)?$|^最大センシング範囲$/i,re:[`(?:ゲイン(?:設定)?|最大センシング範囲)[:：]?${SET_V.gain}`,`Gain(?:Setting)?[:：]?${SET_V.gain}`],imp:1},
   {k:'smartPass',name:'SMART Pass',lab:/^SMART\s?Pass$/i,re:[`SMART\\s?Pass[:：]?${SET_V.onoff}`],imp:1},
   {k:'sysImp',name:'システムインピーダンス',meas:true,lab:/^(?:システム|電極|リード)インピーダンス$|^(?:System|Electrode|Lead)Impedance$/i,re:[`(?:システム|電極)インピーダンス[:：]?(\\d{2,3})\\s?(?:Ω|ohms?|オーム)`,`(?:System|Electrode)Impedance[:：]?(\\d{2,3})\\s?(?:Ω|ohms?)`],unit:'Ω',imp:0},
-  {k:'battery',name:'電池',meas:true,lab:/^(?:電池|バッテリ[ー]?)(?:残量|の状態|状態|残存容量)?$|^Battery(?:Status|Remaining|Life|Capacity)?$/i,re:[`(?:電池|バッテリ[ー]?)(?:残量|の状態|状態|残存容量)?[:：]?(\\d{1,3}\\s?%|ERI|EOL|選択的交換指標|寿命末期)`,`Battery(?:Status|Remaining|Life|Capacity)?[:：]?(\\d{1,3}\\s?%|ERI|EOL)`],imp:0},
+  {k:'battery',name:'電池',meas:true,lab:/^(?:ERIまでの)?(?:電池|バッテリ[ー]?)(?:残量|の状態|状態|残存容量)?$|^Battery(?:Status|Remaining|Life|Capacity)?$|^(?:Remaining)?Battery(?:toERI)?$/i,re:[`(?:ERIまでの)?(?:電池|バッテリ[ー]?)(?:残量|の状態|状態|残存容量)?[:：]?(\\d{1,3}\\s?%|ERI|EOL|選択的交換指標|寿命末期)`,`Battery(?:Status|Remaining|Life|Capacity)?[:：]?(\\d{1,3}\\s?%|ERI|EOL)`],imp:0},
   {k:'afMon',name:'AFモニタ',lab:/^AFモニタ(?:ー|リング)?$|^AFMonitor$/i,re:[`AFモニタ(?:ー|リング)?[:：]?${SET_V.onoff}`,`AFMonitor[:：]?${SET_V.onoff}`],imp:0},
 ];
 // 設定ではない項目（測定値・日時・個人情報など）は、その他の項目として比べない
-const SET_SKIP=/患者|氏名|ID|ふりがな|生年|性別|日時|日付|年月日|送信|読込|植込み日|最終|前回|次回|電池|バッテリ|残量|インピーダンス|抵抗|心拍数|測定|イベント|件数|エピソード|回数|持続|医師|施設|病院|電話|住所|ページ|レポート|シリアル|型式|モデル|S-?ECG表示|Patient|Name|Date|Battery|Impedance|Serial|Model|Page/i;
-const SET_VAL=/^(オン|オフ|ON|OFF|On|Off|有効|無効|あり|なし|はい|いいえ|一次|二次|代替|プライマリ|セカンダリ|オルタネイト|オルタネート|Primary|Secondary|Alternate|標準|逆|反転|Standard|Reverse|[12]\s?[xX×]|[xX×]\s?[12]|[12]倍|Therapy\s?(?:On|Off)(?:モード)?|ERI|EOL|BOL|OK|良好|正常|選択的交換指標|寿命末期|[-+]?\d+(?:\.\d+)?\s*(?:bpm|ms|mV|V|J|Ω|ohms?|オーム|%|秒|分|時間|日|回|拍|min-1|回\/分)?(?:\s*[\/／~〜-]\s*\d+(?:\.\d+)?\s*(?:bpm|ms|mV|V|J|%)?)?)$/;
+const SET_SKIP=/検出された日数|検出期間|概算|実行数|AFが|MRI保護|患者|氏名|ID|ふりがな|生年|性別|日時|日付|年月日|送信|読込|植込み日|最終|前回|次回|電池|バッテリ|残量|インピーダンス|抵抗|心拍数|測定|イベント|件数|エピソード|回数|持続|医師|施設|病院|電話|住所|ページ|レポート|シリアル|型式|モデル|S-?ECG表示|Patient|Name|Date|Battery|Impedance|Serial|Model|Page/i;
+const SET_VAL=/^(オン|オフ|ON|OFF|On|Off|有効|無効|あり|なし|はい|いいえ|一次|二次|代替|プライマリ|セカンダリ|オルタネイト|オルタネート|Primary|Secondary|Alternate|標準|逆|反転|Standard|Reverse|STD|REV|[12]\s?[xX×]|[xX×]\s?[12]|[12]倍|Therapy\s?(?:On|Off)(?:モード)?|ERI|EOL|BOL|OK|良好|正常|選択的交換指標|寿命末期|[-+]?\d+(?:\.\d+)?\s*(?:bpm|ms|mV|V|J|Ω|ohms?|オーム|%|s|秒|分|時間|日|回|拍|min(?:-?1|⁻¹)?|回\/分)?(?:\s*[\/／~〜-]\s*\d+(?:\.\d+)?\s*(?:bpm|ms|mV|V|J|%)?)?)$/;
 const setNorm=s=>String(s||'').replace(/[Ａ-Ｚａ-ｚ０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/[\s　]+/g,'').replace(/[：:]$/,'');
 function setVal(v,unit){let s=setNorm(v);
   if(/^(オン|ON|On|有効|TherapyOn(?:モード)?)$/i.test(s))s='オン';else if(/^(オフ|OFF|Off|無効|TherapyOff(?:モード)?)$/i.test(s))s='オフ';
@@ -750,7 +750,7 @@ function setVal(v,unit){let s=setNorm(v);
   else if(/^([12])(?:[xX×]|倍)$/.test(s))s=s[0]+'x';else if(/^[xX×]([12])$/.test(s))s=s.slice(-1)+'x';else if(/^(Standard|STD)$/i.test(s))s='標準';else if(/^(Reverse|REV|反転)$/i.test(s))s='逆';
   else if(unit&&/^\d+$/.test(s))s+=' '+unit;
   else if(/^(選択的交換指標)$/.test(s))s='ERI';else if(/^(寿命末期)$/.test(s))s='EOL';
-  else s=s.replace(/(\d)(?:min-?1|回\/分)$/,'$1bpm').replace(/(\d)(?:ohms?|オーム)$/i,'$1Ω').replace(/(\d)(bpm|ms|mV|V|J|Ω)$/,'$1 $2');
+  else s=s.replace(/(\d)(?:min(?:-?1|⁻¹)?|回\/分)$/,'$1bpm').replace(/(\d)(?:ohms?|オーム)$/i,'$1Ω').replace(/(\d)(bpm|ms|mV|V|J|Ω)$/,'$1 $2');
   return s;}
 // pdf.jsの文字（全ページ、位置つき）から行を作り、間が空いた所でセルに分ける
 function textLines(items){
