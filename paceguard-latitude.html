@@ -794,15 +794,15 @@ async function extractRawItems(ab){
 const SET_V={onoff:'(オン|オフ|ON|OFF|On|Off|有効|無効)',zone:'(\\d{3}|オフ|OFF|Off)',sense:'(一次|二次|代替|プライマリ|セカンダリ|オルタネイト|オルタネート|Primary|Secondary|Alternate)',gain:'([12]\\s?[xX×]|[xX×]\\s?[12]|[12]倍)',pol:'(標準|逆|反転|STD|REV|Standard|Reverse)'};
 const SET_KNOWN=[ // imp:2＝治療に関わる（変わったら強調）／1＝波形の見え方が変わる
   {k:'therapy',name:'治療',lab:/^(?:頻拍)?治療(?:の設定|モード|設定)?$|^Therapy(?:Mode)?$|^(?:S-?ICD)?(?:パルスジェネレータの)?モード$/i,re:[`(?:頻拍)?治療(?:の設定|モード|設定)?[:：]?${SET_V.onoff}`,`Therapy(?:Mode)?[:：]?${SET_V.onoff}`,`Therapy\\s?(On|Off)`],imp:2},
-  {k:'shockZone',name:'ショックゾーン',lab:/^(?!.*(?:条件|コンディショナル))ショックゾーン$|^ShockZone$/i,re:[`(?<!条件付き|条件付|コンディショナル|Conditional)ショックゾーン[:：]?(\\d{3})`,`(?<!Conditional)ShockZone[:：]?(\\d{3})`],unit:'bpm',imp:2},
-  {k:'condZone',name:'条件付きショックゾーン',lab:/^(?:条件付き?|コンディショナル)(?:ショック)?ゾーン$|^Conditional(?:Shock)?Zone$/i,re:[`(?:条件付き?|コンディショナル)(?:ショック)?ゾーン[:：]?${SET_V.zone}`,`ConditionalShockZone[:：]?${SET_V.zone}`],unit:'bpm',imp:2},
+  {k:'shockZone',name:'ショックゾーン',ok:/^\d{3}( bpm)?$/,lab:/^(?!.*(?:条件|コンディショナル))ショックゾーン$|^ShockZone$/i,re:[`(?<!条件付き|条件付|コンディショナル|Conditional)ショックゾーン[:：]?(\\d{3})`,`(?<!Conditional)ShockZone[:：]?(\\d{3})`],unit:'bpm',imp:2},
+  {k:'condZone',name:'条件付きショックゾーン',ok:/^(\d{3}( bpm)?|オフ)$/,lab:/^(?:条件付き?|コンディショナル)(?:ショック)?ゾーン$|^Conditional(?:Shock)?Zone$/i,re:[`(?:条件付き?|コンディショナル)(?:ショック)?ゾーン[:：]?${SET_V.zone}`,`ConditionalShockZone[:：]?${SET_V.zone}`],unit:'bpm',imp:2},
   {k:'postShock',name:'ショック後ペーシング',lab:/^ショック後(?:の)?ペーシング$|^Post-?ShockPacing$/i,re:[`ショック後(?:の)?ペーシング[:：]?${SET_V.onoff}`,`Post-?ShockPacing[:：]?${SET_V.onoff}`],imp:2},
   {k:'polarity',name:'ショック極性',lab:/^ショック(?:の)?極性$|^ShockPolarity$/i,re:[`ショック(?:の)?極性[:：]?${SET_V.pol}`,`ShockPolarity[:：]?${SET_V.pol}`],imp:2},
   {k:'sensing',name:'センシング構成',lab:/^センシング(?:構成|ベクトル|ベクター)$|^Sensing(?:Configuration|Vector)$/i,re:[`センシング(?:構成|ベクトル|ベクター)[:：]?${SET_V.sense}`,`Sensing(?:Configuration|Vector)[:：]?${SET_V.sense}`],imp:1},
   {k:'gain',name:'ゲイン設定',lab:/^ゲイン(?:設定)?$|^Gain(?:Setting)?$|^最大センシング範囲$/i,re:[`(?:ゲイン(?:設定)?|最大センシング範囲)[:：]?${SET_V.gain}`,`Gain(?:Setting)?[:：]?${SET_V.gain}`],imp:1},
   {k:'smartPass',name:'SMART Pass',lab:/^SMART\s?Pass$/i,re:[`SMART\\s?Pass[:：]?${SET_V.onoff}`],imp:1},
-  {k:'sysImp',name:'システムインピーダンス',meas:true,lab:/^(?:システム|電極|リード)インピーダンス$|^(?:System|Electrode|Lead)Impedance$/i,re:[`(?:システム|電極)インピーダンス[:：]?(\\d{2,3})\\s?(?:Ω|ohms?|オーム)`,`(?:System|Electrode)Impedance[:：]?(\\d{2,3})\\s?(?:Ω|ohms?)`],unit:'Ω',imp:0},
-  {k:'battery',name:'電池',meas:true,lab:/^(?:ERIまでの)?(?:電池|バッテリ[ー]?)(?:残量|の状態|状態|残存容量)?$|^Battery(?:Status|Remaining|Life|Capacity)?$|^(?:Remaining)?Battery(?:toERI)?$/i,re:[`(?:ERIまでの)?(?:電池|バッテリ[ー]?)(?:残量|の状態|状態|残存容量)?[:：]?(\\d{1,3}\\s?%|ERI|EOL|選択的交換指標|寿命末期)`,`Battery(?:Status|Remaining|Life|Capacity)?[:：]?(\\d{1,3}\\s?%|ERI|EOL)`],imp:0},
+  {k:'sysImp',name:'システムインピーダンス',ok:/^\d{1,4}( Ω)?$/,meas:true,lab:/^(?:システム|電極|リード)インピーダンス$|^(?:System|Electrode|Lead)Impedance$/i,re:[`(?:システム|電極)インピーダンス[:：]?(\\d{2,3})\\s?(?:Ω|ohms?|オーム)`,`(?:System|Electrode)Impedance[:：]?(\\d{2,3})\\s?(?:Ω|ohms?)`],unit:'Ω',imp:0},
+  {k:'battery',name:'電池',ok:/^(\d{1,3}%|ERI|EOL)$/,meas:true,lab:/^(?:ERIまでの)?(?:電池|バッテリ[ー]?)(?:残量|の状態|状態|残存容量)?$|^Battery(?:Status|Remaining|Life|Capacity)?$|^(?:Remaining)?Battery(?:toERI)?$/i,re:[`(?:ERIまでの)?(?:電池|バッテリ[ー]?)(?:残量|の状態|状態|残存容量)?[:：]?(\\d{1,3}\\s?%|ERI|EOL|選択的交換指標|寿命末期)`,`Battery(?:Status|Remaining|Life|Capacity)?[:：]?(\\d{1,3}\\s?%|ERI|EOL)`],imp:0},
   {k:'afMon',name:'AFモニタ',lab:/^AFモニタ(?:ー|リング)?$|^AFMonitor$/i,re:[`AFモニタ(?:ー|リング)?[:：]?${SET_V.onoff}`,`AFMonitor[:：]?${SET_V.onoff}`],imp:0},
 ];
 // 設定ではない項目（測定値・日時・個人情報など）は、その他の項目として比べない
@@ -819,17 +819,23 @@ function setVal(v,unit){let s=setNorm(v);
   return s;}
 // pdf.jsの文字（全ページ、位置つき）から行を作り、間が空いた所でセルに分ける
 function textLines(items){
-  const rows=new Map();
-  for(const it of items){if(!String(it.s||'').trim())continue;const key=it.p+':'+Math.round(it.y/3);if(!rows.has(key))rows.set(key,[]);rows.get(key).push(it);}
+  // 行：同じページ（描画命令）の中で、高さが文字の高さの半分ほどの差なら同じ行（上付きの -1 なども同じ行にする）
+  const rows=[];
+  const its=items.filter(it=>String(it.s||'').trim()).sort((a,b)=>String(a.p)<String(b.p)?-1:String(a.p)>String(b.p)?1:b.y-a.y);
+  let cur0=null;
+  for(const it of its){const tol=Math.max(2,0.5*(it.h||8));
+    if(cur0&&cur0.p===it.p&&Math.abs(cur0.y-it.y)<=tol)cur0.r.push(it);else{cur0={p:it.p,y:it.y,r:[it]};rows.push(cur0);}}
   const out=[];
-  for(const r of rows.values()){r.sort((a,b)=>a.x-b.x);const cells=[];let cur='',endX=null;
+  for(const {r} of rows){r.sort((a,b)=>a.x-b.x);const cells=[];let cur='',endX=null;
     for(const it of r){const gap=endX==null?0:it.x-endX,fh=it.h||8;if(endX!=null&&gap>fh*1.2){cells.push(cur);cur='';}cur+=it.s;endX=it.x+(it.w||fh*String(it.s).length*0.6);}
     cells.push(cur);out.push(cells.map(c=>c.replace(/\s+/g,' ').trim()).filter(Boolean));}
   return out;
 }
 function parseSettings(items,flat){
   const got={},src={};
-  const put=(k,name,v,g,how,unit)=>{if(got[k])return;const val=setVal(v,unit);if(!val)return;got[k]={l:name,v:val,g};src[k]=how;};
+  const put=(k,name,v,g,how,unit)=>{if(got[k])return;const val=setVal(v,unit);if(!val)return;
+    const K=SET_KNOWN.find(x=>x.k===k);if(K&&K.ok&&!K.ok.test(val))return; // その項目としてありえない値（上付きの -1 など）は使わない
+    if(/^[-−]?1$/.test(val)&&!K)return;got[k]={l:name,v:val,g};src[k]=how;};
   // 「Shock Zone (ショックゾーン)」のような英日併記も：括弧の外・中のどちらかで見つける
   const known=lab=>{const c=[lab,lab.replace(/[(（][^)）]*[)）]/g,''),...[...lab.matchAll(/[(（]([^)）]+)[)）]/g)].map(m=>m[1])];for(const x of c){const K=SET_KNOWN.find(K=>K.lab.test(x));if(K)return K;}return null;};
   // ①行・セル：「項目｜値」「項目：値」
@@ -840,7 +846,7 @@ function parseSettings(items,flat){
       if(!lab||lab.length>30||!SET_VAL.test(setNorm(v)))continue;
       const K=known(lab);
       if(K){put(K.k,K.name,v,'main','行',K.unit);continue;}
-      if(SET_SKIP.test(lab)||/^[\d.\s\-+\/]+$/.test(lab))continue;
+      if(SET_SKIP.test(lab)||/\d/.test(lab))continue; // 数字が入った項目名（グラフの日付・目盛り「0.0秒」など）は設定ではない
       if(/[\u0080-\u024f\u02b0-\u02ff\u2000-\u206f\ufffd]/.test(lab))continue; // 文字化けした項目名は「その他」に入れない
       put('x:'+lab,setNorm(l0),v,'other','行');}
   }
@@ -947,10 +953,13 @@ function setTrendRender(id,st){
   if(!cols.length){box.innerHTML='<div class="hint">設定を読めた記録がまだありません（この機能を入れた後に読み込んだレポートから記録されます）。</div>';return;}
   const onlyChg=$('setOnlyChg').checked,showOther=$('setShowOther').checked;
   const order=k=>{const i=SET_KNOWN.findIndex(K=>K.k===k);return i<0?99:i;};
-  let keys=[...new Set(cols.flatMap(c=>Object.keys(c.settings.items)))].filter(k=>showOther||order(k)<99).sort((a,b)=>order(a)-order(b)||a.localeCompare(b,'ja'));
+  // 前の版で保存した記録の読み違い（グラフの日付・目盛りの「その他」、ゾーンの -1 など）は表に出さない
+  const badKey=k=>k.startsWith('x:')&&(/\d/.test(k)||/[\u0080-\u024f\u02b0-\u02ff\u2000-\u206f\ufffd]/.test(k));
+  const okVal=(k,v)=>{const K=SET_KNOWN.find(x=>x.k===k);return !(K&&K.ok&&!K.ok.test(v));};
+  let keys=[...new Set(cols.flatMap(c=>Object.keys(c.settings.items)))].filter(k=>!badKey(k)&&(showOther||order(k)<99)).sort((a,b)=>order(a)-order(b)||a.localeCompare(b,'ja'));
   const name=k=>{for(let i=cols.length-1;i>=0;i--){const x=cols[i].settings.items[k];if(x)return x.l;}return k;};
   // セルの状態：前の回（その項目を読めた一番近い回）と違えば変更
-  const grid=keys.map(k=>{let prev=null;return cols.map(c=>{const x=c.settings.items[k];if(!x)return {v:null};const chg=!isMeas(k)&&prev!=null&&prev!==x.v;prev=x.v;const a=alertOf(k,x.v)||(chg&&!NO_RULE.has(k)&&RL(k)&&RL(k).chg?{lv:2,why:'前回から変更（ルール：前回から変わったらアラート）'}:null);return {v:x.v,chg,rb:a&&a.lv>=2?a.why:'',wn:a&&a.lv===1?a.why:''};});});
+  const grid=keys.map(k=>{let prev=null;return cols.map(c=>{const x=c.settings.items[k];if(!x||!okVal(k,x.v))return {v:null};const chg=!isMeas(k)&&prev!=null&&prev!==x.v;prev=x.v;const a=alertOf(k,x.v)||(chg&&!NO_RULE.has(k)&&RL(k)&&RL(k).chg?{lv:2,why:'前回から変更（ルール：前回から変わったらアラート）'}:null);return {v:x.v,chg,rb:a&&a.lv>=2?a.why:'',wn:a&&a.lv===1?a.why:''};});});
   if(onlyChg){const keep=keys.map((k,i)=>grid[i].some(c=>c.chg||c.rb||c.wn));keys=keys.filter((_,i)=>keep[i]);grid.splice(0,grid.length,...grid.filter((_,i)=>keep[i]));}
   const short=d=>escH(String(d||'?').replace(/(\d{4})年(\d{2})月(\d{2})日\s*/,'$1/$2/$3 ').replace(/\s*(JST|ＪＳＴ)/g,'').replace(/\s+\d{1,2}:\d{2}$/,''));
   const ic=l=>l===2?'⚠️':l===1?'🟡':l===0?'✅':'';
