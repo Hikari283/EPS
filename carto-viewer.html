@@ -377,6 +377,9 @@ body,button,select,input,textarea{font-family:Tahoma,"Segoe UI",Verdana,"Meiryo 
     <fieldset><legend>カテーテル</legend>
       <div class="row"><label><input type="radio" name="simCath" value="abl" checked> 焼灼カテーテル（先端1か所）</label></div>
       <div class="row"><label><input type="radio" name="simCath" value="cir"> 円形カテーテル（10極）</label></div>
+      <div class="row"><label><input type="checkbox" id="simAuto" checked> 連続取得（カテーテルを動かすと自動で入る）</label></div>
+      <div class="row"><span class="lb" style="min-width:auto">点の間隔</span><input type="number" id="simMin" value="3" min="1" max="10" step="0.5"> mm 以上</div>
+      <div class="muted small">ゆっくり動かすと入ります。急に大きく動かした瞬間は、入りません（安定していないため）。条件は簡易的な想定で、CARTOの取得条件とは違います。</div>
       <div class="row"><button id="simAcq" class="primary">ポイント取得（Enter）</button><button id="simClear">取得点を全部消す</button></div>
       <div class="muted small">円形カテーテルは肺静脈の入口に置くと、血管をぐるっと囲みます。取得すると9点（隣り合う電極の組）が入ります。</div>
     </fieldset>
@@ -1220,17 +1223,18 @@ const R3={
   ry(t){const c=Math.cos(t),s=Math.sin(t);return[c,0,s,0,1,0,-s,0,c];},
   ortho(R){const r=v3.norm([R[0],R[1],R[2]]);let u=[R[3],R[4],R[5]];u=v3.norm(v3.sub(u,v3.sc(r,v3.dot(u,r))));const b=v3.cross(r,u);return[...r,...u,...b];}
 };
-function sphereTemplate(){
+function sphereTemplate(sub=2){
   let V=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
   let F=[[0,2,4],[2,1,4],[1,3,4],[3,0,4],[2,0,5],[1,2,5],[3,1,5],[0,3,5]];
-  for(let s=0;s<2;s++){const NF=[];const mid=(a,b)=>{V.push(v3.norm(v3.sc(v3.add(V[a],V[b]),.5)));return V.length-1;};
+  for(let s=0;s<sub;s++){const NF=[];const mid=(a,b)=>{V.push(v3.norm(v3.sc(v3.add(V[a],V[b]),.5)));return V.length-1;};
     for(const[a,b,c]of F){const ab=mid(a,b),bc=mid(b,c),ca=mid(c,a);NF.push([a,ab,ca],[b,bc,ab],[c,ca,bc],[ab,bc,ca]);}F=NF;}
   const out=[];for(const f of F)for(const i of f)out.push(V[i]);return out;
 }
-const SPHERE=sphereTemplate();
+const SPHERE=sphereTemplate(2),SPHERE_LO=sphereTemplate(1);   // 点が多いときは粗い玉（頂点数が1/4）を使って軽くする
 function buildSpheres(items){
-  const n=items.length*SPHERE.length,P=new Float32Array(n*3),N=new Float32Array(n*3),C=new Float32Array(n*4);let k=0;
-  for(const it of items){for(const s of SPHERE){P[k*3]=it.x+s[0]*it.r;P[k*3+1]=it.y+s[1]*it.r;P[k*3+2]=it.z+s[2]*it.r;N[k*3]=s[0];N[k*3+1]=s[1];N[k*3+2]=s[2];C[k*4]=it.c[0];C[k*4+1]=it.c[1];C[k*4+2]=it.c[2];C[k*4+3]=it.c[3]??1;k++;}}
+  const tpl=items.length>400?SPHERE_LO:SPHERE;
+  const n=items.length*tpl.length,P=new Float32Array(n*3),N=new Float32Array(n*3),C=new Float32Array(n*4);let k=0;
+  for(const it of items){for(const s of tpl){P[k*3]=it.x+s[0]*it.r;P[k*3+1]=it.y+s[1]*it.r;P[k*3+2]=it.z+s[2]*it.r;N[k*3]=s[0];N[k*3+1]=s[1];N[k*3+2]=s[2];C[k*4]=it.c[0];C[k*4+1]=it.c[1];C[k*4+2]=it.c[2];C[k*4+3]=it.c[3]??1;k++;}}
   return{P,N,C,count:n};
 }
 function isAtrial(m){return !!m&&/(^|[^A-Za-z])(LA|RA|LAA|RAA|CS|SVC|PV|AFL|AF)([^A-Za-z]|$)/i.test(m.name);}
@@ -2490,6 +2494,7 @@ async function buildDiag(){
    「正解」は内部データ（SIM.T）が持っていて、通電するとブロックが反映され、電気の流れ（LAT）が計算し直される。 */
 const SIM_REF=700,SIM_CL=700,SIM_L=2100;
 const SIM={active:false,map:null,T:null,cath:'abl',sites:[],shaft:[],live:null,ver:0,hv:null,lastHv:null,dirtyLive:true,nextId:1,sess:1,
+  auto:true,minDist:3,maxJump:9,grid:new Map(),autoPrev:null,autoDirty:false,autoT:0,autoN:0,autoSkip:0,
   cfg:{power:35,time:20,force:12},leads:null,sheath:[-20,-3,-6],sheathOut:[-40,-10,-16]};
 const simHash=i=>{const s=Math.sin(i*12.9898+78.233)*43758.5453;return s-Math.floor(s);};
 const simPos=(m,i)=>[m.verts[i*3],m.verts[i*3+1],m.verts[i*3+2]];
@@ -2512,8 +2517,12 @@ function simBuildTruth(){
   for(let i=0;i<nv;i++){
     if(!used[i])continue;const q=P(i);
     if(T.vein[i]&&sdEllB(q,LA.center,U,[26,19,21])>3)T.deep[i]=1;
+    // 電圧：なだらかに変わる正常域（約0.8〜3.2 mV）の中に、低電位の斑（約0.1〜0.4 mV）が点々とある（動画のようなAFの左房を想定した、こちらの簡易モデル）
     const s=0.5+0.5*Math.sin(0.23*q[0]+1.3)*Math.sin(0.19*q[1]-0.7)*Math.cos(0.21*q[2]+0.4);
-    let b=0.9+2.6*s;if(T.vein[i])b*=T.hpos[i]<14?0.6:0.35;
+    const patch=Math.sin(0.55*q[0]+0.41*q[1])*Math.sin(0.47*q[2]-0.29*q[0]+2.0)+0.5*Math.sin(0.23*q[0]+1.3)*Math.sin(0.19*q[1]-0.7);
+    let w=clamp((0.5-patch)/0.35,0,1);w=w*w*(3-2*w);
+    let b=(0.09+0.32*simHash(i+313))*(1-w)+(0.8+2.4*s)*w;
+    if(T.vein[i])b*=T.hpos[i]<14?0.6:0.35;
     b*=0.9+0.2*simHash(i);T.bip[i]=b;T.uni[i]=2*b+2+1.5*simHash(i+991);T.cv[i]=T.vein[i]?0.6:0.9;
   }
   let bi=-1,bd=-1;for(let i=0;i<nv;i++){if(!used[i])continue;const d=v3.dist(P(i),LA.center);if(d>bd){bd=d;bi=i;}}
@@ -2612,23 +2621,53 @@ function simRefreshLive(){
 }
 
 /* --- ポイント取得・通電 --- */
+const simGauss=()=>{let u=0;while(!u)u=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*Math.random());};
+function simAddPoint(P,mi){
+  const prm=P.cath==='abl'?P.tip:P.bips[mi],pos=P.cath==='abl'?SIM.sites[0].pos:prm.pos,lat=prm.act?Math.round(prm.lat+simGauss()*1.5):NaN;
+  const p={id:SIM.nextId++,x:pos[0],y:pos[1],z:pos[2],bip:+Math.max(0.02,prm.bip*(0.92+0.16*Math.random())).toFixed(2),uni:+Math.max(0.2,prm.uni*(0.92+0.16*Math.random())).toFixed(2),
+    lat,imp:Math.round(95+30*Math.random()),ref:SIM_REF,woi:[-80,160],mapAnn:Number.isFinite(lat)?SIM_REF+lat:NaN},Pc={...P,map:mi};
+  p.egmGen=()=>simEGM(Pc);initPoint(p);p.loaded=false;SIM.map.points.push(p);simGridAdd(p);return p;
+}
+/* 取得済みポイントの近傍検索（連続取得で「近すぎる点は入れない」ための格子） */
+const SIM_CELL=3;
+const simKey=(x,y,z)=>Math.floor(x/SIM_CELL)+','+Math.floor(y/SIM_CELL)+','+Math.floor(z/SIM_CELL);
+function simGridAdd(p){const k=simKey(p.x,p.y,p.z);let a=SIM.grid.get(k);if(!a)SIM.grid.set(k,a=[]);a.push(p);}
+function simGridRebuild(){SIM.grid=new Map();for(const p of SIM.map.points)simGridAdd(p);}
+function simNearPoint(pos,r){
+  const c=Math.ceil(r/SIM_CELL),gx=Math.floor(pos[0]/SIM_CELL),gy=Math.floor(pos[1]/SIM_CELL),gz=Math.floor(pos[2]/SIM_CELL);
+  for(let a=-c;a<=c;a++)for(let b=-c;b<=c;b++)for(let d=-c;d<=c;d++){const g=SIM.grid.get((gx+a)+','+(gy+b)+','+(gz+d));if(!g)continue;
+    for(const p of g)if((p.x-pos[0])**2+(p.y-pos[1])**2+(p.z-pos[2])**2<r*r)return true;}
+  return false;
+}
 function simAcquire(){
   if(!SIM.active)return;if(!SIM.sites.length)return toast('マップの上にマウスを動かして、カテーテルを置いてください');
-  const map=SIM.map,gauss=()=>{let u=0;while(!u)u=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*Math.random());};
-  const mk=(P,mi)=>{
-    const prm=P.cath==='abl'?P.tip:P.bips[mi],pos=P.cath==='abl'?SIM.sites[0].pos:prm.pos,lat=prm.act?Math.round(prm.lat+gauss()*1.5):NaN;
-    const p={id:SIM.nextId++,x:pos[0],y:pos[1],z:pos[2],bip:+Math.max(0.02,prm.bip*(0.92+0.16*Math.random())).toFixed(2),uni:+Math.max(0.2,prm.uni*(0.92+0.16*Math.random())).toFixed(2),
-      lat,imp:Math.round(95+30*Math.random()),ref:SIM_REF,woi:[-80,160],mapAnn:Number.isFinite(lat)?SIM_REF+lat:NaN},Pc={...P,map:mi};
-    p.egmGen=()=>simEGM(Pc);initPoint(p);p.loaded=false;map.points.push(p);return p;
-  };
   let last,n=0;
-  if(SIM.cath==='abl'){last=mk(simPose(),0);n=1;}else{const P=simPose(0);for(let j=0;j<9;j++){last=mk(P,j);n++;}}
-  map.version++;dirtyAll('cp');selectPoint(map,last);simRenderPanel();
+  if(SIM.cath==='abl'){last=simAddPoint(simPose(),0);n=1;}else{const P=simPose(0);for(let j=0;j<9;j++){last=simAddPoint(P,j);n++;}}
+  SIM.map.version++;dirtyAll('cp');selectPoint(SIM.map,last);simRenderPanel();
   toast(n===1?`ポイント ${last.id} を取得しました`:`円形カテーテルの ${n} 点（P${last.id-n+1}〜P${last.id}）を取得しました`);
+}
+/* 連続取得：カテーテルを動かすと、条件を満たした点が自動で入る（条件はこちらの簡易想定）
+   ・直前のフレームから大きくジャンプしていない（ゆっくり動かしている）
+   ・すでにある点から、指定の間隔（mm）以上はなれている */
+function simAutoStep(){
+  if(!SIM.auto||!SIM.sites.length)return;
+  const cur=SIM.sites[0].pos;
+  if(SIM.autoPrev){const jump=v3.dist(cur,SIM.autoPrev);SIM.autoPrev=cur;if(jump>SIM.maxJump){SIM.autoSkip++;return;}}else{SIM.autoPrev=cur;}
+  const r=SIM.minDist;let added=0;
+  if(SIM.cath==='abl'){if(!simNearPoint(cur,r)){simAddPoint(simPose(),0);added++;}}
+  else{const P=simPose(0);for(let j=0;j<9;j++){const prm=P.bips[j];if(simNearPoint(prm.pos,r))continue;simAddPoint(P,j);added++;}}
+  if(added){SIM.autoDirty=true;SIM.autoN+=added;}
+}
+function simAutoFlush(now){
+  // 点が増えるほど、マップの更新の間隔を広げる（150ms〜700ms）。点の一覧は、さらにゆっくり更新する
+  const n=SIM.map.points.length,gap=clamp(120+n*0.2,150,700);
+  if(!SIM.autoDirty||now-SIM.autoT<gap)return;SIM.autoT=now;SIM.autoDirty=false;
+  SIM.map.version++;dirtyAll('cp');simRenderPanel();
+  if(plVisible()&&now-(SIM.listT||0)>900){SIM.listT=now;renderPtList(true);}else SIM.listPending=true;
 }
 function simClearPoints(){
   if(!SIM.active)return;if(!confirm('取得したポイントを全部消しますか？（通電の記録は残ります）'))return;
-  SIM.map.points=[];SIM.map.version++;S.sel=null;SIM.nextId=1;dirtyAll('cp');renderWave();renderPtList(true);simRenderPanel();
+  SIM.map.points=[];SIM.map.version++;S.sel=null;SIM.nextId=1;simGridRebuild();SIM.autoPrev=null;dirtyAll('cp');renderWave();renderPtList(true);simRenderPanel();
 }
 function simAblate(){
   if(!SIM.active)return;if(SIM.cath!=='abl')return toast('通電は焼灼カテーテルで行います（「シミュ」タブでカテーテルを切り替えてください）');
@@ -2662,9 +2701,10 @@ function simRenderPanel(){
   if(!SIM.active){el.textContent='「症例をはじめる」を押すと始まります。';return;}
   el.innerHTML=`ポイント <b>${SIM.map.points.length}</b> 点　通電 <b>${S.study.visitag.sites.length}</b> 回　カテーテル：<b>${SIM.cath==='abl'?'焼灼（先端）':'円形（10極）'}</b>`;
 }
-function simFrame(){
-  if(SIM.hv){const h=SIM.hv;SIM.hv=null;SIM.lastHv=h;simPlace(h.v,h.x,h.y);}
+function simFrame(now){
+  if(SIM.hv){const h=SIM.hv;SIM.hv=null;SIM.lastHv=h;simPlace(h.v,h.x,h.y);simAutoStep();}
   if(SIM.dirtyLive&&SIM.sites.length){SIM.dirtyLive=false;simRefreshLive();}
+  simAutoFlush(now||performance.now());
 }
 function simStart(){
   progress('シミュレーターを準備中…');
@@ -2673,11 +2713,11 @@ function simStart(){
     const map=newMap('LA（シミュレーター）');map.mesh=T.mesh;
     const study={name:'シミュレーター AF（初回PVI）',maps:[map],vfs:null,warn:[],demo:true,sim:true,
       visitag:{mapNames:[map.name],sites:[],params:[{k:'ai',label:'Ablation Index'},{k:'fti',label:'FTI'},{k:'dur',label:'焼灼時間 (s)'},{k:'force',label:'平均Force (g)'},{k:'power',label:'最大出力 (W)'},{k:'temp',label:'最高温度 (℃)'},{k:'impDrop',label:'インピーダンス低下 (Ω)'},{k:'imp',label:'基礎インピーダンス (Ω)'}]}};
-    Object.assign(SIM,{active:true,map,T,sites:[],shaft:[],live:null,nextId:1,sess:1,hv:null,lastHv:null,leads:null,dirtyLive:true});SIM.ver++;
+    Object.assign(SIM,{active:true,map,T,sites:[],shaft:[],live:null,nextId:1,sess:1,hv:null,lastHv:null,leads:null,dirtyLive:true,autoPrev:null,autoDirty:false,autoN:0,autoSkip:0});SIM.ver++;simGridRebuild();
     setStudy(study);
     if(S.compare)tog('#compareOn');
-    const v=S.viewers[0];v.type='LAT';v.ranges={LAT:{lo:-25,hi:100}};v.setView('PA');
-    S.opt.src='interp';$('#srcSel').value='interp';$('#simTruth').checked=false;$('#simAblRes').textContent='';$('#simIso').textContent='';
+    const v=S.viewers[0];v.type='Bipolar';v.ranges={Bipolar:{lo:0.08,hi:0.5},LAT:{lo:-25,hi:100}};v.setView('PA');
+    S.opt.fill=10;$('#fillR').value=10;S.opt.src='interp';$('#srcSel').value='interp';$('#simTruth').checked=false;$('#simAblRes').textContent='';$('#simIso').textContent='';
     syncPanel();setSel('#wLayout','all');setSide(true);clickTab('t-sim');simRenderPanel();dirtyAll('cpv');
     toast('シミュレーター開始：マップの上でマウスを動かすとカテーテルがついてきます（Enter：ポイント取得 ／ A：通電）',6000);
   }catch(err){console.error(err);toast('シミュレーターを開始できませんでした：'+err.message,6000);}finally{progress(null);}},30);
@@ -2688,12 +2728,14 @@ function simBind(){
   $('#simAcq').onclick=simAcquire;$('#simClear').onclick=simClearPoints;$('#simAbl').onclick=simAblate;$('#simChk').onclick=simCheck;
   const num=(id,k)=>$(id).addEventListener('input',e=>{const x=+e.target.value;if(fin(x))SIM.cfg[k]=x;});num('#simP','power');num('#simT','time');num('#simF','force');
   $('#simTruth').onchange=e=>{if(SIM.active)simTruth(e.target.checked);};
+  $('#simAuto').onchange=e=>{SIM.auto=e.target.checked;SIM.autoPrev=null;toast(SIM.auto?'連続取得：オン（カテーテルをゆっくり動かすと、点が入ります）':'連続取得：オフ（Enterキーで1点ずつ取ります）');};
+  $('#simMin').addEventListener('input',e=>{const x=+e.target.value;if(fin(x)&&x>=1)SIM.minDist=x;});
 }
 /* ===================== メインループ ===================== */
 let lastT=performance.now(),labelT=0;
 function loop(now){
   const dt=Math.min(0.1,(now-lastT)/1000);lastT=now;
-  if(SIM.active)simFrame();
+  if(SIM.active)simFrame(now);
   if(S.anim.prop){const v=allViewers().find(x=>x.T.kind==='prop');if(v&&v.map){const{lo,hi}=v.range();const span=(hi-lo)+2*S.opt.propBand;const prev=S.anim.phase;S.anim.phase=(S.anim.phase+dt*S.opt.propSpeed/Math.max(1,span))%1;
     if(S.rec&&S.rec.kind==='prop'&&S.anim.phase<prev){if(S.rec.wrapped)stopRec();else S.rec.wrapped=true;}
     for(const x of allViewers())if(x.T.kind==='prop'){x.colDirty=true;x.dirty=true;}}}
