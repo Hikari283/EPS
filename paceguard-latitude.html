@@ -2647,6 +2647,7 @@ function tlAuto(id){if(id)tlLoad(id,true).catch(()=>{});}
 // タイムラインを別の患者に切り替える時、前の患者の表示を残さない
 function tlReset(id,msg){setTrendRender(null,null);tl.id=id||'';tl.items=[];tl.cache.clear();$('tlId').value=id||'';$('tlSum').textContent=id?`ID ${id}・${msg}`:'';$('tlMsg').textContent=id?`ID ${id}：${msg}`:'';$('tlBody').hidden=true;}
 try{const v=localStorage.getItem('pg_lat_tlopen');if(v)$('tlCard').open=v==='1';}catch(_){}
+if(window.PG_CL)$('tlCard').open=false; // CareLink（Medtronicの経静脈デバイス）は波形の比較をしないので、タイムラインは閉じておく（見たい時に開く）
 setRulesUi();
 $('setRulesSave').onclick=setRulesSave;
 $('ptRulesSave').onclick=()=>ptRulesSave(false);
