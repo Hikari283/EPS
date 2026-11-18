@@ -113,6 +113,7 @@
   .settab tr:first-child th{font-size:11px;color:var(--sub);background:var(--tblh);vertical-align:bottom} .settab tr:first-child th.base{color:var(--accent2)}
   .settab tr>th:first-child{position:sticky;left:0;z-index:1;box-shadow:1px 0 0 var(--line)} .settab tr.oth th{font-weight:400;color:var(--sub)}
   .numdet{margin-top:12px;border:1px solid var(--line);border-radius:10px;padding:6px 10px} .numdet>summary{cursor:pointer;font-weight:700;font-size:13px}
+  .settab tr.grp th,table.crit tr.grp th{background:var(--tblh);color:var(--sub);font-size:11px;font-weight:700;letter-spacing:.04em;position:static}
   .setnav{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:0 0 8px} .setnav input[type=range]{flex:1;min-width:120px;max-width:360px} .setnav button{padding:3px 10px}
   .settab table{table-layout:fixed} .settab th:first-child{width:170px} .settab tr:first-child th:nth-child(2),.settab td:nth-child(2){width:190px}
   .ptmark{font-size:10.5px;color:var(--accent2);font-weight:700} .settab td.warnv,.warnk{background:rgba(251,146,60,.28);font-weight:700} .warnk{padding:0 4px;border-radius:4px} .settab td.chg,.chgk{background:rgba(251,191,36,.22)} .settab td.bad,.badk{background:rgba(251,113,133,.22);font-weight:700} .chgk,.badk{padding:0 4px;border-radius:4px}
@@ -664,7 +665,7 @@ function thinGreen(x,W,H){
 async function loadPDF(file,{forceEval=false,pageNo=0}={}){
   try{
     const lib=await ensurePdfjs();
-    const buf=await file.arrayBuffer();lastPdfFile=file;lastPdfBytes=buf.slice(0);
+    const buf=await file.arrayBuffer();lastPdfFile=file;lastPdfBytes=buf.slice(0);curTV=null;
     // ★pdf.jsはdataのArrayBufferを転送（detach）して空にするため、先にコピーから自前抽出しておく
     let rawPdfText=''; try{ rawPdfText=await extractRawPdfText(buf.slice(0)); }catch(_){}
     let rawItems=[]; try{ rawItems=await extractRawItems(buf.slice(0)); }catch(_){} // 設定用（位置つき・日本語に戻した文字）
@@ -687,12 +688,20 @@ async function loadPDF(file,{forceEval=false,pageNo=0}={}){
         for(const it of tci.items)all.push({s:it.str,x:it.transform[4],y:it.transform[5],w:it.width,h:Math.abs(it.transform[3])||it.height,p:pg});}
       const rawJ=rawItems.map(x=>x.s).join(' ');
       const flatAll=all.map(x=>x.s).join('')+' '+annotStrs.join(' ')+' '+rawJ+' '+rawPdfText;
-      curSettings=parseSettings([...all,...rawItems],flatAll);
+      curSettings=parseSettings([...all,...rawItems],flatAll);lastAllItems=all;lastRawItems=rawItems;
       curSettings.diag=setDiag(all,annotStrs,rawJ,np,rawItems.length);}
     catch(e){curSettings={items:{},src:{},n:0,diag:{err:String(e&&e.message||e)}};}
     if($('dbg'))$('dbg').insertAdjacentHTML('beforeend',settingsDebugHtml(curSettings)); // 別の患者になったら前の患者のタイムラインを消す
     curNonSicd=nonSicdOf(tc.items.map(it=>it.str).join(' ')+' '+annotStrs.join(' ')+' '+rawPdfText,$('fDev').value.trim());
-    if(curNonSicd){ // S-ICD以外：波形の比較・保存はしない
+    if(curNonSicd){ // S-ICD以外：Bostonの経静脈デバイス（ICD・CRTなど）のレポートなら、測定値・設定を読んで記録する
+      try{const t1=parseTV(lastRawItems),t2=parseTV(lastAllItems),tv=t2.n>t1.n?t2:t1; // 自前で取り出した文字とpdf.jsの文字の、多く読めた方
+        if(tv.n>=6&&Object.keys(tv.items).some(k=>/^(lead|pace):/.test(k)))curTV=tv;}catch(_){curTV=null;}
+      if(curTV){curSigs=[];curFeat=[];curNoise=[];curPool=null;$('overlayCard').hidden=true;$('traceMsg').textContent='';
+        try{const ae=localStorage.getItem('pg_lat_autoeval');if(ae!==null)$('autoEval').checked=ae==='1';}catch(_){}
+        if($('autoEval').checked||forceEval)await runTV();
+        else $('result').innerHTML=`<div class="verdict info"><h2>🫀 ${escH(curTV.tv)}（経静脈）のレポート</h2>${curTV.n}項目を読みました。「🔍 前回と比較」で記録・比較します。</div>`;
+        return;}
+      // それ以外：波形の比較・保存はしない
       curSigs=[];curFeat=[];curNoise=[];curPool=null;$('overlayCard').hidden=true;$('traceMsg').textContent='';
       $('result').innerHTML=`<div class="verdict info"><h2>S-ICD以外のPDFです（対象外）</h2>機種：${escH(curNonSicd)}　患者ID：${escH($('fId').value||'—')}<br><span class="hint">このツールはS-ICDのS-ECGだけを比較します。このPDFは比較・保存しません。</span></div>`;
       tlReset($('fId').value.trim(),'S-ICD以外のため対象外');return;}
@@ -734,7 +743,7 @@ function u16Text(bin){ // 1バイトずつの文字列 → 日本語（UTF-16BE�
   if(bin.length<2||bin.length%2||!/[\x00\x80-\xff]/.test(bin))return bin;
   let out='',ok=0,n=0;
   for(let i=0;i+1<bin.length;i+=2){const c=(bin.charCodeAt(i)<<8)|bin.charCodeAt(i+1);n++;
-    if((c>=0x20&&c<0x7f)||(c>=0x3000&&c<0x3100)||(c>=0x4e00&&c<0xa000)||(c>=0xff00&&c<0xfff0)||c===0xb5||c===0x3a9||c===0x2126||(c>=0x2010&&c<0x2200))ok++;
+    if((c>=0x20&&c<0x7f)||(c>=0x3000&&c<0x3100)||(c>=0x4e00&&c<0xa000)||(c>=0xff00&&c<0xfff0)||c===0xb5||c===0x3a9||c===0x2126||(c>=0x2010&&c<0x2200)||(c>=0x2500&&c<0x27c0)||(c>=0xa0&&c<0x100))ok++; // 記号（●■◆→など）も日本語の文字と一緒に使われる
     out+=String.fromCharCode(c);}
   return ok>=n*0.8?out:bin;
 }
@@ -789,6 +798,77 @@ async function extractRawItems(ab){
     if(s&&/\bBT\b/.test(s))items.push(...streamTextItems(s,'r'+k));
   }
   return items;
+}
+// ===== Boston 経静脈デバイス（ICD・CRT-D・CRT-P・PM）：レポートの測定値・設定を読む =====
+// S-ICDとは別のつくり（リードの表／Brady(CRT)カウンタ／心房性不整脈カウンタ／設定は左右2列）。波形の比較はしない
+let curTV=null,lastAllItems=[],lastRawItems=[];
+function tvRows(items){ // 位置つきの文字 → 行（上から順）とセル（x0〜x1）
+  const its=items.filter(it=>String(it.s||'').trim()).sort((a,b)=>String(a.p)<String(b.p)?-1:String(a.p)>String(b.p)?1:b.y-a.y);
+  const rows=[];let cur=null;
+  for(const it of its){const tol=Math.max(2,0.5*(it.h||8));if(cur&&cur.p===it.p&&Math.abs(cur.y-it.y)<=tol)cur.r.push(it);else{cur={p:it.p,y:it.y,r:[it]};rows.push(cur);}}
+  return rows.map(({p,y,r})=>{r.sort((a,b)=>a.x-b.x);const cells=[];let c=null;
+    for(const it of r){const fh=it.h||8,x1=it.x+(it.w||fh*String(it.s).length*0.6);
+      if(c&&it.x-c.x1<=fh*1.2){c.s+=it.s;c.x1=Math.max(c.x1,x1);}else{c={s:it.s,x0:it.x,x1};cells.push(c);}}
+    cells.forEach(c=>{c.s=c.s.replace(/\s+/g,' ').trim();});return {p,y,cells:cells.filter(c=>c.s)};});
+}
+const tvClean=s=>String(s||'').replace(/^[●■◆◇○□▲△\s]+/,'').replace(/\s+/g,' ').trim();
+const tvUnit=v=>String(v||'').replace(/min\s*[-−]?\s*1\b/g,'min⁻¹').replace(/(\d)\s*min⁻¹/g,'$1 min⁻¹').replace(/\s+/g,' ').trim();
+const TV_CH=/^(心房|心室|右心室|右室|左心室|左室|ショック)$/;
+const TV_MEAS_KEY=/^(lead|pace|atAf|bat|charge|evTotal):?/;
+function parseTV(items){
+  const rows=tvRows(items),got={};let o=0;
+  const put=(k,l,v,extra)=>{v=tvUnit(v);if(!v||got[k])return;got[k]={l,v,g:'tv',o:o++,...(extra||{})};};
+  // 並び順：設定は左の列→右の列、イベントは最後（表を読む順に近づける）
+  let oL=2000,oR=3000;
+  const txt=r=>r.cells.map(c=>c.s).join(' ');
+  let sec='',ch='',cols=null,midX=null,grp={L:'',R:''},last={L:null,R:null};
+  // 設定の左右の境目：右の列の見出しの位置
+  for(const r of rows)for(const c of r.cells)if(/^(ペーシング出力|感度|リードの極性|レートアダプティブペーシング|LV ?Multisite)/.test(tvClean(c.s))){midX=midX==null?c.x0:Math.min(midX,c.x0);}
+  for(let i=0;i<rows.length;i++){const r=rows[i],c0=tvClean(r.cells[0].s),all=txt(r);
+    // 電池（どこにあっても）
+    {const m=all.match(/交換までの予測期間[:：]?\s*([\d.]+)\s*年/);if(m)put('bat:years','電池 交換までの予測期間',m[1]+'年');}
+    if(/^充電時間/.test(c0)&&r.cells.length>1)put('charge','充電時間',r.cells.slice(1).map(c=>c.s).join(' '));
+    {const m=all.match(/イベントの合計[:：]?\s*(.+)$/);if(m)put('evTotal','イベントの合計',m[1],{o:9000});}
+    // 見出し（セクションの切り替え）
+    if(/^リード$/.test(c0)){sec='lead';ch='';cols={};} // 同じ行の列見出し（植込み・医療施設・最新の日常測定）も下で読む
+    if(/^Brady(\/CRT)?カウンタ/.test(c0)){sec='brady';continue;}
+    if(/^心房性不整脈カウンタ/.test(c0)){sec='atr';continue;}
+    if(/^設定$/.test(c0)&&r.cells.length===1){sec='set';grp={L:'',R:''};last={L:null,R:null};continue;}
+    if(/^(前回のリセット以降|マイアラート|電池|イベント数|心室性不整脈カウンタ)/.test(c0)){sec='';continue;}
+    if(sec==='lead'){
+      for(const c of r.cells){const s=tvClean(c.s),mid=(c.x0+c.x1)/2;
+        if(/最新の日常/.test(s))cols.daily=mid;else if(/医療施設/.test(s))cols.clinic=mid;else if(/^植込み/.test(s))cols.impl=mid;}
+      if(r.cells.length===1&&TV_CH.test(c0)){ch=c0;continue;}
+      if(/波高|インピーダンス|閾値/.test(c0)&&r.cells.length>1){
+        const pick=name=>{const x=cols[name];if(x==null)return null;let best=null,bd=1e9;for(const c of r.cells.slice(1)){const d=Math.abs((c.x0+c.x1)/2-x);if(d<bd){bd=d;best=c;}}
+          if(!best)return null;const other=Object.entries(cols).filter(([k])=>k!==name).some(([,ox])=>Math.abs((best.x0+best.x1)/2-ox)<bd);return other?null:best.s;};
+        const daily=pick('daily'),clinic=pick('clinic'),ok=v=>v&&!/記録なし/.test(v);
+        const v=ok(daily)?daily:ok(clinic)?clinic+'（医療施設）':(daily||clinic||'');
+        if(v)put(`lead:${ch}:${c0}`,`${ch&&!c0.startsWith(ch)?ch+' ':''}${c0}`,v,{daily:daily||'',clinic:clinic||''});}
+      continue;}
+    if(sec==='brady'&&r.cells.length>1){const v=r.cells.slice(1).map(c=>c.s).join(' ');const m=v.match(/([<>]?\s*[\d.]+)\s*%/);if(m)put(`pace:${c0}`,`ペーシング率 ${c0}`,m[1].replace(/\s/g,'')+'%');continue;}
+    if(sec==='atr'&&r.cells.length>1){if(/AT\/?AF/.test(c0))put('atAf','%AT/AF',r.cells.slice(1).map(c=>c.s).join(' ').replace(/\s*%?$/,'')+'%');continue;}
+    if(sec==='set'){
+      const cells=r.cells;
+      // ゾーンとATRは1行まとめて1つの値（レート・ATP・ショックなど）
+      const RH=/^(ペーシング出力|感度|リードの極性|レートアダプティブペーシング|LV ?Multisite)/;
+      if(cells.length>1&&/^(心室細動|心室頻拍(-?1)?|VF|VT(-?1)?|ATR ?Mode ?Switch)$/i.test(c0)){
+        const rest=cells.slice(1).filter(c=>!RH.test(tvClean(c.s))),rh=cells.find(c=>RH.test(tvClean(c.s)));if(rh){grp.R=tvClean(rh.s);}
+        put(`set:${c0}`,c0,rest.map(c=>c.s).join(' / '),{o:oL++});last={L:null,R:null};continue;}
+      const mx=midX!=null?midX-3:1e9;
+      for(const side of ['L','R']){const H=cells.filter(c=>side==='L'?c.x0<mx:c.x0>=mx);if(!H.length)continue;
+        const t0=tvClean(H[0].s);
+        if(H.length===1){
+          if(/^(ms|mV|V|J|Ω|%|s|[-−]?1|min⁻¹)$/.test(t0)&&last[side]){const it=got[last[side]];if(it)it.v=tvUnit(it.v+(/^[-−]?1$/.test(t0)?'':' ')+t0);continue;}
+          grp[side]=t0;last[side]=null;continue;}
+        const lab=(side==='R'&&grp.R&&/^(心房|心室|右心室|右室|左心室|左室|LV[ab]?|RV|RA)\s*(\(.*\))?$/.test(t0))?`${grp.R} ${t0}`:t0;
+        const k=`set:${lab}`;put(k,lab,H.slice(1).map(c=>c.s).join(' '),{o:side==='L'?oL++:oR++});last[side]=k;}
+    }
+  }
+  const n=Object.keys(got).length;
+  const has=re=>Object.keys(got).some(k=>re.test(k));
+  const type=has(/^lead:左心室|^pace:左心室/)?(has(/^lead:ショック/)?'CRT-D':'CRT-P'):has(/^lead:ショック/)?'ICD':'PM';
+  return {items:got,src:{},n,tv:type};
 }
 // ===== デバイス設定の読み取りと、前回との比較 =====
 // レポートの文字（全ページ）から設定を読む。①位置から行・セルを組み立て「項目｜値」の組を拾う ②主な設定は項目名のパターンで特定 ③取れない時は詰めた文字から正規表現で拾う
@@ -935,7 +1015,7 @@ const IMP_RULES={
   sysImp:{txt:()=>{const r=IR('sysImp');return `${r.lo}〜${r.hi}Ω（外なら要確認）`;},
     f:n=>{const r=IR('sysImp');return hasN(r.lo)&&n<+r.lo?{lv:2,why:`${r.lo}Ω未満（範囲 ${r.lo}〜${r.hi}Ω の外）`}:hasN(r.hi)&&n>+r.hi?{lv:2,why:`${r.hi}Ω超（範囲 ${r.lo}〜${r.hi}Ω の外）`}:null;}},
 };
-const isMeas=k=>!!IMP_RULES[k];
+const isMeas=k=>!!IMP_RULES[k]||TV_MEAS_KEY.test(k); // 測定値（毎回変わる）は「◀変」を付けない
 function alertOf(k,v){const rb=ruleBreak(k,v);if(rb)return {lv:2,why:rb};const R=IMP_RULES[k];if(!R||v==null)return null;
   if(k==='battery'){if(/EOL/i.test(v))return {lv:2,why:'EOL（バッテリ寿命末期：速やかに交換。治療は担保されない）'};if(/ERI/i.test(v))return {lv:2,why:'ERI（選択的交換指標：交換を予定。3か月以上は治療できる）'};}const n=parseFloat(v);return isNaN(n)?null:R.f(n);}
 function settingsAlerts(cur,prev){
@@ -969,7 +1049,9 @@ function setTrendRender(id,st){
   // 前の版で保存した記録の読み違い（グラフの日付・目盛りの「その他」、ゾーンの -1 など）は表に出さない
   const badKey=k=>k.startsWith('x:')&&(/\d/.test(k)||/[\u0080-\u024f\u02b0-\u02ff\u2000-\u206f\ufffd]/.test(k));
   const okVal=(k,v)=>{const K=SET_KNOWN.find(x=>x.k===k);return !(K&&K.ok&&!K.ok.test(LV(v)));};
-  let keys=[...new Set(cols.flatMap(c=>Object.keys(c.settings.items)))].filter(k=>!badKey(k)&&(showOther||order(k)<99)).sort((a,b)=>order(a)-order(b)||a.localeCompare(b,'ja'));
+  let keys=[...new Set(cols.flatMap(c=>Object.keys(c.settings.items)))].filter(k=>!badKey(k)&&(showOther||order(k)<99));
+  const oOf=k=>{let m=1e9;for(const c of cols){const x=c.settings.items[k];if(x&&x.o!=null&&x.o<m)m=x.o;}return m;};
+  keys.sort((a,b)=>order(a)-order(b)||oOf(a)-oOf(b)||a.localeCompare(b,'ja'));
   const name=k=>{for(let i=cols.length-1;i>=0;i--){const x=cols[i].settings.items[k];if(x)return x.l;}return k;};
   // セルの状態：前の回（その項目を読めた一番近い回）と違えば変更
   const grid=keys.map(k=>{let prev=null;return cols.map(c=>{const x0=c.settings.items[k];if(!x0||!okVal(k,x0.v))return {v:null};const x={...x0,v:LV(x0.v)};const chg=!isMeas(k)&&prev!=null&&prev!==x.v;prev=x.v;const a=alertOf(k,x.v)||(chg&&!NO_RULE.has(k)&&RL(k)&&RL(k).chg?{lv:2,why:'前回から変更（ルール：前回から変わったらアラート）'}:null);return {v:x.v,chg,rb:a&&a.lv>=2?a.why:'',wn:a&&a.lv===1?a.why:''};});});
@@ -982,8 +1064,10 @@ function setTrendRender(id,st){
   const short=d=>escH(String(d||'?').replace(/(\d{4})年(\d{2})月(\d{2})日\s*/,'$1/$2/$3 ').replace(/\s*(JST|ＪＳＴ)/g,'').replace(/\s+\d{1,2}:\d{2}$/,''));
   const ic=l=>l===2?'⚠️':l===1?'🟡':l===0?'✅':'';
   const head=vis.map(c=>`<th class="${c.pdf&&c.pdf===basePdf?'base':''}" title="${escH(c.secg||c.date||'')}">${c.pdf&&c.pdf===basePdf?'📌 ':''}${short(c.secg||c.date)}<br><span class="hint">${ic(c.level)}</span></th>`).join('');
-  const body=keys.map((k,i)=>{const imp=setImp(k),main=order(k)<99;
-    return `<tr${main?'':' class="oth"'}><th>${escH(name(k))}</th><td class="hint">${escH(ruleText(k)||(isPt(k)?'決めない':''))}${isPt(k)?' <b class="ptmark">この患者</b>':''}</td>${grid[i].map(c=>c.v==null?'<td class="hint">—</td>':`<td class="${c.rb?'bad':c.wn?'warnv':c.chg?'chg':''}" title="${escH(c.rb||c.wn||(c.chg?'前の回から変更':''))}">${c.rb?'⚠️ ':c.wn?'🟡 ':''}${escH(c.v)}${c.chg?' <span class="hint">◀変</span>':''}</td>`).join('')}</tr>`;}).join('');
+  let gPrev='';
+  const body=keys.map((k,i)=>{const imp=setImp(k),main=order(k)<99||!k.startsWith('x:');
+    const g=typeof TV_GRP==='function'?TV_GRP(k):'',gh=g&&g!==gPrev?`<tr class="grp"><th colspan="${2+vis.length}">${escH(g)}</th></tr>`:'';if(g)gPrev=g;
+    return gh+`<tr${main?'':' class="oth"'}><th>${escH(name(k))}</th><td class="hint">${escH(ruleText(k)||(isPt(k)?'決めない':''))}${isPt(k)?' <b class="ptmark">この患者</b>':''}</td>${grid[i].map(c=>c.v==null?'<td class="hint">—</td>':`<td class="${c.rb?'bad':c.wn?'warnv':c.chg?'chg':''}" title="${escH(c.rb||c.wn||(c.chg?'前の回から変更':''))}">${c.rb?'⚠️ ':c.wn?'🟡 ':''}${escH(c.v)}${c.chg?' <span class="hint">◀変</span>':''}</td>`).join('')}</tr>`;}).join('');
   const nav=n>WIN?`<div class="setnav"><button class="ghost" data-sn="-${WIN}" ${s0<=0?'disabled':''} title="5回前へ">⏮</button><button class="ghost" data-sn="-1" ${s0<=0?'disabled':''} title="1回前へ">◀ 古い</button>
       <input type="range" id="setNavR" min="0" max="${maxS}" value="${s0}" step="1"><button class="ghost" data-sn="1" ${s0>=maxS?'disabled':''} title="1回後へ">新しい ▶</button><button class="ghost" data-sn="${WIN}" ${s0>=maxS?'disabled':''} title="最新へ">⏭</button>
       <span class="hint">${s0+1}〜${Math.min(n,s0+WIN)}回目を表示／全${n}回${s0>=maxS?'（最新）':''}</span></div>`:'';
@@ -1043,6 +1127,38 @@ async function ptRulesSave(clear){
 const numDetOpen=()=>{try{return localStorage.getItem('pg_lat_numdet')==='1';}catch(_){return false;}};
 const numDet=h=>`<details class="numdet"${numDetOpen()?' open':''}><summary>📊 詳しい数値（段ごとの記録）</summary>${h}</details>`;
 document.addEventListener('toggle',e=>{if(e.target&&e.target.classList&&e.target.classList.contains('numdet')){try{localStorage.setItem('pg_lat_numdet',e.target.open?'1':'0');}catch(_){}}},true);
+// 経静脈デバイスのレポートを記録して、前回と比べる（波形の比較はしない）
+const tvDateKey=d=>{const m=String(d||'').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})(?:\D+(\d{1,2}):(\d{2}))?/);return m?m[1]+m[2].padStart(2,'0')+m[3].padStart(2,'0')+(m[4]||'0').padStart(2,'0')+(m[5]||'00'):'';};
+const TV_GRP=k=>/^lead:/.test(k)?'リード（最新の日常測定。記録なしの時は医療施設での測定）':/^(pace|atAf)/.test(k)?'ペーシング率・AT/AF':/^(bat|charge)/.test(k)?'電池':/^set:/.test(k)?'設定':/^evTotal/.test(k)?'イベント':'';
+async function runTV(){
+  const tv=curTV;if(!tv)return;await ensureDir();
+  const id=$('fId').value.trim(),date=$('fDate').value,key=tvDateKey(date),ts=Date.now();
+  if(!id){$('result').innerHTML='<div class="verdict info"><h2>患者IDを決めてください</h2>IDを自動で読み取れませんでした。上の候補を押すかIDを入力してから、「🔍 前回と比較」を押してください。</div>';return;}
+  const store=dirHandle?await readBaseline(id):null;
+  PT_ID=id;PT_RULES=store&&store.setRules||null;
+  const saves=((store&&store.saves)||[]).filter(x=>!(x.tv&&x.key===key&&key)); // 同じ日付のレポートを読み直した時は置き換える
+  const prev=saves.filter(x=>x.tv&&x.settings&&x.settings.n&&(key?(x.key&&x.key<key):true)).sort((a,b)=>a.key<b.key?1:a.key>b.key?-1:(b.ts||0)-(a.ts||0))[0]||null;
+  const cmp=compareSettings(prev&&prev.settings,tv),al=settingsAlerts(tv,prev&&prev.settings),lv=al.length?Math.max(...al.map(a=>a.lv)):0;
+  const chg=(cmp?cmp.changed:[]).filter(x=>!isMeas(x.k));
+  let saved=false;
+  if(dirHandle){saves.push({tv:tv.tv,settings:tv,date,key,ts,pdf:null,secg:'',events:[],tx:meta.tx||'',level:lv,causes:al.map(a=>'⚙ '+a.txt),first:{level:lv,causes:al.map(a=>'⚙ '+a.txt),ts}});
+    const base=store||{id,name:'',reports:[],history:[]};
+    saved=await writeBaseline(id,{...base,date,device:$('fDev').value||base.device||'',saves});}
+  const P=prev&&prev.settings&&prev.settings.items||{};
+  const keys=Object.keys(tv.items).sort((a,b)=>(tv.items[a].o??0)-(tv.items[b].o??0));
+  let g0='';const rows=keys.map(k=>{const x=tv.items[k],p=P[k],g=TV_GRP(k),changed=p&&LV(p.v)!==LV(x.v)&&!isMeas(k);
+    const head=g!==g0?`<tr class="grp"><th colspan="3">${escH(g)}</th></tr>`:'';g0=g;
+    return head+`<tr class="${changed?'lv1':''}"><td>${escH(x.l)}</td><td>${p?escH(LV(p.v)):'<span class="hint">—</span>'}</td><td>${escH(LV(x.v))}${changed?' <span class="hint">◀変</span>':''}</td></tr>`;}).join('');
+  const cls=lv>=2?'bad':lv===1?'warn':prev?'ok':'info';
+  const title=lv>=2?'⚠️ 要確認 — 設定・測定値のアラート':lv===1?'🟡 注意 — 設定・測定値のアラート':prev?(chg.length?`✅ アラートなし（設定が${chg.length}項目変わりました）`:'✅ アラートなし（前回と同じ設定）'):'記録しました（この患者の初めての記録）';
+  $('result').innerHTML=`<div class="verdict ${cls}"><h2>${title}</h2>
+    <div>🫀 Boston ${escH(tv.tv)}（経静脈）　患者ID：${escH(id)}　${prev?`比較：${escH(prev.date||'?')}（前回） → ${escH(date||'?')}（今回）`:escH(date||'')}</div>
+    ${al.length?setAlertHtml(al,tv,chg):chg.length?`<div class="cause">前回から変わった設定（アラートではありません）：${chg.map(x=>`${escH(x.l)} ${escH(x.p)}→${escH(x.c)}`).join('、')}</div>`:''}
+    <details class="numdet" open><summary>📊 今回読めた値（${tv.n}項目）</summary><table class="crit"><tr><th>項目</th><th>前回</th><th>今回</th></tr>${rows}</table>
+    <div class="hint">波形（EGM）の比較はまだしていません。測定値は毎回変わるので「◀変」は設定だけに付けます。</div></details>
+    ${dirHandle?(saved?'':'<div class="warn-t">保存できませんでした（フォルダの許可を確認してください）</div>'):'<div class="warn-t">※フォルダ未選択のため保存できていません。</div>'}</div>`;
+  tlAuto(id);rvLoad();
+}
 let curSettings=null; // 今回のレポートから読んだ設定
 function extractFields(items, annotStrs, rawPdfText){
   annotStrs=annotStrs||[]; rawPdfText=rawPdfText||'';
@@ -2097,9 +2213,9 @@ async function doPrint(withResult){
 function alertMsg(t){$('result').insertAdjacentHTML('afterbegin',`<div class="verdict info"><h2>${t}</h2></div>`);}
 window.addEventListener('afterprint',()=>{$('printArea').innerHTML='';});
 document.addEventListener('click',e=>{if(e.target.closest('.prWith'))doPrint(true);else if(e.target.closest('.prPlain'))doPrint(false);});
-$('evalBtn').onclick=()=>runEval('prev');
+$('evalBtn').onclick=()=>curTV?runTV():runEval('prev');
 $('autoEval').addEventListener('change',()=>{try{localStorage.setItem('pg_lat_autoeval',$('autoEval').checked?'1':'0');}catch(_){}});
-$('evalBaseBtn').onclick=()=>runEval('base');
+$('evalBaseBtn').onclick=()=>curTV?runTV():runEval('base');
 let lastEval=null; // 「この波形を基準にする」用
 document.addEventListener('click',async e=>{if(!e.target.closest('#setBaseBtn')||!lastEval)return;
   const st=await readBaseline(lastEval.id);if(!st){$('setBaseMsg').textContent='保存先に接続できません';return;}
@@ -2390,6 +2506,15 @@ async function pollWatch(){
       const prevRes=$('result').innerHTML,prevOv=$('overlayCard').hidden;
       $('result').innerHTML='';
       await loadPDF(f,{forceEval:true});
+      if(curTV){ // Bostonの経静脈デバイス：記録はloadPDFの中で済んでいる。元のPDFは残さない設定なら消す（残す設定なら患者フォルダへ）
+        const id=$('fId').value.trim();let moved='';
+        if(KEEP_PDF&&id&&dirHandle){const to=await archivePdf(id,{name:'',date:$('fDate').value,device:$('fDev').value},'経静脈');if(to){moved='コピー：'+to;if($('watchMove').checked){try{await watchDir.removeEntry(f.name);moved='→ '+to;}catch(_){}}}}
+        else if(!KEEP_PDF&&id){try{await watchDir.removeEntry(f.name);moved='記録だけ残して削除（元のPDFを残さない設定）';}catch(_){}}
+        const h2=document.querySelector('#result h2'),verdict=h2?h2.textContent.trim():'経静脈デバイス',lv=/要確認/.test(verdict)?2:/注意/.test(verdict)?1:0,cause=document.querySelector('#result .cause');
+        const row={t:new Date().toLocaleTimeString('ja-JP'),file:f.name,moved,id,date:$('fDate').value,verdict:`${curTV.tv}：${verdict}`,cause:cause?cause.textContent:'',lv};
+        watchLog.unshift(row);renderWatchLog();
+        if(lv>0)notifyResult('PaceGuard LATITUDE：'+row.verdict,`ID ${id||'—'}　${row.date||''}\n${row.cause}`,lv);
+        continue;}
       if(curNonSicd){ // S-ICD以外：_対象外 フォルダへ移して、通知は出さない
         let moved='';
         if(!KEEP_PDF){try{await watchDir.removeEntry(f.name);moved='保存せずに削除（元のPDFを残さない設定）';}catch(_){}}
