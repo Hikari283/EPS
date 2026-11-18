@@ -165,3 +165,4 @@ Export_Study-…/
 - WOI を Late Boundary（既定：リファレンスから −5 ms）で前後に分け、LBより右（遅い側）で見つかった遅延電位に注釈を付ける。感度 Normal／High／Highest。**Local Voltage** 関心ウィンドウ（Late Annotation の前後 ±20 ms から静かな区間を探して決める）。Point List に **Late**（紫の点）と **Late Sens.** の列。心室（洞調律・ペーシング）で検証されたもので、AFのPVIとは別。
 
 → ビューアへの反映：OCTARAYの説明（mm）と、通電タグの大きさの既定を 3 mm に変更。
+- 残りのページも確認済み（2026-11-18）：OPTRELL の LCV は「Show Catheter → LCV」でカテーテル陰影の上に矢印を重ねて表示。点の WOI・リファレンス・マッピングのアノテーションを変えると遡って再計算される。LAMは、連続取得中に Filter Status の紫の点で Late Annotation を示す。いずれもAFのPVIの実装には影響なし。
