@@ -11,14 +11,10 @@ button{padding:4px 10px;border:1px solid #94a3b8;border-radius:6px;background:#f
 <label><input type="checkbox" id="enabled"> LATITUDEで開いたPDFを自動で保存する</label>
 <label><input type="checkbox" id="autoArrange"> 開いた時に左右に並べる（左：ツール／右：LATITUDE）</label>
 <div><button id="arrangeNow">🪟 今すぐ左右に並べる</button> <span id="arrMsg" class="hint"></span></div>
-<div class="hint">Chromeのダウンロード先は「波形認識」にしてください（chrome://settings/downloads）。</div>
-<label>LATITUDEの保存先：ダウンロード先\<input type="text" id="folder"></label>
-<div class="hint">PaceGuardの「👀 自動比較を始める」では、このフォルダを選んでください（既定 LATITUDE用/LATITUDE）。</div>
+<label>保存先：ダウンロード\<input type="text" id="folder"></label>
+<div class="hint">PaceGuardの「👀 自動比較を始める」では、このフォルダ（ダウンロードの中）を選んでください。</div>
 <label>対象サイト：<input type="text" id="hosts"></label>
 <div class="hint">LATITUDEのアドレスの一部（例：bostonscientific.com）。複数はカンマ区切り。</div>
-<label><input type="checkbox" id="clEnabled"> CareLink（Medtronic）からのダウンロードを分けて保存する</label>
-<label>CareLinkの保存先：ダウンロード先\<input type="text" id="clFolder"></label>
-<label>CareLinkのサイト：<input type="text" id="clHosts"></label>
 <div style="margin-top:8px"><button id="save">保存</button> <span id="msg" class="hint"></span></div>
 <div class="st" id="status"></div>
 <div class="hint">PDFはこのパソコンのフォルダに保存するだけで、外部には送りません。</div>

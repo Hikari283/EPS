@@ -1,21 +1,17 @@
 // PaceGuard LATITUDE 取り込み：LATITUDEで開いたPDFを ダウンロード\<フォルダ>\ に自動保存する
-// v0.7.0：Chromeのダウンロード先は「波形認識」。BostonのPDFは LATITUDE用/LATITUDE、CareLinkのPDFは CareLink用/CareLink へ
-const DEF = { enabled: true, folder: 'LATITUDE用/LATITUDE', hosts: ['bostonscientific.com', 'bostonscientific.jp'], count: 0,
-  clEnabled: true, clFolder: 'CareLink用/CareLink', clHosts: ['medtronic.com', 'medtroniccarelink.net'] };
+const DEF = { enabled: true, folder: 'LATITUDE', hosts: ['bostonscientific.com', 'bostonscientific.jp'], count: 0 };
 const getCfg = async () => { const c = { ...DEF, ...(await chrome.storage.local.get(Object.keys(DEF))) }; c.hosts = [...new Set([...DEF.hosts, ...(c.hosts || [])])]; return c; };
 const hostOk = (url, cfg) => { try { const h = new URL(url).hostname; return cfg.hosts.some(d => h === d || h.endsWith('.' + d)); } catch (_) { return false; } };
 const recent = new Map(); // 同じPDFを二重に保存しない
 const stamp = () => { const d = new Date(), p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; };
 const safe = s => String(s || '').replace(/[\\/:*?"<>|\r\n]/g, '').trim();
-// フォルダの中のフォルダ（例 LATITUDE用/LATITUDE）も書ける。「..」や空の段は使わない
-const safePath = s => String(s || '').split(/[\\/]+/).map(safe).filter(x => x && x !== '.' && x !== '..').join('/');
 
 async function save(opts, key) {
   const now = Date.now();
   for (const [k, t] of recent) if (now - t > 20000) recent.delete(k);
   if (recent.has(key)) return; recent.set(key, now);
   const cfg = await getCfg(); if (!cfg.enabled) return;
-  const filename = `${safePath(cfg.folder) || 'LATITUDE用/LATITUDE'}/LATITUDE_${stamp()}_${Math.random().toString(36).slice(2, 6)}.pdf`;
+  const filename = `${safe(cfg.folder) || 'LATITUDE'}/LATITUDE_${stamp()}_${Math.random().toString(36).slice(2, 6)}.pdf`;
   try {
     await chrome.downloads.download({ ...opts, filename, conflictAction: 'uniquify', saveAs: false });
     // 件数：今日の件数（日付が変わると0から）と、これまでの合計
@@ -131,22 +127,4 @@ chrome.runtime.onMessage.addListener((m, sender, reply) => {
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.local.remove(['autoReport', 'autoStart', 'saveManual', 'autoSeen', 'autoLastRun', 'autoLast', 'lastSavedAt']);
   try { chrome.storage.session.clear(); } catch (_) {}
-});
-
-// ⑤ CareLink（Medtronic）からのダウンロード：ダウンロード先の中の CareLink用/CareLink へ振り分ける（LATITUDEとは分ける）
-const clHostOk = (url, cfg) => { try { const h = new URL(url).hostname; return (cfg.clHosts || []).some(d => h === d || h.endsWith('.' + d)); } catch (_) { return false; } };
-chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
-  if (item.byExtensionId === chrome.runtime.id) { suggest(); return; } // この拡張機能が保存したもの（LATITUDE）は名前を変えない
-  getCfg().then(cfg => {
-    const from = [item.url, item.finalUrl, item.referrer].filter(Boolean);
-    if (!cfg.clEnabled || !from.some(u => clHostOk(u, cfg))) { suggest(); return; }
-    const base = String(item.filename || '').split(/[\\/]/).pop() || `CareLink_${stamp()}.pdf`;
-    suggest({ filename: `${safePath(cfg.clFolder) || 'CareLink用/CareLink'}/${base}`, conflictAction: 'uniquify' });
-  }).catch(() => suggest());
-  return true; // suggest をあとで呼ぶ
-});
-// 前の版（v0.6.0まで）の既定「LATITUDE」を、新しい置き場所に合わせて直す
-chrome.runtime.onInstalled.addListener(async () => {
-  const st = await chrome.storage.local.get(['folder']);
-  if (st.folder === 'LATITUDE') await chrome.storage.local.set({ folder: 'LATITUDE用/LATITUDE' });
 });

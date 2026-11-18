@@ -390,8 +390,6 @@ USBで持ち運ぶ場合、**常に「最後に編集した方が最新」**。�
 - 2026-11-18 S-ICD：「AFが検出された日数」（afDays、例 5日）を読む。測定値扱い（◀変なし）。「AF 0.0」（AFのグラフの目盛り）は読まない・前の記録の x:AF も表に出さない。
 - 2026-11-18 「記録なし」の吹き出し（アラート文）を「○○：記録なし。各種設定確認！（医療施設での最後の測定 値・日付）」に。
 - 2026-11-18 実データ：ATR Mode Switch に「心房 / トレンド2.0 V @ 0.4」が混ざる→●は図形で文字に無い。右の列の位置にある部屋名（●なし）も右の列の始まりとする→「ペーシング出力 心房」（右心室の上）になる。記録なしの🟡注意は設定の側に付ける：閾値→その部屋のペーシング出力、波高値→その部屋の感度（左心室はLVa・LVb両方）。インピーダンスなど対応する設定が無いものは測定値の側。
-- 2026-11-18 Medtronic 開始。ユーザー決定：Chromeは同じプロファイル（LATITUDE）のまま、ダウンロード先だけ分ける。拡張 v0.7.0：Chromeのダウンロード先＝波形認識、BostonのPDF→LATITUDE用/LATITUDE（folder 既定、旧既定「LATITUDE」は自動で書き換え、safePath で / を許可）、CareLink（medtronic.com・medtroniccarelink.net）からのダウンロード→CareLink用/CareLink（downloads.onDeterminingFilename。この拡張が保存したものは触らない）。拡張の更新とダウンロード先の変更はセットで。
-  ツールのフォルダ・ルールも分ける予定：CareLink用\paceguard-carelink.html として置き、ファイル名で localStorage・IndexedDB の名前を切り替える（Medtronicの読み取りを作る時に実装）。
 - 次：メドトロニック版（CareLink）。対象＝ICD/CRT-D・ペースメーカのEGM、EV-ICD（Aurora）、設定・イベントすべて。CareLinkのPDF／画面の例（個人情報を隠したもの）待ち。
 
 ---
