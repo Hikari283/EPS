@@ -675,8 +675,10 @@ async function loadPDF(file,{forceEval=false,pageNo=0}={}){
     try{const all=[];const np=Math.min(pdf.numPages||1,30);
       for(let pg=1;pg<=np;pg++){const tci=pg===pno?tc:await (await pdf.getPage(pg)).getTextContent();
         for(const it of tci.items)all.push({s:it.str,x:it.transform[4],y:it.transform[5],w:it.width,h:Math.abs(it.transform[3])||it.height,p:pg});}
-      curSettings=parseSettings(all,all.map(x=>x.s).join('')+' '+annotStrs.join(' ')+' '+rawPdfText);}
-    catch(e){curSettings=null;}
+      const flatAll=all.map(x=>x.s).join('')+' '+annotStrs.join(' ')+' '+rawPdfText;
+      curSettings=parseSettings(all,flatAll);
+      curSettings.diag=setDiag(all,annotStrs,rawPdfText,np);}
+    catch(e){curSettings={items:{},src:{},n:0,diag:{err:String(e&&e.message||e)}};}
     if($('dbg'))$('dbg').insertAdjacentHTML('beforeend',settingsDebugHtml(curSettings)); // 別の患者になったら前の患者のタイムラインを消す
     curNonSicd=nonSicdOf(tc.items.map(it=>it.str).join(' ')+' '+annotStrs.join(' ')+' '+rawPdfText,$('fDev').value.trim());
     if(curNonSicd){ // S-ICD以外：波形の比較・保存はしない
@@ -788,11 +790,27 @@ function prevSettingsRec(store,curKey,nowPdf){
   const sv=((store&&store.saves)||[]).filter(x=>x&&x.settings&&x.settings.n&&!evLike(x)&&x.pdf!==nowPdf&&(curKey?(x.key&&x.key<curKey):true));
   return sv.sort((a,b)=>a.key<b.key?1:a.key>b.key?-1:(b.ts||0)-(a.ts||0))[0]||null;
 }
+// 読み取れなかった時の手がかり：設定に関係しそうな言葉の前後の文字を、そのまま見せる（6桁以上の数字＝IDなどは伏せる）
+function setDiag(items,annotStrs,raw,np){
+  const pjs=items.map(x=>x.s).join(''),perPage={};items.forEach(x=>{if(String(x.s||'').trim())perPage[x.p]=(perPage[x.p]||0)+1;});
+  const mask=t=>t.replace(/\d{6,}/g,m=>'#'.repeat(m.length)).replace(/[\x00-\x1f]/g,'');
+  const KW=/ゾーン|Zone|インピーダンス|Impedance|ゲイン|Gain|センシング|Sensing|SMART|治療|Therapy|ペーシング|Pacing|モニタ|Monitor|極性|Polarity|bpm|min-1|Ω|ohm/gi;
+  const snips=[];
+  for(const [name,t] of [['pdf.js',pjs],['注釈',annotStrs.join(' ')],['自前抽出',raw]]){
+    const txt=String(t||'');let m;KW.lastIndex=0;const seen=new Set();
+    while((m=KW.exec(txt))&&snips.length<24){const a=Math.max(0,m.index-25),b=Math.min(txt.length,m.index+45),sn=mask(txt.slice(a,b));if(seen.has(sn))continue;seen.add(sn);snips.push({from:name,sn});KW.lastIndex=m.index+m[0].length+20;}
+  }
+  const jp=(raw.match(/[ぁ-んァ-ヶ一-龯]/g)||[]).length,bad=(raw.match(/[\ufffd\u0080-\u00ff]/g)||[]).length;
+  return {pages:np,perPage,pjsLen:pjs.length,annot:annotStrs.length,rawLen:raw.length,jp,bad,snips};
+}
 function settingsDebugHtml(s){
   if(!s)return '';
+  const d=s.diag||{};
+  const diagHtml=d.err?`<div class="warn-t">読み取り中のエラー：${escH(d.err)}</div>`:`<div class="hint" style="margin-top:6px">手がかり：${d.pages||'?'}ページ／pdf.jsの文字 ${d.pjsLen||0}字（ページごとの項目数 ${escH(JSON.stringify(d.perPage||{}))}）／注釈 ${d.annot||0}／自前抽出 ${d.rawLen||0}字（日本語 ${d.jp||0}字・文字化けらしい文字 ${d.bad||0}字）</div>`+
+    `<div class="hint">設定に関係しそうな言葉の前後（6桁以上の数字は # で伏せています）：</div>`+((d.snips||[]).length?`<table class="crit"><tr><th>どこから</th><th>前後の文字</th></tr>${d.snips.map(x=>`<tr><td>${escH(x.from)}</td><td><code>${escH(x.sn)}</code></td></tr>`).join('')}</table>`:'<div class="warn-t">設定に関係しそうな言葉（ゾーン・インピーダンス・ゲイン・センシング・bpm・Ω など）が、PDFの文字の中に1つも見つかりませんでした。</div>');
   const rows=Object.entries(s.items).map(([k,x])=>`<tr><td>${x.g==='main'?'★ ':''}${escH(x.l)}</td><td>${escH(x.v)}</td><td class="hint">${s.src[k]==='行'?'行から':'文字から'}</td></tr>`).join('');
   const miss=SET_KNOWN.filter(K=>!s.items[K.k]).map(K=>K.name);
-  return `<details style="margin-top:6px"><summary style="cursor:pointer">🔧 設定の読み取り結果（${s.n}項目${miss.length?`／読めなかった主な設定：${miss.join('・')}`:''}）</summary>${rows?`<table class="crit"><tr><th>項目</th><th>値</th><th>読み方</th></tr>${rows}</table>`:'<div>読めた項目はありません。</div>'}<div class="hint">★＝主な設定。項目名や値の書き方が違って読めていない時は、この表と設定の部分の画面（個人情報は隠して）を送ってください。</div></details>`;
+  return `<details style="margin-top:6px"><summary style="cursor:pointer">🔧 設定の読み取り結果（${s.n}項目${miss.length?`／読めなかった主な設定：${miss.join('・')}`:''}）</summary>${rows?`<table class="crit"><tr><th>項目</th><th>値</th><th>読み方</th></tr>${rows}</table>`:'<div>読めた項目はありません。</div>'}<div class="hint">★＝主な設定。項目名や値の書き方が違って読めていない時は、この欄（開いた状態）と設定の部分の画面（個人情報は隠して）を送ってください。</div>${diagHtml}</details>`;
 }
 // ===== 設定のアラート（前回から変わった・基準と違う・ルールの範囲外） =====
 const SET_ENUM={therapy:['オン','オフ'],postShock:['オン','オフ'],smartPass:['オン','オフ'],afMon:['オン','オフ'],sensing:['一次','二次','代替'],gain:['1x','2x'],polarity:['標準','逆']};
