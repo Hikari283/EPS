@@ -1136,6 +1136,55 @@ async function ptRulesSave(clear){
 const numDetOpen=()=>{try{return localStorage.getItem('pg_lat_numdet')==='1';}catch(_){return false;}};
 const numDet=h=>`<details class="numdet"${numDetOpen()?' open':''}><summary>📊 詳しい数値（段ごとの記録）</summary>${h}</details>`;
 document.addEventListener('toggle',e=>{if(e.target&&e.target.classList&&e.target.classList.contains('numdet')){try{localStorage.setItem('pg_lat_numdet',e.target.open?'1':'0');}catch(_){}}},true);
+// ===== 経静脈デバイスのEGM：ページを画像にして患者フォルダに残し、タイムラインに並べる =====
+// EGMのページ＝色のついた線（各誘導の基線）が横幅いっぱいに伸びる行が2本以上あるページ
+async function tvEgmPages(doc){
+  const out=[],n=Math.min(doc.numPages||1,40),c=document.createElement('canvas'),x=c.getContext('2d',{willReadFrequently:true});
+  for(let i=1;i<=n;i++){try{const pg=await doc.getPage(i),vp=pg.getViewport({scale:1.5});c.width=Math.round(vp.width);c.height=Math.round(vp.height);
+    x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);await pg.render({canvasContext:x,viewport:vp}).promise;
+    if(tvTraceRows(x,c.width,c.height).length>=2)out.push(i);}catch(_){}}
+  return out;
+}
+function tvTraceRows(x,W,H){ // 色のついた点が横幅の半分以上に散らばる行（まとまりごとに1本）
+  const d=x.getImageData(0,0,W,H).data,rows=[];let inRun=false;
+  for(let y=0;y<H;y++){let n=0,minX=W,maxX=0;for(let xx=0;xx<W;xx+=2){const i=(y*W+xx)*4,mx=Math.max(d[i],d[i+1],d[i+2]),mn=Math.min(d[i],d[i+1],d[i+2]);if(mx-mn>40&&mn<235){n++;if(xx<minX)minX=xx;if(xx>maxX)maxX=xx;}}
+    const on=n>W*0.08&&maxX-minX>W*0.5;if(on&&!inRun)rows.push(y);inRun=on;}
+  return rows;
+}
+// 1ページを画像に：上は個人情報の枠の下から（枠が無ければ最初の線の少し上から）、下は中身の一番下まで
+async function tvEgmImage(doc,pno){
+  const pg=await doc.getPage(pno),S=2.5,vp=pg.getViewport({scale:S}),c=document.createElement('canvas');c.width=Math.round(vp.width);c.height=Math.round(vp.height);
+  const x=c.getContext('2d',{willReadFrequently:true});x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);await pg.render({canvasContext:x,viewport:vp}).promise;
+  const W=c.width,H=c.height,d=x.getImageData(0,0,W,H).data,tr=tvTraceRows(x,W,H);
+  let frame=-1;const lim=Math.min(H*0.3,tr.length?tr[0]:H);
+  for(let y=0;y<lim;y++){let run=0,best=0;for(let xx=0;xx<W;xx++){const i=(y*W+xx)*4;if(d[i]<110&&d[i+1]<110&&d[i+2]<110){run++;if(run>best)best=run;}else run=0;}if(best>W*0.6)frame=y;}
+  let top=frame>=0?frame+4:Math.max(0,(tr.length?tr[0]:0)-Math.round(70*S));
+  let bottom=0;for(let y=H-1;y>top;y--){let n=0;for(let xx=0;xx<W;xx+=3){const i=(y*W+xx)*4;if(d[i]<200||d[i+1]<200||d[i+2]<200){n++;if(n>2)break;}}if(n>2){bottom=y;break;}}
+  bottom=Math.min(H,bottom+Math.round(8*S));if(bottom<=top+10){top=0;bottom=H;}
+  const o=document.createElement('canvas');o.width=W;o.height=bottom-top;const ox=o.getContext('2d');ox.fillStyle='#fff';ox.fillRect(0,0,o.width,o.height);ox.drawImage(c,0,top,W,bottom-top,0,0,W,bottom-top);
+  return o;
+}
+// ページとイベントの見出しの対応：描画命令ごと（≒ページごと）の文字から「RVAT-603: 2026年11月12日 05:33, RV Auto」を探す
+function tvStreamEvents(raw){
+  const order=[],by=new Map();for(const it of raw){if(!by.has(it.p)){by.set(it.p,[]);order.push(it.p);}by.get(it.p).push(it);}
+  return order.map(p=>{const t=by.get(p).map(i=>i.s).join(' ');
+    if(!/\b(AS|AP|VS|VP|RVP|RVS|LVP|LVS)\b|mm\s*\/\s*sec/.test(t))return null; // EGMのページではない
+    const m=t.match(/(?:([A-Z]{1,6})-)?(\d{1,4})\s*[:：]\s*(\d{4})年\s*(\d{1,2})月\s*(\d{1,2})日\s*(\d{1,2}:\d{2})\s*[,，]?\s*([^\n]{0,24}?)(?=\s{2}|詳細|$|\s+(?:イベント|25\s*mm))/);
+    return {ev:m?{no:m[2],dt:`${m[3]}年${m[4].padStart(2,'0')}月${m[5].padStart(2,'0')}日 ${m[6]}`,type:[m[1],m[7]].filter(Boolean).join(' ').trim()}:null};}).filter(Boolean);
+}
+async function saveTvEgm(id,date){
+  if(!dirHandle||!lastPdfDoc||!id)return [];
+  const pages=await tvEgmPages(lastPdfDoc);if(!pages.length)return [];
+  const evs=tvStreamEvents(lastRawItems),map=evs.length===pages.length?evs:null;
+  const top=await dirHandle.getDirectoryHandle(PDF_DIR,{create:true}),folder=fileNameFor(id,{device:$('fDev').value}).replace(/\.json$/i,'')||id,pd=await top.getDirectoryHandle(folder,{create:true});
+  const m=String(date||'').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})(?:\D+(\d{1,2}):(\d{2}))?/),stem=m?`${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}${m[4]?'_'+m[4].padStart(2,'0')+m[5]:''}`:'EGM';
+  const out=[];let k=0;
+  for(let i=0;i<pages.length;i++){const ev=map&&map[i].ev;const fname=ev?`${stem}_イベント${safeName(ev.no)}.png`:`${stem}_EGM${++k}.png`;
+    try{const cv=await tvEgmImage(lastPdfDoc,pages[i]),blob=await new Promise(r=>cv.toBlob(r,'image/png'));
+      const w=await (await pd.getFileHandle(fname,{create:true})).createWritable();await w.write(blob);await w.close();
+      out.push({path:`${PDF_DIR}/${folder}/${fname}`,ev,page:pages[i]});}catch(_){}}
+  return out;
+}
 // 経静脈デバイスの設定：時系列にせず、開いた時だけ見る欄（最新のレポートの設定。前回から変わった所は黄色）
 function tvSetBox(cur,prev,when){
   const C=cur&&cur.items||{},P=prev&&prev.items||{};
@@ -1158,8 +1207,12 @@ async function runTV(){
   const prev=saves.filter(x=>x.tv&&x.settings&&x.settings.n&&(key?(x.key&&x.key<key):true)).sort((a,b)=>a.key<b.key?1:a.key>b.key?-1:(b.ts||0)-(a.ts||0))[0]||null;
   const cmp=compareSettings(prev&&prev.settings,tv),al=settingsAlerts(tv,prev&&prev.settings),lv=al.length?Math.max(...al.map(a=>a.lv)):0;
   const chg=(cmp?cmp.changed:[]).filter(x=>!isMeas(x.k));
-  let saved=false;
-  if(dirHandle){saves.push({tv:tv.tv,settings:tv,date,key,ts,pdf:null,secg:'',events:[],tx:meta.tx||'',level:lv,causes:al.map(a=>'⚙ '+a.txt),first:{level:lv,causes:al.map(a=>'⚙ '+a.txt),ts}});
+  let saved=false,egm=[];
+  if(dirHandle){try{egm=await saveTvEgm(id,date);}catch(_){egm=[];}
+    const egmPaths=new Set(egm.map(e=>e.path));for(let i=saves.length-1;i>=0;i--)if(saves[i].pdf&&egmPaths.has(saves[i].pdf))saves.splice(i,1); // 同じ画像の古い記録は置き換える
+    const main=egm.find(e=>!e.ev);
+    for(const e of egm.filter(e=>e.ev))saves.push({tv:tv.tv,date,key,ts,pdf:e.path,secg:'',events:[e.ev],tx:meta.tx||'',level:null,feat:null});
+    saves.push({tv:tv.tv,settings:tv,date,key,ts,pdf:main?main.path:null,egmPages:egm.filter(e=>!e.ev).map(e=>e.path),secg:'',events:[],tx:meta.tx||'',level:lv,causes:al.map(a=>'⚙ '+a.txt),first:{level:lv,causes:al.map(a=>'⚙ '+a.txt),ts}});
     const base=store||{id,name:'',reports:[],history:[]};
     saved=await writeBaseline(id,{...base,date,device:$('fDev').value||base.device||'',saves});}
   const P=prev&&prev.settings&&prev.settings.items||{};
@@ -1175,6 +1228,7 @@ async function runTV(){
     <details class="numdet"${numDetOpen()?' open':''}><summary>📊 今回読めた測定値（${keys.length}項目）</summary><table class="crit"><tr><th>項目</th><th>前回</th><th>今回</th></tr>${rows}</table>
     <div class="hint">波形（EGM）の比較はまだしていません。</div></details>
     ${tvSetBox(tv,prev&&prev.settings,date)}
+    ${egm.length?`<div class="hint" style="margin-top:6px">〰 EGMを${egm.filter(e=>!e.ev).length}枚・⚡イベントを${egm.filter(e=>e.ev).length}件、画像にしてタイムラインに入れました。</div>`:''}
     ${dirHandle?(saved?'':'<div class="warn-t">保存できませんでした（フォルダの許可を確認してください）</div>'):'<div class="warn-t">※フォルダ未選択のため保存できていません。</div>'}</div>`;
   tlAuto(id);rvLoad();
 }
@@ -1869,6 +1923,7 @@ async function tlPanel(box,rep,title){
 // サムネイルの日付：S-ECGの記録日時 → イベント（番号・日時・種類）→ 照会日
 function tlThumbLabel(it){
   const f=d=>escH(String(d||'').replace(/(\d{4})年(\d{2})月(\d{2})日\s*/,'$1/$2/$3 ').replace(/\s*(JST|ＪＳＴ)/g,''));const ev=(it.events||[])[0];
+  if(it.tv&&!tlIsEv(it))return `🫀 ${escH(it.tv)} EGM ${f(it.date||'?')}`;
   if(!tlIsEv(it))return `〰 ${f(it.secg||it.tx||it.date||'?')}${it.secg?'':'<span class="hint">（送信）</span>'}`; // S-ECG：記録日時、なければ送信日時
   if(it.secg)return `⚡ ${f(it.secg)}`; // 波形が3段以上＝イベントの記録（S-ECGの欄に載ったもの）
   if(ev)return `⚡${escH(ev.no)} ${f(ev.dt)}${ev.type?` <b style="color:var(--warn)">${escH(ev.type)}</b>`:''}`;
