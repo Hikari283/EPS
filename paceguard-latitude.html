@@ -2358,14 +2358,14 @@ async function tlLoad(idArg,quiet){
         const m=n.match(/^(\d{4})-(\d{2})-(\d{2})(?:_(\d{2})(\d{2}))?/);const key=m?m[1]+m[2]+m[3]+(m[4]||'00')+(m[5]||'00'):'';
         files.push({n,key,path:`${PDF_DIR}/${fname}/${n}`,doc:/_(書類|経静脈)\d/.test(n)});}}}catch(_){}
   const items=[];
-  for(const f of files.filter(f=>!f.doc).sort((a,b)=>a.key===b.key?(a.n<b.n?-1:1):(a.key<b.key?-1:1))){
+  for(const f of files.filter(f=>!f.doc).sort((a,b)=>a.key===b.key?String(a.n).localeCompare(String(b.n),'ja',{numeric:true}):(a.key<b.key?-1:1))){
     const sv=(st.saves||[]).find(x=>x.pdf===f.path);
     const r=sv?{...sv,lv:sv.level,h:sv.level!=null?{level:sv.level,causes:sv.causes,ref:sv.ref,mode:sv.mode}:null}:null; // このPDF自身の記録だけを使う
     const saved=(f.n.match(/保存(\d{8})-(\d{2})(\d{2})/)||[]);
     items.push({...(r||{}),date:(r&&r.date)||f.key.replace(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})$/,'$1年$2月$3日 $4:$5'),key:f.key,pdf:f.path,file:f.n,
       saved:saved[1]?`${saved[1].slice(4,6)}/${saved[1].slice(6,8)} ${saved[2]}:${saved[3]}保存`:'',lv:r?r.lv:null,h:r?r.h:null,feat:r?r.feat:null,own:!!r});}
   // PDF・画像のファイルが見つからない記録は、タイムラインには出さない（数値の記録は基準・前回の比較用に残す）
-  items.sort((a,b)=>a.key===b.key?((a.file||'')<(b.file||'')?-1:1):(a.key<b.key?-1:1));
+  items.sort((a,b)=>a.key===b.key?String(a.file||'').localeCompare(String(b.file||''),'ja',{numeric:true}):(a.key<b.key?-1:1)); // 同じ送信の画像は番号の順（イベント9 → イベント12）
   // 保存済みのPDFで送信日時やS-ECGの記録日時が記録されていないものは、PDFの文字から直接読む
   for(const it of items){if(!it.pdf||/\.png$/i.test(it.pdf)||(it.secg&&it.tx))continue;
     try{const f=await fileFromPath(it.pdf);if(!f)continue;const h=headerInfo((await extractRawPdfText(await f.arrayBuffer())).replace(/\s+/g,''),false,'');
