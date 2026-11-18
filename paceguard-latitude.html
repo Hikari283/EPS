@@ -963,16 +963,17 @@ function parseTV(items){
 // ===== Medtronic（CareLink の Quick Look II）：レポートの測定値・設定を読む =====
 // Bostonの経静脈デバイスと同じキー（lead:/set:/pace:/bat:...）にそろえて、推移の表・ルール・アラートを共通にする
 const MDT_MON={Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12'};
-const mdtDate=s=>{const m=String(s||'').match(/(\d{1,2})-([A-Z][a-z]{2})-(\d{4})(?:\s+(\d{1,2}:\d{2}))?/);return m&&MDT_MON[m[2]]?`${m[3]}年${MDT_MON[m[2]]}月${m[1].padStart(2,'0')}日${m[4]?' '+m[4]:''}`:'';};
+const mdtDate=s=>{const t=String(s||'');const d=t.match(/(\d{4})\.(\d{1,2})\.(\d{1,2})(?:\s+(\d{1,2}:\d{2}))?/);if(d)return `${d[1]}年${d[2].padStart(2,'0')}月${d[3].padStart(2,'0')}日${d[4]?' '+d[4]:''}`; // 日本語版の「2026.11.19」
+  const m=t.match(/(\d{1,2})-([A-Z][a-z]{2})-(\d{4})(?:\s+(\d{1,2}:\d{2}))?/);return m&&MDT_MON[m[2]]?`${m[3]}年${MDT_MON[m[2]]}月${m[1].padStart(2,'0')}日${m[4]?' '+m[4]:''}`:'';};
 const mdtCh=s=>{const t=String(s||'').replace(/\s/g,'');if(/^(RA|A)(\(|$)/i.test(t))return '心房';if(/^RV(\(|$)/i.test(t))return '右心室';if(/^LV(\(|$)/i.test(t))return '左心室';return '';};
-const mdtVal=v=>tvUnit(String(v||'').replace(/\s*\((\d+(?:\.\d+)?)\s*ms\)/,' @ $1 ms').replace(/\s*\/\s*(\d+(?:\.\d+)?)\s*ms/,' @ $1 ms').replace(/(\d)\s*sec\b/,'$1 s').replace(/(\d)\s*bpm\b/,'$1 bpm'));
+const mdtVal=v=>tvUnit(String(v||'').replace(/([\d.]+)\s*ms\s*で\s*([\d.]+)\s*V/,'$2 V @ $1 ms').replace(/\s*\((\d+(?:\.\d+)?)\s*ms\)/,' @ $1 ms').replace(/\s*\/\s*(\d+(?:\.\d+)?)\s*ms/,' @ $1 ms').replace(/(\d)\s*sec\b/,'$1 s').replace(/(\d)\s*bpm\b/,'$1 bpm'));
 function isMedtronic(text){return /Medtronic|CareLink|Quick\s*Look/i.test(String(text||''));}
 function parseMDT(items,flat){
   const rows=tvRows(items),got={};let o=0;
   // pr：同じ値が2か所にある時の優先度（2＝日付つきの詳しいページ・ヒストグラム、1＝Quick Look）。PDFの順番に関係なく、優先度の高い方を使う
   const put=(k,l,v,extra)=>{v=mdtVal(v);if(!v)return;if(got[k]&&!(((extra&&extra.pr)||1)>(got[k].pr||1)))return;got[k]={l,v,g:'tv',o:o++,...(extra||{})};};
   const T=String(flat||'');
-  const mdD=s=>{const m=String(s||'').match(/(\d{1,2}-[A-Z][a-z]{2}-\d{4})\s*$/);return m?mdtDate(m[1]):'';};
+  const mdD=s=>{const m=String(s||'').match(/((?:\d{1,2}-[A-Z][a-z]{2}-\d{4}|\d{4}\.\d{1,2}\.\d{1,2}))\s*$/);return m?mdtDate(m[1]):'';};
   const durSec=d=>{const a=String(d).split(':').map(x=>+x||0);return a.length>=3?a[0]*3600+a[1]*60+a[2]:a.length===2?a[0]*60+a[1]:a[0];};
   const durTxt=n=>n<60?`${n}秒`:n<3600?`${Math.floor(n/60)}分${n%60?n%60+'秒':''}`:`${Math.floor(n/3600)}時間${Math.floor(n%3600/60)}分`;
   let sicStart='';
@@ -980,7 +981,7 @@ function parseMDT(items,flat){
   const id=(T.match(/(?:^|[^A-Za-z])ID\s*[:：]\s*(\d{6,10})/)||[])[1]||'';
   const model=((T.match(/デバイス\s*[:：]\s*(.+?)\s+シリアル番号/)||[])[1]||'').trim();
   const serial=((T.match(/シリアル番号\s*[:：]\s*([A-Z0-9]{6,})/)||[])[1]||'');
-  const sent=mdtDate((T.match(/送信日時\s*[:：]?\s*(\d{1,2}-[A-Z][a-z]{2}-\d{4}\s+\d{1,2}:\d{2})/)||[])[1]);
+  const sent=mdtDate((T.match(/送信日時\s*[:：]?\s*((?:\d{1,2}-[A-Z][a-z]{2}-\d{4}|\d{4}\.\d{1,2}\.\d{1,2})\s+\d{1,2}:\d{2})/)||[])[1]);
   let sec='',cols={},chDef='右心室',lastThr=null,rightX=null,rightSec='',lastShock=[];
   const xOf=(c,re)=>{const i=c.s.search(re);return i<=0?c.x0:c.x0+(c.x1-c.x0)*i/Math.max(1,c.s.length);}; // くっついたセルの中で、その言葉が始まる位置
   const near=x=>{let b='',bd=1e9;for(const [k,cx] of Object.entries(cols)){const d=Math.abs(cx-x);if(d<bd){bd=d;b=k;}}return b;};
@@ -990,45 +991,47 @@ function parseMDT(items,flat){
     if(/^前回のインテロゲーション/.test(c0)){sec='';continue;}
     // 見出しでセクションを切り替える
     const H=(re,name)=>{if(re.test(c0)){sec=name;return true;}return false;};
-    if(H(/^デバイスステータス/,'dev')){cols={};const d=all.match(/植込み日\s*[:：]\s*(\d{1,2}-[A-Z][a-z]{2}-\d{4})/);if(d)put('impl','植込み日',mdtDate(d[1]));continue;}
+    if(H(/^デバイスステータス/,'dev')){cols={};const d=all.match(/植込み日時?\s*[:：]\s*((?:\d{1,2}-[A-Z][a-z]{2}-\d{4}|\d{4}\.\d{1,2}\.\d{1,2}))/);if(d)put('impl','植込み日',mdtDate(d[1]));continue;}
     if(H(/^パラメータサマリ/,'param'))continue;
     if(H(/^検出$/,'detect'))continue;
     if(H(/^臨床ステータス/,'clin')){const g=cells.find(c=>/Cardiac\s*Compass/i.test(c.s));rightX=g?xOf(g,/Cardiac\s*Compass/i)-3:null;continue;}
-    if(/^治療済みのイベント/.test(c0)){sec='evTx';continue;}
-    if(/^モニタ済みイベント/.test(c0)){sec='evMon';continue;}
+    if(/^治療済み(のイベント)?$/.test(c0)||/^治療済みのイベント/.test(c0)){sec='evTx';continue;}
+    if(/^モニタ済み(イベント)?$/.test(c0)||/^モニタ済みイベント/.test(c0)){sec='evMon';continue;}
     if(H(/^身体機能/,'act'))continue;
     if(H(/^治療サマリ/,'txsum')){const g=cells.find(c=>/ペーシング/.test(c.s)&&!/^治療サマリ/.test(c.s))||cells.find(c=>/ペーシング/.test(c.s));rightX=g?xOf(g,/ペーシング/)-3:null;rightSec='pace';continue;}
     if(H(/^オブザベーション/,'obs'))continue;
-    if(/^予測寿命/.test(c0)&&!/months?|years?/i.test(all)){sec='life';continue;} // 値の付いた「予測寿命 9 months」は見出しではない
+    if(/^予測(電池)?寿命/.test(c0)&&!/months?|years?|\d\s*(年|か月|ヶ月)/i.test(all)){sec='life';continue;} // 値の付いた「予測寿命 9 months」は見出しではない
     if(/^電池電圧/.test(c0)&&!/\d\s*V\b/.test(all)){sec='volt';continue;}
     if(H(/^前回のチャージ/,'charge'))continue;
-    if(H(/^センシング・?インテグリティ/,'sic')){const d=all.match(/開始日\s*[:：]?\s*(\d{1,2}-[A-Z][a-z]{2}-\d{4})/);sicStart=d?mdtDate(d[1]):'';continue;}
+    if(H(/^センシング・?インテグリティ/,'sic')){const d=all.match(/(?:開始日\s*[:：]?\s*|(?=\d{4}\.\d{1,2}\.\d{1,2}\s*以降))((?:\d{1,2}-[A-Z][a-z]{2}-\d{4}|\d{4}\.\d{1,2}\.\d{1,2}))/);sicStart=d?mdtDate(d[1]):'';continue;}
     if(sec!=='dev'&&H(/^リードインピーダンス/,'limp'))continue;
     if(H(/^心房リードポジションチェック/,'apc'))continue;
     if(H(/^センシング$/,'sense'))continue;
     if(H(/^前回のショック治療/,'shock')){const d=mdtDate(all);lastShock=d?[d]:[];continue;}
     if(H(/^(CareLink|Copyright|患者個人情報)/,''))continue;
     // ヒストグラムのページ（「総VP < 0.1% < 0.1%」のように前回チェックまで／以降の2列）：右の列（前回チェック以降）の値
-    {const li=cells.findIndex(c=>/^(総VP|総AP|AS-VS|AS-VP|AP-VS|AP-VP)$/.test(tvClean(c.s)));if(li>=0){const lab=tvClean(cells[li].s),pc=cells.slice(li+1).map(c=>c.s).join(' ').match(/[<>]?\s*[\d.]+\s*%/g);if(pc&&pc.length){put(`pace:${lab}`,`ペーシング率 ${lab}`,pc[pc.length-1].replace(/\s/g,''),{pr:2});continue;}}}
+    {const li=cells.findIndex(c=>/^(総VP|総AP|総VS|総AS|AS-VS|AS-VP|AP-VS|AP-VP)$/.test(tvClean(c.s)));if(li>=0){const lab=tvClean(cells[li].s),pc=cells.slice(li+1).map(c=>c.s).join(' ').match(/[<>]?\s*[\d.]+\s*%/g);if(pc&&pc.length){put(`pace:${lab}`,`ペーシング率 ${lab}`,pc[pc.length-1].replace(/\s/g,''),{pr:2});continue;}}}
     // エピソードの行（タイプ … ID# 日付 時刻 持続時間 …）：例「Fast A&V 9 28-Oct-2026 14:32 :21 152/152 154/154 安静」
-    {const m=all.match(/^(.+?)\s+(\d{1,5})\s+(\d{1,2}-[A-Z][a-z]{2}-\d{4})\s*(\d{1,2}:\d{2})\s+(\d{0,2}:\d{2}(?::\d{2})?)(?=\s|$)/);
+    {const m=all.match(/^(.+?)\s+(\d{1,5})\s+((?:\d{1,2}-[A-Z][a-z]{2}-\d{4}|\d{4}\.\d{1,2}\.\d{1,2}))\s*(\d{1,2}:\d{2})\s+(\d{0,2}:\d{2}(?::\d{2})?)(?=\s|$)/);
       if(m&&!/エピソード|#|送信|インテロゲーション/.test(m[1])){const type=tvClean(cells[0].s).replace(/\s+\d.*$/,'')||m[1].split(/\s+/)[0],sec=durSec(m[5]),dt=mdtDate(m[3]+' '+m[4]);
         put(`epi:${m[2]}`,`${type} #${m[2]}`,`${durTxt(sec)}（${dt}）`,{pr:2,ep:{type,no:m[2],dt,dur:m[5],sec}});continue;}}
     // 右の列（Cardiac Compass のグラフ／ペーシングの表）はここで分ける
     let L=cells,R=[];if(rightX!=null&&(sec==='clin'||sec==='evTx'||sec==='evMon'||sec==='act'||sec==='txsum')){L=cells.filter(c=>c.x0<rightX);R=cells.filter(c=>c.x0>=rightX);}
-    if(R.length>=2&&rightSec==='pace'&&sec==='txsum'){const k=tvClean(R[0].s);if(/^(AS|AP|VS|VP|AS-VS|AS-VP|AP-VS|AP-VP)$/.test(k)){const m=R.slice(1).map(c=>c.s).join(' ').match(/([<>]?\s*[\d.]+)\s*%/);if(m){const kk=/^(VP|AP)$/.test(k)?'総'+k:k;put(`pace:${kk}`,`ペーシング率 ${kk}`,m[1].replace(/\s/g,'')+'%');}}}
+    if(R.length>=2&&rightSec==='pace'&&sec==='txsum'){const k=tvClean(R[0].s);if(/^(AS|AP|VS|VP|AS-VS|AS-VP|AP-VS|AP-VP)$/.test(k)){const m=R.slice(1).map(c=>c.s).join(' ').match(/([<>]?\s*[\d.]+)\s*%/);if(m){const kk=/^(VP|AP|VS|AS)$/.test(k)?'総'+k:k;put(`pace:${kk}`,`ペーシング率 ${kk}`,m[1].replace(/\s/g,'')+'%');}}}
     if(!L.length)continue;let l0=tvClean(L[0].s),rest=L.slice(1).map(c=>c.s).join(' ').trim();
     // 件数の表で、項目名と数字の間が狭くてくっついた時（例「VT-NS (>4 beat, >200 bpm)0」）は、最後の数字を値にする
     if(!rest&&/^(evTx|evMon|txsum|sic)$/.test(sec)){const m=l0.match(/^(.*?[^\d\s])\s*(\d+)$/);if(m&&!/[~\-]$/.test(m[1])){l0=m[1].trim();rest=m[2];}}
     if(sec==='dev'){
       // 列見出し（RV(6935M) / RA / LV）
       const hd=cells.filter(c=>mdtCh(c.s));if(hd.length&&hd.length===cells.length){cols={};for(const c of hd)cols[mdtCh(c.s)]=(c.x0+c.x1)/2;if(hd.length===1)chDef=mdtCh(hd[0].s);continue;}
-      if(/^予測寿命/.test(l0)){const m=rest.match(/([<>]?\s*\d+(?:\.\d+)?\s*(?:months?|years?))/i);if(m)put('bat:years','電池 予測寿命',m[1]);continue;}
+      if(/^予測(電池)?寿命/.test(l0)){const m=rest.match(/([<>]?\s*\d+(?:\.\d+)?\s*(?:months?|years?|年|か月|ヶ月))/i);if(m)put('bat:years','電池 予測寿命',m[1]);continue;}
       const vals=L.slice(1);if(!vals.length)continue;
       const each=fn=>{if(Object.keys(cols).length>1){for(const c of vals){const ch=near((c.x0+c.x1)/2);if(ch)fn(ch,c.s);}}else fn(chDef,vals.map(c=>c.s).join(' '));};
       if(/ペーシングインピーダンス|^リードインピーダンス/.test(l0)){each((ch,v)=>put(`lead:${ch}:ペーシングインピーダンス`,`${ch} ペーシングインピーダンス`,v));continue;}
-      if(/除細動インピーダンス/.test(l0)){const v=rest.replace(/^(RV|SVC)\s*/,'');put('lead:ショック:ショックインピーダンス','ショックインピーダンス（RV除細動）',v);continue;}
-      if(/ペーシング閾値/.test(l0)){each((ch,v)=>{put(`lead:${ch}:ペーシング閾値`,`${ch} ペーシング閾値`,v);lastThr=`lead:${ch}:ペーシング閾値`;});continue;}
+      if(/除細動インピーダンス/.test(l0)){const v=rest.replace(/^(RV|SVC)\s*=?\s*/,'');put(/^SVC/.test(rest)?'lead:ショック:SVC除細動インピーダンス':'lead:ショック:ショックインピーダンス',/^SVC/.test(rest)?'SVC除細動インピーダンス':'ショックインピーダンス（RV除細動）',v);continue;}
+      if(/^SVC\s*=/.test(l0+' '+rest)){put('lead:ショック:SVC除細動インピーダンス','SVC除細動インピーダンス',(l0+' '+rest).replace(/^SVC\s*=\s*/,''));continue;}
+      if(/ペーシング極性/.test(l0)&&rest){put('set:ペーシング極性','ペーシング極性',rest);continue;}
+      if(/ペーシング閾値|キャプチャ閾値/.test(l0)){each((ch,v)=>{put(`lead:${ch}:ペーシング閾値`,`${ch} ペーシング閾値`,v);lastThr=`lead:${ch}:ペーシング閾値`;});continue;}
       if(/^測定日/.test(l0)){if(Object.keys(cols).length>1){for(const c of L.slice(1)){const ch=near((c.x0+c.x1)/2),k=`lead:${ch}:ペーシング閾値`;if(got[k])got[k].measDate=mdtDate(c.s);}}else if(lastThr&&got[lastThr])got[lastThr].measDate=mdtDate(rest);continue;}
       if(/電圧\/?パルス幅|出力/.test(l0)){each((ch,v)=>put(`set:ペーシング出力 ${ch}`,`ペーシング出力 ${ch}`,v));continue;}
       if(/[PR]波|波高|測定値/.test(l0)&&/mV/.test(rest)){each((ch,v)=>put(`lead:${ch}:心内波高値`,`${ch} 心内波高値`,v));continue;}
@@ -1039,24 +1042,24 @@ function parseMDT(items,flat){
       const tok=[];for(const c of L){const t=c.s.trim(),m=t.match(/^([^\d<>]*?[^\d\s<>])\s*([<>]?\d.*)$/);if(m&&!isVal(t))tok.push(m[1].trim(),m[2].trim());else tok.push(t);}
       let lab=null;for(const t of tok){if(isVal(t)&&lab){put(`set:${lab}`,lab,t);lab=null;}else if(!isVal(t))lab=tvClean(t);}continue;}
     if(sec==='detect'){if(/^レート|^治療/.test(l0))continue;
-      if(/^(VF|FVT|VT|AT\/AF|ATR)$/i.test(l0)){put(`set:${l0}`,`検出 ${l0}`,L.slice(1).map(c=>c.s).join(' / '));}else if(/^Onになっている/.test(l0))put('set:検出強化機能','検出強化機能',rest);continue;}
+      if(/^(VF|FVT|VT|AT\/AF|AF|ATR)$/i.test(l0)){put(`set:${l0}`,`検出 ${l0}`,L.slice(1).map(c=>c.s).join(' / '));}else if(/^Onになっている/.test(l0))put('set:検出強化機能','検出強化機能',rest);continue;}
     if(sec==='evTx'||sec==='evMon'){
-      if(/^AT\/AF時間/.test(l0)){const m=rest.match(/\(\s*([<>]?\s*[\d.]+)\s*%\s*\)/);put('atAf',`%AT/AF（AT/AF時間 ${rest.replace(/\s*\(.*$/,'')}）`,(m?m[1].replace(/\s/g,''):'')+'%',{hr:rest.replace(/\s*\(.*$/,'')});continue;}
+      if(/^(AT\/AF|AF)時間/.test(l0)){const m=rest.match(/\(\s*([<>]?\s*[\d.]+)\s*%\s*\)/);put('atAf',`%AT/AF（AT/AF時間 ${rest.replace(/\s*\(.*$/,'')}）`,(m?m[1].replace(/\s/g,''):'')+'%',{hr:rest.replace(/\s*\(.*$/,''),lab:l0.replace(/\s.*$/,'')});continue;}
       const n1=L.slice(1).map(c=>c.s.trim()).find(v=>/^\d+$/.test(v))??(/^\d+$/.test(rest)?rest:null);
       if(n1!=null){const pre=sec==='evTx'?'治療済み':'モニタ';put(`ev:${pre}:${l0}`,`${pre} ${l0}`,n1+'件');}continue;}
     if(sec==='act'){if(/アクティビティ/.test(l0)&&L[1])put('act','患者アクティビティ',L[1].s);continue;}
     if(sec==='txsum'){let n1=L.slice(1).map(c=>c.s.trim()).filter(v=>/^\d+$/.test(v));if(!n1.length&&/^\d+$/.test(rest))n1=[rest];if(n1.length)put(`ev:治療:${l0}`,l0,n1.join(' / ')+'件');continue;}
     if(sec==='apc'){if(/ポジションチェック/.test(l0)&&rest)put('leadpos','心房リード ポジションチェック',rest,{pr:2});continue;}
     if(sec==='obs'){const t=all.replace(/^[•・\s]+/,'').trim();if(t){const k='obs';if(got[k])got[k].v+=' ／ '+t;else put(k,'オブザベーション',t);}continue;}
-    if(sec==='life'){const m=rest.match(/([<>]?\s*\d+(?:\.\d+)?\s*(?:months?|years?))/i);if(/^推定値/.test(l0)&&m)put('bat:years','電池 予測寿命',m[1],{pr:2});else if(/^最小/.test(l0)&&m)put('bat:min','電池 予測寿命（最小）',m[1],{pr:2});else if(/^最大/.test(l0)&&m)put('bat:max','電池 予測寿命（最大）',m[1],{pr:2});continue;}
+    if(sec==='life'){const m=rest.match(/([<>]?\s*\d+(?:\.\d+)?\s*(?:months?|years?|年|か月|ヶ月))/i);if(/^推定値/.test(l0)&&m)put('bat:years','電池 予測寿命',m[1],{pr:2});else if(/^最小/.test(l0)&&m)put('bat:min','電池 予測寿命（最小）',m[1],{pr:2});else if(/^最大/.test(l0)&&m)put('bat:max','電池 予測寿命（最大）',m[1],{pr:2});continue;}
     if(sec==='volt'){if(/^電圧/.test(l0)&&rest)put('bat:volt','電池電圧',rest,{pr:2});else if(/RRT/.test(all)&&got['bat:volt'])got['bat:volt'].v+=' '+all.trim();continue;}
     if(sec==='charge'){if(/^充電時間/.test(l0)&&rest)put('charge','充電時間',rest);continue;}
     if(sec==='sic'){if(/V-?V/.test(l0)&&rest)put('sic','SIC（短いV-Vインターバル）',rest.split(/\s/)[0],{pr:2,start:sicStart});continue;}
-    if(sec==='limp'){const v=rest.replace(/\s+\d{1,2}-[A-Z][a-z]{2}-\d{4}$/,''),E={pr:2,measDate:mdD(rest)};const ch=mdtCh(l0.replace(/(ペーシング|除細動).*/,''));
+    if(sec==='limp'){const v=rest.replace(/\s+(?:\d{1,2}-[A-Z][a-z]{2}-\d{4}|\d{4}\.\d{1,2}\.\d{1,2})$/,''),E={pr:2,measDate:mdD(rest)};const ch=mdtCh(l0.replace(/(ペーシング|除細動).*/,''));
       if(/ペーシング/.test(l0)&&ch)put(`lead:${ch}:ペーシングインピーダンス`,`${ch} ペーシングインピーダンス`,v.replace(/^\(.*?\)\s*/,''),E);
       else if(/^RV除細動/.test(l0))put('lead:ショック:ショックインピーダンス','ショックインピーダンス（RV除細動）',v,E);
       else if(/^SVC除細動/.test(l0))put('lead:ショック:SVC除細動インピーダンス','SVC除細動インピーダンス',v,E);continue;}
-    if(sec==='sense'){if(/波高/.test(l0)&&rest){const ch=/^P/.test(l0)?'心房':chDef;put(`lead:${ch}:心内波高値`,`${ch} 心内波高値`,rest.replace(/\s+\d{1,2}-[A-Z][a-z]{2}-\d{4}$/,''),{pr:2,measDate:mdD(rest)});}continue;}
+    if(sec==='sense'){if(/波高/.test(l0)&&rest){const ch=/^P/.test(l0)?'心房':chDef;put(`lead:${ch}:心内波高値`,`${ch} 心内波高値`,rest.replace(/\s+(?:\d{1,2}-[A-Z][a-z]{2}-\d{4}|\d{4}\.\d{1,2}\.\d{1,2})$/,''),{pr:2,measDate:mdD(rest)});}continue;}
     if(sec==='shock'){if(rest)lastShock.push(`${l0} ${rest}`);continue;}
   }
   if(lastShock.length)put('shock','前回のショック治療',lastShock.join(' ／ '));
@@ -1066,8 +1069,8 @@ function parseMDT(items,flat){
   return {items:got,src:{},n:Object.keys(got).length,tv:'Medtronic '+type,mdt:true,id,sent,model,serial};
 }
 // ERI：「最小−推定値」（例 12.5-13.1 years）。判定は小さい方（最小値）で行う
-function mdtEri(got){const b=got['bat:years'],mn=got['bat:min'];if(!b||!mn||b.eri)return;const u=/month/i.test(b.v)?' months':' years',n=x=>String(x).replace(/\s*(years?|months?)\s*$/i,'');
-  got['bat:years']={...b,l:'ERI',v:`${n(mn.v)}-${n(b.v)}${u}`,eri:1,pr:Math.max(b.pr||1,2)};}
+function mdtEri(got){const b=got['bat:years'],mn=got['bat:min'];if(!b||!mn||b.eri)return;const u=/month/i.test(b.v)?' months':' years',n=x=>String(x).replace(/\s*(years?|months?|年|か月|ヶ月)\s*$/i,'');
+  got['bat:years']={...b,l:'ERI',v:`${n(mn.v)}-${n(b.v)}${/年/.test(b.v)?' 年':/か月|ヶ月/.test(b.v)?' か月':u}`,eri:1,pr:Math.max(b.pr||1,2)};}
 // Medtronicの画面の並び（2026-11-18 当院のシート）。PDFを読んだ順番に関係なく、いつも同じ並びにする
 const MDT_HIDE=/^(act|bat:min|bat:max|impl)$/;
 function mdtLayout(C){
@@ -1081,11 +1084,11 @@ function mdtLayout(C){
     if(ch==='心房')add(g,'leadpos','リードポジションチェック');if(ch==='右心室')add(g,'sic','SIC',C.sic&&C.sic.start?'開始日 '+dt(C.sic.start):'');
     Object.keys(C).filter(k=>k.startsWith(`lead:${ch}:`)).forEach(k=>add(g,k,C[k].l.replace(ch+' ',''),md(k)));}
   Object.keys(C).filter(k=>/^lead:/.test(k)).forEach(k=>add('ショック・リード',k,null,md(k)));add('ショック・リード','charge');add('ショック・リード','shock');
-  const pg='ペーシング率（前回チェック以降）';['総VP','総AP','AS-VS','AS-VP','AP-VS','AP-VP'].forEach(x=>add(pg,`pace:${x}`,x));
+  const pg='ペーシング率（前回チェック以降）';['総VS','総VP','総AS','総AP','AS-VS','AS-VP','AP-VS','AP-VP'].forEach(x=>add(pg,`pace:${x}`,x));
   Object.keys(C).filter(k=>/^pace:/.test(k)).forEach(k=>add(pg,k,C[k].l.replace(/^ペーシング率\s*/,'')));
   Object.keys(C).filter(k=>/^ev:/.test(k)).forEach(k=>add('イベント',k,C[k].l.replace(/^モニタ\s+/,'')));
   Object.keys(C).filter(k=>/^epi:/.test(k)).sort((a,b)=>(+a.slice(4))-(+b.slice(4))).forEach(k=>{const e=C[k].ep||{};add('イベント',k,mdtIsAF(e.type)?`AF持続時間（#${e.no}）`:`${e.type||'エピソード'} #${e.no}`);});
-  add('イベント','atAf','AT/AF時間',C.atAf&&C.atAf.hr?C.atAf.hr:'');
+  add('イベント','atAf',C.atAf&&C.atAf.lab||'AT/AF時間',C.atAf&&C.atAf.hr?C.atAf.hr:'');
   add('そのほか','obs','オブザベーション');
   Object.keys(C).filter(k=>!/^set:/.test(k)&&!MDT_HIDE.test(k)).forEach(k=>add('そのほか',k));
   return L;}
@@ -1408,11 +1411,15 @@ function tvStreamEvents(raw){
 // Medtronic：エピソードの見出し「エピソード#11: 29-Oct-2026 09:36:25」（ページ番号つき）。種類は一覧の「タイプ」の行から
 function mdtEpisodeHeads(items,flat){
   const out=[],byP=new Map();for(const it of items||[]){if(!byP.has(it.p))byP.set(it.p,[]);byP.get(it.p).push(it.s);}
-  const typeOf=no=>{const m=String(flat||'').match(new RegExp('([A-Z][A-Za-z/\\-]{1,12})\\s+[^\\n]{0,40}?\\b'+no+'\\s+\\d{1,2}-[A-Z][a-z]{2}-\\d{4}'));return m?m[1]:'';};
-  for(const [p,arr] of byP){const t=arr.join(' ');for(const m of t.matchAll(/エピソード\s*#\s*(\d+)\s*[:：]\s*(\d{1,2}-[A-Z][a-z]{2}-\d{4}\s+\d{1,2}:\d{2})/g))out.push({p,no:m[1],dt:mdtDate(m[2]),type:typeOf(m[1])});}
-  if(!out.length)for(const m of String(flat||'').matchAll(/エピソード\s*#\s*(\d+)\s*[:：]\s*(\d{1,2}-[A-Z][a-z]{2}-\d{4}\s+\d{1,2}:\d{2})/g))out.push({p:null,no:m[1],dt:mdtDate(m[2]),type:typeOf(m[1])});
+  const typeOf=no=>{const m=String(flat||'').match(new RegExp('([A-Z][A-Za-z/\\-]{1,12})\\s+[^\\n]{0,40}?\\b'+no+'\\s+(?:\\d{1,2}-[A-Z][a-z]{2}-\\d{4}|\\d{4}\\.\\d{1,2}\\.\\d{1,2})'));return m?m[1]:'';};
+  for(const [p,arr] of byP){const t=arr.join(' ');for(const m of t.matchAll(/エピソード\s*#\s*(\d+)\s*[:：]\s*((?:\d{1,2}-[A-Z][a-z]{2}-\d{4}|\d{4}\.\d{1,2}\.\d{1,2})\s+\d{1,2}:\d{2})/g))out.push({p,no:m[1],dt:mdtDate(m[2]),type:typeOf(m[1])});}
+  if(!out.length)for(const m of String(flat||'').matchAll(/エピソード\s*#\s*(\d+)\s*[:：]\s*((?:\d{1,2}-[A-Z][a-z]{2}-\d{4}|\d{4}\.\d{1,2}\.\d{1,2})\s+\d{1,2}:\d{2})/g))out.push({p:null,no:m[1],dt:mdtDate(m[2]),type:typeOf(m[1])});
   // 「エピソード #」の見出しが無い形（表の行「AT/AF 288 14-Nov-2026 22:06 05:12:46 …」のあとにグラフ・EGMが続く）：その行のページから後ろがそのエピソード
-  for(const [p,arr] of byP){const t=arr.join(' ');for(const m of t.matchAll(/(AT\/AF|Fast A&V|VT-NS|FVT|VF|VT|SVT|AF|AT)\s+(?:[^\d\s]+\s+){0,3}(\d{1,5})\s+(\d{1,2}-[A-Z][a-z]{2}-\d{4})\s*(\d{1,2}:\d{2})\s+\d{0,2}:\d{2}/g))if(!out.some(o=>o.row&&o.no===m[2]))out.push({p,no:m[2],dt:mdtDate(m[3]+' '+m[4]),type:m[1],row:true});}
+  for(const [p,arr] of byP){const t=arr.join(' ');for(const m of t.matchAll(/(AT\/AF|Fast A&V|VT-NS|FVT|VF|VT|SVT|AF|AT|ハイレートNS|ハイレート|[^\s\d]{2,12})\s+(?:[^\d\s]+\s+){0,3}(\d{1,5})\s+((?:\d{1,2}-[A-Z][a-z]{2}-\d{4}|\d{4}\.\d{1,2}\.\d{1,2}))\s*(\d{1,2}:\d{2})\s+\d{0,2}:\d{2}/g))if(!out.some(o=>o.row&&o.no===m[2])){
+      // 種類：IDの前の言葉のうち、知っている種類（AT/AF・VT・ハイレートNSなど）を後ろから探す（見出しの「Max bpm」などを拾わない）
+      const pre=m[0].slice(0,m[0].lastIndexOf(m[2]+' ')).trim(),tk=pre.split(/\s+/);let type=/Fast A&V/.test(pre)?'Fast A&V':'';
+      if(!type)for(let i=tk.length-1;i>=0;i--)if(/^(AT\/AF|VT-NS|FVT|VF|VT|SVT|AF|AT|ハイレートNS|ハイレート|[^\x00-\x7F]{2,}NS)$/.test(tk[i])){type=tk[i];break;}
+      out.push({p,no:m[2],dt:mdtDate(m[3]+' '+m[4]),type:type||m[1],row:true});}}
   return out;
 }
 // MedtronicのEGMのページ（波形は黒い線）：文字「EGM 1」「マーカ」「インターバル(ms)」で見分ける。エピソードは、そのページ以降で最初の見出し
@@ -1426,7 +1433,7 @@ function mdtEgmPages(items0,raw0,nPages){const items=items0||lastAllItems||[],ra
   // エピソードの見出し（エピソードサマリ／表の行）のページから、次の見出しの前までがそのエピソード（サマリ・インターバルのグラフ・EGMの続きのページ）
   // ただし、ほかのレポートのページ（Quick Look・ヒストグラムなど）は入れない
   const OTHER=/デバイスステータス|パラメータサマリ|Quick\s*Look|前回チェック(まで|以降)|予測寿命|電池電圧|リードインピーダンス|臨床ステータス/;
-  const SUMMARY=/エピソードサマリ|エピソード\s*#\s*\d+\s*[:：]/; // エピソードサマリのページ（文字だけ）は画像にしない。波形のページだけ
+  const SUMMARY=/エピソードサマリ|エピソード\s*#\s*\d+\s*[:：]|入手可能なQRSデータなし/; // エピソードサマリのページ（文字だけ）は画像にしない。波形のページだけ
   const EGMT=/EGM\s*\d|マーカ|インターバル\s*\(ms\)/;
   // どのエピソードか：表の行（AT/AF 288 …）があれば、その行のページから次の行の前まで。無ければ「エピソード #」の見出しが波形の前か後ろかで決める
   const rowH=heads.filter(h=>h.row),sumH=heads.filter(h=>!h.row);
@@ -1529,7 +1536,7 @@ function tvAlerts(cur,prev){
   const rel=TVP('rel'),chg=TVP('chg'),mg=TVP('margin');
   const nd=TVP('nodata');
   for(const [k,x] of Object.entries(C)){let n=tvNum(LV(x.v));
-    if(k==='bat:years'&&/month/i.test(String(x.v)))n=n/12; // Medtronic の予測寿命は「9 months」のように月で書かれる
+    if(k==='bat:years'&&/month|か月|ヶ月/i.test(String(x.v)))n=n/12; // Medtronic の予測寿命は「9 months」のように月で書かれる
     if(nd&&/^lead:/.test(k)&&/記録なし/.test(String(x.v))){
       // 閾値→その部屋のペーシング出力、波高値→その部屋の感度 に注意を付ける（設定が見つからない時・インピーダンスは測定値の側）
       const ch=tvCh(k).replace('右室','右心室').replace('左室','左心室'),set=/ペーシング閾値/.test(k)?'ペーシング出力':/心内波高値/.test(k)?'感度':'';
