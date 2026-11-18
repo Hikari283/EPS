@@ -166,3 +166,14 @@ Export_Study-…/
 
 → ビューアへの反映：OCTARAYの説明（mm）と、通電タグの大きさの既定を 3 mm に変更。
 - 残りのページも確認済み（2026-11-18）：OPTRELL の LCV は「Show Catheter → LCV」でカテーテル陰影の上に矢印を重ねて表示。点の WOI・リファレンス・マッピングのアノテーションを変えると遡って再計算される。LAMは、連続取得中に Filter Status の紫の点で Late Annotation を示す。いずれもAFのPVIの実装には影響なし。
+
+---
+
+## 9. 資料の読了状況とURL（2026-11-18時点）
+**読了（先生から受け取り、全ページ確認）**：OCTARAY サポート（UG-5070-0475M）、OPTRELL 48 サポート（UG-5404-0175M）、VISITAG SURPOINT（UG-5420-017M）、LAM（UG-5405-0175M）。PDFに文字が入っていれば `pdftotext -layout` で全文を取り出せる。画像で読むときは1回20ページまで。
+
+**未読（優先順）** — e-ifu.com は利用規約の同意が必要で、私は開けない。先生がPDFを保存して渡す。**アプリの添付は1ファイル100ページまで**（CARTO 3 本体は401ページ→分割するか、目次＋必要な章だけ）。
+1. CARTO 3 システム 取説（V7.5 または V8）：https://www.e-ifu.com/ja/shared-document/14922/1/0/shared?langcode=ja&country=7501 　※手元に `BWJ-C3V75ML-02` あり（401ページ。未送信）。期待：点の取得条件、色の既定値、Export、タグ、FAM。
+2. TRUPULSE Generator（VARIPULSEの発生装置）：https://www.e-ifu.com/ja/shared-document/52419/1/3/shared?langcode=ja&country=7501 　期待：PFAの通電の仕組み・寸法。
+3. THERMOCOOL SMARTTOUCH SF：https://www.e-ifu.com/ja/shared-document/52335/1/0/shared?langcode=ja&country=7501 　期待：接触力・RFの条件。
+4. FDA 510(k) K231207（V8.0）：https://www.accessdata.fda.gov/cdrh_docs/pdf23/K231207.pdf 　PDFが圧縮されていて自動では読めなかった。先生がブラウザで開いて保存すれば読める可能性あり。
