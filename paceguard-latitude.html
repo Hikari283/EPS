@@ -308,6 +308,7 @@
       </div>
     </div>
   </details>
+  <div id="setCardHome" hidden></div>
   <details class="card" id="setCard" open>
     <summary>⚙ 設定・インピーダンスの推移（時系列）<span class="hint" id="setSum" style="margin-left:8px;font-weight:400;letter-spacing:0"></span></summary>
     <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:8px 0">
@@ -1340,7 +1341,10 @@ async function runTV(){
 }
 // タイムラインの開閉：S-ICD以外の機種の時は自動で閉じる（覚えている開閉は変えない）。S-ICDの時は覚えている開閉に戻す
 let tlAutoSet=false;
-function tlAutoOpen(sicd){let want;if(sicd){want=true;try{const v=localStorage.getItem('pg_lat_tlopen');if(v)want=v==='1';}catch(_){}}else want=false;
+// S-ICD以外（波形の重ね描きが無い）の時は、空いている右の列に「設定・インピーダンスの推移」を置く（スクロールしなくても見える）
+function placeSetCard(side){const c=$('setCard'),home=$('setCardHome'),grid=document.querySelector('.grid');if(!c||!home||!grid)return;
+  if(side){if(c.parentElement!==grid){grid.appendChild(c);}c.open=true;}else if(c.previousElementSibling!==home){home.after(c);}}
+function tlAutoOpen(sicd){placeSetCard(!sicd);let want;if(sicd){want=true;try{const v=localStorage.getItem('pg_lat_tlopen');if(v)want=v==='1';}catch(_){}}else want=false;
   if($('tlCard').open!==want){tlAutoSet=true;$('tlCard').open=want;}}
 let curSettings=null; // 今回のレポートから読んだ設定
 function extractFields(items, annotStrs, rawPdfText){
