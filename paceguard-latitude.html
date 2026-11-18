@@ -727,7 +727,7 @@ async function loadPDF(file,{forceEval=false,pageNo=0}={}){
     tlAutoOpen(!curNonSicd); // S-ICD以外はタイムラインを閉じる
     if(curNonSicd){ // S-ICD以外：Bostonの経静脈デバイス（ICD・CRTなど）のレポートなら、測定値・設定を読んで記録する
       // Medtronic（CareLink）：測定値・設定を読んで記録する。患者ID・送信日時・機種名もここで決める
-      let mdtDiag=null;mdtPendNote='';
+      let mdtDiag=null;mdtPendNote='';mdtPendSerial='';
       try{const flatM=lastAllItems.map(x=>x.s).join(' ')+' '+lastRawItems.map(x=>x.s).join(' ')+' '+rawPdfText;
         mdtDiag={found:isMedtronic(flatM),pjs:lastAllItems.length,raw:lastRawItems.length,n:0,id:'',sent:''};
         if(isMedtronic(flatM)){const m1=parseMDT(lastRawItems,flatM),m2=parseMDT(lastAllItems,flatM),md=m2.n>m1.n?m2:m1;
@@ -739,7 +739,7 @@ async function loadPDF(file,{forceEval=false,pageNo=0}={}){
           // あとでIDとシリアル番号の両方があるPDFを読んだ時に、同じ送信（同じシリアル番号・送信日時）の分を足し合わせる
           let pend={};try{pend=JSON.parse(localStorage.getItem('pg_lat_mdtpend')||'{}')||{};}catch(_){}
           const pk=md.serial?md.serial+'|'+(md.sent||''):'';
-          if(!md.id&&pk&&md.n){pend[pk]={items:tvMerge(pend[pk]&&pend[pk].items,md.items),ts:Date.now()};mdtPendNote=`IDの無いPDFでした（シリアル番号 ${md.serial}）。読めた${md.n}項目は取っておき、IDのあるPDF（Quick Look など）を読んだ時に同じ送信の記録にまとめます。`;}
+          if(!md.id&&pk&&md.n){pend[pk]={items:tvMerge(pend[pk]&&pend[pk].items,md.items),ts:Date.now()};mdtPendNote=`IDの無いPDFでした（シリアル番号 ${md.serial}）。読めた${md.n}項目は取っておき、IDのあるPDF（Quick Look など）を読んだ時に同じ送信の記録にまとめます。`;mdtPendSerial=md.serial;}
           if(md.id&&md.serial){for(const [k2,v2] of Object.entries(pend))if(k2.startsWith(md.serial+'|')&&(!md.sent||k2===pk||k2===md.serial+'|')){md.items=tvMerge(v2.items,md.items);delete pend[k2];}md.n=Object.keys(md.items).length;}
           for(const [k2,v2] of Object.entries(pend))if(Date.now()-(v2.ts||0)>7*864e5)delete pend[k2]; // 1週間たった待ちは捨てる
           try{localStorage.setItem('pg_lat_mdtpend',JSON.stringify(pend));}catch(_){}
@@ -756,6 +756,8 @@ async function loadPDF(file,{forceEval=false,pageNo=0}={}){
         if($('autoEval').checked||forceEval)await runTV();
         else $('result').innerHTML=`<div class="verdict info"><h2>🫀 ${escH(curTV.tv)}（経静脈）の${curTV.evOnly?'イベントのPDF':'レポート'}</h2>${curTV.evOnly?'イベントの波形があります。':`${curTV.n}項目を読みました。`}「🔍 前回と比較」で記録します。</div>`;
         return;}
+      // Medtronic のIDの無いPDF：患者PDF\_待ち\<シリアル番号> に取っておく（IDのあるPDFが来たら、その患者のフォルダへ移す）
+      if(mdtPendSerial&&lastPdfFile){const to=await archivePend(lastPdfFile,mdtPendSerial);if(to)mdtPendNote+=`PDFは「${to}」に取っておきました。`;}
       // それ以外：波形の比較・保存はしない
       curSigs=[];curFeat=[];curNoise=[];curPool=null;$('overlayCard').hidden=true;$('traceMsg').textContent='';
       $('result').innerHTML=`<div class="verdict info"><h2>${mdtPendNote?'⏳ 同じ送信のほかのPDFを待っています':'S-ICD以外のPDFです（対象外）'}</h2>${mdtPendNote?`<div>${escH(mdtPendNote)}</div>`:''}機種：${escH(curNonSicd)}　患者ID：${escH($('fId').value||'—')}<br>${mdtDiag?`<div class="hint">手がかり：Medtronic/CareLinkの文字 ${mdtDiag.found?'あり':'なし'}／Medtronicとして読めた項目 ${mdtDiag.n}（6以上で記録）${mdtDiag.keys?'：'+escH(mdtDiag.keys):''}／pdf.jsの文字項目 ${mdtDiag.pjs}・自前抽出 ${mdtDiag.raw}</div>`:''}<span class="hint">このツールはS-ICDのS-ECGだけを比較します。このPDFは比較・保存しません。</span></div>`;
@@ -1560,7 +1562,7 @@ async function runTVEvents(){
   tlAuto(id);
 }
 // 経静脈デバイスのレポートを記録して、前回と比べる（波形の比較はしない）
-let mdtPendNote='';
+let mdtPendNote='',mdtPendSerial='';
 const tvDateKey=d=>{const m=String(d||'').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})(?:\D+(\d{1,2}):(\d{2}))?/);return m?m[1]+m[2].padStart(2,'0')+m[3].padStart(2,'0')+(m[4]||'0').padStart(2,'0')+(m[5]||'00'):'';};
 const tvClinic=x=>x&&x.clinic?`<div class="hint">医療施設での最後の測定：${escH(LV(x.clinic))}${x.clinicDate?`（${escH(String(x.clinicDate).replace(/(\d{4})年(\d{1,2})月(\d{1,2})日/,'$1/$2/$3'))}）`:''}</div>`:'';
 const TV_GRP=k=>/^lead:/.test(k)?'リード（最新の日常測定）':/^(pace|atAf)/.test(k)?'ペーシング率・AT/AF':/^(bat|charge)/.test(k)?'電池':/^set:/.test(k)?'設定':/^(evTotal|ev:)/.test(k)?'イベント':/^(act|obs|shock|leadpos)/.test(k)?'そのほか':'';
@@ -1580,8 +1582,11 @@ async function runTV(){
   const prev=saves.filter(x=>x.tv&&x.settings&&x.settings.n&&(key?(x.key&&x.key<key):true)).sort((a,b)=>a.key<b.key?1:a.key>b.key?-1:(b.ts||0)-(a.ts||0))[0]||null;
   const cmp=compareSettings(prev&&prev.settings,tv),al=tvAlerts(tv,prev&&prev.settings),lv=al.length?Math.max(...al.map(a=>a.lv)):0;
   const chg=(cmp?cmp.changed:[]).filter(x=>!isMeas(x.k));
-  let saved=false,egm=[];
+  let saved=false,egm=[],pdfNote='';
   if(dirHandle){try{egm=await saveTvEgm(id,date);}catch(_){egm=[];}
+    // 元のPDFも、LATITUDEと同じく 患者PDF\<ID> に入れる（自動比較の時も同じファイルになるので二重にならない）
+    if(KEEP_PDF&&!reloadArchived){try{const to=await archivePdf(id,{name:'',date,device:$('fDev').value},'経静脈');if(to)pdfNote=`PDFを「${to}」に保存しました。`;}catch(_){}}
+    if(tv.mdt&&tv.serial){const n=await movePendTo(id,tv.serial,date);if(n)pdfNote+=`待っていたIDの無いPDF ${n}件も、この患者のフォルダへ移しました。`;}
     const egmPaths=new Set(egm.map(e=>e.path));for(let i=saves.length-1;i>=0;i--)if(saves[i].pdf&&egmPaths.has(saves[i].pdf))saves.splice(i,1); // 同じ画像の古い記録は置き換える
     const main=egm.find(e=>!e.ev);
     for(const e of egm.filter(e=>e.ev))saves.push({tv:tv.tv,date,key,ts,pdf:e.path,secg:'',events:[e.ev],tx:meta.tx||'',level:null,feat:null});
@@ -1605,6 +1610,7 @@ async function runTV(){
     <div class="hint">波形（EGM）の比較はまだしていません。</div></details>
     ${tvSetBox(tv,prev&&prev.settings,date)}
     ${egm.length?`<div class="hint" style="margin-top:6px">〰 EGMを${egm.filter(e=>!e.ev).length}枚・⚡イベントを${egm.filter(e=>e.ev).length}件、画像にしてタイムラインに入れました。</div>`:''}
+    ${pdfNote?`<div class="hint" style="margin-top:4px">📁 ${escH(pdfNote)}</div>`:''}
     ${dirHandle?(saved?'':'<div class="warn-t">保存できませんでした（フォルダの許可を確認してください）</div>'):'<div class="warn-t">※フォルダ未選択のため保存できていません。</div>'}</div>`;
   tlAuto(id);rvLoad();
 }
@@ -1818,7 +1824,7 @@ $('filePatSave').onclick=()=>{const v=$('filePat').value.trim();if(!/\{ID\}/.tes
   FILE_PAT=v;try{localStorage.setItem('pg_lat_filepat',v);}catch(_){}$('filePatMsg').innerHTML=`<span class="ok-t">保存しました。例：${fileNameFor('01652389',{name:'',device:'A219'})}</span>`;};
 // ===== PDFを患者ごとのフォルダに整理 =====
 // 元のPDFを残すか（標準は残さない＝波形の部分だけの画像を残す）。許可を得たら「残す」に切り替える
-let KEEP_PDF=false;try{KEEP_PDF=localStorage.getItem('pg_lat_keeppdf')==='1';}catch(_){}
+let KEEP_PDF=false;try{const v=localStorage.getItem('pg_lat_keeppdf');KEEP_PDF=v==='1'||(v===null&&!!window.PG_CL);}catch(_){} // CareLinkは、決めていなければ元のPDFを患者ごとのフォルダに残す（LATITUDEと同じ管理）
 let PDF_DIR='患者PDF';try{const v=localStorage.getItem('pg_lat_pdfdir');if(v)PDF_DIR=v;}catch(_){}
 $('pdfDirName').value=PDF_DIR;
 $('pdfDirSave').onclick=()=>{const v=safeName($('pdfDirName').value);if(!v){$('pdfDirMsg').innerHTML='<span class="warn-t">名前を入れてください</span>';return;}PDF_DIR=v;$('pdfDirName').value=v;try{localStorage.setItem('pg_lat_pdfdir',v);}catch(_){}$('pdfDirMsg').innerHTML='<span class="ok-t">保存しました</span>';};
@@ -1832,6 +1838,19 @@ function nonSicdOf(text,dev){const t=String(text||'');if(t.replace(/\s+/g,'').le
 async function archiveNonSicd(file){if(!dirHandle||!file)return null;
   try{const top=await dirHandle.getDirectoryHandle(PDF_DIR,{create:true}),od=await top.getDirectoryHandle('_対象外',{create:true});
     const fh=await od.getFileHandle(safeName(file.name),{create:true}),w=await fh.createWritable();await w.write(await file.arrayBuffer());await w.close();return `${PDF_DIR}/_対象外/${safeName(file.name)}`;}catch(_){return null;}}
+// Medtronic：IDの無いPDF（患者がまだ分からない）は 患者PDF\_待ち\<シリアル番号> に取っておき、IDが分かったらその患者のフォルダへ移す
+async function archivePend(file,serial){if(!dirHandle||!file||!serial||!KEEP_PDF)return null;
+  try{const top=await dirHandle.getDirectoryHandle(PDF_DIR,{create:true}),w0=await top.getDirectoryHandle('_待ち',{create:true}),sd=await w0.getDirectoryHandle(safeName(serial),{create:true});
+    const fh=await sd.getFileHandle(safeName(file.name),{create:true}),w=await fh.createWritable();await w.write(await file.arrayBuffer());await w.close();return `${PDF_DIR}/_待ち/${safeName(serial)}/${safeName(file.name)}`;}catch(_){return null;}}
+async function movePendTo(id,serial,date){if(!dirHandle||!serial||!id)return 0;let n=0;
+  try{const top=await dirHandle.getDirectoryHandle(PDF_DIR),w0=await top.getDirectoryHandle('_待ち'),sd=await w0.getDirectoryHandle(safeName(serial));
+    const pd=await top.getDirectoryHandle(fileNameFor(id,{device:$('fDev').value}).replace(/\.json$/i,'')||id,{create:true});
+    const m=String(date||'').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})(?:\D+(\d{1,2}):(\d{2}))?/),stem=m?`${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}${m[4]?'_'+m[4].padStart(2,'0')+m[5]:''}`:'CareLink';
+    const names=[];for await(const [nm,h] of sd.entries())if(h.kind==='file'&&/\.pdf$/i.test(nm))names.push(nm);
+    for(const nm of names){let fname;for(let k=1;k<100;k++){fname=`${stem}_経静脈${k}.pdf`;try{await pd.getFileHandle(fname);}catch(_){break;}}
+      const f=await (await sd.getFileHandle(nm)).getFile(),w=await (await pd.getFileHandle(fname,{create:true})).createWritable();await w.write(await f.arrayBuffer());await w.close();await sd.removeEntry(nm);n++;}
+    try{await w0.removeEntry(safeName(serial));}catch(_){}}catch(_){}
+  return n;}
 const pdfKey=f=>f?`${f.name}|${f.size}|${f.lastModified}`:''; // 読み込んだPDF／最後に整理したPDF
 let reloadArchived=null; // タイムラインから「評価し直す」で読み込んだ時：すでに患者PDFにあるので保存し直さない
 // 波形のページのうち、ページ上部の枠（Boston Scientificのロゴと患者情報の欄）より下だけを、解析と同じ倍率（HI）で画像にする。
@@ -2989,6 +3008,9 @@ async function pollWatch(){
         watchLog.unshift(row);renderWatchLog();
         if(lv>0)notifyResult('PaceGuard LATITUDE：'+row.verdict,`ID ${id||'—'}　${row.date||''}\n${row.cause}`,lv);
         continue;}
+      if(curNonSicd&&mdtPendSerial){ // Medtronic のIDの無いPDF：_待ち に取ってある（loadPDFの中）。見張りのフォルダからは消してよい
+        let moved='';if(KEEP_PDF&&$('watchMove').checked){try{await watchDir.removeEntry(f.name);moved=`→ ${PDF_DIR}/_待ち/${mdtPendSerial}`;}catch(_){}}else if(KEEP_PDF)moved=`コピー：${PDF_DIR}/_待ち/${mdtPendSerial}`;
+        watchLog.unshift({t:new Date().toLocaleTimeString('ja-JP'),file:f.name,moved,id:'',date:$('fDate').value,verdict:'⏳ IDの無いPDF（同じ送信のIDのあるPDFを待っています）',cause:'シリアル番号 '+mdtPendSerial,lv:0});renderWatchLog();continue;}
       if(curNonSicd){ // S-ICD以外：_対象外 フォルダへ移して、通知は出さない
         let moved='';
         if(!KEEP_PDF){try{await watchDir.removeEntry(f.name);moved='保存せずに削除（元のPDFを残さない設定）';}catch(_){}}
