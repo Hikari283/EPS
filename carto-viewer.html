@@ -378,6 +378,7 @@ body,button,select,input,textarea{font-family:Tahoma,"Segoe UI",Verdana,"Meiryo 
     </fieldset>
     <fieldset><legend>カテーテル</legend>
       <div class="row"><label><input type="radio" name="simCath" value="oct" checked> オクタレイ（8本×5＝40点。マッピング用）</label></div>
+      <div class="row"><span class="lb" style="min-width:auto">オクタレイの電極の並び</span><select id="simOctCfg"><option value="3-3-3-3-3" selected>3-3-3-3-3</option><option value="2-2-2-2-2">2-2-2-2-2</option><option value="2-5-2-5-2">2-5-2-5-2</option></select></div>
       <div class="row"><label><input type="radio" name="simCath" value="abl"> 焼灼カテーテル（先端1か所。通電用）</label></div>
       <div class="row"><label><input type="radio" name="simCath" value="cir"> 円形カテーテル（10極）</label></div>
       <div class="row"><label><input type="checkbox" id="simAuto" checked> 連続取得（カテーテルを動かすと自動で入る）</label></div>
@@ -1987,7 +1988,7 @@ const MENUS={
     {l:'透明度',sub:()=>[0,25,50,75].map(o=>({l:o+'%',c:()=>Math.round((1-S.opt.opacity)*100)===o,a:()=>{S.opt.opacity=1-o/100;$('#opacity').value=S.opt.opacity;dirtyAll('');syncViewOverlays();}}))},
     {l:'点の色',sub:()=>[['value','マップの値'],['white','白'],['label','ラベル付きを強調']].map(([v,l])=>({l,c:()=>S.opt.ptColor===v,a:()=>setSel('#ptColor',v)}))},
     {l:S.anim.prop?'Propagationを停止':'Propagationを再生',a:()=>togglePropPlay(),d:need},
-    {l:'伝導速度の矢印',c:()=>isOn('#cvOn'),a:()=>tog('#cvOn'),d:need},{l:'焼灼点（Tag）',c:()=>isOn('#vtOn'),a:()=>tog('#vtOn')},{l:'焼灼点を線でつなぐ',c:()=>isOn('#vtChain'),a:()=>tog('#vtChain')},
+    {l:'Local Velocity Vectors風（伝導速度の矢印）',c:()=>isOn('#cvOn'),a:()=>tog('#cvOn'),d:need},{l:'焼灼点（Tag）',c:()=>isOn('#vtOn'),a:()=>tog('#vtOn')},{l:'焼灼点を線でつなぐ',c:()=>isOn('#vtChain'),a:()=>tog('#vtChain')},
     {l:'向き',sub:viewMenu}],
   imaging:()=>[
     U('Begin CARTOMERGE® Study'),D('Show Registration Toolbar'),SEP,
@@ -2028,7 +2029,7 @@ const MENUS={
     {l:'距離を測る（2点）',c:()=>S.mode==='dist',a:()=>{setMode('dist');clickTab('t-meas');},d:need},{l:'ラインの長さを測る',c:()=>S.mode==='line',a:()=>{setMode('line');clickTab('t-meas');},d:need},
     {l:'計測をすべて消す',a:()=>$('#measClear').click()},
     {l:'低電位領域の面積',a:()=>{clickTab('t-ana');$('#btnArea').click();},d:need},{l:'伝導速度',a:()=>{clickTab('t-ana');$('#btnCV').click();},d:need},
-    {l:'電位解析（分裂・遅延電位・LAVA）',a:()=>{clickTab('t-ana');$('#btnEGM').click();},d:need},
+    {l:'Complex Signal Identification風（分裂・遅延電位・LAVAの自動検出）',a:()=>{clickTab('t-ana');$('#btnEGM').click();},d:need},
     {l:'焼灼点の隙間チェック',a:()=>{clickTab('t-abl');$('#btnGap').click();},d:()=>!(S.study&&S.study.visitag)}],
   help:()=>[
     {l:'Online Help',a:()=>$('#btnHelp').click()},{l:'Keyboard Shortcuts...',a:()=>showText('Keyboard Shortcuts',shortcutsText())},SEP,
@@ -2512,7 +2513,10 @@ async function buildDiag(){
    「正解」は内部データ（SIM.T）が持っていて、通電するとブロックが反映され、電気の流れ（LAT）が計算し直される。 */
 const SIM_REF=700,SIM_CL=700,SIM_L=2100;
 const SIM_SPL='ABCDEFGH',SIM_OCT_COL=[[1,0.6,0.24],[0.36,0.45,1],[1,0.88,0.3],[1,0.42,0.54],[0.26,0.72,1],[0.37,0.88,0.48],[0.78,0.49,1],[1,0.75,0.3]];
-const SIM={active:false,map:null,T:null,cath:'oct',octRot:0.3,sites:[],shaft:[],live:null,ver:0,hv:null,lastHv:null,dirtyLive:true,nextId:1,sess:1,
+/* オクタレイの電極の並び：製品ページ（J&J）に載っている3種類「2-2-2-2-2 / 2-5-2-5-2 / 3-3-3-3-3」（単位の記載はなく、電極の間隔 mm と想定）。
+   1本のスプラインに電極6つ＝双極5つ。最初の電極の位置（中心から 3 mm）は私の想定。 */
+function simOctRadii(cfg){const gaps=String(cfg).split('-').map(Number);let x=3;const e=[x];for(const g of gaps){x+=g;e.push(x);}return e.slice(0,5).map((v,j)=>(v+e[j+1])/2);}
+const SIM={active:false,map:null,T:null,cath:'oct',octRot:0.3,octCfg:'3-3-3-3-3',octR:[4.5,7.5,10.5,13.5,16.5],sites:[],shaft:[],live:null,ver:0,hv:null,lastHv:null,dirtyLive:true,nextId:1,sess:1,
   auto:true,minDist:3,maxJump:9,grid:new Map(),autoPrev:null,autoDirty:false,autoT:0,autoN:0,autoSkip:0,
   cfg:{power:35,time:20,force:12},leads:null,sheath:[-14,-3,-4],sheathOut:[-38,-9,-16]};
 const simHash=i=>{const s=Math.sin(i*12.9898+78.233)*43758.5453;return s-Math.floor(s);};
@@ -2704,7 +2708,7 @@ function simPlace(v,cx,cy){
   else if(SIM.cath==='oct'){   // オクタレイ：中心＋8本のスプライン（A〜H）×5つの双極（中心から 4〜19 mm）を、壁にそって広げる
     const nrm=simNormal(T,vi),e1=v3.norm(v3.cross(nrm,Math.abs(nrm[2])<0.9?[0,0,1]:[1,0,0])),e2=v3.cross(nrm,e1),C=h.surf.pos;
     sites.push({pos:C,vi});
-    for(let s=0;s<8;s++){const th=SIM.octRot+s*Math.PI/4;for(let j=0;j<5;j++){const r=4+3.8*j,t=v3.add(C,v3.add(v3.sc(e1,r*Math.cos(th)),v3.sc(e2,r*Math.sin(th)))),vk=simNear(m,t);sites.push({pos:simPos(m,vk),vi:vk});}}
+    for(let s=0;s<8;s++){const th=SIM.octRot+s*Math.PI/4;for(let j=0;j<5;j++){const r=SIM.octR[j],t=v3.add(C,v3.add(v3.sc(e1,r*Math.cos(th)),v3.sc(e2,r*Math.sin(th)))),vk=simNear(m,t);sites.push({pos:simPos(m,vk),vi:vk});}}
   }
   else{
     let C,ax,R;
@@ -2900,6 +2904,7 @@ function simBind(){
   $('#simAcq').onclick=simAcquire;$('#simClear').onclick=simClearPoints;$('#simAbl').onclick=simAblate;$('#simChk').onclick=simCheck;
   const num=(id,k)=>$(id).addEventListener('input',e=>{const x=+e.target.value;if(fin(x))SIM.cfg[k]=x;});num('#simP','power');num('#simT','time');num('#simF','force');
   $('#simTruth').onchange=e=>{if(SIM.active)simTruth(e.target.checked);};
+  $('#simOctCfg').onchange=e=>{SIM.octCfg=e.target.value;SIM.octR=simOctRadii(SIM.octCfg);SIM.sites=[];SIM.shaft=[];if(SIM.lastHv)SIM.hv=SIM.lastHv;SIM.ver++;dirtyAll('');toast('オクタレイの電極の並び：'+SIM.octCfg+'（製品ページの3種類。単位は書かれていないので、mmと想定）',5000);};
   $('#simAuto').onchange=e=>{SIM.auto=e.target.checked;SIM.autoPrev=null;toast(SIM.auto?'連続取得：オン（カテーテルをゆっくり動かすと、点が入ります）':'連続取得：オフ（Enterキーで1点ずつ取ります）');};
   $('#simMin').addEventListener('input',e=>{const x=+e.target.value;if(fin(x)&&x>=1)SIM.minDist=x;});
 }
