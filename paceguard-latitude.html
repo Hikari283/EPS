@@ -113,6 +113,8 @@
   .settab tr:first-child th{font-size:11px;color:var(--sub);background:var(--tblh);vertical-align:bottom} .settab tr:first-child th.base{color:var(--accent2)}
   .settab tr>th:first-child{position:sticky;left:0;z-index:1;box-shadow:1px 0 0 var(--line)} .settab tr.oth th{font-weight:400;color:var(--sub)}
   .numdet{margin-top:12px;border:1px solid var(--line);border-radius:10px;padding:6px 10px} .numdet>summary{cursor:pointer;font-weight:700;font-size:13px}
+  .setnav{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:0 0 8px} .setnav input[type=range]{flex:1;min-width:120px;max-width:360px} .setnav button{padding:3px 10px}
+  .settab table{table-layout:fixed} .settab th:first-child{width:170px} .settab tr:first-child th:nth-child(2),.settab td:nth-child(2){width:190px}
   .ptmark{font-size:10.5px;color:var(--accent2);font-weight:700} .settab td.warnv,.warnk{background:rgba(251,146,60,.28);font-weight:700} .warnk{padding:0 4px;border-radius:4px} .settab td.chg,.chgk{background:rgba(251,191,36,.22)} .settab td.bad,.badk{background:rgba(251,113,133,.22);font-weight:700} .chgk,.badk{padding:0 4px;border-radius:4px}
   .setbadge{font-size:13px;font-weight:800;margin-left:8px;padding:1px 10px;border-radius:999px;background:rgba(251,191,36,.18);color:var(--warn);vertical-align:middle}
   .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:10px}
@@ -941,7 +943,7 @@ function setAlertHtml(alerts,cur,chg){
   return `<div class="setbox alert lv${lv}"><b>🔔 設定・インピーダンスのアラート ${alerts.length}件</b>　${go}<ul>${alerts.map(a=>`<li>${a.lv>=2?'⚠️':'🟡'} ${escH(a.txt)}</li>`).join('')}</ul>${chgTxt}</div>`;
 }
 // ===== 設定の推移（時系列の表） =====
-let setTrendLast=null;
+let setTrendLast=null,setTrendView={id:'',n:0,start:0};
 function setTrendRender(id,st){
   setTrendLast=id&&st?{id,st}:null;const box=$('setTrend');if(!box)return;
   PT_ID=id||'';PT_RULES=st&&st.setRules||null;ptRulesUi();
@@ -960,14 +962,23 @@ function setTrendRender(id,st){
   const name=k=>{for(let i=cols.length-1;i>=0;i--){const x=cols[i].settings.items[k];if(x)return x.l;}return k;};
   // セルの状態：前の回（その項目を読めた一番近い回）と違えば変更
   const grid=keys.map(k=>{let prev=null;return cols.map(c=>{const x=c.settings.items[k];if(!x||!okVal(k,x.v))return {v:null};const chg=!isMeas(k)&&prev!=null&&prev!==x.v;prev=x.v;const a=alertOf(k,x.v)||(chg&&!NO_RULE.has(k)&&RL(k)&&RL(k).chg?{lv:2,why:'前回から変更（ルール：前回から変わったらアラート）'}:null);return {v:x.v,chg,rb:a&&a.lv>=2?a.why:'',wn:a&&a.lv===1?a.why:''};});});
+  // 表に出すのは5回分。古い回はバー／◀▶で戻る（変更の判定は、表に出ない回も含めた前の回と比べる）
+  const WIN=5,n=cols.length,maxS=Math.max(0,n-WIN);
+  if(setTrendView.id!==id||setTrendView.n!==n)setTrendView={id,n,start:maxS}; // 患者が変わった・記録が増えた時は最新5回へ
+  const s0=Math.min(maxS,Math.max(0,setTrendView.start));setTrendView.start=s0;
+  const vis=cols.slice(s0,s0+WIN);grid.forEach((g,i)=>{grid[i]=g.slice(s0,s0+WIN);});
   if(onlyChg){const keep=keys.map((k,i)=>grid[i].some(c=>c.chg||c.rb||c.wn));keys=keys.filter((_,i)=>keep[i]);grid.splice(0,grid.length,...grid.filter((_,i)=>keep[i]));}
   const short=d=>escH(String(d||'?').replace(/(\d{4})年(\d{2})月(\d{2})日\s*/,'$1/$2/$3 ').replace(/\s*(JST|ＪＳＴ)/g,'').replace(/\s+\d{1,2}:\d{2}$/,''));
   const ic=l=>l===2?'⚠️':l===1?'🟡':l===0?'✅':'';
-  const head=cols.map(c=>`<th class="${c.pdf&&c.pdf===basePdf?'base':''}" title="${escH(c.secg||c.date||'')}">${c.pdf&&c.pdf===basePdf?'📌 ':''}${short(c.secg||c.date)}<br><span class="hint">${ic(c.level)}</span></th>`).join('');
+  const head=vis.map(c=>`<th class="${c.pdf&&c.pdf===basePdf?'base':''}" title="${escH(c.secg||c.date||'')}">${c.pdf&&c.pdf===basePdf?'📌 ':''}${short(c.secg||c.date)}<br><span class="hint">${ic(c.level)}</span></th>`).join('');
   const body=keys.map((k,i)=>{const imp=setImp(k),main=order(k)<99;
     return `<tr${main?'':' class="oth"'}><th>${escH(name(k))}</th><td class="hint">${escH(ruleText(k)||(isPt(k)?'決めない':''))}${isPt(k)?' <b class="ptmark">この患者</b>':''}</td>${grid[i].map(c=>c.v==null?'<td class="hint">—</td>':`<td class="${c.rb?'bad':c.wn?'warnv':c.chg?'chg':''}" title="${escH(c.rb||c.wn||(c.chg?'前の回から変更':''))}">${c.rb?'⚠️ ':c.wn?'🟡 ':''}${escH(c.v)}${c.chg?' <span class="hint">◀変</span>':''}</td>`).join('')}</tr>`;}).join('');
-  box.innerHTML=keys.length?`<div class="settab"><table><tr><th>項目</th><th>ルール</th>${head}</tr>${body}</table></div>`:'<div class="hint">変わった項目・ルール外の項目はありません。</div>';
-  const sc=box.querySelector('.settab');if(sc)sc.scrollLeft=sc.scrollWidth; // 右端＝最新を見せる
+  const nav=n>WIN?`<div class="setnav"><button class="ghost" data-sn="-${WIN}" ${s0<=0?'disabled':''} title="5回前へ">⏮</button><button class="ghost" data-sn="-1" ${s0<=0?'disabled':''} title="1回前へ">◀ 古い</button>
+      <input type="range" id="setNavR" min="0" max="${maxS}" value="${s0}" step="1"><button class="ghost" data-sn="1" ${s0>=maxS?'disabled':''} title="1回後へ">新しい ▶</button><button class="ghost" data-sn="${WIN}" ${s0>=maxS?'disabled':''} title="最新へ">⏭</button>
+      <span class="hint">${s0+1}〜${Math.min(n,s0+WIN)}回目を表示／全${n}回${s0>=maxS?'（最新）':''}</span></div>`:'';
+  box.innerHTML=nav+(keys.length?`<div class="settab"><table><tr><th>項目</th><th>ルール</th>${head}</tr>${body}</table></div>`:'<div class="hint">この5回の中に、変わった項目・ルール外の項目はありません。</div>');
+  box.querySelectorAll('[data-sn]').forEach(b=>b.onclick=()=>{setTrendView.start=s0+(+b.dataset.sn);setTrendRender(id,st);});
+  const rg=box.querySelector('#setNavR');if(rg)rg.oninput=()=>{setTrendView.start=+rg.value;setTrendRender(id,st);const r2=$('setNavR');if(r2)r2.focus();};
 }
 // ===== ルールの編集（⚙ 設定） =====
 // ルールの表（全体用／患者用）。患者用は「全体のルールのまま」を選べる
