@@ -371,9 +371,9 @@ body,button,select,input,textarea{font-family:Tahoma,"Segoe UI",Verdana,"Meiryo 
   <div class="tabpane" id="t-sim">
     <fieldset><legend>AF 初回PVI（シミュレーター）</legend>
       <div class="small" id="simInfo">「症例をはじめる」を押すと始まります。</div>
-      <div class="row"><span class="lb" style="min-width:auto">症例</span><select id="simCase"><option value="normal">電圧：ほぼ正常（体部は高電位）</option><option value="low">電圧：後壁に低電位域あり</option></select></div>
+      <div class="row"><span class="lb" style="min-width:auto">症例</span><select id="simCase"><option value="A">実際の形A（電圧：ほぼ正常）</option><option value="B">実際の形B（低電位域あり）</option><option value="C">実際の形C（低電位が広い）</option><option value="normal">簡易モデル（ほぼ正常）</option><option value="low">簡易モデル（後壁に低電位域）</option></select></div>
       <div class="row"><button id="simStart" class="primary">症例をはじめる／やり直す</button></div>
-      <div class="muted small">症例の種類を変えたら、「症例をはじめる」を押すと反映されます。電圧の値は簡易の想定で、実際の症例とは違います。</div>
+      <div class="muted small">症例を変えたら、「症例をはじめる」を押すと反映されます。「実際の形」は、公開されている患者データ（Martínez Díaz ら、Zenodo 10.5281/zenodo.10726677、CC BY 4.0）の左房の形と電圧・伝導速度です。肺静脈の位置は自動で見つけたもので、左右の名前は座標の向きの仮定です。「簡易モデル」は私が数式で作った形です。</div>
       <div class="muted small">仮想の左房です（架空のデータ）。マップの上でマウスを動かすと、カテーテルがついてきます。ドラッグで回転、ホイールで拡大・縮小。</div>
     </fieldset>
     <fieldset><legend>カテーテル</legend>
@@ -647,7 +647,12 @@ function parseMesh(text){
     if(sec==='verticessection'){verts.push(+f[0],+f[1],+f[2]);}
     else if(sec==='trianglessection'){tris.push(+f[0],+f[1],+f[2]);tg.push(f.length>6?+f[6]:0);}
     else if(sec==='verticescolorssection'){
-      if(!colorNames){colorNames=lastComment?lastComment.split(/\s+/):MESH_DEFAULT_COLS.slice();if(colorNames.length===f.length+1)colorNames.shift();}
+      if(!colorNames){
+        // 名前は [GeneralAttributes] の ColorsNames を優先（なければ、直前のコメント行、それもなければ既定の名前）
+        const cn=attrs.ColorsNames?attrs.ColorsNames.trim().split(/\s+/).filter(Boolean):null;
+        colorNames=(cn&&cn.length>=Math.min(f.length,3))?cn:(lastComment?lastComment.replace(/\[.*$/,'').trim().split(/\s+/):MESH_DEFAULT_COLS.slice());
+        if(colorNames.length===f.length+1)colorNames.shift();
+      }
       colors.push(f.map(Number));
     }
   }
@@ -685,10 +690,12 @@ function parseCar(text){
   const pts=[];
   for(const ln of text.split(/\r?\n/)){
     const t=ln.trim();if(!/^P\s/.test(t))continue;
-    const f=t.split(/\s+/);if(f.length<12)continue;
-    const id=+f[1];if(!fin(id))continue;
+    // CARTO 3 の VERSION_5_0 の列（OpenEPのテスト用の本物のExportで確認）：
+    //   P, 0, ポイント番号, 0, X, Y, Z, 向き×3, Unipolar, Bipolar, LAT, Impedance, …（-10000 は無効値）
+    const f=t.split(/\s+/);if(f.length<14)continue;
+    const id=+f[2];if(!fin(id))continue;
     const num=i=>{const v=+f[i];return fin(v)&&v>-9999?v:NaN;};
-    pts.push({id,x:+f[3],y:+f[4],z:+f[5],bip:num(9),uni:num(10),lat:num(11),imp:num(12)});
+    pts.push({id,x:+f[4],y:+f[5],z:+f[6],uni:num(10),bip:num(11),lat:num(12),imp:num(13)});
   }
   return pts;
 }
@@ -797,7 +804,7 @@ async function loadPointDetail(map,p){
     }
     if(p.egmGen&&!p.egm)p.egm=p.egmGen();
     if(p.egm&&!fin(p.ref)){p.ref=guessRef(p.egm);p.refGuessed=true;}
-    if(!fin(p.lat)&&fin(p.mapAnn)&&fin(p.ref)){p.lat=p.lat0=p.mapAnn-p.ref;}
+    if(!fin(p.lat)&&fin(p.mapAnn)&&fin(p.ref)){const l=p.mapAnn-p.ref;if(l>-9999&&l<9999)p.lat=p.lat0=l;}   // -10000 前後は無効値
     p.loaded=true;
   })();
   return p._loading;
@@ -1901,7 +1908,8 @@ function shortcutsText(){
 function aboutText(){
   return ['CARTO Viewer（研究・教育用）','','CARTO 3 のExportデータ（.mesh / _car.txt / ECG Export / VisiTag）を、このPCのブラウザだけで表示・解析します。','データは外部に送信されません。','',
     'これはBiosense Websterの製品ではありません。CARTO本体の代わりにはならず、診療の最終判断には使わないでください。','色の補間・伝導速度・電位解析は独自の簡易計算で、CARTOの表示とは一致しません。','',
-    '各メニューの項目のうち、グレーで表示しているものは、Exportのデータにないため未対応です（カテーテル位置、透視・CT画像の重ね合わせ、ペースマップなど）。'].join('\n');
+    '各メニューの項目のうち、グレーで表示しているものは、Exportのデータにないため未対応です（カテーテル位置、透視・CT画像の重ね合わせ、ペースマップなど）。','',
+    '【シミュレーターの「実際の形」の出典】','Martínez Díaz P, Goetz C, Dasi A, Unger LA, Haas A, Dössel O, Luik A, Loewe A.','"Atrial Models with Personalized Effective Refractory Period", Zenodo (2024), doi:10.5281/zenodo.10726677','ライセンス：CC BY 4.0。形・電圧・伝導速度の配列を取り出して形式を変換しています（元の作成者は、この変更を承認していません）。'].join('\n');
 }
 
 const MENUS={
@@ -2547,6 +2555,80 @@ function simBuildTruth(){
   T.src=simNear(m,[-8,-13,14]);
   return T;
 }
+/* ===== 実際の人の左房（carto-viewer-la-data.js から） =====
+   形・電圧(bi)・伝導速度(cv) は、公開データ（Martínez Díaz et al., Zenodo 10.5281/zenodo.10726677, CC BY 4.0）の実際の患者のもの。
+   肺静脈・僧帽弁は、メッシュの「穴のふち」から自動で見つける（最大の穴＝僧帽弁、ほかの4つ＝肺静脈の切り口）。
+   左右（L/R）の名前は、「+X＝患者の左」という座標の向きの仮定で付けています（実際の向きは未確認）。 */
+function b64Bytes(s){const bin=atob(s),n=bin.length,u=new Uint8Array(n);for(let i=0;i<n;i++)u[i]=bin.charCodeAt(i);return u;}
+function simLoadLaData(){
+  if(window.SIM_LA_DATA)return Promise.resolve(window.SIM_LA_DATA);
+  if(simLoadLaData.p)return simLoadLaData.p;
+  return simLoadLaData.p=new Promise((res,rej)=>{const s=document.createElement('script');s.src='carto-viewer-la-data.js';
+    s.onload=()=>window.SIM_LA_DATA?res(window.SIM_LA_DATA):rej(new Error('データが空です'));
+    s.onerror=()=>{simLoadLaData.p=null;rej(new Error('carto-viewer-la-data.js が見つかりません（carto-viewer.html と同じ場所に置いてください）'));};
+    document.head.appendChild(s);});
+}
+function simDecodeLa(d){
+  const pos=new Int16Array(b64Bytes(d.pos).buffer),tri=new Uint16Array(b64Bytes(d.tri).buffer),nv=d.n,verts=new Float32Array(nv*3);
+  for(let i=0;i<nv;i++)for(let k=0;k<3;k++)verts[i*3+k]=pos[i*3+k]*d.step+d.center[k];
+  const mesh={nv,verts,tris:Uint32Array.from(tri),colors:{},colorNames:[],attrs:{}};computeNormals(mesh);mesh.used=new Uint8Array(nv);for(const i of mesh.tris)mesh.used[i]=1;   // 三角形に使われていない点は除く
+  mesh.bi=new Uint16Array(b64Bytes(d.bi).buffer);mesh.cvd=new Uint16Array(b64Bytes(d.cv).buffer);mesh.latd=new Uint16Array(b64Bytes(d.lat).buffer);
+  return mesh;
+}
+function simBoundaryLoops(mesh){
+  const T=mesh.tris,nv=mesh.nv,cnt=new Map();
+  for(let t=0;t<T.length;t+=3)for(let k=0;k<3;k++){const a=T[t+k],b=T[t+(k+1)%3],kk=a<b?a*nv+b:b*nv+a;cnt.set(kk,(cnt.get(kk)||0)+1);}
+  const adj=new Map(),add=(a,b)=>{let l=adj.get(a);if(!l)adj.set(a,l=[]);l.push(b);};
+  for(const[kk,c]of cnt){if(c!==1)continue;const a=Math.floor(kk/nv),b=kk-a*nv;add(a,b);add(b,a);}
+  const seen=new Set(),loops=[];
+  for(const s of adj.keys()){if(seen.has(s))continue;const comp=[],st=[s];seen.add(s);
+    while(st.length){const x=st.pop();comp.push(x);for(const y of adj.get(x))if(!seen.has(y)){seen.add(y);st.push(y);}}loops.push(comp);}
+  return loops;
+}
+function simGeoMulti(mesh,sources){   // 複数の出発点（ラベル付き）からの、表面に沿った距離
+  const adj=meshAdj(mesh),nv=mesh.nv,d=new Float64Array(nv).fill(Infinity),lab=new Int16Array(nv).fill(-1),h=new Heap();   // 32ビットだと丸めで同じ点を何度も計算し直すので、64ビット
+  for(const s of sources){d[s.vi]=0;lab[s.vi]=s.lab;h.push(0,s.vi);}
+  while(h.size){const[du,u]=h.pop();if(du>d[u])continue;for(let k=adj.off[u];k<adj.off[u+1];k++){const w=adj.nb[k],nd=du+adj.wt[k];if(nd<d[w]){d[w]=nd;lab[w]=lab[u];h.push(nd,w);}}}
+  return{d,lab};
+}
+const SIM_GV=30,SIM_GOST=14;   // 肺静脈として扱う範囲（切り口からの距離, mm）／入口（体部との境）とみなす距離
+function simBuildTruthReal(key){
+  const D=window.SIM_LA_DATA.meshes[key];if(!D)throw new Error('形のデータがありません：'+key);
+  const m=simDecodeLa(D),nv=m.nv,V=m.verts,P=i=>[V[i*3],V[i*3+1],V[i*3+2]];
+  const loops=simBoundaryLoops(m).sort((a,b)=>b.length-a.length);
+  if(loops.length<5)throw new Error('肺静脈の切り口を見つけられませんでした');
+  let c0=[0,0,0],nu=0;for(let i=0;i<nv;i++){if(!m.used[i])continue;c0[0]+=V[i*3];c0[1]+=V[i*3+1];c0[2]+=V[i*3+2];nu++;}c0=v3.sc(c0,1/nu);
+  const lc=L=>{let c=[0,0,0];for(const i of L)c=v3.add(c,P(i));return v3.sc(c,1/L.length);};
+  const pvs=loops.slice(1,5).map(L=>({L,c:lc(L)})).sort((a,b)=>b.c[0]-a.c[0]);
+  const grp=[pvs.slice(0,2).sort((a,b)=>b.c[2]-a.c[2]),pvs.slice(2,4).sort((a,b)=>b.c[2]-a.c[2])];   // [左(+X)の上・下, 右(-X)の上・下]
+  const veins=[{n:'LSPV',...grp[0][0]},{n:'LIPV',...grp[0][1]},{n:'RSPV',...grp[1][0]},{n:'RIPV',...grp[1][1]}];
+  const mitral=lc(loops[0]);
+  const geo=simGeoMulti(m,veins.flatMap((v,k)=>v.L.map(vi=>({vi,lab:k}))));
+  const T={mesh:m,vein:new Uint8Array(nv),axis:new Float32Array(nv*3),hpos:new Float32Array(nv),deep:new Uint8Array(nv),g:geo.d,
+    bip:new Float32Array(nv),uni:new Float32Array(nv),cv:new Float32Array(nv),lat:new Float32Array(nv).fill(NaN),blocked:new Uint8Array(nv),q:new Float32Array(nv).fill(1),lat0:-25};
+  for(let i=0;i<nv;i++){const g=geo.d[i];if(!m.used[i])continue;
+    if(geo.lab[i]>=0&&g<=SIM_GV){T.vein[i]=geo.lab[i]+1;T.hpos[i]=SIM_GV-g;if(g<=SIM_GOST)T.deep[i]=1;}
+    const b=clamp(m.bi[i]/1000,0.06,8);T.bip[i]=b;T.uni[i]=2*b+2+1.5*simHash(i+991);
+    const c=m.cvd[i]/1000;T.cv[i]=clamp(c>0?c:0.7,0.25,1.6)*(T.deep[i]?0.85:1);
+  }
+  // 肺静脈ごとの中心線（切り口から2 mmごとの帯の重心・半径）。円形カテーテルを静脈の中に置くときに使う
+  T.bands=veins.map((v,k)=>{const nb=Math.floor(SIM_GV/2)+1,acc=Array.from({length:nb},()=>({n:0,s:[0,0,0],ids:[]}));
+    for(let i=0;i<nv;i++)if(m.used[i]&&T.vein[i]===k+1){const b=Math.min(nb-1,Math.floor(geo.d[i]/2)),a=acc[b];a.n++;a.s=v3.add(a.s,P(i));a.ids.push(i);}
+    const bs=acc.map(a=>{if(a.n<3)return null;const c=v3.sc(a.s,1/a.n);let r=0;for(const i of a.ids)r+=v3.dist(P(i),c);return{c,r:r/a.n,ax:[0,0,1]};});
+    let last=null;for(let b=0;b<nb;b++){if(bs[b])last=bs[b];else if(last)bs[b]=last;}last=null;for(let b=nb-1;b>=0;b--){if(bs[b])last=bs[b];else if(last)bs[b]=last;}
+    for(let b=0;b<nb;b++){const p=bs[Math.max(0,b-1)],q=bs[Math.min(nb-1,b+1)],d=v3.sub(q.c,p.c);bs[b]={...bs[b],ax:v3.len(d)>1e-6?v3.norm(d):[0,0,1]};}
+    return bs;});
+  for(let i=0;i<nv;i++)if(T.vein[i]){const bs=T.bands[T.vein[i]-1],a=bs[Math.min(bs.length-1,Math.floor(geo.d[i]/2))].ax;T.axis[i*3]=a[0];T.axis[i*3+1]=a[1];T.axis[i*3+2]=a[2];}
+  // 体部の外向きの向き、洞調律の出発点（実際のLATが最も早い点）
+  let bi=-1,bd=-1;for(let i=0;i<nv;i++){if(!m.used[i])continue;const d=v3.dist(P(i),c0);if(d>bd){bd=d;bi=i;}}
+  T.outSign=v3.dot([m.norms[bi*3],m.norms[bi*3+1],m.norms[bi*3+2]],v3.sub(P(bi),c0))>=0?1:-1;
+  let sv=-1,sl=1e9;for(let i=0;i<nv;i++){if(!m.used[i]||T.vein[i])continue;const l=m.latd[i];if(l<sl){sl=l;sv=i;}}T.src=sv;
+  let mx=[-1e9,-1e9,-1e9],mn=[1e9,1e9,1e9];for(let i=0;i<nv;i++)for(let k=0;k<3;k++){if(!m.used[i])continue;mn[k]=Math.min(mn[k],V[i*3+k]);mx[k]=Math.max(mx[k],V[i*3+k]);}
+  T.sheath=v3.add(c0,[-0.3*(mx[0]-mn[0])/2,0,-4]);T.sheathOut=v3.add(T.sheath,[-34,-6,-14]);
+  T.LA={center:c0,veins:veins.map(v=>({n:v.n})),mitral,real:true,
+    ostiumAt:k=>{const b=T.bands[k],bb=b[Math.min(b.length-1,Math.floor(SIM_GOST/2))];return{C:bb.c,ax:bb.ax,R:bb.r,t:SIM_GOST};}};
+  return T;
+}
 // 電気の流れ（LAT）の計算。ブロックされた点は通れない
 function simActivate(T){
   const m=T.mesh,adj=meshAdj(m);
@@ -2572,7 +2654,8 @@ function simPlace(v,cx,cy){
   if(SIM.cath==='abl')sites.push({pos:h.surf.pos,vi});
   else{
     let C,ax,R;
-    if(T.vein[vi]){ax=[T.axis[vi*3],T.axis[vi*3+1],T.axis[vi*3+2]];const vv=T.LA.veins[T.vein[vi]-1],t=clamp(segH(h.surf.pos,vv.a,vv.b),0,1);C=v3.add(vv.a,v3.sc(v3.sub(vv.b,vv.a),t));R=v3.dist(C,h.surf.pos);}
+    if(T.vein[vi]&&T.bands){const bs=T.bands[T.vein[vi]-1],bb=bs[Math.min(bs.length-1,Math.floor(T.g[vi]/2))];C=bb.c;ax=bb.ax;R=bb.r;}   // 実際の形：肺静脈の中心線
+    else if(T.vein[vi]){ax=[T.axis[vi*3],T.axis[vi*3+1],T.axis[vi*3+2]];const vv=T.LA.veins[T.vein[vi]-1],t=clamp(segH(h.surf.pos,vv.a,vv.b),0,1);C=v3.add(vv.a,v3.sc(v3.sub(vv.b,vv.a),t));R=v3.dist(C,h.surf.pos);}
     else{ax=simNormal(T,vi);C=h.surf.pos;R=9;}
     R=clamp(R,5,12);
     const e1=v3.norm(v3.cross(ax,Math.abs(ax[2])<0.9?[0,0,1]:[1,0,0])),e2=v3.cross(ax,e1),d0=v3.sub(h.surf.pos,C),a0=Math.atan2(v3.dot(d0,e2),v3.dot(d0,e1));
@@ -2725,8 +2808,14 @@ function simFrame(now){
 }
 function simStart(){
   progress('シミュレーターを準備中…');
-  setTimeout(()=>{try{
-    const T=simBuildTruth();simActivate(T);
+  setTimeout(async()=>{try{
+    const kind=($('#simCase')&&$('#simCase').value)||'A';let T=null;
+    if(kind==='A'||kind==='B'||kind==='C'){
+      try{await simLoadLaData();T=simBuildTruthReal(kind);}
+      catch(err){console.warn(err);toast('実際の形を読み込めなかったので、簡易の形で始めます：'+err.message,8000);}
+    }
+    if(!T)T=simBuildTruth();
+    simActivate(T);SIM.sheath=T.sheath||[-14,-3,-4];SIM.sheathOut=T.sheathOut||[-38,-9,-16];
     const map=newMap('LA（シミュレーター）');map.mesh=T.mesh;
     const study={name:'シミュレーター AF（初回PVI）',maps:[map],vfs:null,warn:[],demo:true,sim:true,
       visitag:{mapNames:[map.name],sites:[],params:[{k:'ai',label:'Ablation Index'},{k:'fti',label:'FTI'},{k:'dur',label:'焼灼時間 (s)'},{k:'force',label:'平均Force (g)'},{k:'power',label:'最大出力 (W)'},{k:'temp',label:'最高温度 (℃)'},{k:'impDrop',label:'インピーダンス低下 (Ω)'},{k:'imp',label:'基礎インピーダンス (Ω)'}]}};

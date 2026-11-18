@@ -1,8 +1,8 @@
 /* CARTO Viewer: オフラインでも開けるようにするだけのService Worker。
    ページ本体は「ネットが使えれば常に最新版、使えなければ前回の版」を返します（更新の貼り直しは不要）。
    症例データはここを通らず、このPCの中だけで処理されます。 */
-const CACHE = 'carto-viewer-v1';
-const FILES = ['./carto-viewer.html', './carto-viewer.webmanifest', './carto-viewer-icon-192.png', './carto-viewer-icon-512.png'];
+const CACHE = 'carto-viewer-v2';
+const FILES = ['./carto-viewer.html', './carto-viewer.webmanifest', './carto-viewer-icon-192.png', './carto-viewer-icon-512.png', './carto-viewer-la-data.js'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
 });
