@@ -118,6 +118,8 @@
   body.norule .settab tr>:nth-child(2):not([colspan]),body.norule .rulehint{display:none}
   .setnav{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:0 0 8px} .setnav input[type=range]{flex:1;min-width:120px;max-width:360px} .setnav button{padding:3px 10px}
   .settab table{table-layout:fixed} .settab th:first-child{width:170px} .settab tr:first-child th:nth-child(2),.settab td:nth-child(2){width:190px}
+  #whyTip{position:absolute;z-index:50;background:var(--card2);color:var(--tx);border:1px solid var(--line2);border-radius:10px;padding:8px 10px;font-size:12.5px;line-height:1.6;white-space:pre-line;box-shadow:0 8px 24px rgba(0,0,0,.18);pointer-events:none}
+  [data-why]{cursor:help}
   .ptmark{font-size:10.5px;color:var(--accent2);font-weight:700} .settab td.warnv,.warnk{background:rgba(251,146,60,.28);font-weight:700} .warnk{padding:0 4px;border-radius:4px} .settab td.chg,.chgk{background:rgba(251,191,36,.22)} .settab td.bad,.badk{background:rgba(251,113,133,.22);font-weight:700} .chgk,.badk{padding:0 4px;border-radius:4px}
   .setbadge{font-size:13px;font-weight:800;margin-left:8px;padding:1px 10px;border-radius:999px;background:rgba(251,191,36,.18);color:var(--warn);vertical-align:middle}
   .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:10px}
@@ -818,14 +820,15 @@ let curTV=null,lastAllItems=[],lastRawItems=[];
 function tvRows(items){ // 位置つきの文字 → 行（上から順）とセル（x0〜x1）
   const its=items.filter(it=>String(it.s||'').trim()).sort((a,b)=>String(a.p)<String(b.p)?-1:String(a.p)>String(b.p)?1:b.y-a.y);
   const rows=[];let cur=null;
-  for(const it of its){const tol=Math.max(2,0.5*(it.h||8));if(cur&&cur.p===it.p&&Math.abs(cur.y-it.y)<=tol)cur.r.push(it);else{cur={p:it.p,y:it.y,r:[it]};rows.push(cur);}}
+  for(const it of its){const tol=Math.max(2,0.7*(it.h||8));if(cur&&cur.p===it.p&&Math.abs(cur.y-it.y)<=tol)cur.r.push(it);else{cur={p:it.p,y:it.y,r:[it]};rows.push(cur);}}
   return rows.map(({p,y,r})=>{r.sort((a,b)=>a.x-b.x);const cells=[];let c=null;
     for(const it of r){const fh=it.h||8,x1=it.x+(it.w||fh*String(it.s).length*0.6);
       if(c&&it.x-c.x1<=fh*1.2){c.s+=it.s;c.x1=Math.max(c.x1,x1);}else{c={s:it.s,x0:it.x,x1};cells.push(c);}}
     cells.forEach(c=>{c.s=c.s.replace(/\s+/g,' ').trim();});return {p,y,cells:cells.filter(c=>c.s)};});
 }
 const tvClean=s=>String(s||'').replace(/^[●■◆◇○□▲△\s]+/,'').replace(/\s+/g,' ').trim();
-const tvUnit=v=>String(v||'').replace(/(\d)\s*W(?=$|\s|（)/g,'$1 Ω').replace(/min\s*[-−]?\s*1\b/g,'min⁻¹').replace(/(\d)\s*min⁻¹/g,'$1 min⁻¹').replace(/\s+/g,' ').trim();
+const tvUnit=v=>String(v||'').replace(/(\d)\s*W(?=$|\s|（)/g,'$1 Ω').replace(/®/g,'→').replace(/³/g,'≥').replace(/£/g,'≤') // 記号用の書体（Symbol）：W＝Ω、®＝→、³＝≥、£＝≤
+  .replace(/min\s*(?:[-−⁻]\s*[1¹]|[1¹]|⁻¹)(?![\d.])/g,'min⁻¹').replace(/(\d)\s*min⁻¹/g,'$1 min⁻¹').replace(/\s+/g,' ').trim();
 const TV_CH=/^(心房|心室|右心室|右室|左心室|左室|ショック)$/;
 const TV_MEAS_KEY=/^(lead|pace|atAf|bat|charge|evTotal):?/;
 function parseTV(items){
@@ -876,8 +879,16 @@ function parseTV(items){
       // ゾーンとATRは1行まとめて1つの値（レート・ATP・ショックなど）
       const RH=/^(ペーシング出力|感度|リードの極性|レートアダプティブペーシング|LV ?Multisite)/;
       if(cells.length>1&&/^(心室細動|心室頻拍(-?1)?|VF|VT(-?1)?|ATR ?Mode ?Switch)$/i.test(c0)){
-        const rest=cells.slice(1).filter(c=>!RH.test(tvClean(c.s))),rh=cells.find(c=>RH.test(tvClean(c.s)));if(rh){grp.R=tvClean(rh.s);}
-        put(`set:${c0}`,c0,rest.map(c=>c.s).join(' / '),{o:oL++});last={L:null,R:null};continue;}
+        // 右の列の見出し・部屋名（● 心房 など）が同じ行に入ってきたら、そこから先は右の列として読む
+        const isRStart=c=>RH.test(tvClean(c.s))||(c.x0>=(midX!=null?midX-3:1e9)&&/^[●■◆◇]\s*(心房|心室|右心室|右室|左心室|左室|LV[ab]?|RV|RA)(?=$|\s|[(（])/.test(String(c.s).trim()));
+        let cut=cells.findIndex((c,i)=>i>0&&isRStart(c));if(cut<0)cut=cells.length;
+        const rest=cells.slice(1,cut);
+        put(`set:${c0}`,c0,rest.map(c=>c.s).join(' / ').replace(/\s*\/\s*([-−⁻]?[1¹])(?=\s*\/|$)/g,'$1'),{o:oL++});last={L:`set:${c0}`,R:null};
+        const R=cells.slice(cut);
+        if(R.length){if(RH.test(tvClean(R[0].s))){grp.R=tvClean(R[0].s);R.shift();}
+          if(R.length>=2){const t0=tvClean(R[0].s),lab=grp.R&&/^(心房|心室|右心室|右室|左心室|左室|LV[ab]?|RV|RA)\s*(\(.*\))?$/.test(t0)?`${grp.R} ${t0}`:t0;const k=`set:${lab}`;put(k,lab,R.slice(1).map(c=>c.s).join(' '),{o:oR++});last.R=k;}
+          else if(R.length===1){const t0=tvClean(R[0].s);if(!/^(ms|mV|V|J|Ω|%|s)$/.test(t0)){grp.R=t0;}}}
+        continue;}
       const mx=midX!=null?midX-3:1e9;
       // 左に項目名だけ・右の端に値だけ（例：Ventricular Tachy EGM 保存 …… On）→ 1つの組にする
       {const L=cells.filter(c=>c.x0<mx),R=cells.filter(c=>c.x0>=mx),rv=R.length===1?tvClean(R[0].s):'';
@@ -886,8 +897,12 @@ function parseTV(items){
       for(const side of ['L','R']){const H=cells.filter(c=>side==='L'?c.x0<mx:c.x0>=mx);if(!H.length)continue;
         const t0=tvClean(H[0].s);
         if(H.length===1){
-          if(/^(ms|mV|V|J|Ω|%|s|[-−]?1|min⁻¹)$/.test(t0)&&last[side]){const it=got[last[side]];if(it)it.v=tvUnit(it.v+(/^[-−]?1$/.test(t0)?'':' ')+t0);continue;}
+          if(/^(ms|mV|V|J|Ω|%|s|[-−⁻]?[1¹]|min⁻¹)$/.test(t0)){if(last[side]){const it=got[last[side]];if(it)it.v=tvUnit(it.v+(/^[-−⁻]?[1¹]$/.test(t0)?'':' ')+t0);}continue;} // 折り返した単位・上付きの -1（見出しにはしない）
           grp[side]=t0;last[side]=null;continue;}
+        if(H.length>=2&&H.slice(1).every(c=>/^[-−⁻]?[1¹]$/.test(tvClean(c.s)))){ // 値が上付きの「-1」だけ：本当の値（60 min など）は少しずれた別の行にある
+          const ri=rows.indexOf(r),near=[rows[ri-1],rows[ri+1]].filter(Boolean);let found=null;
+          for(const nr of near){const cand=nr.cells.filter(c=>(side==='L'?c.x0<mx:c.x0>=mx)&&c.x0>H[0].x1&&/\d/.test(c.s));if(nr.cells.filter(c=>side==='L'?c.x0<mx:c.x0>=mx).length===cand.length&&cand.length===1){found=cand[0];nr.cells=nr.cells.filter(c=>c!==found);break;}}
+          if(found){H.splice(1,H.length-1,{...found,s:found.s+'-1'});}}
         const lab=(side==='R'&&grp.R&&/^(心房|心室|右心室|右室|左心室|左室|LV[ab]?|RV|RA)\s*(\(.*\))?$/.test(t0))?`${grp.R} ${t0}`:t0;
         const k=`set:${lab}`;put(k,lab,H.slice(1).map(c=>c.s).join(' '),{o:side==='L'?oL++:oR++});last[side]=k;}
     }
@@ -1086,7 +1101,7 @@ function setTrendRender(id,st){
   const name=k=>{for(let i=cols.length-1;i>=0;i--){const x=cols[i].settings.items[k];if(x)return x.l;}return k;};
   // セルの状態：前の回（その項目を読めた一番近い回）と違えば変更
   // 経静脈デバイス：列ごとに、その回と前の回からアラートを作って色を付ける
-  const tvAl=isTVp?cols.map((c,i)=>{const m=new Map();for(const a of tvAlerts(c.settings,i>0?cols[i-1].settings:null)){const o=m.get(a.k);if(!o||a.lv>o.lv)m.set(a.k,{lv:a.lv,why:a.txt});}return m;}):null;
+  const tvAl=isTVp?cols.map((c,i)=>{const m=new Map();for(const a of tvAlerts(c.settings,i>0?cols[i-1].settings:null)){const o=m.get(a.k);m.set(a.k,o?{lv:Math.max(o.lv,a.lv),why:o.why+'\n'+(a.lv>=2?'⚠️ ':'🟡 ')+a.txt}:{lv:a.lv,why:(a.lv>=2?'⚠️ ':'🟡 ')+a.txt});}return m;}):null;
   const grid=keys.map(k=>{let prev=null;return cols.map((c,ci)=>{if(tvAl){const x0=c.settings.items[k];if(!x0)return {v:null};const a=tvAl[ci].get(k);return {v:LV(x0.v),note:tvClinic(x0),chg:false,rb:a&&a.lv>=2?a.why:'',wn:a&&a.lv===1?a.why:''};}const x0=c.settings.items[k];if(!x0||!okVal(k,x0.v))return {v:null};const x={...x0,v:LV(x0.v)};const chg=!isMeas(k)&&prev!=null&&prev!==x.v;prev=x.v;const a=alertOf(k,x.v)||(chg&&!NO_RULE.has(k)&&RL(k)&&RL(k).chg?{lv:2,why:'前回から変更（ルール：前回から変わったらアラート）'}:null);return {v:x.v,chg,rb:a&&a.lv>=2?a.why:'',wn:a&&a.lv===1?a.why:''};});});
   // 表に出すのは5回分。古い回はバー／◀▶で戻る（変更の判定は、表に出ない回も含めた前の回と比べる）
   const WIN=5,n=cols.length,maxS=Math.max(0,n-WIN);
@@ -1100,7 +1115,7 @@ function setTrendRender(id,st){
   let gPrev='';
   const body=keys.map((k,i)=>{const imp=setImp(k),main=order(k)<99||!k.startsWith('x:');
     const g=typeof TV_GRP==='function'?TV_GRP(k):'',gh=g&&g!==gPrev?`<tr class="grp"><th colspan="${2+vis.length}">${escH(g)}</th></tr>`:'';if(g)gPrev=g;
-    return gh+`<tr${main?'':' class="oth"'}><th>${escH(name(k))}</th><td class="hint">${escH(isTVp?tvRuleText(k):(ruleText(k)||(isPt(k)?'決めない':'')))}${!isTVp&&isPt(k)?' <b class="ptmark">この患者</b>':''}</td>${grid[i].map(c=>c.v==null?'<td class="hint">—</td>':`<td class="${c.rb?'bad':c.wn?'warnv':c.chg?'chg':''}" title="${escH(c.rb||c.wn||(c.chg?'前の回から変更':''))}">${c.rb?'⚠️ ':c.wn?'🟡 ':''}${escH(c.v)}${c.chg?' <span class="hint">◀変</span>':''}${c.note||''}</td>`).join('')}</tr>`;}).join('');
+    return gh+`<tr${main?'':' class="oth"'}><th>${escH(name(k))}</th><td class="hint">${escH(isTVp?tvRuleText(k):(ruleText(k)||(isPt(k)?'決めない':'')))}${!isTVp&&isPt(k)?' <b class="ptmark">この患者</b>':''}</td>${grid[i].map(c=>c.v==null?'<td class="hint">—</td>':`<td class="${c.rb?'bad':c.wn?'warnv':c.chg?'chg':''}" title="${escH(c.rb||c.wn||(c.chg?'前の回から変更':''))}"${c.rb||c.wn?` data-why="${escH(c.rb||c.wn)}"`:''}>${c.rb?'⚠️ ':c.wn?'🟡 ':''}${escH(c.v)}${c.chg?' <span class="hint">◀変</span>':''}${c.note||''}</td>`).join('')}</tr>`;}).join('');
   const nav=n>WIN?`<div class="setnav"><button class="ghost" data-sn="-${WIN}" ${s0<=0?'disabled':''} title="5回前へ">⏮</button><button class="ghost" data-sn="-1" ${s0<=0?'disabled':''} title="1回前へ">◀ 古い</button>
       <input type="range" id="setNavR" min="0" max="${maxS}" value="${s0}" step="1"><button class="ghost" data-sn="1" ${s0>=maxS?'disabled':''} title="1回後へ">新しい ▶</button><button class="ghost" data-sn="${WIN}" ${s0>=maxS?'disabled':''} title="最新へ">⏭</button>
       <span class="hint">${s0+1}〜${Math.min(n,s0+WIN)}回目を表示／全${n}回${s0>=maxS?'（最新）':''}</span></div>`:'';
@@ -1215,8 +1230,8 @@ const tvNum=v=>{const m=String(v||'').match(/([<>]?)\s*(-?\d+(?:\.\d+)?)/);if(!m
 const tvCh=k=>{const m=k.match(/^lead:([^:]*):/);return m?m[1]:'';};
 const TV_LEAD=(re)=>k=>/^lead:/.test(k)&&re.test(k);
 // ルールの値（全体）。患者ごとに上書きできる（基準JSONの tvRules。{none:true}＝この患者は決めない）
-const TV_DEF={ampA:{v:0.5},ampV:{v:3.0},thr:{v:1.5},pimp:{lo:300,hi:1000},simp:{lo:50,hi:100},bat:{warn:1,alert:0.5},af:{v:1.0},chg:{on:1},margin:{out:2,sens:0.5},rel:{warn:10,alert:20}};
-const TV_NAMES={ampA:'心房 心内波高値',ampV:'心室（右心室・左心室） 心内波高値',thr:'ペーシング閾値',pimp:'ペーシングインピーダンス',simp:'ショックインピーダンス',bat:'交換までの予測期間',af:'%AT/AF',chg:'設定（ゾーン・ATR・モード・レート・AV Delayなど）',margin:'マージン（出力と閾値・感度と波高値）',rel:'前回からの変化（閾値・インピーダンス・波高値）'};
+const TV_DEF={nodata:{on:1},ampA:{v:0.5},ampV:{v:3.0},thr:{v:1.5},pimp:{lo:300,hi:1000},simp:{lo:50,hi:100},bat:{warn:1,alert:0.5},af:{v:1.0},chg:{on:1},margin:{out:2,sens:0.5},rel:{warn:10,alert:20}};
+const TV_NAMES={nodata:'最新の日常測定が「記録なし」',ampA:'心房 心内波高値',ampV:'心室（右心室・左心室） 心内波高値',thr:'ペーシング閾値',pimp:'ペーシングインピーダンス',simp:'ショックインピーダンス',bat:'交換までの予測期間',af:'%AT/AF',chg:'設定（ゾーン・ATR・モード・レート・AV Delayなど）',margin:'マージン（出力と閾値・感度と波高値）',rel:'前回からの変化（閾値・インピーダンス・波高値）'};
 let PT_TV=null; // 今表示・評価している患者の上書き
 const TVP=g=>{const o=PT_TV&&PT_TV[g];if(o&&o.none)return null;return {...TV_DEF[g],...(o||{})};};
 const tvIsPt=g=>!!(PT_TV&&PT_TV[g]);
@@ -1238,6 +1253,7 @@ const TV_REL=[
   {when:k=>/^lead:.*心内波高値/.test(k),dir:-1,name:'心内波高値の低下',w:'低下'},
 ];
 function tvRuleText(k){const a=[],mk=g=>tvIsPt(g)?'（この患者）':'';
+  if(/^lead:/.test(k)){a.push(TVP('nodata')?'記録なしで注意'+mk('nodata'):'記録なし：決めない'+mk('nodata'));}
   for(const R of TV_RULES)if(R.when(k)){const r=TVP(R.g);a.push(r?R.t(r)+mk(R.g):`決めない${mk(R.g)}`);}
   if(TV_CHG.test(k)){a.push(TVP('chg')?'前回から変わったら要確認'+mk('chg'):'決めない'+mk('chg'));}
   for(const R of TV_REL)if(R.when(k)){const r=TVP('rel');if(r)a.push(`前回から${R.w}（${r.warn}%以上で注意／${r.alert}%以上で要確認）${mk('rel')}`);}
@@ -1248,7 +1264,9 @@ function tvAlerts(cur,prev){
   const C=cur&&cur.items||{},P=prev&&prev.items||{},out=[];
   const add=(k,lv,why)=>out.push({k,lv,txt:`${(C[k]||{}).l||k} ${LV((C[k]||{}).v)}：${why}`});
   const rel=TVP('rel'),chg=TVP('chg'),mg=TVP('margin');
+  const nd=TVP('nodata');
   for(const [k,x] of Object.entries(C)){const n=tvNum(LV(x.v));
+    if(nd&&/^lead:/.test(k)&&/記録なし/.test(String(x.v)))out.push({k,lv:1,txt:`${x.l}：最新の日常測定が記録なし${x.clinic?`（医療施設での最後の測定 ${LV(x.clinic)}${x.clinicDate?'・'+x.clinicDate:''}）`:''}${tvIsPt('nodata')?'（この患者のルール）':''}`});
     for(const R of TV_RULES){if(!R.when(k)||isNaN(n))continue;const r=TVP(R.g);if(!r)continue;const a=R.f(n,r);if(a)add(k,a.lv,a.why+(tvIsPt(R.g)?'（この患者のルール）':''));}
     if(chg&&TV_CHG.test(k)&&P[k]&&LV(P[k].v)!==LV(x.v))out.push({k,lv:2,txt:`${x.l}が前回から変更（${LV(P[k].v)}→${LV(x.v)}）`});
     if(rel)for(const R of TV_REL){if(!R.when(k)||!P[k])continue;const a=tvNum(LV(P[k].v)),b=n;if(isNaN(a)||isNaN(b)||a<=0)continue;
@@ -1265,14 +1283,14 @@ function tvAlerts(cur,prev){
   return out.sort((a,b)=>b.lv-a.lv);
 }
 // この患者だけのルール（経静脈）：画面と保存
-const TV_FIELDS={ampA:[['v','mV未満']],ampV:[['v','mV未満']],thr:[['v','V以上']],pimp:[['lo','Ω（下限）'],['hi','Ω（上限）']],simp:[['lo','Ω（下限）'],['hi','Ω（上限）']],bat:[['warn','年以下で注意'],['alert','年以下で要確認']],af:[['v','%以上']],chg:[],margin:[['out','倍（出力÷閾値がこれ未満で要確認）'],['sens','倍（感度÷波高値がこれを超えたら要確認）']],rel:[['warn','%以上で注意'],['alert','%以上で要確認']]};
+const TV_FIELDS={nodata:[],ampA:[['v','mV未満']],ampV:[['v','mV未満']],thr:[['v','V以上']],pimp:[['lo','Ω（下限）'],['hi','Ω（上限）']],simp:[['lo','Ω（下限）'],['hi','Ω（上限）']],bat:[['warn','年以下で注意'],['alert','年以下で要確認']],af:[['v','%以上']],chg:[],margin:[['out','倍（出力÷閾値がこれ未満で要確認）'],['sens','倍（感度÷波高値がこれを超えたら要確認）']],rel:[['warn','%以上で注意'],['alert','%以上で要確認']]};
 function tvPtRulesUi(){
   const box=$('tvPtRules');if(!box)return;const R=PT_TV||{};
   $('tvPtSum').textContent=Object.keys(R).length?`（${Object.keys(R).length}項目を変更中：${Object.keys(R).map(g=>TV_NAMES[g]).join('・')}）`:'（全体のルールのまま）';
   box.innerHTML=`<table class="crit"><tr><th>ルール</th><th>この患者</th></tr>${Object.keys(TV_DEF).map(g=>{const r=R[g],d=TV_DEF[g],v={...d,...(r&&!r.none?r:{})};
     const sel=`<select data-tg="${g}" data-tt="mode"><option value="__inh"${!r?' selected':''}>全体のルールのまま</option>${TV_FIELDS[g].length?`<option value="__set"${r&&!r.none?' selected':''}>この患者は次の値</option>`:''}<option value="__none"${r&&r.none?' selected':''}>決めない</option></select>`;
     const ins=TV_FIELDS[g].map(([f,u])=>`<input class="inp" style="width:70px" data-tg="${g}" data-tt="${f}" value="${hasN(v[f])?v[f]:''}"> <span class="hint">${u}</span>`).join(' ');
-    const keep=PT_TV;PT_TV=null;const gtxt=(()=>{const rr=TVP(g);if(!rr)return '決めない';const T=TV_RULES.find(x=>x.g===g);return T?T.t(rr):g==='chg'?'前回から変わったら要確認':g==='margin'?`出力が閾値の${rr.out}倍未満／感度が波高値の${rr.sens}倍超で要確認`:`${rr.warn}%以上で注意／${rr.alert}%以上で要確認`;})();PT_TV=keep;
+    const keep=PT_TV;PT_TV=null;const gtxt=(()=>{const rr=TVP(g);if(!rr)return '決めない';const T=TV_RULES.find(x=>x.g===g);return T?T.t(rr):g==='nodata'?'記録なしで注意':g==='chg'?'前回から変わったら要確認':g==='margin'?`出力が閾値の${rr.out}倍未満／感度が波高値の${rr.sens}倍超で要確認`:`${rr.warn}%以上で注意／${rr.alert}%以上で要確認`;})();PT_TV=keep;
     return `<tr><td>${TV_NAMES[g]}<div class="hint">全体：${escH(gtxt)}</div></td><td>${sel} ${ins}</td></tr>`;}).join('')}</table>`;
 }
 async function tvPtRulesSave(clear){
@@ -1287,12 +1305,12 @@ async function tvPtRulesSave(clear){
 }
 // 経静脈デバイスの設定：時系列にせず、開いた時だけ見る欄（最新のレポートの設定。前回から変わった所は黄色）
 function tvSetBox(cur,prev,when){
-  const C=cur&&cur.items||{},P=prev&&prev.items||{},AL=tvAlerts(cur,prev),alv=k=>Math.max(0,...AL.filter(a=>a.k===k).map(a=>a.lv));
+  const C=cur&&cur.items||{},P=prev&&prev.items||{},AL=tvAlerts(cur,prev),alv=k=>Math.max(0,...AL.filter(a=>a.k===k).map(a=>a.lv)),awhy=k=>AL.filter(a=>a.k===k).map(a=>(a.lv>=2?'⚠️ ':'🟡 ')+a.txt).join('\n');
   const ks=Object.keys(C).filter(k=>/^set:/.test(k)).sort((a,b)=>(C[a].o??0)-(C[b].o??0));if(!ks.length)return '';
   const nChg=ks.filter(k=>P[k]&&LV(P[k].v)!==LV(C[k].v)).length,nAl=ks.filter(k=>alv(k)>0).length;
   return `<details class="numdet tvset"><summary>⚙ 設定（${escH(when||'最新のレポート')}・${ks.length}項目${prev?(nChg?`／<span class="warn-t">前回から${nChg}項目変更</span>`:'／前回から変更なし'):''}${nAl?`／<span class="warn-t">⚠️ アラート ${nAl}項目</span>`:''}）</summary>
     <table class="crit"><tr><th>項目</th><th>前回</th><th>今回</th></tr>${ks.map(k=>{const x=C[k],p=P[k],chg=p&&LV(p.v)!==LV(x.v);
-      const lv=alv(k),rt=tvRuleText(k);return `<tr class="${lv?'lv'+lv:chg?'lv1':''}"><td>${escH(x.l)}${rt?`<div class="hint rulehint">${escH(rt)}</div>`:''}</td><td>${p?escH(LV(p.v)):'<span class="hint">—</span>'}</td><td>${lv>=2?'⚠️ ':lv===1?'🟡 ':''}${escH(LV(x.v))}${chg?' <span class="hint">◀変</span>':''}</td></tr>`;}).join('')}</table></details>`;
+      const lv=alv(k),rt=tvRuleText(k);return `<tr class="${lv?'lv'+lv:chg?'lv1':''}"><td>${escH(x.l)}${rt?`<div class="hint rulehint">${escH(rt)}</div>`:''}</td><td>${p?escH(LV(p.v)):'<span class="hint">—</span>'}</td><td${lv?` data-why="${escH(awhy(k))}" title="${escH(awhy(k))}"`:''}>${lv>=2?'⚠️ ':lv===1?'🟡 ':''}${escH(LV(x.v))}${chg?' <span class="hint">◀変</span>':''}</td></tr>`;}).join('')}</table></details>`;
 }
 // 経静脈デバイスのイベントだけのPDF：イベントの波形を画像にして記録する（判定はしない）
 async function runTVEvents(){
@@ -1332,10 +1350,10 @@ async function runTV(){
     saved=await writeBaseline(id,{...base,date,device:$('fDev').value||base.device||'',saves});}
   const P=prev&&prev.settings&&prev.settings.items||{};
   const keys=Object.keys(tv.items).filter(k=>!/^set:/.test(k)).sort((a,b)=>(tv.items[a].o??0)-(tv.items[b].o??0));
-  const alv=k=>Math.max(0,...al.filter(a=>a.k===k).map(a=>a.lv));
+  const alv=k=>Math.max(0,...al.filter(a=>a.k===k).map(a=>a.lv)),awhy=k=>al.filter(a=>a.k===k).map(a=>(a.lv>=2?'⚠️ ':'🟡 ')+a.txt).join('\n');
   let g0='';const rows=keys.map(k=>{const x=tv.items[k],p=P[k],g=TV_GRP(k),changed=p&&LV(p.v)!==LV(x.v)&&!isMeas(k),lvk=alv(k);
     const head=g!==g0?`<tr class="grp"><th colspan="3">${escH(g)}</th></tr>`:'';g0=g;
-    return head+`<tr class="${lvk?'lv'+lvk:changed?'lv1':''}"><td>${escH(x.l)}</td><td>${p?escH(LV(p.v))+tvClinic(p):'<span class="hint">—</span>'}</td><td>${escH(LV(x.v))}${changed?' <span class="hint">◀変</span>':''}${tvClinic(x)}</td></tr>`;}).join('');
+    return head+`<tr class="${lvk?'lv'+lvk:changed?'lv1':''}"><td>${escH(x.l)}</td><td>${p?escH(LV(p.v))+tvClinic(p):'<span class="hint">—</span>'}</td><td${lvk?` data-why="${escH(awhy(k))}" title="${escH(awhy(k))}"`:''}>${lvk>=2?'⚠️ ':lvk===1?'🟡 ':''}${escH(LV(x.v))}${changed?' <span class="hint">◀変</span>':''}${tvClinic(x)}</td></tr>`;}).join('');
   const cls=lv>=2?'bad':lv===1?'warn':prev?'ok':'info';
   const title=lv>=2?'⚠️ 要確認 — 設定・測定値のアラート':lv===1?'🟡 注意 — 設定・測定値のアラート':prev?(chg.length?`✅ アラートなし（設定が${chg.length}項目変わりました）`:'✅ アラートなし（前回と同じ設定）'):'記録しました（この患者の初めての記録）';
   $('result').innerHTML=`<div class="verdict ${cls}"><h2>${title}</h2>
@@ -1356,6 +1374,14 @@ function placeSetCard(tv){const c=$('setCard'),home=$('setCardHome'),grid=docume
   if(tv){if(c.previousElementSibling!==grid)grid.after(c);c.open=true;}else if(c.previousElementSibling!==home){home.after(c);}}
 function tlAutoOpen(sicd){placeSetCard(!sicd);let want;if(sicd){want=true;try{const v=localStorage.getItem('pg_lat_tlopen');if(v)want=v==='1';}catch(_){}}else want=false;
   if($('tlCard').open!==want){tlAutoSet=true;$('tlCard').open=want;}}
+// ⚠️・🟡の所を押す（またはマウスを乗せる）と、何が引っかかったかを吹き出しで出す
+(()=>{const tip=document.createElement('div');tip.id='whyTip';tip.hidden=true;document.body.appendChild(tip);
+  const show=el=>{tip.textContent=el.dataset.why;tip.hidden=false;const r=el.getBoundingClientRect(),w=Math.min(420,window.innerWidth-24);tip.style.maxWidth=w+'px';
+    const left=Math.max(12,Math.min(window.innerWidth-w-12,r.left));tip.style.left=left+'px';tip.style.top=(window.scrollY+r.bottom+6)+'px';};
+  document.addEventListener('click',e=>{const el=e.target.closest('[data-why]');if(el){show(el);e.stopPropagation();}else tip.hidden=true;},true);
+  document.addEventListener('mouseover',e=>{const el=e.target.closest('[data-why]');if(el)show(el);});
+  document.addEventListener('mouseout',e=>{const el=e.target.closest('[data-why]');if(el&&!el.contains(e.relatedTarget))tip.hidden=true;});
+  window.addEventListener('scroll',()=>{tip.hidden=true;},{passive:true});})();
 let curSettings=null; // 今回のレポートから読んだ設定
 function extractFields(items, annotStrs, rawPdfText){
   annotStrs=annotStrs||[]; rawPdfText=rawPdfText||'';
