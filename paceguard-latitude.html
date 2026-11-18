@@ -112,7 +112,7 @@
   .settab th,.settab td{padding:6px 10px;border-bottom:1px solid var(--line);white-space:nowrap;text-align:left;background:var(--card2)}
   .settab tr:first-child th{font-size:11px;color:var(--sub);background:var(--tblh);vertical-align:bottom} .settab tr:first-child th.base{color:var(--accent2)}
   .settab tr>th:first-child{position:sticky;left:0;z-index:1;box-shadow:1px 0 0 var(--line)} .settab tr.oth th{font-weight:400;color:var(--sub)}
-  .settab td.warnv,.warnk{background:rgba(251,146,60,.28);font-weight:700} .warnk{padding:0 4px;border-radius:4px} .settab td.chg,.chgk{background:rgba(251,191,36,.22)} .settab td.bad,.badk{background:rgba(251,113,133,.22);font-weight:700} .chgk,.badk{padding:0 4px;border-radius:4px}
+  .ptmark{font-size:10.5px;color:var(--accent2);font-weight:700} .settab td.warnv,.warnk{background:rgba(251,146,60,.28);font-weight:700} .warnk{padding:0 4px;border-radius:4px} .settab td.chg,.chgk{background:rgba(251,191,36,.22)} .settab td.bad,.badk{background:rgba(251,113,133,.22);font-weight:700} .chgk,.badk{padding:0 4px;border-radius:4px}
   .setbadge{font-size:13px;font-weight:800;margin-left:8px;padding:1px 10px;border-radius:999px;background:rgba(251,191,36,.18);color:var(--warn);vertical-align:middle}
   .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:10px}
   .m{background:var(--inbg);border:1px solid var(--line);border-radius:12px;padding:8px 10px}
@@ -308,9 +308,15 @@
     <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:8px 0">
       <label class="hint"><input type="checkbox" id="setOnlyChg"> 変わった項目・ルール外だけ</label>
       <label class="hint"><input type="checkbox" id="setShowOther" checked> その他の項目も表示</label>
-      <span class="hint">左＝過去・右＝最新／<span class="chgk">黄</span>＝前の回から変更（アラートではない）・<span class="warnk">橙</span>＝インピーダンス注意・<span class="badk">赤</span>＝ルール（基準値）の範囲外・インピーダンス警告／📌＝基準の回</span>
+      <span class="hint">左＝過去・右＝最新・⚡＝ショックインピーダンスを読めたイベント／<span class="chgk">黄</span>＝前の回から変更（アラートではない）・<span class="warnk">橙</span>＝インピーダンス注意・<span class="badk">赤</span>＝ルール（基準値）の範囲外・インピーダンス警告／📌＝基準の回</span>
     </div>
     <div id="setTrend"><div class="hint">患者を読み込むと表示します。</div></div>
+    <details id="ptRulesWrap" hidden style="margin-top:10px;padding:8px 10px;border:1px solid var(--line);border-radius:8px">
+      <summary style="cursor:pointer"><b>🔔 この患者だけのルール</b> <span class="hint" id="ptRulesSum"></span></summary>
+      <div class="hint">変えたい項目だけ選んでください。「全体のルールのまま」の項目は、⚙ 設定（保存先）の全体のルールを使います。この患者の記録（基準フォルダのJSON）に保存します。</div>
+      <div id="ptRules"></div>
+      <div style="margin-top:6px"><button id="ptRulesSave">この患者のルールを保存</button> <button id="ptRulesClear" class="ghost">全部、全体のルールに戻す</button> <span class="status" id="ptRulesMsg"></span></div>
+    </details>
   </details>
   <details class="card" id="rvCard">
     <summary>📋 要確認リスト（ツールが🟡注意・⚠️要確認と判定した記録）<span class="hint" id="rvSum" style="margin-left:8px;font-weight:400;letter-spacing:0"></span></summary>
@@ -822,14 +828,18 @@ const SET_RULES_KEY='pg_lat_setrules2'; // 最初の値を変えたので保存�
 const cloneDef=()=>JSON.parse(JSON.stringify(SET_RULES_DEF));
 let SET_RULES=(()=>{try{localStorage.removeItem('pg_lat_setrules');const v=localStorage.getItem(SET_RULES_KEY);return v?JSON.parse(v):cloneDef();}catch(_){return cloneDef();}})();
 const NO_RULE=new Set(['gain']); // ルールの対象にしない項目
+// 患者ごとのルール（基準JSONの setRules）。項目ごとに全体のルールを上書きする。{none:true}＝この患者は決めない
+let PT_RULES=null,PT_ID='';
+const RL=k=>{if(PT_RULES&&PT_RULES[k]!==undefined)return PT_RULES[k]&&PT_RULES[k].none?null:PT_RULES[k];return SET_RULES[k];};
+const isPt=k=>!!(PT_RULES&&PT_RULES[k]!==undefined);
 const hasN=x=>x!=null&&x!==''&&!isNaN(+x);
-function ruleText(k){if(IMP_RULES[k])return IMP_RULES[k].txt();if(NO_RULE.has(k))return '';const r=SET_RULES[k];if(!r)return '';if(r.chg)return '前回から変わったらアラート';if(r.eq)return `${r.eq}であること`;const a=[];if(hasN(r.min))a.push(`${r.min}以上`);if(hasN(r.max))a.push(`${r.max}以下`);return a.join('・');}
-function ruleBreak(k,v){if(NO_RULE.has(k)||IMP_RULES[k])return '';const r=SET_RULES[k];if(!r||v==null)return '';if(r.eq)return v!==r.eq?`ルール外（${r.eq}であること）`:'';
+function ruleText(k){if(IMP_RULES[k])return IMP_RULES[k].txt();if(NO_RULE.has(k))return '';const r=RL(k);if(!r)return '';if(r.chg)return '前回から変わったらアラート';if(r.eq)return `${r.eq}であること`;const a=[];if(hasN(r.min))a.push(`${r.min}以上`);if(hasN(r.max))a.push(`${r.max}以下`);return a.join('・');}
+function ruleBreak(k,v){if(NO_RULE.has(k)||IMP_RULES[k])return '';const r=RL(k);if(!r||v==null)return '';if(r.eq)return v!==r.eq?`ルール外（${r.eq}であること）`:'';
   const n=parseFloat(v);if(isNaN(n))return '';if(hasN(r.min)&&n<+r.min)return `ルール外（${r.min}以上であること）`;if(hasN(r.max)&&n>+r.max)return `ルール外（${r.max}以下であること）`;return '';}
 const setImp=k=>{const K=SET_KNOWN.find(x=>x.k===k);return K?K.imp:0;};
 // 今回の設定について、アラートを作る：ルール（基準値）の範囲から外れた設定だけ＝要確認（前回から変わっただけではアラートにしない）
 // インピーダンス（測定値）：添付文書（EMBLEM MRI S-ICD）の表2・表3の範囲で判定。前回からの変化では判定しない
-const IR=k=>({...SET_RULES_DEF[k],...(SET_RULES[k]||{})});
+const IR=k=>({...SET_RULES_DEF[k],...(RL(k)||{})});
 const IMP_RULES={
   sysImp:{txt:()=>{const r=IR('sysImp');return `≤${r.warn}Ω（${r.warn}超 注意／${r.alert}超 要確認）`;},
     f:n=>{const r=IR('sysImp');return n>r.alert?{lv:2,why:`${r.alert}Ω超（電極の高電圧導体の破損・開放、ヘッダ接続の問題などの可能性）`}:n>r.warn?{lv:1,why:`${r.warn}Ω超（配置が最適でない可能性）`}:null;}},
@@ -840,8 +850,8 @@ const isMeas=k=>!!IMP_RULES[k];
 function alertOf(k,v){const rb=ruleBreak(k,v);if(rb)return {lv:2,why:rb};const R=IMP_RULES[k];if(!R||v==null)return null;const n=parseFloat(v);return isNaN(n)?null:R.f(n);}
 function settingsAlerts(cur,prev){
   const out=[];if(!cur||!cur.n)return out;const P=prev&&prev.items||{};
-  for(const [k,x] of Object.entries(cur.items)){const a=alertOf(k,x.v);if(a)out.push({lv:a.lv,k,txt:`${x.l} ${x.v}：${a.why}`});
-    else if(!NO_RULE.has(k)&&SET_RULES[k]&&SET_RULES[k].chg&&P[k]&&P[k].v!==x.v)out.push({lv:2,k,txt:`${x.l}が前回から変更（${P[k].v}→${x.v}）`});}
+  for(const [k,x] of Object.entries(cur.items)){const a=alertOf(k,x.v);if(a)out.push({lv:a.lv,k,txt:`${x.l} ${x.v}：${a.why}${isPt(k)?'（この患者のルール）':''}`});
+    else if(!NO_RULE.has(k)&&RL(k)&&RL(k).chg&&P[k]&&P[k].v!==x.v)out.push({lv:2,k,txt:`${x.l}が前回から変更（${P[k].v}→${x.v}）`});}
   return out.sort((a,b)=>b.lv-a.lv||setImp(b.k)-setImp(a.k));
 }
 function setAlertHtml(alerts,cur,chg){
@@ -857,9 +867,11 @@ function setAlertHtml(alerts,cur,chg){
 let setTrendLast=null;
 function setTrendRender(id,st){
   setTrendLast=id&&st?{id,st}:null;const box=$('setTrend');if(!box)return;
+  PT_ID=id||'';PT_RULES=st&&st.setRules||null;ptRulesUi();
   if(!st){box.innerHTML='<div class="hint">患者を読み込むと表示します。</div>';$('setSum').textContent='';return;}
   const basePdf=st.baseline&&st.baseline.pdf;
-  const cols=(st.saves||[]).filter(x=>x&&x.settings&&x.settings.n&&!evLike(x)).sort((a,b)=>a.key<b.key?-1:a.key>b.key?1:(a.ts||0)-(b.ts||0));
+  // 列＝S-ECGの記録。イベントの記録は、ショックインピーダンスを読めたものだけ⚡の列にする（ショックを出した時に測る値のため）
+  const cols=(st.saves||[]).filter(x=>x&&x.settings&&x.settings.n&&(!evLike(x)||x.settings.items.shockImp)).sort((a,b)=>a.key<b.key?-1:a.key>b.key?1:(a.ts||0)-(b.ts||0));
   $('setSum').textContent=`ID ${id}・${cols.length}回分`;
   if(!cols.length){box.innerHTML='<div class="hint">設定を読めた記録がまだありません（この機能を入れた後に読み込んだレポートから記録されます）。</div>';return;}
   const onlyChg=$('setOnlyChg').checked,showOther=$('setShowOther').checked;
@@ -867,32 +879,60 @@ function setTrendRender(id,st){
   let keys=[...new Set(cols.flatMap(c=>Object.keys(c.settings.items)))].filter(k=>showOther||order(k)<99).sort((a,b)=>order(a)-order(b)||a.localeCompare(b,'ja'));
   const name=k=>{for(let i=cols.length-1;i>=0;i--){const x=cols[i].settings.items[k];if(x)return x.l;}return k;};
   // セルの状態：前の回（その項目を読めた一番近い回）と違えば変更
-  const grid=keys.map(k=>{let prev=null;return cols.map(c=>{const x=c.settings.items[k];if(!x)return {v:null};const chg=!isMeas(k)&&prev!=null&&prev!==x.v;prev=x.v;const a=alertOf(k,x.v)||(chg&&!NO_RULE.has(k)&&SET_RULES[k]&&SET_RULES[k].chg?{lv:2,why:'前回から変更（ルール：前回から変わったらアラート）'}:null);return {v:x.v,chg,rb:a&&a.lv>=2?a.why:'',wn:a&&a.lv===1?a.why:''};});});
+  const grid=keys.map(k=>{let prev=null;return cols.map(c=>{const x=c.settings.items[k];if(!x||(evLike(c)&&k!=='shockImp'))return {v:null};const chg=!isMeas(k)&&prev!=null&&prev!==x.v;prev=x.v;const a=alertOf(k,x.v)||(chg&&!NO_RULE.has(k)&&RL(k)&&RL(k).chg?{lv:2,why:'前回から変更（ルール：前回から変わったらアラート）'}:null);return {v:x.v,chg,rb:a&&a.lv>=2?a.why:'',wn:a&&a.lv===1?a.why:''};});});
   if(onlyChg){const keep=keys.map((k,i)=>grid[i].some(c=>c.chg||c.rb||c.wn));keys=keys.filter((_,i)=>keep[i]);grid.splice(0,grid.length,...grid.filter((_,i)=>keep[i]));}
   const short=d=>escH(String(d||'?').replace(/(\d{4})年(\d{2})月(\d{2})日\s*/,'$1/$2/$3 ').replace(/\s*(JST|ＪＳＴ)/g,'').replace(/\s+\d{1,2}:\d{2}$/,''));
   const ic=l=>l===2?'⚠️':l===1?'🟡':l===0?'✅':'';
-  const head=cols.map(c=>`<th class="${c.pdf&&c.pdf===basePdf?'base':''}" title="${escH(c.secg||c.date||'')}">${c.pdf&&c.pdf===basePdf?'📌 ':''}${short(c.secg||c.date)}<br><span class="hint">${ic(c.level)}</span></th>`).join('');
+  const head=cols.map(c=>`<th class="${c.pdf&&c.pdf===basePdf?'base':''}" title="${escH(c.secg||c.date||'')}">${c.pdf&&c.pdf===basePdf?'📌 ':''}${evLike(c)?'⚡ ':''}${short(evLike(c)?(((c.events||[])[0]||{}).dt||c.secg||c.date):(c.secg||c.date))}<br><span class="hint">${ic(c.level)}</span></th>`).join('');
   const body=keys.map((k,i)=>{const imp=setImp(k),main=order(k)<99;
-    return `<tr${main?'':' class="oth"'}><th>${escH(name(k))}</th><td class="hint">${escH(ruleText(k))}</td>${grid[i].map(c=>c.v==null?'<td class="hint">—</td>':`<td class="${c.rb?'bad':c.wn?'warnv':c.chg?'chg':''}" title="${escH(c.rb||c.wn||(c.chg?'前の回から変更':''))}">${c.rb?'⚠️ ':c.wn?'🟡 ':''}${escH(c.v)}${c.chg?' <span class="hint">◀変</span>':''}</td>`).join('')}</tr>`;}).join('');
+    return `<tr${main?'':' class="oth"'}><th>${escH(name(k))}</th><td class="hint">${escH(ruleText(k)||(isPt(k)?'決めない':''))}${isPt(k)?' <b class="ptmark">この患者</b>':''}</td>${grid[i].map(c=>c.v==null?'<td class="hint">—</td>':`<td class="${c.rb?'bad':c.wn?'warnv':c.chg?'chg':''}" title="${escH(c.rb||c.wn||(c.chg?'前の回から変更':''))}">${c.rb?'⚠️ ':c.wn?'🟡 ':''}${escH(c.v)}${c.chg?' <span class="hint">◀変</span>':''}</td>`).join('')}</tr>`;}).join('');
   box.innerHTML=keys.length?`<div class="settab"><table><tr><th>項目</th><th>ルール</th>${head}</tr>${body}</table></div>`:'<div class="hint">変わった項目・ルール外の項目はありません。</div>';
   const sc=box.querySelector('.settab');if(sc)sc.scrollLeft=sc.scrollWidth; // 右端＝最新を見せる
 }
 // ===== ルールの編集（⚙ 設定） =====
-function setRulesUi(){
-  const box=$('setRules');if(!box)return;const num=(k,t,v,ph)=>`<input class="inp" style="width:72px" data-rk="${k}" data-rt="${t}" value="${hasN(v)?v:''}" placeholder="${ph}">`;
-  box.innerHTML=`<table class="crit"><tr><th>項目</th><th>アラートを出す条件</th></tr>${SET_KNOWN.map(K=>{const r=SET_RULES[K.k]||{};
-    if(NO_RULE.has(K.k))return '';
-    if(SET_ENUM[K.k])return `<tr><td>${K.name}</td><td><select data-rk="${K.k}" data-rt="eq"><option value="">決めない</option><option value="__chg"${r.chg?' selected':''}>前回から変わったら</option>${SET_ENUM[K.k].map(o=>`<option value="${o}"${r.eq===o?' selected':''}>${o} 以外なら</option>`).join('')}</select> <span class="hint">⚠️アラート</span></td></tr>`;
-    if(SET_NUM[K.k])return `<tr><td>${K.name}</td><td>${num(K.k,'min',r.min,'下限')} 〜 ${num(K.k,'max',r.max,'上限')} ${SET_NUM[K.k]} <span class="hint">の外なら⚠️アラート（空欄＝決めない）</span></td></tr>`;
-    if(K.k==='sysImp'){const q=IR('sysImp');return `<tr><td>${K.name}</td><td>${num(K.k,'warn',q.warn,'注意')} Ω超で🟡注意／${num(K.k,'alert',q.alert,'要確認')} Ω超で⚠️要確認</td></tr>`;}
-    if(K.k==='shockImp'){const q=IR('shockImp');return `<tr><td>${K.name}</td><td>${num(K.k,'lo',q.lo,'下限')} Ω未満で⚠️要確認／${num(K.k,'warn',q.warn,'注意')} Ω超で🟡注意／${num(K.k,'alert',q.alert,'要確認')} Ω超で⚠️要確認</td></tr>`;}
+// ルールの表（全体用／患者用）。患者用は「全体のルールのまま」を選べる
+function rulesTableHtml(R,pt){
+  const num=(k,t,v,ph)=>`<input class="inp" style="width:72px" data-rk="${k}" data-rt="${t}" value="${hasN(v)?v:''}" placeholder="${ph}">`;
+  const mode=(k,r,canNone)=>`<select data-rk="${k}" data-rt="mode"><option value="__inh"${r===undefined?' selected':''}>全体のルールのまま</option><option value="__set"${r&&!r.none?' selected':''}>この患者は次の値</option>${canNone?`<option value=""${r&&r.none?' selected':''}>決めない</option>`:''}</select> `;
+  const glob=k=>pt?`<div class="hint">全体：${escH((()=>{const keep=PT_RULES;PT_RULES=null;const t=ruleText(k)||'決めない';PT_RULES=keep;return t;})())}</div>`:'';
+  return `<table class="crit"><tr><th>項目</th><th>アラートを出す条件</th></tr>${SET_KNOWN.map(K=>{const k=K.k,r=R?R[k]:undefined,g=pt?(r||{}):(R[k]||{});
+    if(NO_RULE.has(k))return '';
+    if(SET_ENUM[k]){const sel=v=>pt?(v==='__inh'?r===undefined:v===''?!!(r&&r.none):v==='__chg'?!!(r&&r.chg):!!(r&&r.eq===v)):(v===''?!(g.chg||g.eq):v==='__chg'?!!g.chg:g.eq===v);
+      return `<tr><td>${K.name}</td><td><select data-rk="${k}" data-rt="eq">${pt?`<option value="__inh"${sel('__inh')?' selected':''}>全体のルールのまま</option>`:''}<option value=""${sel('')?' selected':''}>決めない</option><option value="__chg"${sel('__chg')?' selected':''}>前回から変わったら</option>${SET_ENUM[k].map(o=>`<option value="${o}"${sel(o)?' selected':''}>${o} 以外なら</option>`).join('')}</select> <span class="hint">⚠️アラート</span>${glob(k)}</td></tr>`;}
+    if(SET_NUM[k]){const v=pt?(r&&!r.none?r:{}):g;return `<tr><td>${K.name}</td><td>${pt?mode(k,r,true):''}${num(k,'min',v.min,'下限')} 〜 ${num(k,'max',v.max,'上限')} ${SET_NUM[k]} <span class="hint">の外なら⚠️アラート${pt?'':'（空欄＝決めない）'}</span>${glob(k)}</td></tr>`;}
+    if(k==='sysImp'||k==='shockImp'){const q=pt?(r?{...SET_RULES_DEF[k],...r}:IR(k)):{...SET_RULES_DEF[k],...g};
+      const body=k==='sysImp'?`${num(k,'warn',q.warn,'注意')} Ω超で🟡注意／${num(k,'alert',q.alert,'要確認')} Ω超で⚠️要確認`:`${num(k,'lo',q.lo,'下限')} Ω未満で⚠️要確認／${num(k,'warn',q.warn,'注意')} Ω超で🟡注意／${num(k,'alert',q.alert,'要確認')} Ω超で⚠️要確認`;
+      return `<tr><td>${K.name}</td><td>${pt?mode(k,r,false):''}${body}${glob(k)}</td></tr>`;}
     return '';}).join('')}</table>`;
 }
+function rulesRead(box,pt){
+  const R={},modes={};box.querySelectorAll('[data-rt="mode"]').forEach(e=>modes[e.dataset.rk]=e.value);
+  box.querySelectorAll('[data-rk]').forEach(e=>{const k=e.dataset.rk,t=e.dataset.rt,v=e.value.trim();if(t==='mode')return;
+    if(t==='eq'){if(v==='__inh')return;if(v===''){if(pt)R[k]={none:true};return;}R[k]=v==='__chg'?{chg:true}:{eq:v};return;}
+    if(pt){const m=modes[k];if(m==='__inh')return;if(m===''){R[k]={none:true};return;}}
+    if(!hasN(v))return;(R[k]=R[k]||{})[t]=+v;});
+  if(pt)for(const [k,m] of Object.entries(modes))if(m==='__set'&&!R[k])R[k]={}; // 値を空にした時：最初の値（インピーダンス）／ゾーンは制限なし
+  return R;
+}
+function setRulesUi(){const box=$('setRules');if(box)box.innerHTML=rulesTableHtml(SET_RULES,false);}
 function setRulesSave(){
-  const R={};document.querySelectorAll('#setRules [data-rk]').forEach(e=>{const k=e.dataset.rk,t=e.dataset.rt,v=e.value.trim();if(!v)return;
-    if(t==='eq'){(R[k]=R[k]||{});if(v==='__chg')R[k].chg=true;else R[k].eq=v;return;}if(!hasN(v))return;(R[k]=R[k]||{})[t]=+v;});
-  SET_RULES=R;try{localStorage.setItem(SET_RULES_KEY,JSON.stringify(R));}catch(_){}
+  SET_RULES=rulesRead($('setRules'),false);try{localStorage.setItem(SET_RULES_KEY,JSON.stringify(SET_RULES));}catch(_){}
   $('setRulesMsg').innerHTML='<span class="ok-t">保存しました（次の評価から使います）</span>';if(setTrendLast)setTrendRender(setTrendLast.id,setTrendLast.st);
+}
+// この患者だけのルール（推移の枠の中）
+function ptRulesUi(){
+  const box=$('ptRules'),wrap=$('ptRulesWrap');if(!box||!wrap)return;
+  wrap.hidden=!PT_ID;if(!PT_ID)return;
+  const n=PT_RULES?Object.keys(PT_RULES).length:0;
+  $('ptRulesSum').textContent=n?`（${n}項目を変更中：${Object.keys(PT_RULES).map(k=>(SET_KNOWN.find(K=>K.k===k)||{}).name||k).join('・')}）`:'（全体のルールのまま）';
+  box.innerHTML=rulesTableHtml(PT_RULES||{},true);
+}
+async function ptRulesSave(clear){
+  if(!PT_ID)return;const R=clear?{}:rulesRead($('ptRules'),true);
+  const st=await readBaseline(PT_ID);if(!st){$('ptRulesMsg').innerHTML='<span class="warn-t">この患者の記録が見つかりません（フォルダに接続してください）</span>';return;}
+  if(Object.keys(R).length)st.setRules=R;else delete st.setRules;
+  if(!(await writeBaseline(PT_ID,st))){$('ptRulesMsg').innerHTML='<span class="warn-t">保存できませんでした（フォルダの許可を確認してください）</span>';return;}
+  setTrendRender(PT_ID,st);$('ptRulesMsg').innerHTML=`<span class="ok-t">${clear?'全体のルールに戻しました':'この患者のルールを保存しました'}（次の評価から使います）</span>`;
 }
 let curSettings=null; // 今回のレポートから読んだ設定
 function extractFields(items, annotStrs, rawPdfText){
@@ -1888,6 +1928,7 @@ function tlReset(id,msg){setTrendRender(null,null);tl.id=id||'';tl.items=[];tl.c
 try{const v=localStorage.getItem('pg_lat_tlopen');if(v)$('tlCard').open=v==='1';}catch(_){}
 setRulesUi();
 $('setRulesSave').onclick=setRulesSave;
+$('ptRulesSave').onclick=()=>ptRulesSave(false);$('ptRulesClear').onclick=()=>ptRulesSave(true);
 $('setRulesDef').onclick=()=>{SET_RULES=cloneDef();try{localStorage.removeItem(SET_RULES_KEY);}catch(_){}setRulesUi();$('setRulesMsg').innerHTML='<span class="ok-t">最初の設定に戻しました</span>';if(setTrendLast)setTrendRender(setTrendLast.id,setTrendLast.st);};
 for(const k of ['setOnlyChg','setShowOther'])$(k).onchange=()=>{try{localStorage.setItem('pg_lat_'+k,$(k).checked?'1':'0');}catch(_){}if(setTrendLast)setTrendRender(setTrendLast.id,setTrendLast.st);};
 try{for(const k of ['setOnlyChg','setShowOther']){const v=localStorage.getItem('pg_lat_'+k);if(v!==null)$(k).checked=v==='1';}}catch(_){}
@@ -1974,6 +2015,7 @@ async function runEval(mode){
   const baseRep=store&&store.baseline?store.baseline:(reports.filter(r=>!evLike(r)).length?[...reports.filter(r=>!evLike(r))].sort((a,b)=>a.key<b.key?-1:1)[0]:null);
   const prevRep=[...older].sort((a,b)=>a.key<b.key?1:-1)[0]||null;
   // 設定：波形の比較相手（前回/基準）とは別に、いつも「前回」の設定と比べる
+  PT_ID=id;PT_RULES=store&&store.setRules||null; // この患者だけのルール
   const setPrev=prevSettingsRec(store,curKey,reloadArchived),setCur=curSettings&&curSettings.n?curSettings:null;
   const setCmp=compareSettings(setPrev&&setPrev.settings,setCur),setChg=setCmp?setCmp.changed:[];
   const setAl=settingsAlerts(setCur,setPrev&&setPrev.settings);
@@ -2019,7 +2061,7 @@ async function runEval(mode){
         if(mine){if(o.first&&(!mine.first||(o.first.ts||0)<(mine.first.ts||0)))mine.first=o.first;if(o.review&&!mine.review)mine.review=o.review;if(o.rvHidden)mine.rvHidden=true;}
         saves.splice(saves.indexOf(o),1);rs.forEach(r=>{if(r.pdf===o.pdf)r.pdf=nowPdf;});if(baseOut&&baseOut.pdf===o.pdf)baseOut.pdf=nowPdf;
         await trashFile(o.pdf);}}
-    await writeBaseline(id,{...now,reports:rs,history:hist,saves,baseline:baseOut||(isEvent?null:{date:now.date,key:curKey,feat:poolSave,ts:now.ts,pdf:nowPdf})});
+    await writeBaseline(id,{...now,...(store&&store.setRules?{setRules:store.setRules}:{}),reports:rs,history:hist,saves,baseline:baseOut||(isEvent?null:{date:now.date,key:curKey,feat:poolSave,ts:now.ts,pdf:nowPdf})});
   };
   // 段ごとの一覧（使った段・除外した段と理由）
   const ic=l=>l===2?'⚠️':l===1?'🟡':'✅';
