@@ -1,6 +1,6 @@
 PaceGuard LATITUDE 取り込み（Chrome拡張機能）
 
-LATITUDEで開いたPDFを、自動で「ダウンロード先\LATITUDE\」に保存します。
+LATITUDEで開いたPDFを、自動で「ダウンロード先\LATITUDE用\LATITUDE\」に保存します（v0.7.0〜。Chromeのダウンロード先は「波形認識」）。
 PaceGuard LATITUDE（paceguard-latitude.html）の「👀 自動比較」がそのフォルダを見て、
 波形のPDFを比較し、全部のPDFを患者ごとのフォルダへ整理します。
 PDFはこのパソコンに保存するだけで、外部には送りません。
@@ -14,7 +14,8 @@ PDFはこのパソコンに保存するだけで、外部には送りません�
 
 設定（アイコンをクリック）
 - 自動で保存する：オン／オフ
-- 保存先：ダウンロード先の中のフォルダ名（既定 LATITUDE）
+- LATITUDEの保存先：ダウンロード先の中のフォルダ（既定 LATITUDE用/LATITUDE）
+- CareLinkの保存先：ダウンロード先の中のフォルダ（既定 CareLink用/CareLink）
 - 対象サイト：LATITUDEのアドレス（既定 bostonscientific.com / bostonscientific.jp）
 
 通知（v0.2.0〜）
@@ -29,3 +30,8 @@ PDFはこのパソコンに保存するだけで、外部には送りません�
 v0.6.0（2026-10-17）
 - 試験中だった「自動レポート作成」はやめました。動きは v0.4.3（手動版）と同じです。
 - 入れ替えると、前の版が残した自動レポートの設定・記録は自動で消えます。
+
+v0.7.0（2026-11-18）
+- Chromeのダウンロード先を「波形認識」にする前提に変更。LATITUDEのPDFは「LATITUDE用\LATITUDE」へ保存します（場所は今までと同じ）。
+- CareLink（medtronic.com / medtroniccarelink.net）からダウンロードしたファイルは「CareLink用\CareLink」へ分けて保存します。
+- 拡張機能の更新と、Chromeのダウンロード先の変更（波形認識）は、必ずセットで行ってください。
