@@ -371,7 +371,7 @@ try{document.documentElement.dataset.theme=localStorage.getItem('pg_lat_theme')|
     <div id="watchLog" style="margin-top:10px"></div>
   </section>
 
-  <details class="card" id="pdfSec" open>
+  <details class="card" id="pdfSec">
     <summary>📄 読み込んだPDFと段の読み取り</summary>
     <div class="row">
       <button id="redrawCrop">✂️ 範囲の指定を解除</button>
@@ -627,12 +627,22 @@ function ensureTesseract(){
   _tess=new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.0/tesseract.min.js';s.onload=()=>res(window.Tesseract);s.onerror=()=>rej(new Error('Tesseract読込失敗'));document.head.appendChild(s);});
   return _tess;
 }
+// 上の患者情報の部分：ページ上部の枠の下端（濃い横線）と、ID・医師・氏名などの行の下端の、低い方まで
+const rawPage=document.createElement('canvas'); // 塗りつぶす前のページ（IDのOCR用。画面には出さない）
+function maskHeader(ctx,W,H,tc,vp){
+  const d=ctx.getImageData(0,0,W,Math.round(H*0.3)).data;let bottom=-1;
+  for(let y=0;y<Math.round(H*0.3);y++){let run=0,best=0;for(let x=0;x<W;x++){const i=(y*W+x)*4;if(d[i]<110&&d[i+1]<110&&d[i+2]<110){run++;if(run>best)best=run;}else run=0;}if(best>W*0.6)bottom=y;}
+  for(const it of (tc&&tc.items)||[]){const s=String(it.str||'');if(!s.trim())continue;const [,py]=vp.convertToViewportPoint(it.transform[4],it.transform[5]);
+    if(py<H*0.25&&/ID\s*[:：]|医師|氏名|患者|生年月日|ふりがな|Patient|Name|[（(]\d{6,10}[）)]|\d{8}/i.test(s))bottom=Math.max(bottom,Math.round(py+4));}
+  if(bottom<=0)return;
+  ctx.fillStyle='#e5e7eb';ctx.fillRect(0,0,W,bottom+2);const fs=Math.max(12,Math.min(Math.round(bottom*0.45),Math.round(W/50)));ctx.fillStyle='#6b7280';ctx.font=`${fs}px sans-serif`;ctx.textBaseline='middle';ctx.fillText('患者情報の部分は隠しています',12,Math.round(bottom/2));ctx.textBaseline='alphabetic';
+}
 async function ocrId(){
   if(!idBox||!pageBackup.width)return;
   const r={x:idBox.x*pageCanvas.width,y:idBox.y*pageCanvas.height,w:idBox.w*pageCanvas.width,h:idBox.h*pageCanvas.height};
   const sc=3,tmp=document.createElement('canvas');tmp.width=Math.max(1,r.w*sc);tmp.height=Math.max(1,r.h*sc);
   const tc=tmp.getContext('2d');tc.imageSmoothingEnabled=false;
-  tc.drawImage(pageBackup,r.x,r.y,r.w,r.h,0,0,tmp.width,tmp.height);
+  tc.drawImage(rawPage.width?rawPage:pageBackup,r.x,r.y,r.w,r.h,0,0,tmp.width,tmp.height);
   // 2値化（数字を黒くくっきり）
   const im=tc.getImageData(0,0,tmp.width,tmp.height),D=im.data;
   for(let i=0;i<D.length;i+=4){const l=(D[i]+D[i+1]+D[i+2])/3,v=l<130?0:255;D[i]=D[i+1]=D[i+2]=v;}
@@ -696,6 +706,8 @@ async function loadPDF(file,{forceEval=false,pageNo=0}={}){
     await page.render({canvasContext:pctx,viewport:vp}).promise;
     savePageBackup(); pdfLoaded=true; hiReady=false;
     const tc=await page.getTextContent();
+    // 画面に見せるページは、上の患者情報の部分を塗りつぶす（読み取り・保存する画像には影響しない。IDのOCRには塗る前の絵を使う）
+    try{rawPage.width=pageCanvas.width;rawPage.height=pageCanvas.height;rawPage.getContext('2d').drawImage(pageCanvas,0,0);maskHeader(pctx,pageCanvas.width,pageCanvas.height,tc,vp);savePageBackup();}catch(_){}
     // 患者情報は FreeText 注釈に入っていることがある（通常描画・テキスト抽出では出ない）→ 注釈からも取得
     let annotStrs=[];
     try{ const ans=await page.getAnnotations(); annotStrs=ans.map(a=>(a.contentsObj&&a.contentsObj.str)||a.contents||'').filter(s=>s&&s.trim()); }catch(_){}
@@ -2834,7 +2846,7 @@ document.addEventListener('click',e=>{const tr=e.target.closest('#watchLog tr[da
 // ⚙ ボタン → 設定を開いてそこへ移動
 $('openSettings').onclick=()=>{$('settings').open=true;$('settings').scrollIntoView({block:'start'});};
 // 「PDFと段の読み取り」を開いているか閉じているかを覚える
-try{const v=localStorage.getItem('pg_lat_pdfsec');if(v)$('pdfSec').open=v==='1';}catch(_){}
+try{localStorage.removeItem('pg_lat_pdfsec');}catch(_){} // 「読み込んだPDF」の欄はいつも閉じた状態で出す（患者情報が見えないように）
 $('pdfSec').addEventListener('toggle',()=>{try{localStorage.setItem('pg_lat_pdfsec',$('pdfSec').open?'1':'0');}catch(_){};if($('pdfSec').open&&curSigs.length)showSigPreview();});
 // 画面のどこにPDFをドロップしても読み込む
 let dragDepth=0;
