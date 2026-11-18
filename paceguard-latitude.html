@@ -1011,7 +1011,7 @@ function parseMDT(items,flat){
     // ヒストグラムのページ（「総VP < 0.1% < 0.1%」のように前回チェックまで／以降の2列）：右の列（前回チェック以降）の値
     {const li=cells.findIndex(c=>/^(総VP|総AP|AS-VS|AS-VP|AP-VS|AP-VP)$/.test(tvClean(c.s)));if(li>=0){const lab=tvClean(cells[li].s),pc=cells.slice(li+1).map(c=>c.s).join(' ').match(/[<>]?\s*[\d.]+\s*%/g);if(pc&&pc.length){put(`pace:${lab}`,`ペーシング率 ${lab}`,pc[pc.length-1].replace(/\s/g,''),{pr:2});continue;}}}
     // エピソードの行（タイプ … ID# 日付 時刻 持続時間 …）：例「Fast A&V 9 28-Oct-2026 14:32 :21 152/152 154/154 安静」
-    {const m=all.match(/^(.+?)\s+(\d{1,5})\s+(\d{1,2}-[A-Z][a-z]{2}-\d{4})\s+(\d{1,2}:\d{2})\s+(\d{0,2}:\d{2}(?::\d{2})?)(?=\s|$)/);
+    {const m=all.match(/^(.+?)\s+(\d{1,5})\s+(\d{1,2}-[A-Z][a-z]{2}-\d{4})\s*(\d{1,2}:\d{2})\s+(\d{0,2}:\d{2}(?::\d{2})?)(?=\s|$)/);
       if(m&&!/エピソード|#|送信|インテロゲーション/.test(m[1])){const type=tvClean(cells[0].s).replace(/\s+\d.*$/,'')||m[1].split(/\s+/)[0],sec=durSec(m[5]),dt=mdtDate(m[3]+' '+m[4]);
         put(`epi:${m[2]}`,`${type} #${m[2]}`,`${durTxt(sec)}（${dt}）`,{pr:2,ep:{type,no:m[2],dt,dur:m[5],sec}});continue;}}
     // 右の列（Cardiac Compass のグラフ／ペーシングの表）はここで分ける
@@ -1404,6 +1404,8 @@ function mdtEpisodeHeads(items,flat){
   const typeOf=no=>{const m=String(flat||'').match(new RegExp('([A-Z][A-Za-z/\\-]{1,12})\\s+[^\\n]{0,40}?\\b'+no+'\\s+\\d{1,2}-[A-Z][a-z]{2}-\\d{4}'));return m?m[1]:'';};
   for(const [p,arr] of byP){const t=arr.join(' ');for(const m of t.matchAll(/エピソード\s*#\s*(\d+)\s*[:：]\s*(\d{1,2}-[A-Z][a-z]{2}-\d{4}\s+\d{1,2}:\d{2})/g))out.push({p,no:m[1],dt:mdtDate(m[2]),type:typeOf(m[1])});}
   if(!out.length)for(const m of String(flat||'').matchAll(/エピソード\s*#\s*(\d+)\s*[:：]\s*(\d{1,2}-[A-Z][a-z]{2}-\d{4}\s+\d{1,2}:\d{2})/g))out.push({p:null,no:m[1],dt:mdtDate(m[2]),type:typeOf(m[1])});
+  // 「エピソード #」の見出しが無い形（表の行「AT/AF 288 14-Nov-2026 22:06 05:12:46 …」のあとにグラフ・EGMが続く）：その行のページから後ろがそのエピソード
+  if(!out.length)for(const [p,arr] of byP){const t=arr.join(' ');for(const m of t.matchAll(/(AT\/AF|Fast A&V|VT-NS|FVT|VF|VT|SVT|AF|AT)\s+(?:[^\d\s]+\s+){0,3}(\d{1,5})\s+(\d{1,2}-[A-Z][a-z]{2}-\d{4})\s*(\d{1,2}:\d{2})\s+\d{0,2}:\d{2}/g))if(!out.some(o=>o.no===m[2]))out.push({p,no:m[2],dt:mdtDate(m[3]+' '+m[4]),type:m[1],row:true});}
   return out;
 }
 // MedtronicのEGMのページ（波形は黒い線）：文字「EGM 1」「マーカ」「インターバル(ms)」で見分ける。エピソードは、そのページ以降で最初の見出し
@@ -1412,7 +1414,7 @@ function mdtEgmPages(){
   const flat=lastAllItems.map(x=>x.s).join(' ')+' '+lastRawItems.map(x=>x.s).join(' ');
   const all=mdtEpisodeHeads(lastAllItems,flat),heads=all.filter(h=>h.p!=null).sort((a,b)=>a.p-b.p);
   const out=[];for(const [p,arr] of [...byP].sort((a,b)=>a[0]-b[0])){const t=arr.join(' ');
-    if(/EGM\s*\d|マーカ|インターバル\s*\(ms\)/.test(t)){const h=heads.find(h=>h.p>=p);out.push({page:p,ev:h?{no:h.no,dt:h.dt,type:h.type}:null});}}
+    if(/EGM\s*\d|マーカ|インターバル\s*\(ms\)/.test(t)){const h=heads.some(h=>h.row)?[...heads].reverse().find(h=>h.p<=p):heads.find(h=>h.p>=p);out.push({page:p,ev:h?{no:h.no,dt:h.dt,type:h.type}:null});}}
   // 見出しのページが分からない時：見出しが1つなら全部そのエピソード、EGMのページと同じ数なら順に対応させる
   if(!heads.length&&all.length&&out.length){const uniq=[...new Map(all.map(h=>[h.no,h])).values()];
     out.forEach((o,i)=>{const h=uniq.length===1?uniq[0]:uniq.length===out.length?uniq[i]:null;if(h)o.ev={no:h.no,dt:h.dt,type:h.type};});}
