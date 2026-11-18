@@ -107,6 +107,12 @@
   table.crit tr:hover td{background:var(--hov)}
   table.crit tr.lv2 td{background:rgba(251,113,133,.10)} table.crit tr.lv1 td{background:rgba(251,191,36,.08)}
   .setbox{margin-top:12px;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--inbg)} .setbox.chg{border-color:rgba(251,191,36,.6)}
+  .setbox.alert{border-color:rgba(251,191,36,.7);background:rgba(251,191,36,.08)} .setbox.alert.lv2{border-color:rgba(251,113,133,.75);background:rgba(251,113,133,.08)} .setbox ul{margin:6px 0 2px;padding-left:20px} .setbox li{font-weight:700}
+  .settab{overflow-x:auto;border:1px solid var(--line);border-radius:10px} .settab table{border-collapse:separate;border-spacing:0;font-size:12.5px;font-variant-numeric:tabular-nums;min-width:100%}
+  .settab th,.settab td{padding:6px 10px;border-bottom:1px solid var(--line);white-space:nowrap;text-align:left;background:var(--card2)}
+  .settab tr:first-child th{font-size:11px;color:var(--sub);background:var(--tblh);vertical-align:bottom} .settab tr:first-child th.base{color:var(--accent2)}
+  .settab tr>th:first-child{position:sticky;left:0;z-index:1;box-shadow:1px 0 0 var(--line)} .settab tr.oth th{font-weight:400;color:var(--sub)}
+  .settab td.chg,.chgk{background:rgba(251,191,36,.22)} .settab td.bad,.badk{background:rgba(251,113,133,.22);font-weight:700} .chgk,.badk{padding:0 4px;border-radius:4px}
   .setbadge{font-size:13px;font-weight:800;margin-left:8px;padding:1px 10px;border-radius:999px;background:rgba(251,191,36,.18);color:var(--warn);vertical-align:middle}
   .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:10px}
   .m{background:var(--inbg);border:1px solid var(--line);border-radius:12px;padding:8px 10px}
@@ -297,6 +303,15 @@
       </div>
     </div>
   </details>
+  <details class="card" id="setCard" open>
+    <summary>⚙ 設定の推移（時系列）<span class="hint" id="setSum" style="margin-left:8px;font-weight:400;letter-spacing:0"></span></summary>
+    <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:8px 0">
+      <label class="hint"><input type="checkbox" id="setOnlyChg"> 変わった項目・ルール外だけ</label>
+      <label class="hint"><input type="checkbox" id="setShowOther" checked> その他の項目も表示</label>
+      <span class="hint">左＝過去・右＝最新／<span class="chgk">黄</span>＝前の回から変更・<span class="badk">赤</span>＝治療に関わる変更・ルール外／📌＝基準</span>
+    </div>
+    <div id="setTrend"><div class="hint">患者を読み込むと表示します。</div></div>
+  </details>
   <details class="card" id="rvCard">
     <summary>📋 要確認リスト（ツールが🟡注意・⚠️要確認と判定した記録）<span class="hint" id="rvSum" style="margin-left:8px;font-weight:400;letter-spacing:0"></span></summary>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0">
@@ -379,6 +394,12 @@
     </div>
     <div class="hint" style="margin-top:6px">評価したPDFを「データフォルダ／このフォルダ／患者ごとのフォルダ／日付.pdf」に保存します。患者ごとのフォルダ名は下の「患者ファイルの名前」と同じ形（.jsonを除いたもの）です。</div>
     <div class="hint" style="margin-top:6px">新しい患者のファイルを作るときの名前です。使える項目：<code>{ID}</code>（患者ID）・<code>{機種}</code>　例：<code>{ID}.json</code>、<code>{ID}_{機種}.json</code>。<br>既にあるファイルは今の名前のまま使います。ファイル名を手で変えても、ファイルの中に書かれた患者IDで自動的に見つけます。</div>
+    <div style="margin-top:10px;padding:8px 10px;border:1px solid var(--line);border-radius:8px">
+      <b>🔔 設定アラートのルール</b>
+      <div class="hint">前回から変わった設定・📌基準と違う設定は、ルールに関係なくアラートを出します。ここでは「この値でなければアラート」「この範囲の外ならアラート」を決めます（このPCに保存）。</div>
+      <div id="setRules"></div>
+      <div style="margin-top:6px"><button id="setRulesSave">保存</button> <button id="setRulesDef" class="ghost">最初の設定に戻す</button> <span class="status" id="setRulesMsg"></span></div>
+    </div>
   </details>
 
   <footer>
@@ -763,26 +784,77 @@ function prevSettingsRec(store,curKey,nowPdf){
   const sv=((store&&store.saves)||[]).filter(x=>x&&x.settings&&x.settings.n&&!evLike(x)&&x.pdf!==nowPdf&&(curKey?(x.key&&x.key<curKey):true));
   return sv.sort((a,b)=>a.key<b.key?1:a.key>b.key?-1:(b.ts||0)-(a.ts||0))[0]||null;
 }
-function settingsHtml(cmp,prevRec,cur){
-  const st=x=>`<span class="hint">${escH(x)}</span>`;
-  if(!cur||!cur.n)return `<div class="setbox"><b>⚙ 設定</b>　${st('このレポートから設定を読み取れませんでした（下の「🔧 設定の読み取り結果」で確認できます）。')}</div>`;
-  const list=Object.values(cur.items).filter(x=>x.g==='main').map(x=>`${escH(x.l)} <b>${escH(x.v)}</b>`).join('・');
-  if(!cmp)return `<div class="setbox"><b>⚙ 設定</b>（前回の設定の記録がないため比較なし）<div class="hint" style="margin-top:4px">今回：${list||'主な設定は読めませんでした'}（その他 ${Object.values(cur.items).filter(x=>x.g!=='main').length}項目）</div></div>`;
-  const when=escH(prevRec.secg||prevRec.date||'前回');
-  const ch=cmp.changed;
-  const row=x=>`<tr class="lv${x.imp>=2?2:x.imp>=1?1:0}"><td>${x.imp>=2?'⚠️ ':x.imp>=1?'🟡 ':''}${escH(x.l)}</td><td>${escH(x.p)}</td><td><b>${escH(x.c)}</b></td></tr>`;
-  const miss=cmp.onlyPrev.filter(x=>x.main);
-  return `<div class="setbox ${ch.length?'chg':''}"><b>⚙ 設定（前回 ${when} と比べて）</b>　${ch.length?`<b class="warn-t">${ch.length}項目が変わりました</b>`:'<span class="ok-t">✅ 変更なし</span>'}<span class="hint">（${cmp.same.length+ch.length}項目を比較）</span>
-    ${ch.length?`<table class="crit"><tr><th>項目</th><th>前回</th><th>今回</th></tr>${ch.map(row).join('')}</table>`:''}
-    ${ch.some(x=>x.k==='sensing'||x.k==='gain')?'<div class="cause">ℹ️ センシング構成・ゲインが変わると、S-ECGの形・波高も変わります。波形の判定は設定の変更による違いの可能性があります。</div>':''}
-    ${miss.length?`<div class="hint">今回のレポートで読めなかった設定：${miss.map(x=>escH(x.l)).join('・')}</div>`:''}
-    <details style="margin-top:4px"><summary class="hint" style="cursor:pointer">今回の設定をすべて見る</summary><table class="crit"><tr><th>項目</th><th>前回</th><th>今回</th></tr>${[...ch,...cmp.same].map(x=>`<tr><td>${escH(x.l)}</td><td>${escH(x.p)}</td><td>${escH(x.c)}</td></tr>`).join('')}${cmp.onlyCur.map(x=>`<tr><td>${escH(x.l)}</td><td class="hint">—</td><td>${escH(x.c)}</td></tr>`).join('')}</table></details></div>`;
-}
 function settingsDebugHtml(s){
   if(!s)return '';
   const rows=Object.entries(s.items).map(([k,x])=>`<tr><td>${x.g==='main'?'★ ':''}${escH(x.l)}</td><td>${escH(x.v)}</td><td class="hint">${s.src[k]==='行'?'行から':'文字から'}</td></tr>`).join('');
   const miss=SET_KNOWN.filter(K=>!s.items[K.k]).map(K=>K.name);
   return `<details style="margin-top:6px"><summary style="cursor:pointer">🔧 設定の読み取り結果（${s.n}項目${miss.length?`／読めなかった主な設定：${miss.join('・')}`:''}）</summary>${rows?`<table class="crit"><tr><th>項目</th><th>値</th><th>読み方</th></tr>${rows}</table>`:'<div>読めた項目はありません。</div>'}<div class="hint">★＝主な設定。項目名や値の書き方が違って読めていない時は、この表と設定の部分の画面（個人情報は隠して）を送ってください。</div></details>`;
+}
+// ===== 設定のアラート（前回から変わった・基準と違う・ルールの範囲外） =====
+const SET_ENUM={therapy:['オン','オフ'],postShock:['オン','オフ'],smartPass:['オン','オフ'],afMon:['オン','オフ'],sensing:['一次','二次','代替'],gain:['1x','2x'],polarity:['標準','逆']};
+const SET_NUM={shockZone:'bpm',condZone:'bpm'};
+const SET_RULES_DEF={therapy:{eq:'オン'}};
+let SET_RULES=(()=>{try{const v=localStorage.getItem('pg_lat_setrules');return v?JSON.parse(v):{...SET_RULES_DEF};}catch(_){return {...SET_RULES_DEF};}})();
+const hasN=x=>x!=null&&x!==''&&!isNaN(+x);
+function ruleText(k){const r=SET_RULES[k];if(!r)return '';if(r.eq)return `${r.eq}であること`;const a=[];if(hasN(r.min))a.push(`${r.min}以上`);if(hasN(r.max))a.push(`${r.max}以下`);return a.join('・');}
+function ruleBreak(k,v){const r=SET_RULES[k];if(!r||v==null)return '';if(r.eq)return v!==r.eq?`ルール外（${r.eq}であること）`:'';
+  const n=parseFloat(v);if(isNaN(n))return '';if(hasN(r.min)&&n<+r.min)return `ルール外（${r.min}以上であること）`;if(hasN(r.max)&&n>+r.max)return `ルール外（${r.max}以下であること）`;return '';}
+const setImp=k=>{const K=SET_KNOWN.find(x=>x.k===k);return K?K.imp:0;};
+// 今回の設定について、アラートを作る：ルール外＝要確認／前回から変わった＝治療関係は要確認・それ以外は注意／（前回と同じでも）基準と違う＝注意
+function settingsAlerts(cur,prev,base,baseWhen){
+  const out=[];if(!cur||!cur.n)return out;const C=cur.items,P=prev&&prev.items||{},B=base&&base.items||{};
+  for(const [k,x] of Object.entries(C)){
+    const rb=ruleBreak(k,x.v),tail=rb?`・${rb}`:'',lvR=rb?2:0;
+    if(P[k]&&P[k].v!==x.v)out.push({lv:Math.max(lvR,setImp(k)>=2?2:1),k,txt:`${x.l}が前回から変更（${P[k].v}→${x.v}）${tail}`});
+    else if(B[k]&&B[k].v!==x.v)out.push({lv:Math.max(lvR,1),k,txt:`${x.l}が📌基準${baseWhen?`（${baseWhen}）`:''}と違う（${B[k].v}→${x.v}）${tail}`});
+    else if(rb)out.push({lv:2,k,txt:`${x.l} ${x.v}：${rb}`});
+  }
+  return out.sort((a,b)=>b.lv-a.lv||setImp(b.k)-setImp(a.k));
+}
+function setAlertHtml(alerts,cur,hasPrev){
+  const go='<a href="#setCard" class="hint" onclick="document.getElementById(\'setCard\').open=true">⚙ 設定の推移を見る</a>';
+  if(!cur||!cur.n)return `<div class="setbox"><b>⚙ 設定</b>　<span class="hint">このレポートから設定を読み取れませんでした（「🔧 設定の読み取り結果」で確認できます）。</span></div>`;
+  if(!alerts.length)return `<div class="setbox"><b>⚙ 設定</b>　<span class="ok-t">✅ ${hasPrev?'前回から変更なし・':''}ルールの範囲内</span>　${go}</div>`;
+  const lv=Math.max(...alerts.map(a=>a.lv));
+  return `<div class="setbox alert lv${lv}"><b>🔔 設定アラート ${alerts.length}件</b>　${go}<ul>${alerts.map(a=>`<li>${a.lv>=2?'⚠️':'🟡'} ${escH(a.txt)}</li>`).join('')}</ul>
+    ${alerts.some(a=>a.k==='sensing'||a.k==='gain')?'<div class="hint">ℹ️ センシング構成・ゲインが変わると、S-ECGの形・波高も変わります。波形の判定は設定の変更による違いの可能性があります。</div>':''}</div>`;
+}
+// ===== 設定の推移（時系列の表） =====
+let setTrendLast=null;
+function setTrendRender(id,st){
+  setTrendLast=id&&st?{id,st}:null;const box=$('setTrend');if(!box)return;
+  if(!st){box.innerHTML='<div class="hint">患者を読み込むと表示します。</div>';$('setSum').textContent='';return;}
+  const basePdf=st.baseline&&st.baseline.pdf;
+  const cols=(st.saves||[]).filter(x=>x&&x.settings&&x.settings.n&&!evLike(x)).sort((a,b)=>a.key<b.key?-1:a.key>b.key?1:(a.ts||0)-(b.ts||0));
+  $('setSum').textContent=`ID ${id}・${cols.length}回分`;
+  if(!cols.length){box.innerHTML='<div class="hint">設定を読めた記録がまだありません（この機能を入れた後に読み込んだレポートから記録されます）。</div>';return;}
+  const onlyChg=$('setOnlyChg').checked,showOther=$('setShowOther').checked;
+  const order=k=>{const i=SET_KNOWN.findIndex(K=>K.k===k);return i<0?99:i;};
+  let keys=[...new Set(cols.flatMap(c=>Object.keys(c.settings.items)))].filter(k=>showOther||order(k)<99).sort((a,b)=>order(a)-order(b)||a.localeCompare(b,'ja'));
+  const name=k=>{for(let i=cols.length-1;i>=0;i--){const x=cols[i].settings.items[k];if(x)return x.l;}return k;};
+  // セルの状態：前の回（その項目を読めた一番近い回）と違えば変更
+  const grid=keys.map(k=>{let prev=null;return cols.map(c=>{const x=c.settings.items[k];if(!x)return {v:null};const chg=prev!=null&&prev!==x.v;prev=x.v;return {v:x.v,chg,rb:ruleBreak(k,x.v)};});});
+  if(onlyChg){const keep=keys.map((k,i)=>grid[i].some(c=>c.chg||c.rb));keys=keys.filter((_,i)=>keep[i]);grid.splice(0,grid.length,...grid.filter((_,i)=>keep[i]));}
+  const short=d=>escH(String(d||'?').replace(/(\d{4})年(\d{2})月(\d{2})日\s*/,'$1/$2/$3 ').replace(/\s*(JST|ＪＳＴ)/g,'').replace(/\s+\d{1,2}:\d{2}$/,''));
+  const ic=l=>l===2?'⚠️':l===1?'🟡':l===0?'✅':'';
+  const head=cols.map(c=>`<th class="${c.pdf&&c.pdf===basePdf?'base':''}" title="${escH(c.secg||c.date||'')}">${c.pdf&&c.pdf===basePdf?'📌 ':''}${short(c.secg||c.date)}<br><span class="hint">${ic(c.level)}</span></th>`).join('');
+  const body=keys.map((k,i)=>{const imp=setImp(k),main=order(k)<99;
+    return `<tr${main?'':' class="oth"'}><th>${escH(name(k))}</th><td class="hint">${escH(ruleText(k))}</td>${grid[i].map(c=>c.v==null?'<td class="hint">—</td>':`<td class="${c.rb?'bad':c.chg?(imp>=2?'bad':'chg'):''}" title="${c.rb?escH(c.rb):c.chg?'前の回から変更':''}">${c.rb?'⚠️ ':''}${escH(c.v)}${c.chg?' <span class="hint">◀変</span>':''}</td>`).join('')}</tr>`;}).join('');
+  box.innerHTML=keys.length?`<div class="settab"><table><tr><th>項目</th><th>ルール</th>${head}</tr>${body}</table></div>`:'<div class="hint">変わった項目・ルール外の項目はありません。</div>';
+  const sc=box.querySelector('.settab');if(sc)sc.scrollLeft=sc.scrollWidth; // 右端＝最新を見せる
+}
+// ===== ルールの編集（⚙ 設定） =====
+function setRulesUi(){
+  const box=$('setRules');if(!box)return;
+  box.innerHTML=`<table class="crit"><tr><th>項目</th><th>アラートを出す条件</th></tr>${SET_KNOWN.map(K=>{const r=SET_RULES[K.k]||{};
+    if(SET_ENUM[K.k])return `<tr><td>${K.name}</td><td><select data-rk="${K.k}" data-rt="eq"><option value="">決めない</option>${SET_ENUM[K.k].map(o=>`<option${r.eq===o?' selected':''}>${o}</option>`).join('')}</select> <span class="hint">以外ならアラート</span></td></tr>`;
+    if(SET_NUM[K.k])return `<tr><td>${K.name}</td><td><input class="inp" style="width:80px" data-rk="${K.k}" data-rt="min" value="${hasN(r.min)?r.min:''}" placeholder="下限"> 〜 <input class="inp" style="width:80px" data-rk="${K.k}" data-rt="max" value="${hasN(r.max)?r.max:''}" placeholder="上限"> ${SET_NUM[K.k]} <span class="hint">の外ならアラート（空欄＝決めない）</span></td></tr>`;
+    return '';}).join('')}</table>`;
+}
+function setRulesSave(){
+  const R={};document.querySelectorAll('#setRules [data-rk]').forEach(e=>{const k=e.dataset.rk,t=e.dataset.rt,v=e.value.trim();if(!v)return;if(t!=='eq'&&!hasN(v))return;(R[k]=R[k]||{})[t]=t==='eq'?v:+v;});
+  SET_RULES=R;try{localStorage.setItem('pg_lat_setrules',JSON.stringify(R));}catch(_){}
+  $('setRulesMsg').innerHTML='<span class="ok-t">保存しました（次の評価から使います）</span>';if(setTrendLast)setTrendRender(setTrendLast.id,setTrendLast.st);
 }
 let curSettings=null; // 今回のレポートから読んだ設定
 function extractFields(items, annotStrs, rawPdfText){
@@ -1504,7 +1576,7 @@ async function tlLoad(idArg,quiet){
   if(!dirHandle)await ensureDir();if(!dirHandle){$('tlMsg').innerHTML='<span class="warn-t">データフォルダに接続できません。📁で選んでください。</span>';return;}
   const id=idArg||$('tlId').value.trim()||$('fId').value.trim();if(!id){$('tlMsg').innerHTML='<span class="warn-t">患者IDを入れてください。</span>';return;}
   const st=await readBaseline(id);if(!st||!((st.reports||[]).length||(st.saves||[]).length)){tlReset(id,'記録がありません');return;}
-  tl.id=id;tl.obj={name:st.name,device:st.device};tl.cache.clear();
+  tl.id=id;tl.obj={name:st.name,device:st.device};tl.cache.clear();setTrendRender(id,st);
   const lvOf=r=>{const h=(st.history||[]).filter(x=>x.date===r.date&&x.level!=null).pop();return h?h.level:null;};
   const hOf=r=>(st.history||[]).filter(x=>x.date===r.date&&x.level!=null).pop()||null;
   const reps=[...(st.reports||[])].sort((a,b)=>a.key<b.key?-1:1).map(r=>({...r,lv:lvOf(r),h:hOf(r)}));
@@ -1774,8 +1846,13 @@ $('rvCsv').onclick=async()=>{
 // 評価が終わったら、その患者のタイムラインを自動で表示（たたんであれば中身だけ準備）
 function tlAuto(id){if(id)tlLoad(id,true).catch(()=>{});}
 // タイムラインを別の患者に切り替える時、前の患者の表示を残さない
-function tlReset(id,msg){tl.id=id||'';tl.items=[];tl.cache.clear();$('tlId').value=id||'';$('tlSum').textContent=id?`ID ${id}・${msg}`:'';$('tlMsg').textContent=id?`ID ${id}：${msg}`:'';$('tlBody').hidden=true;}
+function tlReset(id,msg){setTrendRender(null,null);tl.id=id||'';tl.items=[];tl.cache.clear();$('tlId').value=id||'';$('tlSum').textContent=id?`ID ${id}・${msg}`:'';$('tlMsg').textContent=id?`ID ${id}：${msg}`:'';$('tlBody').hidden=true;}
 try{const v=localStorage.getItem('pg_lat_tlopen');if(v)$('tlCard').open=v==='1';}catch(_){}
+setRulesUi();
+$('setRulesSave').onclick=setRulesSave;
+$('setRulesDef').onclick=()=>{SET_RULES={...SET_RULES_DEF};try{localStorage.removeItem('pg_lat_setrules');}catch(_){}setRulesUi();$('setRulesMsg').innerHTML='<span class="ok-t">最初の設定（治療＝オン）に戻しました</span>';if(setTrendLast)setTrendRender(setTrendLast.id,setTrendLast.st);};
+for(const k of ['setOnlyChg','setShowOther'])$(k).onchange=()=>{try{localStorage.setItem('pg_lat_'+k,$(k).checked?'1':'0');}catch(_){}if(setTrendLast)setTrendRender(setTrendLast.id,setTrendLast.st);};
+try{for(const k of ['setOnlyChg','setShowOther']){const v=localStorage.getItem('pg_lat_'+k);if(v!==null)$(k).checked=v==='1';}}catch(_){}
 $('tlCard').addEventListener('toggle',()=>{try{localStorage.setItem('pg_lat_tlopen',$('tlCard').open?'1':'0');}catch(_){}});
 async function tlThumbs(){ // サムネイルは後から順番に読み込む
   const id=tl.id,mode=tlFull,bt=$('tlBaseTh');
@@ -1860,9 +1937,13 @@ async function runEval(mode){
   const prevRep=[...older].sort((a,b)=>a.key<b.key?1:-1)[0]||null;
   // 設定：波形の比較相手（前回/基準）とは別に、いつも「前回」の設定と比べる
   const setPrev=prevSettingsRec(store,curKey,reloadArchived),setCur=curSettings&&curSettings.n?curSettings:null;
-  const setCmp=compareSettings(setPrev&&setPrev.settings,setCur),setHtml=settingsHtml(setCmp,setPrev,curSettings);
-  const setChg=setCmp?setCmp.changed:[],setCauseTxt=setChg.length?'設定変更：'+setChg.map(x=>`${x.l} ${x.p}→${x.c}`).join('、'):'';
-  const addSet=()=>{const v=document.querySelector('#result .verdict');if(v)v.insertAdjacentHTML('beforeend',setHtml);};
+  const setCmp=compareSettings(setPrev&&setPrev.settings,setCur),setChg=setCmp?setCmp.changed:[];
+  const baseSv=store&&store.baseline&&store.baseline.pdf?((store.saves||[]).find(x=>x.pdf===store.baseline.pdf)||null):null;
+  const baseSet=baseSv&&baseSv.settings&&baseSv.pdf!==reloadArchived?baseSv.settings:null;
+  const setAl=settingsAlerts(setCur,setPrev&&setPrev.settings,baseSet,baseSv&&(baseSv.secg||baseSv.date));
+  const setLv=setAl.length?Math.max(...setAl.map(a=>a.lv)):0;
+  const setHtml=setAlertHtml(setAl,curSettings,!!setPrev);
+  const addSet=(where)=>{const v=document.querySelector('#result .verdict');if(!v)return;const h2=v.querySelector('h2');where==='top'&&h2?h2.insertAdjacentHTML('afterend',setHtml):v.insertAdjacentHTML('beforeend',setHtml);};
   if(auto)mode=prevRep?'prev':'base'; // 自動：前の日付があれば前回、なければ基準（同じ日付でも比べられる）
   const ref=mode==='base'?baseRep:prevRep,refLabel=mode==='base'?'基準':'前回';
   const pooledOf=f=>!f?null:Array.isArray(f)?(f.find(Boolean)||null):f; // 以前の保存形式（上段・下段）にも対応
@@ -1932,12 +2013,13 @@ async function runEval(mode){
     $('overlayCard').hidden=true;showRhythm();tlAuto(id);rvLoad();return;
   }
   if(!bp||!bp.tpl){
-    await saveStore({date:now.date,note:'登録'});
+    await saveStore({date:now.date,note:'登録',...(setLv?{level:setLv,causes:setAl.map(a=>'⚙ '+a.txt)}:{})});
     const first=!baseRep;
     const why=isEvent?'イベントの記録として保存しました（基準・前回にはS-ECGのレポートを使います）':first?((store&&store.feat&&!store.reports)?'新しい計測方式で登録しました（この波形が基準になります）':'初回登録しました（この波形が基準になります）'):'比較できる前の日付のレポートがありません';
     $('result').innerHTML=`<div class="verdict info"><h2>${why}</h2>この患者（ID:${id}）の${now.date||'今回'}のレポートとして保存しました。${first?'次から「📌 基準と比較」で、同じ日付のレポートでも比べられます。':'同じ日付どうしを比べるときは「📌 基準と比較」を使ってください。'}${curKey?'':'<br><b>※照会日が読み取れていません。照会日を入力すると前後関係で正しく比較できます。</b>'}${dirHandle?'':'<br><b>※フォルダ未選択のため保存できていません。</b>'}
       <div class="hint" style="margin-top:6px">${measure(pool)}</div>${rowNotes.length?`<div class="cause">記録の中の所見：${rowNotes.map(x=>`${x.info?'ℹ️':ic(x.lv)} ${x.row}：${x.why}`).join('　')}</div>`:''}</div>${rowTable}`;
-    addSet();$('overlayCard').hidden=true; showRhythm(); tlAuto(id); rvLoad(); return;
+    addSet('top');if(setLv){const v=document.querySelector('#result .verdict');v.classList.remove('info');v.classList.add(setLv>=2?'bad':'warn');}
+    $('overlayCard').hidden=true; showRhythm(); tlAuto(id); rvLoad(); return;
   }
   const r={k:0,b:bp,c:pool,...compareFeat(bp,pool)};
   const sign=v=>(v>0?'+':'')+v;
@@ -1950,10 +2032,10 @@ async function runEval(mode){
     {lv:lvP,name:'向き',prev:r.b.pol>0?'上向き':'下向き',cur:r.c.pol>0?'上向き':'下向き',chg:r.polFlip?'逆転':'同じ',rule:'逆転で要確認',why:'主な振れの向きが逆転'},
     {lv:0,name:'心拍数（参考）',prev:`${r.b.hr??'—'} bpm`,cur:`${r.c.hr??'—'} bpm`,chg:'',rule:'判定には使わない',why:''},
   ];
-  const level=Math.max(...crit.map(x=>x.lv),...rowNotes.map(x=>x.lv),0);
-  const cls=['ok','warn','bad'][level],title=[`✅ 変化なし（${refLabel}と同等）`,'🟡 注意 — 変化の兆候・記録内の所見','⚠️ 要確認 — 明らかな変化'][level]+(setChg.length?`<span class="setbadge">⚙ 設定変更 ${setChg.length}項目</span>`:'')+(pvcTag?`<span style="font-size:15px;font-weight:800;color:var(--accent2);margin-left:8px">${pvcTag}</span>`:'')+(auto?'<small style="font-size:12px;font-weight:400;opacity:.7">（自動評価）</small>':'');
-  const causes=[...crit.filter(x=>x.lv>0).map(x=>({lv:x.lv,txt:`${x.why}（${x.prev!=='—'?x.prev+'→'+x.cur:x.chg}）`})),...rowNotes.filter(x=>!x.info).map(x=>({lv:x.lv,txt:`${x.row}：${x.why}`}))].sort((a,b)=>b.lv-a.lv);
-  const causeHtml=`<div class="cause">主な原因：${causes.length?causes.slice(0,4).map(x=>`${ic(x.lv)} ${x.txt}`).join('　'):'なし（すべての項目が基準内）'}</div>`+(setCauseTxt?`<div class="cause">⚙ ${escH(setCauseTxt)}</div>`:'');
+  const level=Math.max(...crit.map(x=>x.lv),...rowNotes.map(x=>x.lv),setLv,0);
+  const cls=['ok','warn','bad'][level],title=[`✅ 変化なし（${refLabel}と同等）`,'🟡 注意 — 変化の兆候・記録内の所見','⚠️ 要確認 — 明らかな変化'][level]+(setAl.length?`<span class="setbadge">🔔 設定アラート ${setAl.length}件</span>`:'')+(pvcTag?`<span style="font-size:15px;font-weight:800;color:var(--accent2);margin-left:8px">${pvcTag}</span>`:'')+(auto?'<small style="font-size:12px;font-weight:400;opacity:.7">（自動評価）</small>':'');
+  const causes=[...crit.filter(x=>x.lv>0).map(x=>({lv:x.lv,txt:`${x.why}（${x.prev!=='—'?x.prev+'→'+x.cur:x.chg}）`})),...setAl.map(a=>({lv:a.lv,txt:'⚙ '+a.txt})),...rowNotes.filter(x=>!x.info).map(x=>({lv:x.lv,txt:`${x.row}：${x.why}`}))].sort((a,b)=>b.lv-a.lv);
+  const causeHtml=`<div class="cause">主な原因：${causes.length?causes.slice(0,6).map(x=>`${ic(x.lv)} ${escH(x.txt)}`).join('　'):'なし（すべての項目が基準内）'}</div>`;
   $('result').innerHTML=`<div class="verdict ${cls}"><h2>${title}</h2>
     <div>比較：${ref.date||'?'}（${refLabel}） → ${now.date||'?'}（今回）</div>
     ${causeHtml}
@@ -1962,10 +2044,10 @@ async function runEval(mode){
     ${crit.map(x=>`<tr class="lv${x.lv}"><td>${x.name}</td><td>${x.prev}</td><td>${x.cur}</td><td>${x.chg}</td><td class="hint">${x.rule}</td><td>${x.name==='心拍数（参考）'?'—':ic(x.lv)}</td></tr>`).join('')}</table>
     ${rowTable}
     <div class="hint" style="margin-top:6px">下の重ね描きで、形が違う部分を赤く塗っています（青＝${refLabel}、橙＝今回）。</div></div>`;
-  addSet();
+  addSet('top');
   lastEval={id,date:now.date,key:curKey,feat:poolSave,ts:now.ts,name:now.name,device:now.device};
   $('result').insertAdjacentHTML('beforeend','<div style="margin-top:8px"><button id="setBaseBtn">📌 今回の波形を基準にする</button> <span class="hint" id="setBaseMsg"></span></div>');
-  await saveStore({date:now.date,ref:ref.date,mode,level,corr:+r.corr.toFixed(3),amp:pool.amp,ampRatio:+r.ampRatio.toFixed(2),width:pool.width,dW:r.dW,pol:pool.pol,hr:pool.hr,rows:rowsSave,causes:[...causes.map(x=>x.txt),...(setCauseTxt?['⚙ '+setCauseTxt]:[])],setChg:setChg.map(x=>({l:x.l,p:x.p,c:x.c,imp:x.imp})),af:!!(rh&&rh.af)});
+  await saveStore({date:now.date,ref:ref.date,mode,level,corr:+r.corr.toFixed(3),amp:pool.amp,ampRatio:+r.ampRatio.toFixed(2),width:pool.width,dW:r.dW,pol:pool.pol,hr:pool.hr,rows:rowsSave,causes:causes.map(x=>x.txt),setAl:setAl.map(a=>({lv:a.lv,txt:a.txt})),setChg:setChg.map(x=>({l:x.l,p:x.p,c:x.c,imp:x.imp})),af:!!(rh&&rh.af)});
   lastEval.pdf=nowPdf;
   $('overlayCard').hidden=false; // 先に表示してから描く（幅を正しく取るため）
   drawBeat(r);
