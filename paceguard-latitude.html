@@ -735,9 +735,10 @@ async function loadPDF(file,{forceEval=false,pageNo=0}={}){
           let smap={};try{smap=JSON.parse(localStorage.getItem('pg_lat_mdtserial')||'{}')||{};}catch(_){}
           if(md.id&&md.serial&&smap[md.serial]!==md.id){smap[md.serial]=md.id;try{localStorage.setItem('pg_lat_mdtserial',JSON.stringify(smap));}catch(_){}}
           if(!md.id&&md.serial&&smap[md.serial])md.id=smap[md.serial];
-          if(md.id)$('fId').value=md.id;if(md.sent){$('fDate').value=md.sent;meta.date=md.sent;}if(md.model)$('fDev').value=md.model;
+          $('fId').value=md.id||''; // MedtronicでIDが分からない時は空にする（ほかの数字をIDと間違えない）
+          if(md.sent){$('fDate').value=md.sent;meta.date=md.sent;}if(md.model)$('fDev').value=md.model;
           mdtDiag.n=md.n;mdtDiag.id=md.id||'';mdtDiag.sent=md.sent||'';mdtDiag.keys=Object.keys(md.items).slice(0,12).join('・');
-          if(md.n>=6)curTV=md;else if(lastPdfDoc&&mdtEpisodeHeads(lastAllItems,flatM).length)curTV={tv:'Medtronic',evOnly:true,mdt:true,items:{},n:0};}}catch(_){}
+          /* 分けたPDFの一部（ヒストグラムなど）も、患者が分かれば同じ送信の記録に足す */ if(md.n>=6||(md.n>=2&&md.id))curTV=md;else if(lastPdfDoc&&mdtEpisodeHeads(lastAllItems,flatM).length)curTV={tv:'Medtronic',evOnly:true,mdt:true,items:{},n:0};}}catch(_){}
       if(!curTV)try{const t1=parseTV(lastRawItems),t2=parseTV(lastAllItems),tv=t2.n>t1.n?t2:t1; // 自前で取り出した文字とpdf.jsの文字の、多く読めた方
         if(tv.n>=6&&Object.keys(tv.items).some(k=>/^(lead|pace):/.test(k)))curTV=tv;
         // リードの表は無いが、経静脈デバイスのイベントのEGM（見出し「RVAT-603: 日時, 種類」）があるPDF：波形の画像だけ記録する
@@ -987,6 +988,8 @@ function parseMDT(items,flat){
     if(H(/^センシング$/,'sense'))continue;
     if(H(/^前回のショック治療/,'shock')){const d=mdtDate(all);lastShock=d?[d]:[];continue;}
     if(H(/^(CareLink|Copyright|患者個人情報)/,''))continue;
+    // ヒストグラムのページ（「総VP < 0.1% < 0.1%」のように前回チェックまで／以降の2列）：右の列（前回チェック以降）の値
+    {const li=cells.findIndex(c=>/^(総VP|総AP|AS-VS|AS-VP|AP-VS|AP-VP)$/.test(tvClean(c.s)));if(li>=0){const lab=tvClean(cells[li].s),pc=cells.slice(li+1).map(c=>c.s).join(' ').match(/[<>]?\s*[\d.]+\s*%/g);if(pc&&pc.length){put(`pace:${lab}`,`ペーシング率 ${lab}（前回チェック以降）`,pc[pc.length-1].replace(/\s/g,''));continue;}}}
     // 右の列（Cardiac Compass のグラフ／ペーシングの表）はここで分ける
     let L=cells,R=[];if(rightX!=null&&(sec==='clin'||sec==='evTx'||sec==='evMon'||sec==='act'||sec==='txsum')){L=cells.filter(c=>c.x0<rightX);R=cells.filter(c=>c.x0>=rightX);}
     if(R.length>=2&&rightSec==='pace'&&sec==='txsum'){const k=tvClean(R[0].s);if(/^(AS|AP|VS|VP|AS-VS|AS-VP|AP-VS|AP-VP)$/.test(k)){const m=R.slice(1).map(c=>c.s).join(' ').match(/([<>]?\s*[\d.]+)\s*%/);if(m)put(`pace:${k}`,`ペーシング率 ${k}`,m[1].replace(/\s/g,'')+'%');}}
