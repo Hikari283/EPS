@@ -1,0 +1,16 @@
+{
+  "name": "CARTO Viewer（研究・教育用）",
+  "short_name": "CARTO Viewer",
+  "description": "CARTO 3 のExportデータをブラウザだけで表示・解析する研究・教育用ビューア（データは外部に送信されません）",
+  "start_url": "./carto-viewer.html",
+  "scope": "./carto-viewer.html",
+  "display": "standalone",
+  "background_color": "#0e1217",
+  "theme_color": "#323a45",
+  "lang": "ja",
+  "icons": [
+    { "src": "carto-viewer-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "carto-viewer-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "carto-viewer-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

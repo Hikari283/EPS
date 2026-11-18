@@ -3,6 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="manifest" href="carto-viewer.webmanifest">
+<link rel="icon" type="image/png" href="carto-viewer-icon-192.png">
+<link rel="apple-touch-icon" href="carto-viewer-icon-192.png">
+<meta name="theme-color" content="#323a45">
 <title>CARTO Viewer</title>
 <style>
 :root{--bg:#0e1217;--panel:#161b22;--panel2:#1d242d;--line:#2b343f;--text:#e3e8ee;--muted:#8b97a5;--accent:#3d9bff;--accent2:#1f5fa8;--warn:#ffb347;--bad:#ff5b5b;--ok:#46cf86}
@@ -146,6 +150,8 @@ main.noside #sideSplit{display:none}
 #menuDrop .hd,#menuSub .hd{padding:3px 12px;color:#ffb27d;font-size:11px;font-weight:bold}
 #menuDrop .kb,#menuSub .kb{float:right;color:#aab4c2;margin-left:18px;font-size:12px;font-weight:normal}
 #waveCanvas.hidden{display:none}
+#btnInstall.hidden{display:none}
+#btnInstall{background:linear-gradient(#ffb07a,#f47a35 45%,#e9601c 55%,#d24f10);border-color:#7a2d06;color:#fff;font-weight:bold}
 #ptList.noHead #pvHead{display:none}
 #ptList.noBody #pvBody{display:none}
 .vtop{position:absolute;left:8px;top:6px;display:flex;flex-direction:column;gap:3px;align-items:flex-start;max-width:46%}
@@ -253,6 +259,7 @@ body,button,select,input,textarea{font-family:Tahoma,"Segoe UI",Verdana,"Meiryo 
     <label class="btn" title="CARTOのExportフォルダを選びます">フォルダを開く<input type="file" id="inDir" webkitdirectory multiple hidden></label>
     <label class="btn" title="ZIP、または .mesh / _car.txt などを複数選択">ZIP・ファイル<input type="file" id="inFiles" multiple hidden></label>
     <button id="btnDiag" title="読み込んだデータの中身を確認（患者情報なし）">読み込み診断</button>
+    <button id="btnInstall" class="hidden" title="このビューアをデスクトップのアプリとして入れます（ダブルクリックで開けるようになります）">アプリとして入れる</button>
     <button id="btnHelp">使い方</button>
   </div>
   <div id="menuDrop" class="hidden"></div><div id="menuSub" class="hidden"></div>
@@ -2459,6 +2466,12 @@ try{
 bindPanel();bindWave();renderSnaps();setMode('select');
 setTimeout(()=>{if(!S.study)$('#views').classList.add('single');},0);
 requestAnimationFrame(loop);
+// 「アプリとして入れる」ボタン（ブラウザがインストールを許可したときだけ表示）
+let installEv=null;window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installEv=e;$('#btnInstall').classList.remove('hidden');});
+$('#btnInstall').onclick=async()=>{if(!installEv)return;installEv.prompt();try{await installEv.userChoice;}catch(_){}installEv=null;$('#btnInstall').classList.add('hidden');};
+window.addEventListener('appinstalled',()=>{$('#btnInstall').classList.add('hidden');toast('アプリとして入りました。次からはデスクトップのアイコンをダブルクリックで開けます',5000);});
+// アプリとして使えるように（http(s)で開いたときだけ。ファイルを直接開いた場合は何もしない）
+if('serviceWorker' in navigator&&/^https?:/.test(location.protocol)){navigator.serviceWorker.register('carto-viewer-sw.js',{scope:'./carto-viewer.html'}).catch(()=>{});}
 window.CV={S,openSources,makeDemoStudy,setStudy};
 </script>
 </body>
