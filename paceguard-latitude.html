@@ -834,7 +834,9 @@ function parseTV(items){
   // 並び順：設定は左の列→右の列、イベントは最後（表を読む順に近づける）
   let oL=2000,oR=3000;
   const txt=r=>r.cells.map(c=>c.s).join(' ');
-  let sec='',ch='',cols=null,midX=null,grp={L:'',R:''},last={L:null,R:null};
+  let sec='',ch='',cols=null,midX=null,grp={L:'',R:''},last={L:null,R:null},colDate={},lastLead=null;
+  const isDate=t=>/^[（(]?\d{4}年\d{1,2}月\d{1,2}日[）)]?$/.test(String(t).replace(/\s/g,''));
+  const nearCol=x=>{let best=null,bd=1e9;for(const [k,cx] of Object.entries(cols||{})){const d=Math.abs(cx-x);if(d<bd){bd=d;best=k;}}return best;};
   // 設定の左右の境目：右の列の見出しの位置
   for(const r of rows)for(const c of r.cells)if(/^(ペーシング出力|感度|リードの極性|レートアダプティブペーシング|LV ?Multisite)/.test(tvClean(c.s))){midX=midX==null?c.x0:Math.min(midX,c.x0);}
   for(let i=0;i<rows.length;i++){const r=rows[i],c0=tvClean(r.cells[0].s),all=txt(r);
@@ -843,7 +845,7 @@ function parseTV(items){
     if(/^充電時間/.test(c0)&&r.cells.length>1)put('charge','充電時間',r.cells.slice(1).map(c=>c.s).join(' '));
     {const m=all.match(/イベントの合計[:：]?\s*(.+)$/);if(m)put('evTotal','イベントの合計',m[1],{o:9000});}
     // 見出し（セクションの切り替え）
-    if(/^リード$/.test(c0)){sec='lead';ch='';cols={};} // 同じ行の列見出し（植込み・医療施設・最新の日常測定）も下で読む
+    if(/^リード$/.test(c0)){sec='lead';ch='';cols={};colDate={};lastLead=null;} // 同じ行の列見出し（植込み・医療施設・最新の日常測定）も下で読む
     if(/^Brady(\/CRT)?カウンタ/.test(c0)){sec='brady';continue;}
     if(/^心房性不整脈カウンタ/.test(c0)){sec='atr';continue;}
     if(/^設定$/.test(c0)&&r.cells.length===1){sec='set';grp={L:'',R:''};last={L:null,R:null};continue;}
@@ -851,6 +853,10 @@ function parseTV(items){
     if(sec==='lead'){
       for(const c of r.cells){const s=tvClean(c.s),mid=(c.x0+c.x1)/2;
         if(/最新の日常/.test(s))cols.daily=mid;else if(/医療施設/.test(s))cols.clinic=mid;else if(/^植込み/.test(s))cols.impl=mid;}
+      // 日付だけの行：見出しの下なら列の日付、測定値の下なら「医療施設での最後の測定」の日付
+      if(r.cells.every(c=>isDate(c.s))){for(const c of r.cells){const col=nearCol((c.x0+c.x1)/2),d=c.s.replace(/[\s（()）]/g,'');
+          if(lastLead&&got[lastLead]){if(col==='clinic'&&got[lastLead].clinic)got[lastLead].clinicDate=d;}else if(col)colDate[col]=d;}continue;}
+      if(!lastLead)for(const c of r.cells)if(isDate(c.s)){const col=nearCol((c.x0+c.x1)/2);if(col)colDate[col]=c.s.replace(/[\s（()）]/g,'');}
       if(r.cells.length===1&&TV_CH.test(c0)){ch=c0;continue;}
       if(/波高|インピーダンス|閾値/.test(c0)&&r.cells.length>1){
         // 値と値の間が狭くて1つのセルにくっついた時（例「自動0.8 V @ 0.4 ms0.5 V @ 0.4 ms」）は分ける。位置は文字数で割り振る
@@ -859,8 +865,9 @@ function parseTV(items){
         const pick=name=>{const x=cols[name];if(x==null)return null;let best=null,bd=1e9;for(const c of r.cells.slice(1)){const d=Math.abs((c.x0+c.x1)/2-x);if(d<bd){bd=d;best=c;}}
           if(!best)return null;const other=Object.entries(cols).filter(([k])=>k!==name).some(([,ox])=>Math.abs((best.x0+best.x1)/2-ox)<bd);return other?null:best.s;};
         const daily=pick('daily'),clinic=pick('clinic'),ok=v=>v&&!/記録なし/.test(v);
-        const v=ok(daily)?daily:ok(clinic)?clinic:(daily||clinic||'');
-        if(v)put(`lead:${ch}:${c0}`,`${ch&&!c0.startsWith(ch)?ch+' ':''}${c0}`,v,{daily:daily||'',clinic:clinic||''});}
+        // 最新の日常測定が無い時は「記録なし」。医療施設での最後の測定（値と日付）を添える
+        const v=ok(daily)?daily:'記録なし',k=`lead:${ch}:${c0}`;
+        put(k,`${ch&&!c0.startsWith(ch)?ch+' ':''}${c0}`,v,ok(daily)?{}:(ok(clinic)?{clinic:tvUnit(clinic),clinicDate:colDate.clinic||''}:{}));lastLead=k;}
       continue;}
     if(sec==='brady'&&r.cells.length>1){const v=r.cells.slice(1).map(c=>c.s).join(' ');const m=v.match(/([<>]?\s*[\d.]+)\s*%/);if(m)put(`pace:${c0}`,`ペーシング率 ${c0}`,m[1].replace(/\s/g,'')+'%');continue;}
     if(sec==='atr'&&r.cells.length>1){if(/AT\/?AF/.test(c0))put('atAf','%AT/AF',r.cells.slice(1).map(c=>c.s).join(' ').replace(/\s*%?$/,'')+'%');continue;}
@@ -1080,7 +1087,7 @@ function setTrendRender(id,st){
   // セルの状態：前の回（その項目を読めた一番近い回）と違えば変更
   // 経静脈デバイス：列ごとに、その回と前の回からアラートを作って色を付ける
   const tvAl=isTVp?cols.map((c,i)=>{const m=new Map();for(const a of tvAlerts(c.settings,i>0?cols[i-1].settings:null)){const o=m.get(a.k);if(!o||a.lv>o.lv)m.set(a.k,{lv:a.lv,why:a.txt});}return m;}):null;
-  const grid=keys.map(k=>{let prev=null;return cols.map((c,ci)=>{if(tvAl){const x0=c.settings.items[k];if(!x0)return {v:null};const a=tvAl[ci].get(k);return {v:LV(x0.v),chg:false,rb:a&&a.lv>=2?a.why:'',wn:a&&a.lv===1?a.why:''};}const x0=c.settings.items[k];if(!x0||!okVal(k,x0.v))return {v:null};const x={...x0,v:LV(x0.v)};const chg=!isMeas(k)&&prev!=null&&prev!==x.v;prev=x.v;const a=alertOf(k,x.v)||(chg&&!NO_RULE.has(k)&&RL(k)&&RL(k).chg?{lv:2,why:'前回から変更（ルール：前回から変わったらアラート）'}:null);return {v:x.v,chg,rb:a&&a.lv>=2?a.why:'',wn:a&&a.lv===1?a.why:''};});});
+  const grid=keys.map(k=>{let prev=null;return cols.map((c,ci)=>{if(tvAl){const x0=c.settings.items[k];if(!x0)return {v:null};const a=tvAl[ci].get(k);return {v:LV(x0.v),note:tvClinic(x0),chg:false,rb:a&&a.lv>=2?a.why:'',wn:a&&a.lv===1?a.why:''};}const x0=c.settings.items[k];if(!x0||!okVal(k,x0.v))return {v:null};const x={...x0,v:LV(x0.v)};const chg=!isMeas(k)&&prev!=null&&prev!==x.v;prev=x.v;const a=alertOf(k,x.v)||(chg&&!NO_RULE.has(k)&&RL(k)&&RL(k).chg?{lv:2,why:'前回から変更（ルール：前回から変わったらアラート）'}:null);return {v:x.v,chg,rb:a&&a.lv>=2?a.why:'',wn:a&&a.lv===1?a.why:''};});});
   // 表に出すのは5回分。古い回はバー／◀▶で戻る（変更の判定は、表に出ない回も含めた前の回と比べる）
   const WIN=5,n=cols.length,maxS=Math.max(0,n-WIN);
   if(setTrendView.id!==id||setTrendView.n!==n)setTrendView={id,n,start:maxS}; // 患者が変わった・記録が増えた時は最新5回へ
@@ -1093,7 +1100,7 @@ function setTrendRender(id,st){
   let gPrev='';
   const body=keys.map((k,i)=>{const imp=setImp(k),main=order(k)<99||!k.startsWith('x:');
     const g=typeof TV_GRP==='function'?TV_GRP(k):'',gh=g&&g!==gPrev?`<tr class="grp"><th colspan="${2+vis.length}">${escH(g)}</th></tr>`:'';if(g)gPrev=g;
-    return gh+`<tr${main?'':' class="oth"'}><th>${escH(name(k))}</th><td class="hint">${escH(isTVp?tvRuleText(k):(ruleText(k)||(isPt(k)?'決めない':'')))}${!isTVp&&isPt(k)?' <b class="ptmark">この患者</b>':''}</td>${grid[i].map(c=>c.v==null?'<td class="hint">—</td>':`<td class="${c.rb?'bad':c.wn?'warnv':c.chg?'chg':''}" title="${escH(c.rb||c.wn||(c.chg?'前の回から変更':''))}">${c.rb?'⚠️ ':c.wn?'🟡 ':''}${escH(c.v)}${c.chg?' <span class="hint">◀変</span>':''}</td>`).join('')}</tr>`;}).join('');
+    return gh+`<tr${main?'':' class="oth"'}><th>${escH(name(k))}</th><td class="hint">${escH(isTVp?tvRuleText(k):(ruleText(k)||(isPt(k)?'決めない':'')))}${!isTVp&&isPt(k)?' <b class="ptmark">この患者</b>':''}</td>${grid[i].map(c=>c.v==null?'<td class="hint">—</td>':`<td class="${c.rb?'bad':c.wn?'warnv':c.chg?'chg':''}" title="${escH(c.rb||c.wn||(c.chg?'前の回から変更':''))}">${c.rb?'⚠️ ':c.wn?'🟡 ':''}${escH(c.v)}${c.chg?' <span class="hint">◀変</span>':''}${c.note||''}</td>`).join('')}</tr>`;}).join('');
   const nav=n>WIN?`<div class="setnav"><button class="ghost" data-sn="-${WIN}" ${s0<=0?'disabled':''} title="5回前へ">⏮</button><button class="ghost" data-sn="-1" ${s0<=0?'disabled':''} title="1回前へ">◀ 古い</button>
       <input type="range" id="setNavR" min="0" max="${maxS}" value="${s0}" step="1"><button class="ghost" data-sn="1" ${s0>=maxS?'disabled':''} title="1回後へ">新しい ▶</button><button class="ghost" data-sn="${WIN}" ${s0>=maxS?'disabled':''} title="最新へ">⏭</button>
       <span class="hint">${s0+1}〜${Math.min(n,s0+WIN)}回目を表示／全${n}回${s0>=maxS?'（最新）':''}</span></div>`:'';
@@ -1303,7 +1310,8 @@ async function runTVEvents(){
 }
 // 経静脈デバイスのレポートを記録して、前回と比べる（波形の比較はしない）
 const tvDateKey=d=>{const m=String(d||'').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})(?:\D+(\d{1,2}):(\d{2}))?/);return m?m[1]+m[2].padStart(2,'0')+m[3].padStart(2,'0')+(m[4]||'0').padStart(2,'0')+(m[5]||'00'):'';};
-const TV_GRP=k=>/^lead:/.test(k)?'リード（最新の日常測定。記録なしの時は医療施設での最後の測定）':/^(pace|atAf)/.test(k)?'ペーシング率・AT/AF':/^(bat|charge)/.test(k)?'電池':/^set:/.test(k)?'設定':/^evTotal/.test(k)?'イベント':'';
+const tvClinic=x=>x&&x.clinic?`<div class="hint">医療施設での最後の測定：${escH(LV(x.clinic))}${x.clinicDate?`（${escH(String(x.clinicDate).replace(/(\d{4})年(\d{1,2})月(\d{1,2})日/,'$1/$2/$3'))}）`:''}</div>`:'';
+const TV_GRP=k=>/^lead:/.test(k)?'リード（最新の日常測定）':/^(pace|atAf)/.test(k)?'ペーシング率・AT/AF':/^(bat|charge)/.test(k)?'電池':/^set:/.test(k)?'設定':/^evTotal/.test(k)?'イベント':'';
 async function runTV(){
   const tv=curTV;if(!tv)return;if(tv.evOnly)return runTVEvents();await ensureDir();
   const id=$('fId').value.trim(),date=$('fDate').value,key=tvDateKey(date),ts=Date.now();
@@ -1327,7 +1335,7 @@ async function runTV(){
   const alv=k=>Math.max(0,...al.filter(a=>a.k===k).map(a=>a.lv));
   let g0='';const rows=keys.map(k=>{const x=tv.items[k],p=P[k],g=TV_GRP(k),changed=p&&LV(p.v)!==LV(x.v)&&!isMeas(k),lvk=alv(k);
     const head=g!==g0?`<tr class="grp"><th colspan="3">${escH(g)}</th></tr>`:'';g0=g;
-    return head+`<tr class="${lvk?'lv'+lvk:changed?'lv1':''}"><td>${escH(x.l)}</td><td>${p?escH(LV(p.v)):'<span class="hint">—</span>'}</td><td>${escH(LV(x.v))}${changed?' <span class="hint">◀変</span>':''}</td></tr>`;}).join('');
+    return head+`<tr class="${lvk?'lv'+lvk:changed?'lv1':''}"><td>${escH(x.l)}</td><td>${p?escH(LV(p.v))+tvClinic(p):'<span class="hint">—</span>'}</td><td>${escH(LV(x.v))}${changed?' <span class="hint">◀変</span>':''}${tvClinic(x)}</td></tr>`;}).join('');
   const cls=lv>=2?'bad':lv===1?'warn':prev?'ok':'info';
   const title=lv>=2?'⚠️ 要確認 — 設定・測定値のアラート':lv===1?'🟡 注意 — 設定・測定値のアラート':prev?(chg.length?`✅ アラートなし（設定が${chg.length}項目変わりました）`:'✅ アラートなし（前回と同じ設定）'):'記録しました（この患者の初めての記録）';
   $('result').innerHTML=`<div class="verdict ${cls}"><h2>${title}</h2>
