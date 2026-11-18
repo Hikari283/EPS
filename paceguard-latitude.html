@@ -1173,9 +1173,9 @@ async function ptRulesSave(clear){
   setTrendRender(PT_ID,st);$('ptRulesMsg').innerHTML=`<span class="ok-t">${clear?'全体のルールに戻しました':'この患者のルールを保存しました'}（次の評価から使います）</span>`;
 }
 // 詳しい数値の表：最初は閉じる（開いた・閉じたは覚える）
-const numDetOpen=()=>{try{return localStorage.getItem('pg_lat_numdet')==='1';}catch(_){return false;}};
+const numDetOpen=()=>false; // いつも閉じた状態で出す（開いた・閉じたは覚えない）
+try{localStorage.removeItem('pg_lat_numdet');}catch(_){}
 const numDet=h=>`<details class="numdet"${numDetOpen()?' open':''}><summary>📊 詳しい数値（段ごとの記録）</summary>${h}</details>`;
-document.addEventListener('toggle',e=>{if(e.target&&e.target.classList&&e.target.classList.contains('numdet')){try{localStorage.setItem('pg_lat_numdet',e.target.open?'1':'0');}catch(_){}}},true);
 // ===== 経静脈デバイスのEGM：ページを画像にして患者フォルダに残し、タイムラインに並べる =====
 // EGMのページ＝色のついた線（各誘導の基線）が横幅いっぱいに伸びる行が2本以上あるページ
 async function tvEgmPages(doc){
