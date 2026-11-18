@@ -665,6 +665,7 @@ async function loadPDF(file,{forceEval=false,pageNo=0}={}){
     const buf=await file.arrayBuffer();lastPdfFile=file;lastPdfBytes=buf.slice(0);
     // ★pdf.jsはdataのArrayBufferを転送（detach）して空にするため、先にコピーから自前抽出しておく
     let rawPdfText=''; try{ rawPdfText=await extractRawPdfText(buf.slice(0)); }catch(_){}
+    let rawItems=[]; try{ rawItems=await extractRawItems(buf.slice(0)); }catch(_){} // 設定用（位置つき・日本語に戻した文字）
     const pdf=await lib.getDocument({data:new Uint8Array(buf),isEvalSupported:false}).promise;lastPdfDoc=pdf;
     const pno=pageNo&&pageNo<=(pdf.numPages||1)?pageNo:await pickEcgPage(pdf);curPageNo=pno;renderPageBtns(pdf.numPages||1,pno,!!pageNo);
     const page=await pdf.getPage(pno);
@@ -682,9 +683,10 @@ async function loadPDF(file,{forceEval=false,pageNo=0}={}){
     try{const all=[];const np=Math.min(pdf.numPages||1,30);
       for(let pg=1;pg<=np;pg++){const tci=pg===pno?tc:await (await pdf.getPage(pg)).getTextContent();
         for(const it of tci.items)all.push({s:it.str,x:it.transform[4],y:it.transform[5],w:it.width,h:Math.abs(it.transform[3])||it.height,p:pg});}
-      const flatAll=all.map(x=>x.s).join('')+' '+annotStrs.join(' ')+' '+rawPdfText;
-      curSettings=parseSettings(all,flatAll);
-      curSettings.diag=setDiag(all,annotStrs,rawPdfText,np);}
+      const rawJ=rawItems.map(x=>x.s).join(' ');
+      const flatAll=all.map(x=>x.s).join('')+' '+annotStrs.join(' ')+' '+rawJ+' '+rawPdfText;
+      curSettings=parseSettings([...all,...rawItems],flatAll);
+      curSettings.diag=setDiag(all,annotStrs,rawJ,np,rawItems.length);}
     catch(e){curSettings={items:{},src:{},n:0,diag:{err:String(e&&e.message||e)}};}
     if($('dbg'))$('dbg').insertAdjacentHTML('beforeend',settingsDebugHtml(curSettings)); // 別の患者になったら前の患者のタイムラインを消す
     curNonSicd=nonSicdOf(tc.items.map(it=>it.str).join(' ')+' '+annotStrs.join(' ')+' '+rawPdfText,$('fDev').value.trim());
@@ -722,6 +724,69 @@ function headerInfo(t,wt,interro){
   // 漢字（表示・年月日）が文字化けしていても読めるよう、「ECG」の直後の日時を探す（ハイフンの種類も問わない）
   const secg=lab(/S.?ECG表示[(（](\d{4})年(\d{1,2})月(\d{1,2})日(\d{1,2}:\d{2})/)||lab(/ECG[^\d]{0,12}?(\d{4})\D{1,4}?(\d{1,2})\D{1,4}?(\d{1,2})\D{0,6}?(\d{1,2}:\d{2})/);
   return {tx,clinic,implant,events:evs,secg,allDT};
+}
+// ===== 設定用：PDFの中身（ページの描画命令）から、文字を位置つきで取り出す =====
+// LATITUDEのPDFは pdf.js で文字が取れない。日本語は2バイト（UTF-16）の文字で入っているので、それを日本語に戻し、
+// 描画位置（Tm/Td）も追って「行・セル」を作れるようにする。患者ID・日付の読み取り（extractRawPdfText）には使わない
+function u16Text(bin){ // 1バイトずつの文字列 → 日本語（UTF-16BEらしければ）／それ以外はそのまま
+  if(bin.length<2||bin.length%2||!/[\x00\x80-\xff]/.test(bin))return bin;
+  let out='',ok=0,n=0;
+  for(let i=0;i+1<bin.length;i+=2){const c=(bin.charCodeAt(i)<<8)|bin.charCodeAt(i+1);n++;
+    if((c>=0x20&&c<0x7f)||(c>=0x3000&&c<0x3100)||(c>=0x4e00&&c<0xa000)||(c>=0xff00&&c<0xfff0)||c===0xb5||c===0x3a9||c===0x2126||(c>=0x2010&&c<0x2200))ok++;
+    out+=String.fromCharCode(c);}
+  return ok>=n*0.8?out:bin;
+}
+function pdfStrBytes(raw){let o='';for(let i=0;i<raw.length;i++){const c=raw[i];if(c!=='\\'){o+=c;continue;}const n=raw[++i];
+  if(n==='n')o+='\n';else if(n==='r')o+='\r';else if(n==='t')o+='\t';else if(n==='b')o+='\b';else if(n==='f')o+='\f';
+  else if(/[0-7]/.test(n)){let d=n;while(d.length<3&&/[0-7]/.test(raw[i+1]))d+=raw[++i];o+=String.fromCharCode(parseInt(d,8)&255);}
+  else if(n==='\r'||n==='\n'){}else o+=n;}return o;}
+const hexBytes=h=>{h=h.replace(/\s/g,'');if(h.length%2)h+='0';let o='';for(let i=0;i<h.length;i+=2)o+=String.fromCharCode(parseInt(h.substr(i,2),16));return o;};
+const decStr=b=>{const t=u16Text(b);if(t!==b)return t;if(/[\x80-\xff]/.test(b)){try{return new TextDecoder('utf-8',{fatal:true}).decode(Uint8Array.from(b,c=>c.charCodeAt(0)&255));}catch(_){}}return b;};
+// 1つの描画命令の列から、位置つきの文字を取り出す
+function streamTextItems(s,p){
+  const items=[];if(!/\bBT\b/.test(s))return items;
+  const re=/\((?:[^()\\]|\\[\s\S])*\)|<[0-9A-Fa-f\s]*>|\[|\]|\/[^\s\/\[\]()<>{}%]+|[-+]?(?:\d+\.?\d*|\.\d+)|[A-Za-z'"*]+|%[^\r\n]*/g;
+  let st=[],arr=null,tm=[1,0,0,1,0,0],tlm=[1,0,0,1,0,0],fs=10,TL=0,m;
+  const setT=(a)=>{tm=a.slice();tlm=a.slice();};
+  const tr=(tx,ty)=>setT([tlm[0],tlm[1],tlm[2],tlm[3],tlm[4]+tx*tlm[0]+ty*tlm[2],tlm[5]+tx*tlm[1]+ty*tlm[3]]);
+  const show=str=>{if(!str)return;const sc=Math.hypot(tm[2],tm[3])||1,h=fs*sc,w=[...str].reduce((a,ch)=>a+(ch.charCodeAt(0)>0x2000?1:0.55),0)*fs*(Math.hypot(tm[0],tm[1])||1);
+    items.push({s:str,x:tm[4],y:tm[5],w,h,p});tm[4]+=w;};
+  while((m=re.exec(s))){const t=m[0];
+    if(t[0]==='%')continue;
+    if(t==='['){arr=[];continue;}
+    if(t===']'){st.push(arr);arr=null;continue;}
+    let v;
+    if(t[0]==='(')v={str:decStr(pdfStrBytes(t.slice(1,-1)))};else if(t[0]==='<')v={str:decStr(hexBytes(t.slice(1,-1)))};
+    else if(t[0]==='/')v={name:t};else if(/^[-+.\d]/.test(t))v=+t;
+    if(v!==undefined){if(arr)arr.push(v);else st.push(v);continue;}
+    const op=t,a=st;st=[];
+    if(op==='BT'){tm=[1,0,0,1,0,0];tlm=[1,0,0,1,0,0];}
+    else if(op==='Tm'&&a.length>=6)setT(a.slice(-6).map(Number));
+    else if(op==='Td'&&a.length>=2)tr(+a[a.length-2],+a[a.length-1]);
+    else if(op==='TD'&&a.length>=2){TL=-a[a.length-1];tr(+a[a.length-2],+a[a.length-1]);}
+    else if(op==='TL'&&a.length)TL=+a[a.length-1];
+    else if(op==='T*')tr(0,-TL);
+    else if(op==='Tf'&&a.length>=2)fs=+a[a.length-1]||fs;
+    else if(op==='Tj'&&a.length)show((a[a.length-1]||{}).str);
+    else if(op==="'"&&a.length){tr(0,-TL);show((a[a.length-1]||{}).str);}
+    else if(op==='"'&&a.length){tr(0,-TL);show((a[a.length-1]||{}).str);}
+    else if(op==='TJ'&&a.length&&Array.isArray(a[a.length-1])){let str='';for(const q of a[a.length-1]){if(q&&q.str!=null)str+=q.str;else if(typeof q==='number'&&q<-200)str+=' ';}show(str);}
+  }
+  return items.map(it=>({...it,s:it.s.replace(/[\x00-\x1f\x7f]/g,'')})).filter(it=>it.s.trim());
+}
+async function extractRawItems(ab){
+  const bytes=new Uint8Array(ab);let bin='';const CH=8192;for(let o=0;o<bytes.length;o+=CH)bin+=String.fromCharCode.apply(null,bytes.subarray(o,o+CH));
+  const items=[];let i=0,k=0;
+  while((i=bin.indexOf('stream',i))!==-1){
+    if(bin.substr(i-3,3)==='end'){i+=6;continue;}
+    let start=i+6;if(bytes[start]===13)start++;if(bytes[start]===10)start++;
+    const end=bin.indexOf('endstream',start);if(end===-1){i=start+6;continue;}
+    const dict=bin.slice(Math.max(0,bin.lastIndexOf('obj',i)),i);const lm=dict.match(/\/Length\s+(\d+)(?!\d)(?!\s+\d+\s+R)/);
+    const dec=await inflateMaybe(bytes.subarray(start,end),lm?+lm[1]:0);i=end+9;k++;
+    let s='';if(dec){for(let o=0;o<dec.length;o+=CH)s+=String.fromCharCode.apply(null,dec.subarray(o,o+CH));}else if(!/\/Filter/.test(dict))s=bin.slice(start,end);
+    if(s&&/\bBT\b/.test(s))items.push(...streamTextItems(s,'r'+k));
+  }
+  return items;
 }
 // ===== デバイス設定の読み取りと、前回との比較 =====
 // レポートの文字（全ページ）から設定を読む。①位置から行・セルを組み立て「項目｜値」の組を拾う ②主な設定は項目名のパターンで特定 ③取れない時は詰めた文字から正規表現で拾う
@@ -776,6 +841,7 @@ function parseSettings(items,flat){
       const K=known(lab);
       if(K){put(K.k,K.name,v,'main','行',K.unit);continue;}
       if(SET_SKIP.test(lab)||/^[\d.\s\-+\/]+$/.test(lab))continue;
+      if(/[\u0080-\u024f\u02b0-\u02ff\u2000-\u206f\ufffd]/.test(lab))continue; // 文字化けした項目名は「その他」に入れない
       put('x:'+lab,setNorm(l0),v,'other','行');}
   }
   // ②詰めた文字から（項目と値が離れて並ぶPDFもあるため、行で取れなかった主な設定だけ）
@@ -799,7 +865,7 @@ function prevSettingsRec(store,curKey,nowPdf){
   return sv.sort((a,b)=>a.key<b.key?1:a.key>b.key?-1:(b.ts||0)-(a.ts||0))[0]||null;
 }
 // 読み取れなかった時の手がかり：設定に関係しそうな言葉の前後の文字を、そのまま見せる（6桁以上の数字＝IDなどは伏せる）
-function setDiag(items,annotStrs,raw,np){
+function setDiag(items,annotStrs,raw,np,nRaw){
   const pjs=items.map(x=>x.s).join(''),perPage={};items.forEach(x=>{if(String(x.s||'').trim())perPage[x.p]=(perPage[x.p]||0)+1;});
   const mask=t=>t.replace(/\d{6,}/g,m=>'#'.repeat(m.length)).replace(/[\x00-\x1f]/g,'');
   const KW=/ゾーン|Zone|インピーダンス|Impedance|ゲイン|Gain|センシング|Sensing|SMART|治療|Therapy|ペーシング|Pacing|モニタ|Monitor|極性|Polarity|bpm|min-1|Ω|ohm/gi;
@@ -809,12 +875,12 @@ function setDiag(items,annotStrs,raw,np){
     while((m=KW.exec(txt))&&snips.length<24){const a=Math.max(0,m.index-25),b=Math.min(txt.length,m.index+45),sn=mask(txt.slice(a,b));if(seen.has(sn))continue;seen.add(sn);snips.push({from:name,sn});KW.lastIndex=m.index+m[0].length+20;}
   }
   const jp=(raw.match(/[ぁ-んァ-ヶ一-龯]/g)||[]).length,bad=(raw.match(/[\ufffd\u0080-\u00ff]/g)||[]).length;
-  return {pages:np,perPage,pjsLen:pjs.length,annot:annotStrs.length,rawLen:raw.length,jp,bad,snips};
+  return {pages:np,perPage,pjsLen:pjs.length,annot:annotStrs.length,rawLen:raw.length,jp,bad,snips,nRaw:nRaw||0};
 }
 function settingsDebugHtml(s){
   if(!s)return '';
   const d=s.diag||{};
-  const diagHtml=d.err?`<div class="warn-t">読み取り中のエラー：${escH(d.err)}</div>`:`<div class="hint" style="margin-top:6px">手がかり：${d.pages||'?'}ページ／pdf.jsの文字 ${d.pjsLen||0}字（ページごとの項目数 ${escH(JSON.stringify(d.perPage||{}))}）／注釈 ${d.annot||0}／自前抽出 ${d.rawLen||0}字（日本語 ${d.jp||0}字・文字化けらしい文字 ${d.bad||0}字）</div>`+
+  const diagHtml=d.err?`<div class="warn-t">読み取り中のエラー：${escH(d.err)}</div>`:`<div class="hint" style="margin-top:6px">手がかり：${d.pages||'?'}ページ／pdf.jsの文字 ${d.pjsLen||0}字（ページごとの項目数 ${escH(JSON.stringify(d.perPage||{}))}）／注釈 ${d.annot||0}／自前抽出 ${d.nRaw||0}項目・${d.rawLen||0}字（日本語 ${d.jp||0}字・文字化けらしい文字 ${d.bad||0}字）</div>`+
     `<div class="hint">設定に関係しそうな言葉の前後（6桁以上の数字は # で伏せています）：</div>`+((d.snips||[]).length?`<table class="crit"><tr><th>どこから</th><th>前後の文字</th></tr>${d.snips.map(x=>`<tr><td>${escH(x.from)}</td><td><code>${escH(x.sn)}</code></td></tr>`).join('')}</table>`:'<div class="warn-t">設定に関係しそうな言葉（ゾーン・インピーダンス・ゲイン・センシング・bpm・Ω など）が、PDFの文字の中に1つも見つかりませんでした。</div>');
   const rows=Object.entries(s.items).map(([k,x])=>`<tr><td>${x.g==='main'?'★ ':''}${escH(x.l)}</td><td>${escH(x.v)}</td><td class="hint">${s.src[k]==='行'?'行から':'文字から'}</td></tr>`).join('');
   const miss=SET_KNOWN.filter(K=>!s.items[K.k]).map(K=>K.name);
