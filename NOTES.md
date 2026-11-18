@@ -393,6 +393,7 @@ USBで持ち運ぶ場合、**常に「最後に編集した方が最新」**。�
 - 2026-11-18 方針変更（ユーザー）：CareLink は別のChromeプロファイルにする。拡張 v0.7.0（ダウンロード先＝波形認識で振り分け）は取り消し、v0.6.0 に戻した。LATITUDE用のChromeは今まで通り（ダウンロード先＝LATITUDE用）。CareLink用プロファイルのダウンロード先＝波形認識\CareLink用 の予定。ツールは CareLink用にコピーを置き、ファイル名で保存場所（localStorage・IndexedDB）を切り替える予定。
 - 2026-11-18 CareLink用プロファイルは作成。病院のChromeではデスクトップショートカットを作れない → carelink-start.bat（プロファイル名「CareLink」を Local State から探して開く。同じフォルダに paceguard-carelink.html があれば一緒に開く。CL= にCareLinkのアドレスを入れれば一緒に開く）。置き場所：波形認識\CareLink用。
 - 2026-11-18 院内PCのChromeは --user-data-dir="C:\LATITUDE-Chrome"（専用のデータフォルダ）。CareLinkのプロファイル＝そのデータフォルダの「Profile 2」。carelink-start.bat に USER_DATA（--user-data-dir を付ける・Local State もそこから読む）と PROFILE_DIR を追加。ユーザーには USER_DATA=C:\LATITUDE-Chrome、PROFILE_DIR=Profile 2 を入れた版を渡した。※ paceguard-start.bat も同じ理由で院内PCでは USER_DATA が必要になる見込み。
+- 2026-11-18 CareLink用の入口：ショートカットのリンク先を直接 "C:\Program Files\Google\Chrome\Application\chrome.exe" --user-data-dir="C:\LATITUDE-Chrome" --profile-directory="Profile 2" にした（Chromeのマークになる。carelink-start.bat は不要）。CareLink用ChromeのダウンロードFolder＝波形認識\CareLink用。次：CareLinkのレポートの出し方（PDFダウンロード／タブで開く／画面だけ）を確認。
 - 次：メドトロニック版（CareLink）。対象＝ICD/CRT-D・ペースメーカのEGM、EV-ICD（Aurora）、設定・イベントすべて。CareLinkのPDF／画面の例（個人情報を隠したもの）待ち。
 
 ---
