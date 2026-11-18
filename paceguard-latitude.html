@@ -795,7 +795,7 @@ async function extractRawItems(ab){
 // ※実際のLATITUDEのレポートで項目名・値の書き方を確認して SET_KNOWN を調整すること（「🔧 設定の読み取り結果」で確認できる）
 const SET_V={onoff:'(オン|オフ|ON|OFF|On|Off|有効|無効)',zone:'(\\d{3}|オフ|OFF|Off)',sense:'(一次|二次|代替|プライマリ|セカンダリ|オルタネイト|オルタネート|Primary|Secondary|Alternate)',gain:'([12]\\s?[xX×]|[xX×]\\s?[12]|[12]倍)',pol:'(標準|逆|反転|STD|REV|Standard|Reverse)'};
 // 表示はレポートと同じ書き方（2026-11-18 ユーザー指示）。前に「一次」「標準」などで保存した記録・ルールも同じ値として扱う
-const LV=v=>({'一次':'プライマリ','二次':'セカンダリ','代替':'オルタネイト','標準':'STD','逆':'REV'}[v]||v);
+const LV=v=>({'一次':'プライマリ','二次':'セカンダリ','代替':'オルタネイト','標準':'STD','逆':'REV','1x':'1倍','2x':'2倍'}[v]||v);
 const SET_KNOWN=[ // imp:2＝治療に関わる（変わったら強調）／1＝波形の見え方が変わる
   {k:'therapy',name:'治療',lab:/^(?:頻拍)?治療(?:の設定|モード|設定)?$|^Therapy(?:Mode)?$|^(?:S-?ICD)?(?:パルスジェネレータの)?モード$/i,re:[`(?:頻拍)?治療(?:の設定|モード|設定)?[:：]?${SET_V.onoff}`,`Therapy(?:Mode)?[:：]?${SET_V.onoff}`,`Therapy\\s?(On|Off)`],imp:2},
   {k:'shockZone',name:'ショックゾーン',ok:/^\d{3}( bpm)?$/,lab:/^(?!.*(?:条件|コンディショナル))ショックゾーン$|^ShockZone$/i,re:[`(?<!条件付き|条件付|コンディショナル|Conditional)ショックゾーン[:：]?(\\d{3})`,`(?<!Conditional)ShockZone[:：]?(\\d{3})`],unit:'bpm',imp:2},
@@ -816,7 +816,7 @@ const setNorm=s=>String(s||'').replace(/[Ａ-Ｚａ-ｚ０-９]/g,c=>String.from
 function setVal(v,unit){let s=setNorm(v);
   if(/^(オン|ON|On|有効|TherapyOn(?:モード)?)$/i.test(s))s='オン';else if(/^(オフ|OFF|Off|無効|TherapyOff(?:モード)?)$/i.test(s))s='オフ';
   else if(/^(プライマリ|Primary|一次)$/i.test(s))s='プライマリ';else if(/^(セカンダリ|Secondary|二次)$/i.test(s))s='セカンダリ';else if(/^(オルタネイト|オルタネート|Alternate|代替)$/i.test(s))s='オルタネイト';
-  else if(/^([12])(?:[xX×]|倍)$/.test(s))s=s[0]+'x';else if(/^[xX×]([12])$/.test(s))s=s.slice(-1)+'x';else if(/^(Standard|STD|標準)$/i.test(s))s='STD';else if(/^(Reverse|REV|反転|逆)$/i.test(s))s='REV';
+  else if(/^([12])(?:[xX×]|倍)$/.test(s))s=s[0]+'倍';else if(/^[xX×]([12])$/.test(s))s=s.slice(-1)+'倍';else if(/^(Standard|STD|標準)$/i.test(s))s='STD';else if(/^(Reverse|REV|反転|逆)$/i.test(s))s='REV';
   else if(unit&&/^\d+$/.test(s))s+=' '+unit;
   else if(/^(選択的交換指標)$/.test(s))s='ERI';else if(/^(寿命末期)$/.test(s))s='EOL';
   else s=s.replace(/(\d)(?:min(?:-?1|⁻¹)?|回\/分)$/,'$1bpm').replace(/(\d)(?:ohms?|オーム)$/i,'$1Ω').replace(/(\d)(bpm|ms|mV|V|J|Ω)$/,'$1 $2');
@@ -906,7 +906,7 @@ function settingsDebugHtml(s){
   return `<details style="margin-top:6px"><summary style="cursor:pointer">🔧 設定の読み取り結果（${s.n}項目${miss.length?`／読めなかった主な設定：${miss.join('・')}`:''}）</summary>${rows?`<table class="crit"><tr><th>項目</th><th>値</th><th>読み方</th></tr>${rows}</table>`:'<div>読めた項目はありません。</div>'}<div class="hint">★＝主な設定。項目名や値の書き方が違って読めていない時は、この欄（開いた状態）と設定の部分の画面（個人情報は隠して）を送ってください。</div>${diagHtml}</details>`;
 }
 // ===== 設定のアラート（前回から変わった・基準と違う・ルールの範囲外） =====
-const SET_ENUM={therapy:['オン','オフ'],postShock:['オン','オフ'],smartPass:['オン','オフ'],afMon:['オン','オフ'],sensing:['プライマリ','セカンダリ','オルタネイト'],gain:['1x','2x'],polarity:['STD','REV']};
+const SET_ENUM={therapy:['オン','オフ'],postShock:['オン','オフ'],smartPass:['オン','オフ'],afMon:['オン','オフ'],sensing:['プライマリ','セカンダリ','オルタネイト'],gain:['1倍','2倍'],polarity:['STD','REV']};
 const SET_NUM={shockZone:'bpm',condZone:'bpm'};
 // 最初の値（2026-11-18 ユーザー指定）。ゲインはルールにしない。センシング構成は「前回から変わったら」。インピーダンスは添付文書の値
 const SET_RULES_DEF={therapy:{eq:'オン'},shockZone:{min:170,max:250},condZone:{min:170,max:240},postShock:{eq:'オン'},polarity:{eq:'STD'},sensing:{chg:true},smartPass:{eq:'オン'},afMon:{eq:'オン'},
