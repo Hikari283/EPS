@@ -727,13 +727,16 @@ async function loadPDF(file,{forceEval=false,pageNo=0}={}){
     tlAutoOpen(!curNonSicd); // S-ICD以外はタイムラインを閉じる
     if(curNonSicd){ // S-ICD以外：Bostonの経静脈デバイス（ICD・CRTなど）のレポートなら、測定値・設定を読んで記録する
       // Medtronic（CareLink）：測定値・設定を読んで記録する。患者ID・送信日時・機種名もここで決める
+      let mdtDiag=null;
       try{const flatM=lastAllItems.map(x=>x.s).join(' ')+' '+lastRawItems.map(x=>x.s).join(' ')+' '+rawPdfText;
+        mdtDiag={found:isMedtronic(flatM),pjs:lastAllItems.length,raw:lastRawItems.length,n:0,id:'',sent:''};
         if(isMedtronic(flatM)){const m1=parseMDT(lastRawItems,flatM),m2=parseMDT(lastAllItems,flatM),md=m2.n>m1.n?m2:m1;
           // 同じ送信を何枚かのPDFに分けた時：IDの無いPDFは、シリアル番号から患者IDを決める（IDとシリアル番号の両方があるPDFで覚える）
           let smap={};try{smap=JSON.parse(localStorage.getItem('pg_lat_mdtserial')||'{}')||{};}catch(_){}
           if(md.id&&md.serial&&smap[md.serial]!==md.id){smap[md.serial]=md.id;try{localStorage.setItem('pg_lat_mdtserial',JSON.stringify(smap));}catch(_){}}
           if(!md.id&&md.serial&&smap[md.serial])md.id=smap[md.serial];
           if(md.id)$('fId').value=md.id;if(md.sent){$('fDate').value=md.sent;meta.date=md.sent;}if(md.model)$('fDev').value=md.model;
+          mdtDiag.n=md.n;mdtDiag.id=md.id||'';mdtDiag.sent=md.sent||'';mdtDiag.keys=Object.keys(md.items).slice(0,12).join('・');
           if(md.n>=6)curTV=md;else if(lastPdfDoc&&mdtEpisodeHeads(lastAllItems,flatM).length)curTV={tv:'Medtronic',evOnly:true,mdt:true,items:{},n:0};}}catch(_){}
       if(!curTV)try{const t1=parseTV(lastRawItems),t2=parseTV(lastAllItems),tv=t2.n>t1.n?t2:t1; // 自前で取り出した文字とpdf.jsの文字の、多く読めた方
         if(tv.n>=6&&Object.keys(tv.items).some(k=>/^(lead|pace):/.test(k)))curTV=tv;
@@ -746,7 +749,7 @@ async function loadPDF(file,{forceEval=false,pageNo=0}={}){
         return;}
       // それ以外：波形の比較・保存はしない
       curSigs=[];curFeat=[];curNoise=[];curPool=null;$('overlayCard').hidden=true;$('traceMsg').textContent='';
-      $('result').innerHTML=`<div class="verdict info"><h2>S-ICD以外のPDFです（対象外）</h2>機種：${escH(curNonSicd)}　患者ID：${escH($('fId').value||'—')}<br><span class="hint">このツールはS-ICDのS-ECGだけを比較します。このPDFは比較・保存しません。</span></div>`;
+      $('result').innerHTML=`<div class="verdict info"><h2>S-ICD以外のPDFです（対象外）</h2>機種：${escH(curNonSicd)}　患者ID：${escH($('fId').value||'—')}<br>${mdtDiag?`<div class="hint">手がかり：Medtronic/CareLinkの文字 ${mdtDiag.found?'あり':'なし'}／Medtronicとして読めた項目 ${mdtDiag.n}（6以上で記録）${mdtDiag.keys?'：'+escH(mdtDiag.keys):''}／pdf.jsの文字項目 ${mdtDiag.pjs}・自前抽出 ${mdtDiag.raw}</div>`:''}<span class="hint">このツールはS-ICDのS-ECGだけを比較します。このPDFは比較・保存しません。</span></div>`;
       tlReset($('fId').value.trim(),'S-ICD以外のため対象外');return;}
     // 計測用に高解像度でも描く（1px≒3.5ms）。時間がかかっても他の処理を止めないよう、最大15秒で打ち切る
     try{const vh=page.getViewport({scale:HI});hiCanvas.width=vh.width;hiCanvas.height=vh.height;

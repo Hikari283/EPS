@@ -402,6 +402,7 @@ USBで持ち運ぶ場合、**常に「最後に編集した方が最新」**。�
 - 2026-11-18 CareLinkのショートカット：リンク先にツールの file:/// アドレスを足すと日本語が %E6… になり260文字を超えて切れる→ショートカットは短い形（chrome.exe --user-data-dir="C:\LATITUDE-Chrome" --profile-directory="Profile 2"）だけにし、CareLinkのChromeの「起動時に開くページ」に CareLink（https://world.medtroniccarelink.net/carelink.web/about）とツールを登録（ユーザー設定済み）。CareLink用：データフォルダ＝CareLink用、自動比較＝CareLink用\CareLink（最初逆に選んでいたのを直した）。次：実際のCareLinkのレポートで読み取りを確認。
 - 2026-11-18 セキュリティ：「📄 読み込んだPDFと段の読み取り」はいつも閉じた状態で出す（開閉を覚えない）。画面に描くページは上の患者情報の部分を灰色で塗りつぶす（maskHeader：上30%の濃い横線＝枠の下端と、上25%の ID・医師・氏名・患者・Patient・8桁の数字などの行の下端）。読み取り（S-ECGの段・hiCanvas）と保存する画像には影響しない。IDのOCRは塗る前の rawPage を使う。
 - 2026-11-18 CareLinkは1回の送信を何枚かのPDFに分けて出す（手動）：同じ患者ID＝同じ記録ファイル。同じ送信日時（key）の経静脈の記録は置き換えずに項目を足し合わせる（runTV：前に読んだ items に今回の items を重ねる）。IDの無いPDFは、シリアル番号→患者IDの対応（IDとシリアル番号の両方があるPDFを読んだ時に localStorage pg_lat_mdtserial＝CareLink用では pg_cl_mdtserial に覚える）で患者を決める。
+- 2026-11-18 実CareLinkのPDF1件目：「S-ICD以外のPDFです（対象外）」になった（Medtronicとして見分けられなかった、または6項目未満）。対象外の画面に手がかり（Medtronic/CareLinkの文字の有無、Medtronicとして読めた項目数と項目名、pdf.js・自前抽出の文字項目数）を出すようにした。🔧のスクショ待ち。
 - 次：メドトロニック版（CareLink）。対象＝ICD/CRT-D・ペースメーカのEGM、EV-ICD（Aurora）、設定・イベントすべて。CareLinkのPDF／画面の例（個人情報を隠したもの）待ち。
 
 ---
