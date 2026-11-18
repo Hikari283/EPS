@@ -395,6 +395,7 @@ USBで持ち運ぶ場合、**常に「最後に編集した方が最新」**。�
 - 2026-11-18 院内PCのChromeは --user-data-dir="C:\LATITUDE-Chrome"（専用のデータフォルダ）。CareLinkのプロファイル＝そのデータフォルダの「Profile 2」。carelink-start.bat に USER_DATA（--user-data-dir を付ける・Local State もそこから読む）と PROFILE_DIR を追加。ユーザーには USER_DATA=C:\LATITUDE-Chrome、PROFILE_DIR=Profile 2 を入れた版を渡した。※ paceguard-start.bat も同じ理由で院内PCでは USER_DATA が必要になる見込み。
 - 2026-11-18 CareLink用の入口：ショートカットのリンク先を直接 "C:\Program Files\Google\Chrome\Application\chrome.exe" --user-data-dir="C:\LATITUDE-Chrome" --profile-directory="Profile 2" にした（Chromeのマークになる。carelink-start.bat は不要）。CareLink用ChromeのダウンロードFolder＝波形認識\CareLink用。次：CareLinkのレポートの出し方（PDFダウンロード／タブで開く／画面だけ）を確認。
 - 2026-11-18 CareLinkのレポートは「新しいタブでPDFが開く（ファイルはできない）」→ CareLink用の拡張機能 carelink-extension v0.1.0 を作成（paceguard-extension v0.6.0 をもとに：対象 medtronic.com・medtroniccarelink.net、保存先 ダウンロード先\CareLink、ファイル名 CareLink_日時.pdf、ツールのタブ＝paceguard-carelink を左右に並べる）。CareLink用のChromeにだけ入れる。置き場所：波形認識\CareLink用\carelink-extension。実機で未確認。
+- 2026-11-18 CareLinkのショートカットのリンク先の最後に CareLink のログイン画面のアドレスを足して、自動で開くようにした（ユーザー確認済み）。次：carelink-extension でPDFが 波形認識\CareLink用\CareLink に保存されるか確認 → PDFの中身（スクショ）を見て読み取りを作る。
 - 次：メドトロニック版（CareLink）。対象＝ICD/CRT-D・ペースメーカのEGM、EV-ICD（Aurora）、設定・イベントすべて。CareLinkのPDF／画面の例（個人情報を隠したもの）待ち。
 
 ---
