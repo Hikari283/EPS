@@ -106,7 +106,7 @@
   table.crit th,table.crit td{border-bottom:1px solid var(--line);padding:7px 8px;text-align:left;vertical-align:top}
   table.crit th{color:var(--sub);font-weight:600;font-size:10.5px;letter-spacing:.06em;background:var(--tblh)}
   table.crit tr:hover td{background:var(--hov)}
-  table.crit tr.lv2 td{background:rgba(251,113,133,.10)} table.crit tr.lv1 td{background:rgba(251,191,36,.08)}
+  table.crit tr.lv2 td{background:rgba(251,113,133,.14)} table.crit tr.lv1 td{background:rgba(250,204,21,.22)}
   .setbox{margin-top:12px;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--inbg)} .setbox.chg{border-color:rgba(251,191,36,.6)}
   .setbox.alert{border-color:rgba(251,191,36,.7);background:rgba(251,191,36,.08)} .setbox.alert.lv2{border-color:rgba(251,113,133,.75);background:rgba(251,113,133,.08)} .setbox ul{margin:6px 0 2px;padding-left:20px} .setbox li{font-weight:700}
   .settab{overflow-x:auto;border:1px solid var(--line);border-radius:10px} .settab table{border-collapse:separate;border-spacing:0;font-size:12.5px;font-variant-numeric:tabular-nums;min-width:100%}
@@ -120,7 +120,7 @@
   .settab table{table-layout:fixed} .settab th:first-child{width:170px} .settab tr:first-child th:nth-child(2),.settab td:nth-child(2){width:190px}
   #whyTip{position:absolute;z-index:50;background:var(--card2);color:var(--tx);border:1px solid var(--line2);border-radius:10px;padding:8px 10px;font-size:12.5px;line-height:1.6;white-space:pre-line;box-shadow:0 8px 24px rgba(0,0,0,.18);pointer-events:none}
   [data-why]{cursor:help}
-  .ptmark{font-size:10.5px;color:var(--accent2);font-weight:700} .settab td.warnv,.warnk{background:rgba(251,146,60,.28);font-weight:700} .warnk{padding:0 4px;border-radius:4px} .settab td.chg,.chgk{background:rgba(251,191,36,.22)} .settab td.bad,.badk{background:rgba(251,113,133,.22);font-weight:700} .chgk,.badk{padding:0 4px;border-radius:4px}
+  .ptmark{font-size:10.5px;color:var(--accent2);font-weight:700} .settab td.warnv,.warnk{background:rgba(250,204,21,.38);font-weight:700} .warnk{padding:0 4px;border-radius:4px} .settab td.chg,.chgk{background:rgba(56,189,248,.16)} table.crit tr.chgrow td{background:rgba(56,189,248,.10)} .settab td.bad,.badk{background:rgba(251,113,133,.22);font-weight:700} .chgk,.badk{padding:0 4px;border-radius:4px}
   .setbadge{font-size:13px;font-weight:800;margin-left:8px;padding:1px 10px;border-radius:999px;background:rgba(251,191,36,.18);color:var(--warn);vertical-align:middle}
   .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:10px}
   .m{background:var(--inbg);border:1px solid var(--line);border-radius:12px;padding:8px 10px}
@@ -318,7 +318,7 @@
       <label class="hint"><input type="checkbox" id="setOnlyChg"> 変わった項目・ルール外だけ</label>
       <label class="hint"><input type="checkbox" id="setShowRule"> 📏 ルールを表示</label>
       <label class="hint"><input type="checkbox" id="setShowOther" checked> その他の項目も表示</label>
-      <span class="hint">左＝過去・右＝最新／<span class="chgk">黄</span>＝前の回から変更（アラートではない）・<span class="warnk">橙</span>＝インピーダンス注意・<span class="badk">赤</span>＝ルール（基準値）の範囲外・インピーダンス警告／📌＝基準の回</span>
+      <span class="hint">左＝過去・右＝最新／<span class="warnk">黄</span>＝🟡注意・<span class="badk">赤</span>＝⚠️要確認（押すと理由が出ます）・<span class="chgk">青</span>＝前の回から変わった（アラートではない）／📌＝基準の回</span>
     </div>
     <div id="setTrend"><div class="hint">患者を読み込むと表示します。</div></div>
     <details id="tvPtWrap" hidden style="margin-top:10px;padding:8px 10px;border:1px solid var(--line);border-radius:8px">
@@ -1310,7 +1310,7 @@ function tvSetBox(cur,prev,when){
   const nChg=ks.filter(k=>P[k]&&LV(P[k].v)!==LV(C[k].v)).length,nAl=ks.filter(k=>alv(k)>0).length;
   return `<details class="numdet tvset"><summary>⚙ 設定（${escH(when||'最新のレポート')}・${ks.length}項目${prev?(nChg?`／<span class="warn-t">前回から${nChg}項目変更</span>`:'／前回から変更なし'):''}${nAl?`／<span class="warn-t">⚠️ アラート ${nAl}項目</span>`:''}）</summary>
     <table class="crit"><tr><th>項目</th><th>前回</th><th>今回</th></tr>${ks.map(k=>{const x=C[k],p=P[k],chg=p&&LV(p.v)!==LV(x.v);
-      const lv=alv(k),rt=tvRuleText(k);return `<tr class="${lv?'lv'+lv:chg?'lv1':''}"><td>${escH(x.l)}${rt?`<div class="hint rulehint">${escH(rt)}</div>`:''}</td><td>${p?escH(LV(p.v)):'<span class="hint">—</span>'}</td><td${lv?` data-why="${escH(awhy(k))}" title="${escH(awhy(k))}"`:''}>${lv>=2?'⚠️ ':lv===1?'🟡 ':''}${escH(LV(x.v))}${chg?' <span class="hint">◀変</span>':''}</td></tr>`;}).join('')}</table></details>`;
+      const lv=alv(k),rt=tvRuleText(k);return `<tr class="${lv?'lv'+lv:chg?'chgrow':''}"><td>${escH(x.l)}${rt?`<div class="hint rulehint">${escH(rt)}</div>`:''}</td><td>${p?escH(LV(p.v)):'<span class="hint">—</span>'}</td><td${lv?` data-why="${escH(awhy(k))}" title="${escH(awhy(k))}"`:''}>${lv>=2?'⚠️ ':lv===1?'🟡 ':''}${escH(LV(x.v))}${chg?' <span class="hint">◀変</span>':''}</td></tr>`;}).join('')}</table></details>`;
 }
 // 経静脈デバイスのイベントだけのPDF：イベントの波形を画像にして記録する（判定はしない）
 async function runTVEvents(){
@@ -1353,7 +1353,7 @@ async function runTV(){
   const alv=k=>Math.max(0,...al.filter(a=>a.k===k).map(a=>a.lv)),awhy=k=>al.filter(a=>a.k===k).map(a=>(a.lv>=2?'⚠️ ':'🟡 ')+a.txt).join('\n');
   let g0='';const rows=keys.map(k=>{const x=tv.items[k],p=P[k],g=TV_GRP(k),changed=p&&LV(p.v)!==LV(x.v)&&!isMeas(k),lvk=alv(k);
     const head=g!==g0?`<tr class="grp"><th colspan="3">${escH(g)}</th></tr>`:'';g0=g;
-    return head+`<tr class="${lvk?'lv'+lvk:changed?'lv1':''}"><td>${escH(x.l)}</td><td>${p?escH(LV(p.v))+tvClinic(p):'<span class="hint">—</span>'}</td><td${lvk?` data-why="${escH(awhy(k))}" title="${escH(awhy(k))}"`:''}>${lvk>=2?'⚠️ ':lvk===1?'🟡 ':''}${escH(LV(x.v))}${changed?' <span class="hint">◀変</span>':''}${tvClinic(x)}</td></tr>`;}).join('');
+    return head+`<tr class="${lvk?'lv'+lvk:changed?'chgrow':''}"><td>${escH(x.l)}</td><td>${p?escH(LV(p.v))+tvClinic(p):'<span class="hint">—</span>'}</td><td${lvk?` data-why="${escH(awhy(k))}" title="${escH(awhy(k))}"`:''}>${lvk>=2?'⚠️ ':lvk===1?'🟡 ':''}${escH(LV(x.v))}${changed?' <span class="hint">◀変</span>':''}${tvClinic(x)}</td></tr>`;}).join('');
   const cls=lv>=2?'bad':lv===1?'warn':prev?'ok':'info';
   const title=lv>=2?'⚠️ 要確認 — 設定・測定値のアラート':lv===1?'🟡 注意 — 設定・測定値のアラート':prev?(chg.length?`✅ アラートなし（設定が${chg.length}項目変わりました）`:'✅ アラートなし（前回と同じ設定）'):'記録しました（この患者の初めての記録）';
   $('result').innerHTML=`<div class="verdict ${cls}"><h2>${title}</h2>
