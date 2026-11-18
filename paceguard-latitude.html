@@ -1485,10 +1485,15 @@ const tvNum=v=>{const m=String(v||'').match(/([<>]?)\s*(-?\d+(?:\.\d+)?)/);if(!m
 const tvCh=k=>{const m=k.match(/^lead:([^:]*):/);return m?m[1]:'';};
 const TV_LEAD=(re)=>k=>/^lead:/.test(k)&&re.test(k);
 // ルールの値（全体）。患者ごとに上書きできる（基準JSONの tvRules。{none:true}＝この患者は決めない）
-const TV_DEF={nodata:{on:1},ampA:{v:0.5},ampV:{v:3.0},thr:{v:1.5},pimp:{lo:300,hi:1000},simp:{lo:50,hi:100},bat:{warn:1,alert:0.5},af:{v:1.0},chg:{on:1},margin:{out:2,sens:0.5},rel:{warn:10,alert:20}};
-const TV_NAMES={nodata:'最新の日常測定が「記録なし」',ampA:'心房 心内波高値',ampV:'心室（右心室・左心室） 心内波高値',thr:'ペーシング閾値',pimp:'ペーシングインピーダンス',simp:'ショックインピーダンス',bat:'交換までの予測期間',af:'%AT/AF',chg:'設定（ゾーン・ATR・モード・レート・AV Delayなど）',margin:'マージン（出力と閾値・感度と波高値）',rel:'前回からの変化（閾値・インピーダンス・波高値）'};
+const TV_DEF={nodata:{on:1},ampA:{v:0.5},ampV:{v:3.0},thr:{v:1.5},pimp:{lo:300,hi:1000},simp:{lo:50,hi:100},bat:{warn:1,alert:0.5},af:{v:1.0},chg:{on:1},margin:{out:2,sens:0.5},rel:{warn:10,alert:20},
+  sic:{warn:100,alert:300},apc:{on:1},afdur:{min:6}}; // sic・apc・afdur は Medtronic（CareLink）だけの項目（2026-11-18 当院のシート）
+const MDT_RULE_KEYS=new Set(['sic','apc','afdur']);
+const tvRuleKeys=()=>Object.keys(TV_DEF).filter(g=>window.PG_CL?!['nodata'].includes(g):!MDT_RULE_KEYS.has(g)); // CareLinkは「記録なし」が無い
+// 全体のルールの上書き（このPCに保存）：{g:{値}} または {g:{none:true}}＝全体で決めない
+let TV_G={};try{TV_G=JSON.parse(localStorage.getItem('pg_lat_tvglobal')||'{}')||{};}catch(_){}
+const TV_NAMES={sic:'SIC（センシング・インテグリティ・カウンタ）',apc:'心房リードポジションチェック',afdur:'AF持続時間（エピソード）',nodata:'最新の日常測定が「記録なし」',ampA:'心房 心内波高値',ampV:'心室（右心室・左心室） 心内波高値',thr:'ペーシング閾値',pimp:'ペーシングインピーダンス',simp:'ショックインピーダンス',bat:'交換までの予測期間',af:'%AT/AF',chg:'設定（ゾーン・ATR・モード・レート・AV Delayなど）',margin:'マージン（出力と閾値・感度と波高値）',rel:'前回からの変化（閾値・インピーダンス・波高値）'};
 let PT_TV=null; // 今表示・評価している患者の上書き
-const TVP=g=>{const o=PT_TV&&PT_TV[g];if(o&&o.none)return null;return {...TV_DEF[g],...(o||{})};};
+const TVP=g=>{const o=PT_TV&&PT_TV[g];if(o&&o.none)return null;const G=TV_G[g];if(!o&&G&&G.none)return null;return {...TV_DEF[g],...(G&&!G.none?G:{}),...(o||{})};};
 const tvIsPt=g=>!!(PT_TV&&PT_TV[g]);
 const TV_RULES=[ // g: ルールの種類／when: このキーに当てはめる／t: 説明／f: 値→{lv,why}
   {g:'ampA',when:TV_LEAD(/^lead:心房:心内波高値/),t:r=>`${r.v} mV未満で要確認`,f:(n,r)=>n<r.v?{lv:2,why:`${r.v} mV未満`}:null},
@@ -1497,6 +1502,9 @@ const TV_RULES=[ // g: ルールの種類／when: このキーに当てはめる
   {g:'pimp',when:TV_LEAD(/:ペーシングインピーダンス/),t:r=>`${r.lo}〜${r.hi} Ωの外で要確認`,f:(n,r)=>(n<r.lo||n>r.hi)?{lv:2,why:`${r.lo}〜${r.hi} Ωの外`}:null},
   {g:'simp',when:k=>/^lead:ショック:|ショックインピーダンス/.test(k),t:r=>`${r.lo}〜${r.hi} Ωの外で要確認`,f:(n,r)=>(n<r.lo||n>r.hi)?{lv:2,why:`${r.lo}〜${r.hi} Ωの外`}:null},
   {g:'bat',when:k=>k==='bat:years',t:r=>`${r.warn}年以下で注意／${r.alert}年以下で要確認`,f:(n,r)=>n<=r.alert?{lv:2,why:`${r.alert}年以下`}:n<=r.warn?{lv:1,why:`${r.warn}年以下`}:null},
+  {g:'sic',when:k=>k==='sic',t:r=>`${r.warn}以上で注意／${r.alert}以上で要確認`,f:(n,r)=>n>=r.alert?{lv:2,why:`${r.alert}以上（センシング確認）`}:n>=r.warn?{lv:1,why:`${r.warn}以上`}:null},
+  {g:'apc',when:k=>k==='leadpos',t:()=>'成功以外で要確認',f:()=>null},
+  {g:'afdur',when:k=>/^epi:/.test(k),t:r=>`AFのエピソードが${r.min}分以上で要確認（抗凝固確認）`,f:()=>null},
   {g:'af',when:k=>k==='atAf',t:r=>`${r.v}%以上で${window.PG_CL?'注意':'要確認'}`,f:(n,r)=>n>=r.v?{lv:2,why:`${r.v}%以上`}:null}, // Medtronic（CareLink）は注意（2026-11-18 当院）
 ];
 // 前回から変わったら要確認にする設定
@@ -1534,9 +1542,9 @@ function tvAlerts(cur,prev){
       const r=(b-a)/a*100,mag=R.dir===0?Math.abs(r):R.dir>0?r:-r;const lv=mag>=rel.alert?2:mag>=rel.warn?1:0;
       if(lv)out.push({k,lv,txt:`${x.l} ${R.name}（${LV(P[k].v)}→${LV(x.v)}、${r>0?'+':''}${Math.round(r)}%）`});}}
   // Medtronicだけの項目（2026-11-18 当院のシート）：SIC 100以上で注意・300以上で要確認／心房リードポジションチェック 成功以外で要確認／AFのエピソードが6分以上で要確認（抗凝固確認）
-  if(C.sic){const n=tvNum(C.sic.v);if(n>=300)out.push({k:'sic',lv:2,txt:`SIC ${C.sic.v}：300以上（センシング確認）`});else if(n>=100)out.push({k:'sic',lv:1,txt:`SIC ${C.sic.v}：100以上`});}
-  if(C.leadpos&&!/^成功/.test(String(C.leadpos.v).trim()))out.push({k:'leadpos',lv:2,txt:`心房リードポジションチェック：${C.leadpos.v}`});
-  for(const [k,x] of Object.entries(C))if(/^epi:/.test(k)&&x.ep&&mdtIsAF(x.ep.type)&&x.ep.sec>=360)out.push({k,lv:2,txt:`AF持続時間 ${x.v}：6分以上。抗凝固確認！`});
+  // （SICはTV_RULESで判定）
+  if(TVP('apc')&&C.leadpos&&!/^成功/.test(String(C.leadpos.v).trim()))out.push({k:'leadpos',lv:2,txt:`心房リードポジションチェック：${C.leadpos.v}${tvIsPt('apc')?'（この患者のルール）':''}`});
+  {const r=TVP('afdur');if(r)for(const [k,x] of Object.entries(C))if(/^epi:/.test(k)&&x.ep&&mdtIsAF(x.ep.type)&&x.ep.sec>=r.min*60)out.push({k,lv:2,txt:`AF持続時間 ${x.v}：${r.min}分以上。抗凝固確認！${tvIsPt('afdur')?'（この患者のルール）':''}`});}
   // マージン：ペーシング出力が閾値の○倍以上か／感度が波高値の○倍以下か（部屋ごと）
   if(mg){const chOf=lab=>{const m=String(lab).match(/(心房|右心室|右室|左心室|左室|心室)/);return m?m[1].replace('右室','右心室').replace('左室','左心室'):'';};
     const leadV=(ch,metric)=>{const k=Object.keys(C).find(k=>k.startsWith(`lead:${ch}:`)&&k.includes(metric));return k?{k,n:tvNum(LV(C[k].v))}:null;};
@@ -1548,16 +1556,29 @@ function tvAlerts(cur,prev){
   return out.sort((a,b)=>b.lv-a.lv);
 }
 // この患者だけのルール（経静脈）：画面と保存
-const TV_FIELDS={nodata:[],ampA:[['v','mV未満']],ampV:[['v','mV未満']],thr:[['v','V以上']],pimp:[['lo','Ω（下限）'],['hi','Ω（上限）']],simp:[['lo','Ω（下限）'],['hi','Ω（上限）']],bat:[['warn','年以下で注意'],['alert','年以下で要確認']],af:[['v','%以上']],chg:[],margin:[['out','倍（出力÷閾値がこれ未満で要確認）'],['sens','倍（感度÷波高値がこれを超えたら要確認）']],rel:[['warn','%以上で注意'],['alert','%以上で要確認']]};
+const TV_FIELDS={sic:[['warn','以上で注意'],['alert','以上で要確認']],apc:[],afdur:[['min','分以上で要確認']],nodata:[],ampA:[['v','mV未満']],ampV:[['v','mV未満']],thr:[['v','V以上']],pimp:[['lo','Ω（下限）'],['hi','Ω（上限）']],simp:[['lo','Ω（下限）'],['hi','Ω（上限）']],bat:[['warn','年以下で注意'],['alert','年以下で要確認']],af:[['v','%以上']],chg:[],margin:[['out','倍（出力÷閾値がこれ未満で要確認）'],['sens','倍（感度÷波高値がこれを超えたら要確認）']],rel:[['warn','%以上で注意'],['alert','%以上で要確認']]};
 function tvPtRulesUi(){
   const box=$('tvPtRules');if(!box)return;const R=PT_TV||{};
   $('tvPtSum').textContent=Object.keys(R).length?`（${Object.keys(R).length}項目を変更中：${Object.keys(R).map(g=>TV_NAMES[g]).join('・')}）`:'（全体のルールのまま）';
-  box.innerHTML=`<table class="crit"><tr><th>ルール</th><th>この患者</th></tr>${Object.keys(TV_DEF).map(g=>{const r=R[g],d=TV_DEF[g],v={...d,...(r&&!r.none?r:{})};
+  box.innerHTML=`<table class="crit"><tr><th>ルール</th><th>この患者</th></tr>${tvRuleKeys().map(g=>{const r=R[g],d=TV_DEF[g],v={...d,...(r&&!r.none?r:{})};
     const sel=`<select data-tg="${g}" data-tt="mode"><option value="__inh"${!r?' selected':''}>全体のルールのまま</option>${TV_FIELDS[g].length?`<option value="__set"${r&&!r.none?' selected':''}>この患者は次の値</option>`:''}<option value="__none"${r&&r.none?' selected':''}>決めない</option></select>`;
     const ins=TV_FIELDS[g].map(([f,u])=>`<input class="inp" style="width:70px" data-tg="${g}" data-tt="${f}" value="${hasN(v[f])?v[f]:''}"> <span class="hint">${u}</span>`).join(' ');
-    const keep=PT_TV;PT_TV=null;const gtxt=(()=>{const rr=TVP(g);if(!rr)return '決めない';const T=TV_RULES.find(x=>x.g===g);return T?T.t(rr):g==='nodata'?'記録なしで注意':g==='chg'?'前回から変わったら要確認':g==='margin'?`出力が閾値の${rr.out}倍未満／感度が波高値の${rr.sens}倍超で要確認`:`${rr.warn}%以上で注意／${rr.alert}%以上で要確認`;})();PT_TV=keep;
+    const keep=PT_TV;PT_TV=null;const gtxt=(()=>{const rr=TVP(g);if(!rr)return '決めない';const T=TV_RULES.find(x=>x.g===g);return T&&!(g==='apc')?T.t(rr):g==='apc'?'成功以外で要確認':g==='nodata'?'記録なしで注意':g==='chg'?'前回から変わったら要確認':g==='margin'?`出力が閾値の${rr.out}倍未満／感度が波高値の${rr.sens}倍超で要確認`:`${rr.warn}%以上で注意／${rr.alert}%以上で要確認`;})();PT_TV=keep;
     return `<tr><td>${TV_NAMES[g]}<div class="hint">全体：${escH(gtxt)}</div></td><td>${sel} ${ins}</td></tr>`;}).join('')}</table>`;
 }
+// 全体のルール（経静脈・CareLink）：⚙設定の「設定アラートのルール（基準値）」の欄
+function tvGlobalText(g){const keep=PT_TV;PT_TV=null;const rr=TVP(g);PT_TV=keep;if(!rr)return '決めない';const T=TV_RULES.find(x=>x.g===g);
+  return g==='apc'?'成功以外で要確認':T?T.t(rr):g==='nodata'?'記録なしで注意':g==='chg'?'前回から変わったら要確認':g==='margin'?`出力が閾値の${rr.out}倍未満／感度が波高値の${rr.sens}倍超で要確認`:`${rr.warn}%以上で注意／${rr.alert}%以上で要確認`;}
+function tvGlobalUi(){const box=$('setRules');if(!box)return;
+  box.innerHTML=`<table class="crit"><tr><th>項目</th><th>アラートを出す条件</th></tr>${tvRuleKeys().map(g=>{const G=TV_G[g],v={...TV_DEF[g],...(G&&!G.none?G:{})};
+    const sel=`<select data-gg="${g}" data-gt="mode"><option value="on"${!(G&&G.none)?' selected':''}>使う</option><option value="none"${G&&G.none?' selected':''}>決めない</option></select>`;
+    const ins=TV_FIELDS[g].map(([f,u])=>`<input class="inp" style="width:70px" data-gg="${g}" data-gt="${f}" value="${hasN(v[f])?v[f]:''}"> <span class="hint">${u}</span>`).join(' ');
+    return `<tr><td>${TV_NAMES[g]}<div class="hint">今：${escH(tvGlobalText(g))}</div></td><td>${sel} ${ins}</td></tr>`;}).join('')}</table>`;}
+function tvGlobalSave(clear){const R={};
+  if(!clear){const box=$('setRules');box.querySelectorAll('[data-gt="mode"]').forEach(e=>{const g=e.dataset.gg;if(e.value==='none'){R[g]={none:true};return;}
+    const o={};box.querySelectorAll(`[data-gg="${g}"]:not([data-gt="mode"])`).forEach(i=>{const t=i.value.trim();if(hasN(t)&&+t!==TV_DEF[g][i.dataset.gt])o[i.dataset.gt]=+t;});if(Object.keys(o).length)R[g]=o;});}
+  TV_G=R;try{if(Object.keys(R).length)localStorage.setItem('pg_lat_tvglobal',JSON.stringify(R));else localStorage.removeItem('pg_lat_tvglobal');}catch(_){}
+  tvGlobalUi();$('setRulesMsg').innerHTML=`<span class="ok-t">${clear?'最初の設定に戻しました':'保存しました'}（次の評価から使います）</span>`;if(setTrendLast)setTrendRender(setTrendLast.id,setTrendLast.st);}
 async function tvPtRulesSave(clear){
   if(!PT_ID)return;const R={};
   if(!clear){const box=$('tvPtRules');const modes={};box.querySelectorAll('[data-tt="mode"]').forEach(e=>modes[e.dataset.tg]=e.value);
@@ -1600,6 +1621,7 @@ async function runTVEvents(){
   tlAuto(id);
 }
 // 経静脈デバイスのレポートを記録して、前回と比べる（波形の比較はしない）
+const PG_BRAND=window.PG_CL?'PaceGuard CareLink':'PaceGuard LATITUDE';
 let mdtPendNote='',mdtPendSerial='',mdtKeepId='',mdtPendEgm=[]; // mdtPendEgm：待っていたPDFから作った波形の画像（runTVで記録に入れる） // mdtKeepId：記録する項目は無いが患者が分かるMedtronicのPDF（グラフだけのページなど）→ その患者のフォルダへ
 const tvDateKey=d=>{const m=String(d||'').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})(?:\D+(\d{1,2}):(\d{2}))?/);return m?m[1]+m[2].padStart(2,'0')+m[3].padStart(2,'0')+(m[4]||'0').padStart(2,'0')+(m[5]||'00'):'';};
 const tvClinic=x=>x&&x.clinic?`<div class="hint">医療施設での最後の測定：${escH(LV(x.clinic))}${x.clinicDate?`（${escH(String(x.clinicDate).replace(/(\d{4})年(\d{1,2})月(\d{1,2})日/,'$1/$2/$3'))}）`:''}</div>`:'';
@@ -1669,7 +1691,16 @@ function tlAutoOpen(sicd){placeSetCard(!sicd);let want;if(sicd){want=true;try{co
   document.addEventListener('mouseover',e=>{const el=e.target.closest('[data-why]');if(el)show(el);});
   document.addEventListener('mouseout',e=>{const el=e.target.closest('[data-why]');if(el&&!el.contains(e.relatedTarget))tip.hidden=true;});
   window.addEventListener('scroll',()=>{tip.hidden=true;},{passive:true});})();
-if(window.PG_CL){try{$('brandName').textContent='CareLink';$('brandSub').textContent='MEDTRONIC REMOTE MONITOR · β';}catch(_){}}
+if(window.PG_CL){try{$('brandName').textContent='CareLink';$('brandSub').textContent='MEDTRONIC REMOTE MONITOR · β';
+  // CareLink版：画面の「LATITUDE」「S-ICD」の説明を、Medtronic（CareLink）用に置き換える
+  document.title='PaceGuard CareLink（β）';
+  const ft=document.querySelector('footer');if(ft)ft.innerHTML='PaceGuard CareLink β — Medtronic CareLink のレポート（測定値・設定・イベントの波形）を読み、前回と比べて記録します。pdf.jsをCDNから読み込みます（初回のみ要ネット）。<br>データフォルダの「基準」フォルダに <code>&lt;患者ID&gt;.json</code>、「患者PDF」フォルダの患者ごとのフォルダにPDFと波形の画像を保存します。医療機器ではありません。';
+  const rb=$('setRules')&&$('setRules').parentElement;if(rb){const h=rb.querySelector('.hint');if(h)h.textContent='Medtronic（ペースメーカー・ICD・CRT-D）の測定値・設定のアラートの条件です。ここで決めた条件に当てはまったら、アラートを出します（⚠️要確認・🟡注意）。患者ごとに変える時は、推移の表の下の「この患者だけのルール」で変えます。このPCに保存します。';
+    const n2=rb.querySelectorAll('.hint')[1];if(n2&&/システムインピーダンス/.test(n2.textContent))n2.textContent='基準値は当院のシート（Bostonと同じ）。SIC・心房リードポジションチェック・AF持続時間はMedtronicだけの項目です。';}
+  const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);const fix=[];while(walker.nextNode())fix.push(walker.currentNode);
+  for(const t of fix){const v=t.nodeValue;if(!/LATITUDE|S-ICD|S-ECG|今日の波形比較/.test(v))continue;
+    t.nodeValue=v.replace(/今日の波形比較を開始/g,'今日の比較を開始').replace(/S-ICD以外/g,'Medtronic').replace(/〰 S-ECGだけ/g,'〰 EGMだけ').replace(/〰 S-ECG/g,'〰 EGM').replace(/LATITUDE/g,'CareLink');}
+}catch(_){}}
 let curSettings=null; // 今回のレポートから読んだ設定
 function extractFields(items, annotStrs, rawPdfText){
   annotStrs=annotStrs||[]; rawPdfText=rawPdfText||'';
@@ -2686,14 +2717,13 @@ function tlAuto(id){if(id)tlLoad(id,true).catch(()=>{});}
 function tlReset(id,msg){setTrendRender(null,null);tl.id=id||'';tl.items=[];tl.cache.clear();$('tlId').value=id||'';$('tlSum').textContent=id?`ID ${id}・${msg}`:'';$('tlMsg').textContent=id?`ID ${id}：${msg}`:'';$('tlBody').hidden=true;}
 try{const v=localStorage.getItem('pg_lat_tlopen');if(v)$('tlCard').open=v==='1';}catch(_){}
 if(window.PG_CL)$('tlCard').open=false; // CareLink（Medtronicの経静脈デバイス）は波形の比較をしないので、タイムラインは閉じておく（見たい時に開く）
-setRulesUi();
-$('setRulesSave').onclick=setRulesSave;
+if(window.PG_CL){setTimeout(tvGlobalUi,0);$('setRulesSave').onclick=()=>tvGlobalSave(false);}else{setRulesUi();$('setRulesSave').onclick=setRulesSave;}
 $('ptRulesSave').onclick=()=>ptRulesSave(false);
 $('tvPtSave').onclick=()=>tvPtRulesSave(false);$('tvPtClear').onclick=()=>tvPtRulesSave(true);
 // ルールの欄（推移表のルールの列・⚙設定の欄のルールの説明）：最初は隠す。チェックで表示（覚えておく）
 {let on=false;try{on=localStorage.getItem('pg_lat_showrule')==='1';}catch(_){}$('setShowRule').checked=on;document.body.classList.toggle('norule',!on);
  $('setShowRule').onchange=()=>{const v=$('setShowRule').checked;document.body.classList.toggle('norule',!v);try{localStorage.setItem('pg_lat_showrule',v?'1':'0');}catch(_){}};}$('ptRulesClear').onclick=()=>ptRulesSave(true);
-$('setRulesDef').onclick=()=>{SET_RULES=cloneDef();try{localStorage.removeItem(SET_RULES_KEY);}catch(_){}setRulesUi();$('setRulesMsg').innerHTML='<span class="ok-t">最初の設定に戻しました</span>';if(setTrendLast)setTrendRender(setTrendLast.id,setTrendLast.st);};
+$('setRulesDef').onclick=()=>{if(window.PG_CL)return tvGlobalSave(true);SET_RULES=cloneDef();try{localStorage.removeItem(SET_RULES_KEY);}catch(_){}setRulesUi();$('setRulesMsg').innerHTML='<span class="ok-t">最初の設定に戻しました</span>';if(setTrendLast)setTrendRender(setTrendLast.id,setTrendLast.st);};
 for(const k of ['setOnlyChg','setShowOther'])$(k).onchange=()=>{try{localStorage.setItem('pg_lat_'+k,$(k).checked?'1':'0');}catch(_){}if(setTrendLast)setTrendRender(setTrendLast.id,setTrendLast.st);};
 try{for(const k of ['setOnlyChg','setShowOther']){const v=localStorage.getItem('pg_lat_'+k);if(v!==null)$(k).checked=v==='1';}}catch(_){}
 $('tlCard').addEventListener('toggle',()=>{if(tlAutoSet){tlAutoSet=false;return;}try{localStorage.setItem('pg_lat_tlopen',$('tlCard').open?'1':'0');}catch(_){}});
@@ -2738,7 +2768,7 @@ async function doPrint(withResult){
   if(withResult){
     const res=$('result').cloneNode(true);res.querySelectorAll('button,#setBaseMsg').forEach(e=>e.remove());res.querySelectorAll('details').forEach(d=>d.setAttribute('open','')); // 印刷では全部開く
     const ov=!$('overlayCard').hidden?['overlay','diff'].map(id=>{try{return `<img class="ov" src="${$(id).toDataURL()}">`;}catch(_){return '';}}).join(''):'';
-    h+=`<div class="pp" style="text-align:left"><div class="prhead"><b>PaceGuard LATITUDE　比較結果</b><span>印刷 ${new Date().toLocaleString('ja-JP')}</span></div>
+    h+=`<div class="pp" style="text-align:left"><div class="prhead"><b>${PG_BRAND}　比較結果</b><span>印刷 ${new Date().toLocaleString('ja-JP')}</span></div>
       <div>患者ID：<b>${escH($('fId').value||'—')}</b>　照会日：${escH($('fDate').value||'—')}　機種：${escH($('fDev').value||'—')}</div>
       ${res.innerHTML.trim()?res.innerHTML:'<div class="verdict info"><h2>比較結果がありません</h2>評価を行ってから印刷してください。</div>'}
       ${ov?`<div style="margin-top:8px"><b>重ね描き</b>（青＝比較相手／橙＝今回、赤＝形が違う所）</div>${ov}`:''}
@@ -2766,7 +2796,7 @@ async function runEval(mode){
   if(auto&&!dirHandle){$('result').innerHTML='<div class="verdict info"><h2>自動評価できませんでした</h2>保存フォルダに接続されていません。「🔍 前回と比較」か「📌 基準と比較」を押してください（許可を聞かれたら「許可」）。</div>';return;}
   if(auto&&!$('fId').value.trim()){$('result').innerHTML='<div class="verdict info"><h2>患者IDを決めてください</h2>IDを自動で読み取れませんでした。上の候補を押すかIDを入力してから、評価ボタンを押してください。</div>';return;}
   const id=$('fId').value.trim();
-  if(!pdfLoaded){ $('result').innerHTML=`<div class="verdict info"><h2>PDFを読み込んでください</h2>${dirHandle?'フォルダは接続済みです。':''}LATITUDEのPDFをドロップしてから、もう一度押してください。</div>`;return; }
+  if(!pdfLoaded){ $('result').innerHTML=`<div class="verdict info"><h2>PDFを読み込んでください</h2>${dirHandle?'フォルダは接続済みです。':''}${window.PG_CL?'CareLink':'LATITUDE'}のPDFをドロップしてから、もう一度押してください。</div>`;return; }
   if(!curSigs.length){ $('result').innerHTML='<div class="verdict bad"><h2>波形が見つかりません</h2>S-ECGの段を自動で見つけられませんでした。使いたい段をまとめてドラッグして範囲を指定してください。</div>';return; }
   if(!id){ $('result').innerHTML='<div class="verdict bad"><h2>患者IDがありません</h2>IDを入力してください。</div>';return; }
   const pool=curPool&&!curPool.error?curPool:null;
@@ -3024,7 +3054,7 @@ async function startWatch(dir,{processExisting=false}={}){
   try{if(window.Notification&&Notification.permission==='default')await Notification.requestPermission();}catch(_){}
   clearInterval(watchTimer);watchTimer=setInterval(pollWatch,3000);pollWatch();
   setWatchStatus(`<span class="ok-t">👀 自動比較中：${escH(dir.name)}</span>（新しいPDFをダウンロードすると自動で評価します。このタブは開いたままにしてください）`+
-    (document.documentElement.dataset.pgExt?'　🔔 通知：拡張機能から出します':'<br><span class="warn-t">🔔 通知が出ない時は、chrome://extensions →「PaceGuard LATITUDE 取り込み」の「詳細」→「ファイルの URL へのアクセスを許可する」をオンにして、このタブを再読み込みしてください。</span>'));
+    (document.documentElement.dataset.pgExt?'　🔔 通知：拡張機能から出します':'<br><span class="warn-t">🔔 通知が出ない時は、chrome://extensions →「${PG_BRAND} 取り込み」の「詳細」→「ファイルの URL へのアクセスを許可する」をオンにして、このタブを再読み込みしてください。</span>'));
   $('watchStop').disabled=false;
 }
 const sizeSeen=new Map();
@@ -3054,7 +3084,7 @@ async function pollWatch(){
         const h2=document.querySelector('#result h2'),verdict=h2?h2.textContent.trim():'経静脈デバイス',lv=/要確認/.test(verdict)?2:/注意/.test(verdict)?1:0,cause=document.querySelector('#result .cause');
         const row={t:new Date().toLocaleTimeString('ja-JP'),file:f.name,moved,id,date:$('fDate').value,verdict:`${curTV.tv}：${verdict}`,cause:cause?cause.textContent:'',lv};
         watchLog.unshift(row);renderWatchLog();
-        if(lv>0)notifyResult('PaceGuard LATITUDE：'+row.verdict,`ID ${id||'—'}　${row.date||''}\n${row.cause}`,lv);
+        if(lv>0)notifyResult(PG_BRAND+'：'+row.verdict,`ID ${id||'—'}　${row.date||''}\n${row.cause}`,lv);
         continue;}
       if(curNonSicd&&mdtKeepId){ // Medtronicの値の無いページ：患者のフォルダに保存済み（loadPDFの中）
         let moved=`コピー：${PDF_DIR}/${mdtKeepId}`;if($('watchMove').checked){try{await watchDir.removeEntry(f.name);moved=`→ ${PDF_DIR}/${mdtKeepId}`;}catch(_){}}
@@ -3079,8 +3109,8 @@ async function pollWatch(){
       if(lastArchive&&lastArchive.file===f){moved=lastArchive.path;if($('watchMove').checked||!KEEP_PDF){try{await watchDir.removeEntry(f.name);moved='→ '+moved;}catch(_){moved='コピー：'+moved;}}else moved='コピー：'+moved;}
       const row={t:new Date().toLocaleTimeString('ja-JP'),file:f.name,moved,id:$('fId').value,date:$('fDate').value,verdict,cause:cause?cause.textContent.replace(/^主な原因：/,''):'',lv};
       watchLog.unshift(row);renderWatchLog();
-      if(isEcg&&!/イベントの記録/.test(verdict))notifyResult('PaceGuard LATITUDE：'+verdict,`ID ${row.id||'—'}　${row.date||''}\n${row.cause}`,lv);
-      if(isEcg&&!/イベントの記録/.test(verdict))document.title=(lv===2?'⚠️ ':lv===1?'🟡 ':'✅ ')+'PaceGuard LATITUDE';
+      if(isEcg&&!/イベントの記録/.test(verdict))notifyResult(PG_BRAND+'：'+verdict,`ID ${row.id||'—'}　${row.date||''}\n${row.cause}`,lv);
+      if(isEcg&&!/イベントの記録/.test(verdict))document.title=(lv===2?'⚠️ ':lv===1?'🟡 ':'✅ ')+PG_BRAND;
     }
     setWatchStatus(`<span class="ok-t">👀 自動比較中：${escH(watchDir.name)}</span>（最終確認 ${new Date().toLocaleTimeString('ja-JP')}）`);
   }catch(e){setWatchStatus(`<span class="warn-t">自動比較でエラー：${escH(e.message||e)}。「👀 自動比較を始める」を押し直してください。</span>`);clearInterval(watchTimer);watchDir=null;}
@@ -3105,7 +3135,7 @@ function showStartScreen(){const d=new Date();$('ssDate').textContent=`${d.getFu
 $('ssStart').onclick=async()=>{
   if(!dirHandle&&!savedHandle){ // 初めての時：先にデータフォルダ（波形認識）を選ぶ → もう一度押して受け取りフォルダ
     await $('pickFolder').onclick();
-    if(dirHandle){$('ssStart').textContent='▶ 受け取りフォルダ（LATITUDE）を選んで開始';$('ssNote2').textContent='データフォルダを選びました。もう一度押して、LATITUDEのPDFが入るフォルダを選んでください。';}
+    if(dirHandle){$('ssStart').textContent=`▶ 受け取りフォルダ（${window.PG_CL?'CareLink':'LATITUDE'}）を選んで開始`;$('ssNote2').textContent=`データフォルダを選びました。もう一度押して、${window.PG_CL?'CareLink':'LATITUDE'}のPDFが入るフォルダを選んでください。`;}
     return;}
   $('startScreen').hidden=true;$('watchStart').click();};
 $('ssLater').onclick=()=>{$('startScreen').hidden=true;$('startBanner').hidden=false;};
