@@ -308,7 +308,7 @@
     <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:8px 0">
       <label class="hint"><input type="checkbox" id="setOnlyChg"> 変わった項目・ルール外だけ</label>
       <label class="hint"><input type="checkbox" id="setShowOther" checked> その他の項目も表示</label>
-      <span class="hint">左＝過去・右＝最新／<span class="chgk">黄</span>＝前の回から変更・<span class="badk">赤</span>＝治療に関わる変更・ルール外／📌＝基準</span>
+      <span class="hint">左＝過去・右＝最新／<span class="chgk">黄</span>＝前の回から変更（アラートではない）・<span class="badk">赤</span>＝ルール（基準値）の範囲外／📌＝基準の回</span>
     </div>
     <div id="setTrend"><div class="hint">患者を読み込むと表示します。</div></div>
   </details>
@@ -395,8 +395,8 @@
     <div class="hint" style="margin-top:6px">評価したPDFを「データフォルダ／このフォルダ／患者ごとのフォルダ／日付.pdf」に保存します。患者ごとのフォルダ名は下の「患者ファイルの名前」と同じ形（.jsonを除いたもの）です。</div>
     <div class="hint" style="margin-top:6px">新しい患者のファイルを作るときの名前です。使える項目：<code>{ID}</code>（患者ID）・<code>{機種}</code>　例：<code>{ID}.json</code>、<code>{ID}_{機種}.json</code>。<br>既にあるファイルは今の名前のまま使います。ファイル名を手で変えても、ファイルの中に書かれた患者IDで自動的に見つけます。</div>
     <div style="margin-top:10px;padding:8px 10px;border:1px solid var(--line);border-radius:8px">
-      <b>🔔 設定アラートのルール</b>
-      <div class="hint">前回から変わった設定・📌基準と違う設定は、ルールに関係なくアラートを出します。ここでは「この値でなければアラート」「この範囲の外ならアラート」を決めます（このPCに保存）。</div>
+      <b>🔔 設定アラートのルール（基準値）</b>
+      <div class="hint">ここで決めた範囲から外れた設定だけ、⚠️要確認のアラートを出します。前回から変わっただけではアラートにしません（設定の推移の表で黄色になります）。このPCに保存します。</div>
       <div id="setRules"></div>
       <div style="margin-top:6px"><button id="setRulesSave">保存</button> <button id="setRulesDef" class="ghost">最初の設定に戻す</button> <span class="status" id="setRulesMsg"></span></div>
     </div>
@@ -800,24 +800,19 @@ function ruleText(k){const r=SET_RULES[k];if(!r)return '';if(r.eq)return `${r.eq
 function ruleBreak(k,v){const r=SET_RULES[k];if(!r||v==null)return '';if(r.eq)return v!==r.eq?`ルール外（${r.eq}であること）`:'';
   const n=parseFloat(v);if(isNaN(n))return '';if(hasN(r.min)&&n<+r.min)return `ルール外（${r.min}以上であること）`;if(hasN(r.max)&&n>+r.max)return `ルール外（${r.max}以下であること）`;return '';}
 const setImp=k=>{const K=SET_KNOWN.find(x=>x.k===k);return K?K.imp:0;};
-// 今回の設定について、アラートを作る：ルール外＝要確認／前回から変わった＝治療関係は要確認・それ以外は注意／（前回と同じでも）基準と違う＝注意
-function settingsAlerts(cur,prev,base,baseWhen){
-  const out=[];if(!cur||!cur.n)return out;const C=cur.items,P=prev&&prev.items||{},B=base&&base.items||{};
-  for(const [k,x] of Object.entries(C)){
-    const rb=ruleBreak(k,x.v),tail=rb?`・${rb}`:'',lvR=rb?2:0;
-    if(P[k]&&P[k].v!==x.v)out.push({lv:Math.max(lvR,setImp(k)>=2?2:1),k,txt:`${x.l}が前回から変更（${P[k].v}→${x.v}）${tail}`});
-    else if(B[k]&&B[k].v!==x.v)out.push({lv:Math.max(lvR,1),k,txt:`${x.l}が📌基準${baseWhen?`（${baseWhen}）`:''}と違う（${B[k].v}→${x.v}）${tail}`});
-    else if(rb)out.push({lv:2,k,txt:`${x.l} ${x.v}：${rb}`});
-  }
-  return out.sort((a,b)=>b.lv-a.lv||setImp(b.k)-setImp(a.k));
+// 今回の設定について、アラートを作る：ルール（基準値）の範囲から外れた設定だけ＝要確認（前回から変わっただけではアラートにしない）
+function settingsAlerts(cur){
+  const out=[];if(!cur||!cur.n)return out;
+  for(const [k,x] of Object.entries(cur.items)){const rb=ruleBreak(k,x.v);if(rb)out.push({lv:2,k,txt:`${x.l} ${x.v}：${rb}`});}
+  return out.sort((a,b)=>setImp(b.k)-setImp(a.k));
 }
-function setAlertHtml(alerts,cur,hasPrev){
+function setAlertHtml(alerts,cur,chg){
   const go='<a href="#setCard" class="hint" onclick="document.getElementById(\'setCard\').open=true">⚙ 設定の推移を見る</a>';
   if(!cur||!cur.n)return `<div class="setbox"><b>⚙ 設定</b>　<span class="hint">このレポートから設定を読み取れませんでした（「🔧 設定の読み取り結果」で確認できます）。</span></div>`;
-  if(!alerts.length)return `<div class="setbox"><b>⚙ 設定</b>　<span class="ok-t">✅ ${hasPrev?'前回から変更なし・':''}ルールの範囲内</span>　${go}</div>`;
+  const chgTxt=chg&&chg.length?`<div class="hint" style="margin-top:4px">前回から変わった設定（アラートではありません）：${chg.map(x=>`${escH(x.l)} ${escH(x.p)}→${escH(x.c)}`).join('、')}</div>`:'';
+  if(!alerts.length)return `<div class="setbox"><b>⚙ 設定</b>　<span class="ok-t">✅ ルールの範囲内</span>　${go}${chgTxt}</div>`;
   const lv=Math.max(...alerts.map(a=>a.lv));
-  return `<div class="setbox alert lv${lv}"><b>🔔 設定アラート ${alerts.length}件</b>　${go}<ul>${alerts.map(a=>`<li>${a.lv>=2?'⚠️':'🟡'} ${escH(a.txt)}</li>`).join('')}</ul>
-    ${alerts.some(a=>a.k==='sensing'||a.k==='gain')?'<div class="hint">ℹ️ センシング構成・ゲインが変わると、S-ECGの形・波高も変わります。波形の判定は設定の変更による違いの可能性があります。</div>':''}</div>`;
+  return `<div class="setbox alert lv${lv}"><b>🔔 設定アラート ${alerts.length}件</b>　${go}<ul>${alerts.map(a=>`<li>⚠️ ${escH(a.txt)}</li>`).join('')}</ul>${chgTxt}</div>`;
 }
 // ===== 設定の推移（時系列の表） =====
 let setTrendLast=null;
@@ -839,7 +834,7 @@ function setTrendRender(id,st){
   const ic=l=>l===2?'⚠️':l===1?'🟡':l===0?'✅':'';
   const head=cols.map(c=>`<th class="${c.pdf&&c.pdf===basePdf?'base':''}" title="${escH(c.secg||c.date||'')}">${c.pdf&&c.pdf===basePdf?'📌 ':''}${short(c.secg||c.date)}<br><span class="hint">${ic(c.level)}</span></th>`).join('');
   const body=keys.map((k,i)=>{const imp=setImp(k),main=order(k)<99;
-    return `<tr${main?'':' class="oth"'}><th>${escH(name(k))}</th><td class="hint">${escH(ruleText(k))}</td>${grid[i].map(c=>c.v==null?'<td class="hint">—</td>':`<td class="${c.rb?'bad':c.chg?(imp>=2?'bad':'chg'):''}" title="${c.rb?escH(c.rb):c.chg?'前の回から変更':''}">${c.rb?'⚠️ ':''}${escH(c.v)}${c.chg?' <span class="hint">◀変</span>':''}</td>`).join('')}</tr>`;}).join('');
+    return `<tr${main?'':' class="oth"'}><th>${escH(name(k))}</th><td class="hint">${escH(ruleText(k))}</td>${grid[i].map(c=>c.v==null?'<td class="hint">—</td>':`<td class="${c.rb?'bad':c.chg?'chg':''}" title="${c.rb?escH(c.rb):c.chg?'前の回から変更':''}">${c.rb?'⚠️ ':''}${escH(c.v)}${c.chg?' <span class="hint">◀変</span>':''}</td>`).join('')}</tr>`;}).join('');
   box.innerHTML=keys.length?`<div class="settab"><table><tr><th>項目</th><th>ルール</th>${head}</tr>${body}</table></div>`:'<div class="hint">変わった項目・ルール外の項目はありません。</div>';
   const sc=box.querySelector('.settab');if(sc)sc.scrollLeft=sc.scrollWidth; // 右端＝最新を見せる
 }
@@ -1938,11 +1933,9 @@ async function runEval(mode){
   // 設定：波形の比較相手（前回/基準）とは別に、いつも「前回」の設定と比べる
   const setPrev=prevSettingsRec(store,curKey,reloadArchived),setCur=curSettings&&curSettings.n?curSettings:null;
   const setCmp=compareSettings(setPrev&&setPrev.settings,setCur),setChg=setCmp?setCmp.changed:[];
-  const baseSv=store&&store.baseline&&store.baseline.pdf?((store.saves||[]).find(x=>x.pdf===store.baseline.pdf)||null):null;
-  const baseSet=baseSv&&baseSv.settings&&baseSv.pdf!==reloadArchived?baseSv.settings:null;
-  const setAl=settingsAlerts(setCur,setPrev&&setPrev.settings,baseSet,baseSv&&(baseSv.secg||baseSv.date));
+  const setAl=settingsAlerts(setCur);
   const setLv=setAl.length?Math.max(...setAl.map(a=>a.lv)):0;
-  const setHtml=setAlertHtml(setAl,curSettings,!!setPrev);
+  const setHtml=setAlertHtml(setAl,curSettings,setChg);
   const addSet=(where)=>{const v=document.querySelector('#result .verdict');if(!v)return;const h2=v.querySelector('h2');where==='top'&&h2?h2.insertAdjacentHTML('afterend',setHtml):v.insertAdjacentHTML('beforeend',setHtml);};
   if(auto)mode=prevRep?'prev':'base'; // 自動：前の日付があれば前回、なければ基準（同じ日付でも比べられる）
   const ref=mode==='base'?baseRep:prevRep,refLabel=mode==='base'?'基準':'前回';
