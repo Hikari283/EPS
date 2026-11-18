@@ -727,7 +727,7 @@ async function loadPDF(file,{forceEval=false,pageNo=0}={}){
     tlAutoOpen(!curNonSicd); // S-ICD以外はタイムラインを閉じる
     if(curNonSicd){ // S-ICD以外：Bostonの経静脈デバイス（ICD・CRTなど）のレポートなら、測定値・設定を読んで記録する
       // Medtronic（CareLink）：測定値・設定を読んで記録する。患者ID・送信日時・機種名もここで決める
-      let mdtDiag=null;mdtPendNote='';mdtPendSerial='';
+      let mdtDiag=null;mdtPendNote='';mdtPendSerial='';mdtKeepId='';
       try{const flatM=lastAllItems.map(x=>x.s).join(' ')+' '+lastRawItems.map(x=>x.s).join(' ')+' '+rawPdfText;
         mdtDiag={found:isMedtronic(flatM),pjs:lastAllItems.length,raw:lastRawItems.length,n:0,id:'',sent:''};
         if(isMedtronic(flatM)){const m1=parseMDT(lastRawItems,flatM),m2=parseMDT(lastAllItems,flatM),md=m2.n>m1.n?m2:m1;
@@ -758,6 +758,11 @@ async function loadPDF(file,{forceEval=false,pageNo=0}={}){
         return;}
       // Medtronic のIDの無いPDF：患者PDF\_待ち\<シリアル番号> に取っておく（IDのあるPDFが来たら、その患者のフォルダへ移す）
       if(mdtPendSerial&&lastPdfFile){const to=await archivePend(lastPdfFile,mdtPendSerial);if(to)mdtPendNote+=`PDFは「${to}」に取っておきました。`;}
+      else if(mdtDiag&&mdtDiag.found&&$('fId').value.trim()&&dirHandle&&KEEP_PDF){ // Medtronicで患者は分かるが、記録する項目が無いページ：PDFだけ患者のフォルダへ
+        const to=await archivePdf($('fId').value.trim(),{name:'',date:$('fDate').value,device:$('fDev').value},'経静脈');
+        if(to){mdtKeepId=$('fId').value.trim();curSigs=[];curFeat=[];curNoise=[];curPool=null;$('overlayCard').hidden=true;$('traceMsg').textContent='';
+          $('result').innerHTML=`<div class="verdict info"><h2>📁 CareLinkのPDF（記録する項目なし）</h2>患者ID：${escH(mdtKeepId)}　グラフなど、記録する値の無いページでした。PDFは「${escH(to)}」に保存しました。</div>`;
+          tlAuto(mdtKeepId);return;}}
       // それ以外：波形の比較・保存はしない
       curSigs=[];curFeat=[];curNoise=[];curPool=null;$('overlayCard').hidden=true;$('traceMsg').textContent='';
       $('result').innerHTML=`<div class="verdict info"><h2>${mdtPendNote?'⏳ 同じ送信のほかのPDFを待っています':'S-ICD以外のPDFです（対象外）'}</h2>${mdtPendNote?`<div>${escH(mdtPendNote)}</div>`:''}機種：${escH(curNonSicd)}　患者ID：${escH($('fId').value||'—')}<br>${mdtDiag?`<div class="hint">手がかり：Medtronic/CareLinkの文字 ${mdtDiag.found?'あり':'なし'}／Medtronicとして読めた項目 ${mdtDiag.n}（6以上で記録）${mdtDiag.keys?'：'+escH(mdtDiag.keys):''}／pdf.jsの文字項目 ${mdtDiag.pjs}・自前抽出 ${mdtDiag.raw}</div>`:''}<span class="hint">このツールはS-ICDのS-ECGだけを比較します。このPDFは比較・保存しません。</span></div>`;
@@ -1562,7 +1567,7 @@ async function runTVEvents(){
   tlAuto(id);
 }
 // 経静脈デバイスのレポートを記録して、前回と比べる（波形の比較はしない）
-let mdtPendNote='',mdtPendSerial='';
+let mdtPendNote='',mdtPendSerial='',mdtKeepId=''; // mdtKeepId：記録する項目は無いが患者が分かるMedtronicのPDF（グラフだけのページなど）→ その患者のフォルダへ
 const tvDateKey=d=>{const m=String(d||'').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})(?:\D+(\d{1,2}):(\d{2}))?/);return m?m[1]+m[2].padStart(2,'0')+m[3].padStart(2,'0')+(m[4]||'0').padStart(2,'0')+(m[5]||'00'):'';};
 const tvClinic=x=>x&&x.clinic?`<div class="hint">医療施設での最後の測定：${escH(LV(x.clinic))}${x.clinicDate?`（${escH(String(x.clinicDate).replace(/(\d{4})年(\d{1,2})月(\d{1,2})日/,'$1/$2/$3'))}）`:''}</div>`:'';
 const TV_GRP=k=>/^lead:/.test(k)?'リード（最新の日常測定）':/^(pace|atAf)/.test(k)?'ペーシング率・AT/AF':/^(bat|charge)/.test(k)?'電池':/^set:/.test(k)?'設定':/^(evTotal|ev:)/.test(k)?'イベント':/^(act|obs|shock|leadpos)/.test(k)?'そのほか':'';
@@ -1832,7 +1837,9 @@ try{const v=localStorage.getItem('pg_lat_watchmove');if(v)$('watchMove').checked
 $('watchMove').addEventListener('change',()=>{try{localStorage.setItem('pg_lat_watchmove',$('watchMove').checked?'1':'0');}catch(_){}});
 let lastPdfFile=null,lastPdfBytes=null,lastArchive=null,curNonSicd=null;
 // S-ICD以外（ペースメーカー・ICDなど）のPDFは比較しない。文字が読めない時は判断しない（S-ICDとして扱う）
-function nonSicdOf(text,dev){const t=String(text||'');if(t.replace(/\s+/g,'').length<200)return null;
+function nonSicdOf(text,dev){const t=String(text||'');
+  if(isMedtronic(t))return dev||'Medtronic'; // Medtronic（CareLink）は文字が少ないページ（ヒストグラムだけなど）でも S-ICD ではない
+  if(t.replace(/\s+/g,'').length<200)return null;
   return /S-?ICD|S-?ECG|EMBLEM|SQ-?RX|A209|A219/i.test(t)?null:(dev||'機種不明');}
 // S-ICD以外のPDFを、患者PDF\_対象外 に移す（元の名前のまま）
 async function archiveNonSicd(file){if(!dirHandle||!file)return null;
@@ -3010,6 +3017,9 @@ async function pollWatch(){
         watchLog.unshift(row);renderWatchLog();
         if(lv>0)notifyResult('PaceGuard LATITUDE：'+row.verdict,`ID ${id||'—'}　${row.date||''}\n${row.cause}`,lv);
         continue;}
+      if(curNonSicd&&mdtKeepId){ // Medtronicの値の無いページ：患者のフォルダに保存済み（loadPDFの中）
+        let moved=`コピー：${PDF_DIR}/${mdtKeepId}`;if($('watchMove').checked){try{await watchDir.removeEntry(f.name);moved=`→ ${PDF_DIR}/${mdtKeepId}`;}catch(_){}}
+        watchLog.unshift({t:new Date().toLocaleTimeString('ja-JP'),file:f.name,moved,id:mdtKeepId,date:$('fDate').value,verdict:'CareLinkのPDF（記録する項目なし）',cause:'',lv:0});renderWatchLog();continue;}
       if(curNonSicd&&mdtPendSerial){ // Medtronic のIDの無いPDF：_待ち に取ってある（loadPDFの中）。見張りのフォルダからは消してよい
         let moved='';if(KEEP_PDF&&$('watchMove').checked){try{await watchDir.removeEntry(f.name);moved=`→ ${PDF_DIR}/_待ち/${mdtPendSerial}`;}catch(_){}}else if(KEEP_PDF)moved=`コピー：${PDF_DIR}/_待ち/${mdtPendSerial}`;
         watchLog.unshift({t:new Date().toLocaleTimeString('ja-JP'),file:f.name,moved,id:'',date:$('fDate').value,verdict:'⏳ IDの無いPDF（同じ送信のIDのあるPDFを待っています）',cause:'シリアル番号 '+mdtPendSerial,lv:0});renderWatchLog();continue;}
