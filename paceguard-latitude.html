@@ -795,11 +795,11 @@ async function extractRawItems(ab){
 // ※実際のLATITUDEのレポートで項目名・値の書き方を確認して SET_KNOWN を調整すること（「🔧 設定の読み取り結果」で確認できる）
 const SET_V={onoff:'(オン|オフ|ON|OFF|On|Off|有効|無効)',zone:'(\\d{3}|オフ|OFF|Off)',sense:'(一次|二次|代替|プライマリ|セカンダリ|オルタネイト|オルタネート|Primary|Secondary|Alternate)',gain:'([12]\\s?[xX×]|[xX×]\\s?[12]|[12]倍)',pol:'(標準|逆|反転|STD|REV|Standard|Reverse)'};
 // 表示はレポートと同じ書き方（2026-11-18 ユーザー指示）。前に「一次」「標準」などで保存した記録・ルールも同じ値として扱う
-const LV=v=>({'一次':'プライマリ','二次':'セカンダリ','代替':'オルタネイト','標準':'STD','逆':'REV','1x':'1倍','2x':'2倍'}[v]||v);
+const LV=v=>({'一次':'プライマリ','二次':'セカンダリ','代替':'オルタネイト','標準':'STD','逆':'REV','1x':'1倍','2x':'2倍'}[v]||String(v??'').replace(/^(\d+) bpm$/,'$1 min⁻¹')||v);
 const SET_KNOWN=[ // imp:2＝治療に関わる（変わったら強調）／1＝波形の見え方が変わる
   {k:'therapy',name:'治療',lab:/^(?:頻拍)?治療(?:の設定|モード|設定)?$|^Therapy(?:Mode)?$|^(?:S-?ICD)?(?:パルスジェネレータの)?モード$/i,re:[`(?:頻拍)?治療(?:の設定|モード|設定)?[:：]?${SET_V.onoff}`,`Therapy(?:Mode)?[:：]?${SET_V.onoff}`,`Therapy\\s?(On|Off)`],imp:2},
-  {k:'shockZone',name:'ショックゾーン',ok:/^\d{3}( bpm)?$/,lab:/^(?!.*(?:条件|コンディショナル))ショックゾーン$|^ShockZone$/i,re:[`(?<!条件付き|条件付|コンディショナル|Conditional)ショックゾーン[:：]?(\\d{3})`,`(?<!Conditional)ShockZone[:：]?(\\d{3})`],unit:'bpm',imp:2},
-  {k:'condZone',name:'条件付きショックゾーン',ok:/^(\d{3}( bpm)?|オフ)$/,lab:/^(?:条件付き?|コンディショナル)(?:ショック)?ゾーン$|^Conditional(?:Shock)?Zone$/i,re:[`(?:条件付き?|コンディショナル)(?:ショック)?ゾーン[:：]?${SET_V.zone}`,`ConditionalShockZone[:：]?${SET_V.zone}`],unit:'bpm',imp:2},
+  {k:'shockZone',name:'ショックゾーン',ok:/^\d{3}( min⁻¹)?$/,lab:/^(?!.*(?:条件|コンディショナル))ショックゾーン$|^ShockZone$/i,re:[`(?<!条件付き|条件付|コンディショナル|Conditional)ショックゾーン[:：]?(\\d{3})`,`(?<!Conditional)ShockZone[:：]?(\\d{3})`],unit:'min⁻¹',imp:2},
+  {k:'condZone',name:'条件付きショックゾーン',ok:/^(\d{3}( min⁻¹)?|オフ)$/,lab:/^(?:条件付き?|コンディショナル)(?:ショック)?ゾーン$|^Conditional(?:Shock)?Zone$/i,re:[`(?:条件付き?|コンディショナル)(?:ショック)?ゾーン[:：]?${SET_V.zone}`,`ConditionalShockZone[:：]?${SET_V.zone}`],unit:'min⁻¹',imp:2},
   {k:'postShock',name:'ショック後ペーシング',lab:/^ショック後(?:の)?ペーシング$|^Post-?ShockPacing$/i,re:[`ショック後(?:の)?ペーシング[:：]?${SET_V.onoff}`,`Post-?ShockPacing[:：]?${SET_V.onoff}`],imp:2},
   {k:'polarity',name:'ショック極性',lab:/^ショック(?:の)?極性$|^ShockPolarity$/i,re:[`ショック(?:の)?極性[:：]?${SET_V.pol}`,`ShockPolarity[:：]?${SET_V.pol}`],imp:2},
   {k:'sensing',name:'センシング構成',lab:/^センシング(?:構成|ベクトル|ベクター)$|^Sensing(?:Configuration|Vector)$/i,re:[`センシング(?:構成|ベクトル|ベクター)[:：]?${SET_V.sense}`,`Sensing(?:Configuration|Vector)[:：]?${SET_V.sense}`],imp:1},
@@ -819,7 +819,7 @@ function setVal(v,unit){let s=setNorm(v);
   else if(/^([12])(?:[xX×]|倍)$/.test(s))s=s[0]+'倍';else if(/^[xX×]([12])$/.test(s))s=s.slice(-1)+'倍';else if(/^(Standard|STD|標準)$/i.test(s))s='STD';else if(/^(Reverse|REV|反転|逆)$/i.test(s))s='REV';
   else if(unit&&/^\d+$/.test(s))s+=' '+unit;
   else if(/^(選択的交換指標)$/.test(s))s='ERI';else if(/^(寿命末期)$/.test(s))s='EOL';
-  else s=s.replace(/(\d)(?:min(?:-?1|⁻¹)?|回\/分)$/,'$1bpm').replace(/(\d)(?:ohms?|オーム)$/i,'$1Ω').replace(/(\d)(bpm|ms|mV|V|J|Ω)$/,'$1 $2');
+  else s=s.replace(/(\d)(?:min(?:-?1|⁻¹)?|bpm|回\/分)$/,'$1 min⁻¹').replace(/(\d)(?:ohms?|オーム)$/i,'$1Ω').replace(/(\d)(bpm|ms|mV|V|J|Ω)$/,'$1 $2');
   return s;}
 // pdf.jsの文字（全ページ、位置つき）から行を作り、間が空いた所でセルに分ける
 function textLines(items){
@@ -907,7 +907,7 @@ function settingsDebugHtml(s){
 }
 // ===== 設定のアラート（前回から変わった・基準と違う・ルールの範囲外） =====
 const SET_ENUM={therapy:['オン','オフ'],postShock:['オン','オフ'],smartPass:['オン','オフ'],afMon:['オン','オフ'],sensing:['プライマリ','セカンダリ','オルタネイト'],gain:['1倍','2倍'],polarity:['STD','REV']};
-const SET_NUM={shockZone:'bpm',condZone:'bpm'};
+const SET_NUM={shockZone:'min⁻¹',condZone:'min⁻¹'};
 // 最初の値（2026-11-18 ユーザー指定）。ゲインはルールにしない。センシング構成は「前回から変わったら」。インピーダンスは添付文書の値
 const SET_RULES_DEF={therapy:{eq:'オン'},shockZone:{min:170,max:250},condZone:{min:170,max:240},postShock:{eq:'オン'},polarity:{eq:'STD'},sensing:{chg:true},smartPass:{eq:'オン'},afMon:{eq:'オン'},
   sysImp:{lo:40,hi:100},battery:{alert:20}};
@@ -968,7 +968,7 @@ function setTrendRender(id,st){
   const order=k=>{const i=SET_KNOWN.findIndex(K=>K.k===k);return i<0?99:i;};
   // 前の版で保存した記録の読み違い（グラフの日付・目盛りの「その他」、ゾーンの -1 など）は表に出さない
   const badKey=k=>k.startsWith('x:')&&(/\d/.test(k)||/[\u0080-\u024f\u02b0-\u02ff\u2000-\u206f\ufffd]/.test(k));
-  const okVal=(k,v)=>{const K=SET_KNOWN.find(x=>x.k===k);return !(K&&K.ok&&!K.ok.test(v));};
+  const okVal=(k,v)=>{const K=SET_KNOWN.find(x=>x.k===k);return !(K&&K.ok&&!K.ok.test(LV(v)));};
   let keys=[...new Set(cols.flatMap(c=>Object.keys(c.settings.items)))].filter(k=>!badKey(k)&&(showOther||order(k)<99)).sort((a,b)=>order(a)-order(b)||a.localeCompare(b,'ja'));
   const name=k=>{for(let i=cols.length-1;i>=0;i--){const x=cols[i].settings.items[k];if(x)return x.l;}return k;};
   // セルの状態：前の回（その項目を読めた一番近い回）と違えば変更
