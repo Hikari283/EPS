@@ -1268,7 +1268,7 @@ function tvAlerts(cur,prev){
   const rel=TVP('rel'),chg=TVP('chg'),mg=TVP('margin');
   const nd=TVP('nodata');
   for(const [k,x] of Object.entries(C)){const n=tvNum(LV(x.v));
-    if(nd&&/^lead:/.test(k)&&/記録なし/.test(String(x.v)))out.push({k,lv:1,txt:`${x.l}：最新の日常測定が記録なし${x.clinic?`（医療施設での最後の測定 ${LV(x.clinic)}${x.clinicDate?'・'+x.clinicDate:''}）`:''}${tvIsPt('nodata')?'（この患者のルール）':''}`});
+    if(nd&&/^lead:/.test(k)&&/記録なし/.test(String(x.v)))out.push({k,lv:1,txt:`${x.l}：記録なし。各種設定確認！${x.clinic?`（医療施設での最後の測定 ${LV(x.clinic)}${x.clinicDate?'・'+x.clinicDate:''}）`:''}${tvIsPt('nodata')?'（この患者のルール）':''}`});
     for(const R of TV_RULES){if(!R.when(k)||isNaN(n))continue;const r=TVP(R.g);if(!r)continue;const a=R.f(n,r);if(a)add(k,a.lv,a.why+(tvIsPt(R.g)?'（この患者のルール）':''));}
     if(chg&&TV_CHG.test(k)&&P[k]&&LV(P[k].v)!==LV(x.v))out.push({k,lv:2,txt:`${x.l}が前回から変更（${LV(P[k].v)}→${LV(x.v)}）`});
     if(rel)for(const R of TV_REL){if(!R.when(k)||!P[k])continue;const a=tvNum(LV(P[k].v)),b=n;if(isNaN(a)||isNaN(b)||a<=0)continue;
