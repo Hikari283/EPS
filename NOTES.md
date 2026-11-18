@@ -358,3 +358,4 @@ CARTO 3 の Export データ（フォルダ/ZIP）をブラウザだけで表示
 - 起動用: `carto-viewer.bat`（同じフォルダの carto-viewer.html を Edge/Chrome の `--app` で専用ウィンドウとして開く。どちらも無ければ既定のブラウザ）。
 - メニューバー: CARTO 3 の実メニュー（Study/Map/Point/Catheter/ECG/Display/Imaging/Window/Tools/Help）と同じ項目・順で `MENUS`（サブメニュー対応）。機能のある項目は動作、ビューア未対応は `U()`（グレー、押すと未対応表示）、CARTOでも無効なものは `D()`。各メニューの下に「ビューア独自の機能」を残している。
 - アプリ化(PWA): GitHub Pages の https://hikari283.github.io/EPS/carto-viewer.html をEdge/Chromeで開き「アプリとして入れる」→デスクトップのアイコンをダブルクリックで起動。`carto-viewer.webmanifest` / `carto-viewer-sw.js`（ネット可なら常に最新、不可なら前回版）/ アイコンPNG。file:// で直接開いた場合はSWを登録しない。
+- **シミュレーター（AF・初回PVI）** `SIM`（`simStart()`）: 仮想の左房（`laAnatomy()`）に仮想カテーテル（焼灼／円形10極）をマウスで動かし、位置→電位を `simEGM()` で生成。Enter=ポイント取得、A=通電。通電するとブロックが反映され `simActivate()`（Dijkstra）でLATを再計算。答え合わせ=`simIsolation()`。正解データは `SIM.T`（truth）。想定利用者: ME、1人1端末。次の候補: 頻拍症例(CTI)、ペーシング、採点・症例ファイル、実症例リプレイ。
