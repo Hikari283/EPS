@@ -2398,6 +2398,7 @@ $('watchStart').onclick=async()=>{
   try{
     let dir=null;try{dir=await idb('readonly',st=>st.get('watch'));}catch(_){}
     if(dir&&!$('watchPick').checked){if(await dir.requestPermission({mode:'readwrite'})!=='granted')dir=null;}else dir=null;
+    if(dir&&!(await dirAlive(dir)))dir=null; // 覚えていたフォルダが移動・削除されていたら、選び直してもらう
     if(!dir){dir=await window.showDirectoryPicker({mode:'readwrite',startIn:'downloads'});try{await idb('readwrite',st=>st.put(dir,'watch'));}catch(_){}}
     $('watchPick').checked=false;
     await startWatch(dir,{processExisting:$('watchExisting').checked});
@@ -2415,10 +2416,15 @@ $('ssStart').onclick=async()=>{
   $('startScreen').hidden=true;$('watchStart').click();};
 $('ssLater').onclick=()=>{$('startScreen').hidden=true;$('startBanner').hidden=false;};
 $('startBanner').onclick=()=>$('watchStart').click();
+// フォルダを移動した時の対策：覚えているフォルダが今もあるか／データフォルダに「基準」があるか
+async function dirAlive(h){try{const it=h.entries();await it.next();return true;}catch(_){return false;}}
+async function hasBase(h){try{await h.getDirectoryHandle(BASE_DIR);return true;}catch(_){return false;}}
 (async()=>{
   let w=null,d=null;try{w=await idb('readonly',st=>st.get('watch'));d=await idb('readonly',st=>st.get('dir'));}catch(_){}
   const granted=async h=>{try{return (await h.queryPermission({mode:'readwrite'}))==='granted';}catch(_){return false;}};
-  if(w&&d&&await granted(d)&&await granted(w)){
+  if(d&&await granted(d)&&!(await dirAlive(d)&&await hasBase(d))){ // データフォルダが移動された（または「基準」が無い）：選び直してもらう
+    dirHandle=null;savedHandle=null;setFolderStatus(`<span class="warn-t">データフォルダ「${escH(d.name)}」に「${escH(BASE_DIR)}」フォルダが見つかりません（フォルダを移動しましたか？）。📁で選び直してください。</span>`);d=null;}
+  if(w&&d&&await granted(d)&&await granted(w)&&await dirAlive(w)){
     dirHandle=d;savedHandle=d;setFolderStatus('<span class="ok-t">フォルダ接続済み：'+escH(d.name)+'（自動）</span>');
     await startWatch(w);return;
   }
