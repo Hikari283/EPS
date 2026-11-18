@@ -123,3 +123,17 @@ Export_Study-…/
 - シミュレーターの通電に **VARIPULSE（10極スパイラル）** を追加（先生の症例はPFA）。
 - 座標の向き・OCTARAYの寸法を、取説で確認して直す。
 - 本物のAF症例のExport（匿名化）で、読み込みを確認する（ブタのデータは、LATや電位が少ない）。
+
+---
+
+## 7. V8の機能の詳細【確認済：J&J MedTech 公式ページ jnjmedtech.com/en-US/products/cardiovascular/carto/software/ 、2026-11-18】
+先生のCARTOは **V8**（確認済み）。
+- **V8 Base**：信号解析の強化、基質（瘢痕など）の評価の改善、超音波の連携。
+- **LAT Velocity Vectors（LVV）**：洞調律またはペーシング中のマップ上に、興奮の伝わる速度を矢印で表示。名前は「Local」ではなく **LAT**。VTの瘢痕内の LAVA を見つけるための機能（虚血性VT 16例で15例でLAVAが消えた、という脚注あり）。
+- **Stability+**：呼吸による動きとカテーテル自体の動きを分け、安定の判定と VISITAG の表示を早くする。
+- **CARTO ELEVATE**：機械学習で信号を解析。**Complex Signal Identification** は、**心房粗動**の症例で、分裂電位を自動で取得してタグ付けする。**OPTRELL**（多電極カテーテル）と併用し、単極の遠距離成分を減らしてLATと電圧を安定させる。
+- **Enhanced CONFIDENSE**：**Smart Index** を使ったマッピングで、マップを自動で最適化し続ける。Smart Index が高いほど、マップの質が高い。
+- **CARTOSOUND FAM**：深層学習で、超音波カテーテルを数回転させるだけで左房の形を自動で作る（フレームの自動選択、呼吸ゲート）。
+- **VISITAG**：通電中のデータ（出力・接触力・時間）。Tag Index は効果を示すものではない（ユーザー設定）。
+- 公式のFDA届出（K231207, V8.0）は、PDFが圧縮されていて読めなかった（原文は未確認）。
+- ビューアへの反映：メニュー名を LVV／Complex Signal Identification に修正。シミュレーターに「Smart Index風（マップの充実度）」を追加（実際の計算式は非公開なので、色が付いた面積の割合で代用）。

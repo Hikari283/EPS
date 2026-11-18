@@ -1988,7 +1988,7 @@ const MENUS={
     {l:'透明度',sub:()=>[0,25,50,75].map(o=>({l:o+'%',c:()=>Math.round((1-S.opt.opacity)*100)===o,a:()=>{S.opt.opacity=1-o/100;$('#opacity').value=S.opt.opacity;dirtyAll('');syncViewOverlays();}}))},
     {l:'点の色',sub:()=>[['value','マップの値'],['white','白'],['label','ラベル付きを強調']].map(([v,l])=>({l,c:()=>S.opt.ptColor===v,a:()=>setSel('#ptColor',v)}))},
     {l:S.anim.prop?'Propagationを停止':'Propagationを再生',a:()=>togglePropPlay(),d:need},
-    {l:'Local Velocity Vectors風（伝導速度の矢印）',c:()=>isOn('#cvOn'),a:()=>tog('#cvOn'),d:need},{l:'焼灼点（Tag）',c:()=>isOn('#vtOn'),a:()=>tog('#vtOn')},{l:'焼灼点を線でつなぐ',c:()=>isOn('#vtChain'),a:()=>tog('#vtChain')},
+    {l:'LAT Velocity Vectors（LVV）風（伝導速度の矢印）',c:()=>isOn('#cvOn'),a:()=>tog('#cvOn'),d:need},{l:'焼灼点（Tag）',c:()=>isOn('#vtOn'),a:()=>tog('#vtOn')},{l:'焼灼点を線でつなぐ',c:()=>isOn('#vtChain'),a:()=>tog('#vtChain')},
     {l:'向き',sub:viewMenu}],
   imaging:()=>[
     U('Begin CARTOMERGE® Study'),D('Show Registration Toolbar'),SEP,
@@ -2029,7 +2029,7 @@ const MENUS={
     {l:'距離を測る（2点）',c:()=>S.mode==='dist',a:()=>{setMode('dist');clickTab('t-meas');},d:need},{l:'ラインの長さを測る',c:()=>S.mode==='line',a:()=>{setMode('line');clickTab('t-meas');},d:need},
     {l:'計測をすべて消す',a:()=>$('#measClear').click()},
     {l:'低電位領域の面積',a:()=>{clickTab('t-ana');$('#btnArea').click();},d:need},{l:'伝導速度',a:()=>{clickTab('t-ana');$('#btnCV').click();},d:need},
-    {l:'Complex Signal Identification風（分裂・遅延電位・LAVAの自動検出）',a:()=>{clickTab('t-ana');$('#btnEGM').click();},d:need},
+    {l:'Complex Signal Identification風（ELEVATE：分裂電位を自動で探す）',a:()=>{clickTab('t-ana');$('#btnEGM').click();},d:need},
     {l:'焼灼点の隙間チェック',a:()=>{clickTab('t-abl');$('#btnGap').click();},d:()=>!(S.study&&S.study.visitag)}],
   help:()=>[
     {l:'Online Help',a:()=>$('#btnHelp').click()},{l:'Keyboard Shortcuts...',a:()=>showText('Keyboard Shortcuts',shortcutsText())},SEP,
@@ -2869,7 +2869,15 @@ function simTruth(on){
 function simRenderPanel(){
   const el=$('#simInfo');if(!el)return;
   if(!SIM.active){el.textContent='「症例をはじめる」を押すと始まります。';return;}
-  el.innerHTML=`ポイント <b>${SIM.map.points.length}</b> 点　通電 <b>${S.study.visitag.sites.length}</b> 回　カテーテル：<b>${SIM.cath==='abl'?'焼灼（先端）':SIM.cath==='oct'?'オクタレイ（40点）':'円形（10極）'}</b>`;
+  el.innerHTML=`ポイント <b>${SIM.map.points.length}</b> 点　通電 <b>${S.study.visitag.sites.length}</b> 回　カテーテル：<b>${SIM.cath==='abl'?'焼灼（先端）':SIM.cath==='oct'?'オクタレイ（40点）':'円形（10極）'}</b><br>Smart Index風（マップの充実度）：<b>${simSmartIndex()}</b> %<span class="small">　※ 色が付いた面積の割合。実際のSmart Indexとは計算が違います（Enhanced CONFIDENSE風）</span>`;
+}
+function simSmartIndex(){
+  const m=SIM.map&&SIM.map.mesh,P=SIM.map&&SIM.map.points;if(!m||!P||!P.length)return 0;
+  const R2=Math.pow(S.opt.fill||8,2),used=[];for(let i=0;i<m.nv;i++)if(m.used?m.used[i]:1)used.push(i);
+  const step=Math.max(1,Math.floor(used.length/500));let n=0,c=0;
+  for(let k=0;k<used.length;k+=step){const i=used[k],x=m.verts[i*3],y=m.verts[i*3+1],z=m.verts[i*3+2];n++;
+    for(let j=0;j<P.length;j++){const p=P[j],dx=p.x-x,dy=p.y-y,dz=p.z-z;if(dx*dx+dy*dy+dz*dz<=R2){c++;break;}}}
+  return n?Math.round(100*c/n):0;
 }
 function simFrame(now){
   if(SIM.hv){const h=SIM.hv;SIM.hv=null;SIM.lastHv=h;simPlace(h.v,h.x,h.y);simAutoStep();}
