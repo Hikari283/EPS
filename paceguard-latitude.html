@@ -880,7 +880,8 @@ function parseTV(items){
       const RH=/^(ペーシング出力|感度|リードの極性|レートアダプティブペーシング|LV ?Multisite)/;
       if(cells.length>1&&/^(心室細動|心室頻拍(-?1)?|VF|VT(-?1)?|ATR ?Mode ?Switch)$/i.test(c0)){
         // 右の列の見出し・部屋名（● 心房 など）が同じ行に入ってきたら、そこから先は右の列として読む
-        const isRStart=c=>RH.test(tvClean(c.s))||(c.x0>=(midX!=null?midX-3:1e9)&&/^[●■◆◇]\s*(心房|心室|右心室|右室|左心室|左室|LV[ab]?|RV|RA)(?=$|\s|[(（])/.test(String(c.s).trim()));
+        // ●■◆は図形で、文字としては無いことがある：右の列の位置にある部屋名（心房・右心室・左心室(LVa)など）なら右の列の始まり
+        const isRStart=c=>RH.test(tvClean(c.s))||(c.x0>=(midX!=null?midX-3:1e9)&&/^(心房|心室|右心室|右室|左心室|左室|LV[ab]?|RV|RA)\s*([(（][^)）]*[)）])?$/.test(tvClean(c.s)));
         let cut=cells.findIndex((c,i)=>i>0&&isRStart(c));if(cut<0)cut=cells.length;
         const rest=cells.slice(1,cut);
         put(`set:${c0}`,c0,rest.map(c=>c.s).join(' / ').replace(/\s*\/\s*([-−⁻]?[1¹])(?=\s*\/|$)/g,'$1'),{o:oL++});last={L:`set:${c0}`,R:null};
@@ -1268,7 +1269,12 @@ function tvAlerts(cur,prev){
   const rel=TVP('rel'),chg=TVP('chg'),mg=TVP('margin');
   const nd=TVP('nodata');
   for(const [k,x] of Object.entries(C)){const n=tvNum(LV(x.v));
-    if(nd&&/^lead:/.test(k)&&/記録なし/.test(String(x.v)))out.push({k,lv:1,txt:`${x.l}：記録なし。各種設定確認！${x.clinic?`（医療施設での最後の測定 ${LV(x.clinic)}${x.clinicDate?'・'+x.clinicDate:''}）`:''}${tvIsPt('nodata')?'（この患者のルール）':''}`});
+    if(nd&&/^lead:/.test(k)&&/記録なし/.test(String(x.v))){
+      // 閾値→その部屋のペーシング出力、波高値→その部屋の感度 に注意を付ける（設定が見つからない時・インピーダンスは測定値の側）
+      const ch=tvCh(k).replace('右室','右心室').replace('左室','左心室'),set=/ペーシング閾値/.test(k)?'ペーシング出力':/心内波高値/.test(k)?'感度':'';
+      const targets=set&&ch?Object.keys(C).filter(sk=>sk.startsWith(`set:${set} ${ch}`)):[];
+      const msg=`${x.l}：記録なし。各種設定確認！${x.clinic?`（医療施設での最後の測定 ${LV(x.clinic)}${x.clinicDate?'・'+x.clinicDate:''}）`:''}${tvIsPt('nodata')?'（この患者のルール）':''}`;
+      if(targets.length){for(const sk of targets)out.push({k:sk,lv:1,txt:msg});}else out.push({k,lv:1,txt:msg});}
     for(const R of TV_RULES){if(!R.when(k)||isNaN(n))continue;const r=TVP(R.g);if(!r)continue;const a=R.f(n,r);if(a)add(k,a.lv,a.why+(tvIsPt(R.g)?'（この患者のルール）':''));}
     if(chg&&TV_CHG.test(k)&&P[k]&&LV(P[k].v)!==LV(x.v))out.push({k,lv:2,txt:`${x.l}が前回から変更（${LV(P[k].v)}→${LV(x.v)}）`});
     if(rel)for(const R of TV_REL){if(!R.when(k)||!P[k])continue;const a=tvNum(LV(P[k].v)),b=n;if(isNaN(a)||isNaN(b)||a<=0)continue;
