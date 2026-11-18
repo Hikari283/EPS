@@ -812,7 +812,7 @@ function tvRows(items){ // 位置つきの文字 → 行（上から順）とセ
     cells.forEach(c=>{c.s=c.s.replace(/\s+/g,' ').trim();});return {p,y,cells:cells.filter(c=>c.s)};});
 }
 const tvClean=s=>String(s||'').replace(/^[●■◆◇○□▲△\s]+/,'').replace(/\s+/g,' ').trim();
-const tvUnit=v=>String(v||'').replace(/min\s*[-−]?\s*1\b/g,'min⁻¹').replace(/(\d)\s*min⁻¹/g,'$1 min⁻¹').replace(/\s+/g,' ').trim();
+const tvUnit=v=>String(v||'').replace(/(\d)\s*W(?=$|\s|（)/g,'$1 Ω').replace(/min\s*[-−]?\s*1\b/g,'min⁻¹').replace(/(\d)\s*min⁻¹/g,'$1 min⁻¹').replace(/\s+/g,' ').trim();
 const TV_CH=/^(心房|心室|右心室|右室|左心室|左室|ショック)$/;
 const TV_MEAS_KEY=/^(lead|pace|atAf|bat|charge|evTotal):?/;
 function parseTV(items){
@@ -882,7 +882,7 @@ function parseTV(items){
 // ※実際のLATITUDEのレポートで項目名・値の書き方を確認して SET_KNOWN を調整すること（「🔧 設定の読み取り結果」で確認できる）
 const SET_V={onoff:'(オン|オフ|ON|OFF|On|Off|有効|無効)',zone:'(\\d{3}|オフ|OFF|Off)',sense:'(一次|二次|代替|プライマリ|セカンダリ|オルタネイト|オルタネート|Primary|Secondary|Alternate)',gain:'([12]\\s?[xX×]|[xX×]\\s?[12]|[12]倍)',pol:'(標準|逆|反転|STD|REV|Standard|Reverse)'};
 // 表示はレポートと同じ書き方（2026-11-18 ユーザー指示）。前に「一次」「標準」などで保存した記録・ルールも同じ値として扱う
-const LV=v=>({'一次':'プライマリ','二次':'セカンダリ','代替':'オルタネイト','標準':'STD','逆':'REV','1x':'1倍','2x':'2倍'}[v]||String(v??'').replace(/^(\d+) bpm$/,'$1 min⁻¹')||v);
+const LV=v=>({'一次':'プライマリ','二次':'セカンダリ','代替':'オルタネイト','標準':'STD','逆':'REV','1x':'1倍','2x':'2倍'}[v]||String(v??'').replace(/^(\d+) bpm$/,'$1 min⁻¹').replace(/^(\d+) ?W((?:（医療施設）)?)$/,'$1 Ω$2')||v);
 const SET_KNOWN=[ // imp:2＝治療に関わる（変わったら強調）／1＝波形の見え方が変わる
   {k:'therapy',name:'治療',lab:/^(?:頻拍)?治療(?:の設定|モード|設定)?$|^Therapy(?:Mode)?$|^(?:S-?ICD)?(?:パルスジェネレータの)?モード$/i,re:[`(?:頻拍)?治療(?:の設定|モード|設定)?[:：]?${SET_V.onoff}`,`Therapy(?:Mode)?[:：]?${SET_V.onoff}`,`Therapy\\s?(On|Off)`],imp:2},
   {k:'shockZone',name:'ショックゾーン',ok:/^\d{3}( min⁻¹)?$/,lab:/^(?!.*(?:条件|コンディショナル))ショックゾーン$|^ShockZone$/i,re:[`(?<!条件付き|条件付|コンディショナル|Conditional)ショックゾーン[:：]?(\\d{3})`,`(?<!Conditional)ShockZone[:：]?(\\d{3})`],unit:'min⁻¹',imp:2},
@@ -898,7 +898,7 @@ const SET_KNOWN=[ // imp:2＝治療に関わる（変わったら強調）／1�
 ];
 // 設定ではない項目（測定値・日時・個人情報など）は、その他の項目として比べない
 const SET_SKIP=/検出された日数|検出期間|概算|実行数|AFが|MRI保護|患者|氏名|ID|ふりがな|生年|性別|日時|日付|年月日|送信|読込|植込み日|最終|前回|次回|電池|バッテリ|残量|インピーダンス|抵抗|心拍数|測定|イベント|件数|エピソード|回数|持続|医師|施設|病院|電話|住所|ページ|レポート|シリアル|型式|モデル|S-?ECG表示|Patient|Name|Date|Battery|Impedance|Serial|Model|Page/i;
-const SET_VAL=/^(オン|オフ|ON|OFF|On|Off|有効|無効|あり|なし|はい|いいえ|一次|二次|代替|プライマリ|セカンダリ|オルタネイト|オルタネート|Primary|Secondary|Alternate|標準|逆|反転|Standard|Reverse|STD|REV|[12]\s?[xX×]|[xX×]\s?[12]|[12]倍|Therapy\s?(?:On|Off)(?:モード)?|ERI|EOL|BOL|OK|良好|正常|選択的交換指標|寿命末期|[-+]?\d+(?:\.\d+)?\s*(?:bpm|ms|mV|V|J|Ω|ohms?|オーム|%|s|秒|分|時間|日|回|拍|min(?:-?1|⁻¹)?|回\/分)?(?:\s*[\/／~〜-]\s*\d+(?:\.\d+)?\s*(?:bpm|ms|mV|V|J|%)?)?)$/;
+const SET_VAL=/^(オン|オフ|ON|OFF|On|Off|有効|無効|あり|なし|はい|いいえ|一次|二次|代替|プライマリ|セカンダリ|オルタネイト|オルタネート|Primary|Secondary|Alternate|標準|逆|反転|Standard|Reverse|STD|REV|[12]\s?[xX×]|[xX×]\s?[12]|[12]倍|Therapy\s?(?:On|Off)(?:モード)?|ERI|EOL|BOL|OK|良好|正常|選択的交換指標|寿命末期|[-+]?\d+(?:\.\d+)?\s*(?:bpm|ms|mV|V|J|Ω|W|ohms?|オーム|%|s|秒|分|時間|日|回|拍|min(?:-?1|⁻¹)?|回\/分)?(?:\s*[\/／~〜-]\s*\d+(?:\.\d+)?\s*(?:bpm|ms|mV|V|J|%)?)?)$/;
 const setNorm=s=>String(s||'').replace(/[Ａ-Ｚａ-ｚ０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/[\s　]+/g,'').replace(/[：:]$/,'');
 function setVal(v,unit){let s=setNorm(v);
   if(/^(オン|ON|On|有効|TherapyOn(?:モード)?)$/i.test(s))s='オン';else if(/^(オフ|OFF|Off|無効|TherapyOff(?:モード)?)$/i.test(s))s='オフ';
@@ -906,7 +906,7 @@ function setVal(v,unit){let s=setNorm(v);
   else if(/^([12])(?:[xX×]|倍)$/.test(s))s=s[0]+'倍';else if(/^[xX×]([12])$/.test(s))s=s.slice(-1)+'倍';else if(/^(Standard|STD|標準)$/i.test(s))s='STD';else if(/^(Reverse|REV|反転|逆)$/i.test(s))s='REV';
   else if(unit&&/^\d+$/.test(s))s+=' '+unit;
   else if(/^(選択的交換指標)$/.test(s))s='ERI';else if(/^(寿命末期)$/.test(s))s='EOL';
-  else s=s.replace(/(\d)(?:min(?:-?1|⁻¹)?|bpm|回\/分)$/,'$1 min⁻¹').replace(/(\d)(?:ohms?|オーム)$/i,'$1Ω').replace(/(\d)(bpm|ms|mV|V|J|Ω)$/,'$1 $2');
+  else s=s.replace(/(\d)W$/,'$1Ω').replace(/(\d)(?:min(?:-?1|⁻¹)?|bpm|回\/分)$/,'$1 min⁻¹').replace(/(\d)(?:ohms?|オーム)$/i,'$1Ω').replace(/(\d)(bpm|ms|mV|V|J|Ω)$/,'$1 $2');
   return s;}
 // pdf.jsの文字（全ページ、位置つき）から行を作り、間が空いた所でセルに分ける
 function textLines(items){
@@ -1172,7 +1172,7 @@ async function runTV(){
   $('result').innerHTML=`<div class="verdict ${cls}"><h2>${title}</h2>
     <div>🫀 Boston ${escH(tv.tv)}（経静脈）　患者ID：${escH(id)}　${prev?`比較：${escH(prev.date||'?')}（前回） → ${escH(date||'?')}（今回）`:escH(date||'')}</div>
     ${al.length?setAlertHtml(al,tv,chg):chg.length?`<div class="cause">前回から変わった設定（アラートではありません）：${chg.map(x=>`${escH(x.l)} ${escH(x.p)}→${escH(x.c)}`).join('、')}</div>`:''}
-    <details class="numdet" open><summary>📊 今回読めた測定値（${keys.length}項目）</summary><table class="crit"><tr><th>項目</th><th>前回</th><th>今回</th></tr>${rows}</table>
+    <details class="numdet"${numDetOpen()?' open':''}><summary>📊 今回読めた測定値（${keys.length}項目）</summary><table class="crit"><tr><th>項目</th><th>前回</th><th>今回</th></tr>${rows}</table>
     <div class="hint">波形（EGM）の比較はまだしていません。</div></details>
     ${tvSetBox(tv,prev&&prev.settings,date)}
     ${dirHandle?(saved?'':'<div class="warn-t">保存できませんでした（フォルダの許可を確認してください）</div>'):'<div class="warn-t">※フォルダ未選択のため保存できていません。</div>'}</div>`;
