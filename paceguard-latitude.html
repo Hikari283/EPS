@@ -704,11 +704,13 @@ async function loadPDF(file,{forceEval=false,pageNo=0}={}){
     tlAutoOpen(!curNonSicd); // S-ICD以外はタイムラインを閉じる
     if(curNonSicd){ // S-ICD以外：Bostonの経静脈デバイス（ICD・CRTなど）のレポートなら、測定値・設定を読んで記録する
       try{const t1=parseTV(lastRawItems),t2=parseTV(lastAllItems),tv=t2.n>t1.n?t2:t1; // 自前で取り出した文字とpdf.jsの文字の、多く読めた方
-        if(tv.n>=6&&Object.keys(tv.items).some(k=>/^(lead|pace):/.test(k)))curTV=tv;}catch(_){curTV=null;}
+        if(tv.n>=6&&Object.keys(tv.items).some(k=>/^(lead|pace):/.test(k)))curTV=tv;
+        // リードの表は無いが、経静脈デバイスのイベントのEGM（見出し「RVAT-603: 日時, 種類」）があるPDF：波形の画像だけ記録する
+        else if(lastPdfDoc&&tvStreamEvents(lastRawItems).some(e=>e.ev))curTV={tv:'経静脈',evOnly:true,items:{},n:0};}catch(_){curTV=null;}
       if(curTV){curSigs=[];curFeat=[];curNoise=[];curPool=null;$('overlayCard').hidden=true;$('traceMsg').textContent='';
         try{const ae=localStorage.getItem('pg_lat_autoeval');if(ae!==null)$('autoEval').checked=ae==='1';}catch(_){}
         if($('autoEval').checked||forceEval)await runTV();
-        else $('result').innerHTML=`<div class="verdict info"><h2>🫀 ${escH(curTV.tv)}（経静脈）のレポート</h2>${curTV.n}項目を読みました。「🔍 前回と比較」で記録・比較します。</div>`;
+        else $('result').innerHTML=`<div class="verdict info"><h2>🫀 ${escH(curTV.tv)}（経静脈）の${curTV.evOnly?'イベントのPDF':'レポート'}</h2>${curTV.evOnly?'イベントの波形があります。':`${curTV.n}項目を読みました。`}「🔍 前回と比較」で記録します。</div>`;
         return;}
       // それ以外：波形の比較・保存はしない
       curSigs=[];curFeat=[];curNoise=[];curPool=null;$('overlayCard').hidden=true;$('traceMsg').textContent='';
@@ -1283,16 +1285,30 @@ function tvSetBox(cur,prev,when){
     <table class="crit"><tr><th>項目</th><th>前回</th><th>今回</th></tr>${ks.map(k=>{const x=C[k],p=P[k],chg=p&&LV(p.v)!==LV(x.v);
       const lv=alv(k),rt=tvRuleText(k);return `<tr class="${lv?'lv'+lv:chg?'lv1':''}"><td>${escH(x.l)}${rt?`<div class="hint rulehint">${escH(rt)}</div>`:''}</td><td>${p?escH(LV(p.v)):'<span class="hint">—</span>'}</td><td>${lv>=2?'⚠️ ':lv===1?'🟡 ':''}${escH(LV(x.v))}${chg?' <span class="hint">◀変</span>':''}</td></tr>`;}).join('')}</table></details>`;
 }
+// 経静脈デバイスのイベントだけのPDF：イベントの波形を画像にして記録する（判定はしない）
+async function runTVEvents(){
+  await ensureDir();const id=$('fId').value.trim(),date=$('fDate').value,key=tvDateKey(date),ts=Date.now();
+  if(!id){$('result').innerHTML='<div class="verdict info"><h2>患者IDを決めてください</h2>IDを自動で読み取れませんでした。上の候補を押すかIDを入力してから、「🔍 前回と比較」を押してください。</div>';return;}
+  if(!dirHandle){$('result').innerHTML='<div class="verdict info"><h2>フォルダに接続してください</h2>イベントの波形を保存するには、データフォルダへの接続が必要です。</div>';return;}
+  const store=await readBaseline(id);let egm=[];try{egm=await saveTvEgm(id,date);}catch(_){egm=[];}
+  const paths=new Set(egm.map(e=>e.path)),saves=((store&&store.saves)||[]).filter(x=>!paths.has(x.pdf));
+  const dev=((store&&store.saves)||[]).filter(x=>x.tv&&x.settings).map(x=>x.tv).pop()||'経静脈';
+  for(const e of egm)saves.push({tv:dev,date,key,ts,pdf:e.path,secg:'',events:e.ev?[e.ev]:[],tx:meta.tx||'',level:null,feat:null});
+  const ok=egm.length?await writeBaseline(id,{...(store||{id,name:'',reports:[],history:[]}),saves}):false;
+  const evs=egm.filter(e=>e.ev).map(e=>`${escH(e.ev.no)}：${escH(String(e.ev.dt))}${e.ev.type?`（${escH(e.ev.type)}）`:''}`);
+  $('result').innerHTML=`<div class="verdict info"><h2>⚡ イベントの記録（${escH(dev)}・経静脈）</h2>患者ID：${escH(id)}　${evs.length?`イベント ${evs.join('、')} の波形を保存しました。`:''}${egm.filter(e=>!e.ev).length?`EGM ${egm.filter(e=>!e.ev).length}枚も保存しました。`:''}${egm.length?'タイムラインで見られます。':'波形のページを見つけられませんでした。'}${egm.length&&!ok?'<br><span class="warn-t">記録を保存できませんでした（フォルダの許可を確認してください）</span>':''}</div>`;
+  tlAuto(id);
+}
 // 経静脈デバイスのレポートを記録して、前回と比べる（波形の比較はしない）
 const tvDateKey=d=>{const m=String(d||'').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})(?:\D+(\d{1,2}):(\d{2}))?/);return m?m[1]+m[2].padStart(2,'0')+m[3].padStart(2,'0')+(m[4]||'0').padStart(2,'0')+(m[5]||'00'):'';};
 const TV_GRP=k=>/^lead:/.test(k)?'リード（最新の日常測定。記録なしの時は医療施設での最後の測定）':/^(pace|atAf)/.test(k)?'ペーシング率・AT/AF':/^(bat|charge)/.test(k)?'電池':/^set:/.test(k)?'設定':/^evTotal/.test(k)?'イベント':'';
 async function runTV(){
-  const tv=curTV;if(!tv)return;await ensureDir();
+  const tv=curTV;if(!tv)return;if(tv.evOnly)return runTVEvents();await ensureDir();
   const id=$('fId').value.trim(),date=$('fDate').value,key=tvDateKey(date),ts=Date.now();
   if(!id){$('result').innerHTML='<div class="verdict info"><h2>患者IDを決めてください</h2>IDを自動で読み取れませんでした。上の候補を押すかIDを入力してから、「🔍 前回と比較」を押してください。</div>';return;}
   const store=dirHandle?await readBaseline(id):null;
   PT_ID=id;PT_RULES=store&&store.setRules||null;PT_TV=store&&store.tvRules||null;
-  const saves=((store&&store.saves)||[]).filter(x=>!(x.tv&&x.key===key&&key)); // 同じ日付のレポートを読み直した時は置き換える
+  const saves=((store&&store.saves)||[]).filter(x=>!(x.tv&&x.settings&&x.key===key&&key)); // 同じ日付のレポート（測定値・設定の記録）を読み直した時は置き換える。イベントの記録は残す
   const prev=saves.filter(x=>x.tv&&x.settings&&x.settings.n&&(key?(x.key&&x.key<key):true)).sort((a,b)=>a.key<b.key?1:a.key>b.key?-1:(b.ts||0)-(a.ts||0))[0]||null;
   const cmp=compareSettings(prev&&prev.settings,tv),al=tvAlerts(tv,prev&&prev.settings),lv=al.length?Math.max(...al.map(a=>a.lv)):0;
   const chg=(cmp?cmp.changed:[]).filter(x=>!isMeas(x.k));
@@ -1902,7 +1918,7 @@ async function findRefPdf(ref,id,obj){
   const m=String(ref&&ref.date||'').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})(?:\D+(\d{1,2}):(\d{2}))?/);if(!m||!dirHandle)return null;
   const stem=`${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}${m[4]?'_'+m[4].padStart(2,'0')+m[5]:''}`;
   try{const top=await dirHandle.getDirectoryHandle(PDF_DIR);const pd=await top.getDirectoryHandle(fileNameFor(id,obj).replace(/\.json$/i,'')||id);
-    const names=[];for await(const [n,h] of pd.entries())if(h.kind==='file'&&n.startsWith(stem)&&/\.(pdf|png)$/i.test(n)&&!/_書類\d|_イベント\d/.test(n))names.push(n);
+    const names=[];for await(const [n,h] of pd.entries())if(h.kind==='file'&&n.startsWith(stem)&&/\.(pdf|png)$/i.test(n)&&!/_(書類|経静脈)\d|_イベント\d/.test(n))names.push(n);
     names.sort();if(!names.length)return null;return await (await pd.getFileHandle(names[names.length-1])).getFile();}catch(_){return null;}
 }
 async function ecgImage(doc,pageNo,full){ // 波形のページを描く。full＝ページをそのまま全部／それ以外＝緑の線がある範囲だけを高い倍率で（どちらもPDFの見た目は加工しない）
@@ -2057,7 +2073,7 @@ async function tlLoad(idArg,quiet){
     for(const fname of [...new Set([fileNameFor(id,tl.obj).replace(/\.json$/i,''),id])]){let pd=null;try{pd=await top.getDirectoryHandle(fname);}catch(_){}if(!pd)continue;
       for await(const [n,h] of pd.entries()){if(h.kind!=='file'||!/\.(pdf|png)$/i.test(n))continue;
         const m=n.match(/^(\d{4})-(\d{2})-(\d{2})(?:_(\d{2})(\d{2}))?/);const key=m?m[1]+m[2]+m[3]+(m[4]||'00')+(m[5]||'00'):'';
-        files.push({n,key,path:`${PDF_DIR}/${fname}/${n}`,doc:/_書類\d/.test(n)});}}}catch(_){}
+        files.push({n,key,path:`${PDF_DIR}/${fname}/${n}`,doc:/_(書類|経静脈)\d/.test(n)});}}}catch(_){}
   const items=[];
   for(const f of files.filter(f=>!f.doc).sort((a,b)=>a.key===b.key?(a.n<b.n?-1:1):(a.key<b.key?-1:1))){
     const sv=(st.saves||[]).find(x=>x.pdf===f.path);
@@ -2189,7 +2205,7 @@ async function purgeRun(auto){
   for await(const [folder,fh] of top.entries()){if(fh.kind!=='directory')continue;const pd=await top.getDirectoryHandle(folder);
     const names=[];for await(const [n,h] of pd.entries())if(h.kind==='file'&&/\.pdf$/i.test(n))names.push(n);
     for(const n of names){const path=`${PDF_DIR}/${folder}/${n}`;msg(`処理中：${folder}/${n}`);
-      if(folder.startsWith('_')||/_書類\d/.test(n)){toDel.push([pd,n]);continue;}
+      if(folder.startsWith('_')||/_(書類|経静脈)\d/.test(n)){toDel.push([pd,n]);continue;} // 経静脈の元のPDF：数値と波形の画像は記録済み
       try{const f=await (await pd.getFileHandle(n)).getFile(),doc=await lib.getDocument({data:new Uint8Array(await f.arrayBuffer()),isEvalSupported:false}).promise;
         const png=n.replace(/\.pdf$/i,'.png'),newPath=`${PDF_DIR}/${folder}/${png}`;
         const refs=[];for(const J of jsons)for(const sv of J.j.saves||[])if(sv.pdf===path)refs.push({J,sv});
@@ -2241,13 +2257,14 @@ async function rvLoad(){
       if(evLike(sv))continue; // イベントの記録は比較の対象外
       const f=sv.first||(sv.level!=null?{level:sv.level,causes:sv.causes||null,ref:sv.ref||null,mode:sv.mode||null,ts:sv.ts}:null);
       if(!f||!(f.level>=1))continue;
-      rows.push({rk:sameRecKey(sv),secg:sv.secg||'',ts:sv.ts||0,id:String(j.id||name.replace(/\.json$/i,'')),pdf:sv.pdf,when:String(sv.secg||sv.date||'').replace(/\s*JST/,''),key:sv.key||'',first:f,now:sv.level,review:sv.review||{judge:'',memo:''},hid:!!sv.rvHidden});}}}catch(_){}
+      rows.push({tv:sv.tv||'',rk:sameRecKey(sv),secg:sv.secg||'',ts:sv.ts||0,id:String(j.id||name.replace(/\.json$/i,'')),pdf:sv.pdf,when:String(sv.secg||sv.date||'').replace(/\s*JST/,''),key:sv.key||'',first:f,now:sv.level,review:sv.review||{judge:'',memo:''},hid:!!sv.rvHidden});}}}catch(_){}
   rows.sort((a,b)=>(b.key||b.when)<(a.key||a.when)?-1:1); // 新しい順
   // 同じ患者・同じS-ECG記録が重なっていたら1行にまとめる（医師の判断があるもの→新しいもの を残す）
   const uniq=new Map();
-  for(const r of rows){const k=r.rk?r.id+'|'+r.rk:'pdf|'+r.pdf;const o=uniq.get(k);
+  const rkey=r=>r.rk?r.id+'|'+r.rk:r.pdf?'pdf|'+r.pdf:`rec|${r.id}|${r.key}|${r.ts}`; // ファイルの無い記録（経静脈）は患者・日付・時刻で区別
+  for(const r of rows){const k=rkey(r);const o=uniq.get(k);
     if(!o||(!o.review.judge&&r.review.judge)||(!!o.review.judge===!!r.review.judge&&r.ts>o.ts))uniq.set(k,r);}
-  rvRows=rows.filter(r=>uniq.get(r.rk?r.id+'|'+r.rk:'pdf|'+r.pdf)===r);rvRender();
+  rvRows=rows.filter(r=>uniq.get(rkey(r))===r);rvRender();
 }
 function rvRender(){
   const live=rvRows.filter(r=>!r.hid),n=live.filter(r=>!r.review.judge).length;
@@ -2267,7 +2284,7 @@ function rvRender(){
 }
 async function rvSave(i,judge,memo){
   const r=rvRows[i];if(!r)return;
-  const st=await readBaseline(r.id);const sv=st&&(st.saves||[]).find(x=>x.pdf===r.pdf);
+  const st=await readBaseline(r.id);const sv=st&&(st.saves||[]).find(x=>x.pdf===r.pdf&&(r.pdf||(x.ts||0)===r.ts));
   if(!sv){$('rvMsg').textContent='記録が見つからず、保存できませんでした。';return;}
   sv.review={judge,memo,ts:Date.now()};
   if(!(await writeBaseline(r.id,st))){$('rvMsg').textContent='保存できませんでした（フォルダの許可を確認してください）。';return;}
@@ -2277,7 +2294,7 @@ async function rvSave(i,judge,memo){
 async function rvHide(i){
   const r=rvRows[i];if(!r)return;const hide=!r.hid;
   if(hide&&!confirm(`${r.id}（${r.when}）を要確認リストから外します。\nPDFと評価の記録は消えません（「外したもの」から戻せます）。\nPDFそのものを消したいときは、タイムラインの🗑を使ってください。`))return;
-  const st=await readBaseline(r.id);const sv=st&&(st.saves||[]).find(x=>x.pdf===r.pdf);if(!sv){$('rvMsg').textContent='記録が見つかりませんでした。';return;}
+  const st=await readBaseline(r.id);const sv=st&&(st.saves||[]).find(x=>x.pdf===r.pdf&&(r.pdf||(x.ts||0)===r.ts));if(!sv){$('rvMsg').textContent='記録が見つかりませんでした。';return;}
   if(hide)sv.rvHidden=true;else delete sv.rvHidden;
   if(!(await writeBaseline(r.id,st))){$('rvMsg').textContent='保存できませんでした（フォルダの許可を確認してください）。';return;}
   r.hid=hide;rvRender();$('rvMsg').textContent=`${r.id} を${hide?'リストから外しました':'リストに戻しました'}。`;
@@ -2294,6 +2311,8 @@ document.addEventListener('change',e=>{const tr=e.target.closest('#rvTable tr[da
 document.addEventListener('click',async e=>{const tr=e.target.closest('#rvTable tr[data-i]');if(!tr)return;const r=rvRows[+tr.dataset.i];if(!r)return;
   if(e.target.closest('.rvView'))return rvOpen(r);
   if(e.target.closest('.rvHide'))return rvHide(+tr.dataset.i);
+  if(e.target.closest('.rvDeep')&&rvRows[+e.target.closest('tr').dataset.i]&&rvRows[+e.target.closest('tr').dataset.i].tv){ // 経静脈：その患者の推移の表を開く
+    const r=rvRows[+e.target.closest('tr').dataset.i];await tlLoad(r.id);$('setCard').open=true;$('setCard').scrollIntoView({block:'start'});return;}
   if(e.target.closest('.rvDeep')){const b=e.target.closest('.rvDeep');b.disabled=true;b.textContent='評価中…';
     if(/\.png$/i.test(r.pdf||'')){const err=await loadImageRecord(r.pdf,r.id);b.disabled=false;b.textContent='🔬 詳しく';if(err){$('rvMsg').textContent=err;return;}$('result').scrollIntoView({block:'start'});rvLoad();return;}
     const f=await fileFromPath(r.pdf);if(!f){b.textContent='PDFが見つかりません';return;}
