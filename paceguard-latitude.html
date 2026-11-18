@@ -308,7 +308,7 @@
     <summary>⚙ 設定・インピーダンスの推移（時系列）<span class="hint" id="setSum" style="margin-left:8px;font-weight:400;letter-spacing:0"></span></summary>
     <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:8px 0">
       <label class="hint"><input type="checkbox" id="setOnlyChg"> 変わった項目・ルール外だけ</label>
-      <label class="hint"><input type="checkbox" id="setShowOther" checked> その他の項目も表示</label>
+      <label class="hint" hidden><input type="checkbox" id="setShowOther" checked> その他の項目も表示</label>
       <span class="hint">左＝過去・右＝最新／<span class="chgk">黄</span>＝前の回から変更（アラートではない）・<span class="warnk">橙</span>＝インピーダンス注意・<span class="badk">赤</span>＝ルール（基準値）の範囲外・インピーダンス警告／📌＝基準の回</span>
     </div>
     <div id="setTrend"><div class="hint">患者を読み込むと表示します。</div></div>
@@ -848,7 +848,8 @@ function parseSettings(items,flat){
       if(K){put(K.k,K.name,v,'main','行',K.unit);continue;}
       if(SET_SKIP.test(lab)||/\d/.test(lab))continue; // 数字が入った項目名（グラフの日付・目盛り「0.0秒」など）は設定ではない
       if(/[\u0080-\u024f\u02b0-\u02ff\u2000-\u206f\ufffd]/.test(lab))continue; // 文字化けした項目名は「その他」に入れない
-      put('x:'+lab,setNorm(l0),v,'other','行');}
+      // 決まった項目（SET_KNOWN）以外は読まない（2026-11-18 ユーザー指示：AF・MRI Protectionモード・SMART Charge など不要）
+      }
   }
   // ②詰めた文字から（項目と値が離れて並ぶPDFもあるため、行で取れなかった主な設定だけ）
   const t=setNorm(flat||'');
@@ -934,7 +935,7 @@ function settingsAlerts(cur,prev){
 function setAlertHtml(alerts,cur,chg){
   const go='<a href="#setCard" class="hint" onclick="document.getElementById(\'setCard\').open=true">⚙ 設定の推移を見る</a>';
   if(!cur||!cur.n)return `<div class="setbox"><b>⚙ 設定</b>　<span class="hint">このレポートから設定を読み取れませんでした（「🔧 設定の読み取り結果」で確認できます）。</span></div>`;
-  chg=(chg||[]).filter(x=>!isMeas(x.k));
+  chg=(chg||[]).filter(x=>!isMeas(x.k)&&!String(x.k).startsWith('x:'));
   const chgTxt=chg&&chg.length?`<div class="hint" style="margin-top:4px">前回から変わった設定（アラートではありません）：${chg.map(x=>`${escH(x.l)} ${escH(x.p)}→${escH(x.c)}`).join('、')}</div>`:'';
   if(!alerts.length)return `<div class="setbox"><b>⚙ 設定</b>　<span class="ok-t">✅ ルール・インピーダンスの範囲内</span>　${go}${chgTxt}</div>`;
   const lv=Math.max(...alerts.map(a=>a.lv));
@@ -954,7 +955,7 @@ function setTrendRender(id,st){
   const onlyChg=$('setOnlyChg').checked,showOther=$('setShowOther').checked;
   const order=k=>{const i=SET_KNOWN.findIndex(K=>K.k===k);return i<0?99:i;};
   // 前の版で保存した記録の読み違い（グラフの日付・目盛りの「その他」、ゾーンの -1 など）は表に出さない
-  const badKey=k=>k.startsWith('x:')&&(/\d/.test(k)||/[\u0080-\u024f\u02b0-\u02ff\u2000-\u206f\ufffd]/.test(k));
+  const badKey=k=>k.startsWith('x:'); // 前の版で保存した「その他」の項目は表に出さない
   const okVal=(k,v)=>{const K=SET_KNOWN.find(x=>x.k===k);return !(K&&K.ok&&!K.ok.test(v));};
   let keys=[...new Set(cols.flatMap(c=>Object.keys(c.settings.items)))].filter(k=>!badKey(k)&&(showOther||order(k)<99)).sort((a,b)=>order(a)-order(b)||a.localeCompare(b,'ja'));
   const name=k=>{for(let i=cols.length-1;i>=0;i--){const x=cols[i].settings.items[k];if(x)return x.l;}return k;};
