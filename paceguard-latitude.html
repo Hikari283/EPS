@@ -828,6 +828,7 @@ function parseTV(items){
     // 電池（どこにあっても）
     {const m=all.match(/交換までの予測期間[:：]?\s*([\d.]+)\s*年/);if(m)put('bat:years','電池 交換までの予測期間',m[1]+'年');}
     if(/^充電時間/.test(c0)&&r.cells.length>1)put('charge','充電時間',r.cells.slice(1).map(c=>c.s).join(' '));
+    if(/^Magnet ?Rate/i.test(c0)&&r.cells.length>1)put('bat:magnet','Magnet Rate',r.cells.slice(1).map(c=>c.s).join(' ')); // ペースメーカ
     {const m=all.match(/イベントの合計[:：]?\s*(.+)$/);if(m)put('evTotal','イベントの合計',m[1],{o:9000});}
     // 見出し（セクションの切り替え）
     if(/^リード$/.test(c0)){sec='lead';ch='';cols={};} // 同じ行の列見出し（植込み・医療施設・最新の日常測定）も下で読む
@@ -840,6 +841,9 @@ function parseTV(items){
         if(/最新の日常/.test(s))cols.daily=mid;else if(/医療施設/.test(s))cols.clinic=mid;else if(/^植込み/.test(s))cols.impl=mid;}
       if(r.cells.length===1&&TV_CH.test(c0)){ch=c0;continue;}
       if(/波高|インピーダンス|閾値/.test(c0)&&r.cells.length>1){
+        // 値と値の間が狭くて1つのセルにくっついた時（例「自動0.8 V @ 0.4 ms0.5 V @ 0.4 ms」）は分ける。位置は文字数で割り振る
+        r.cells=[r.cells[0],...r.cells.slice(1).flatMap(c=>{const parts=c.s.split(/(?<=ms|mV|Ω|なし)\s*(?=自動|記録なし|[<>]?\d)/);if(parts.length<2)return [c];
+          const tot=parts.reduce((a,q)=>a+q.length,0)||1;let x=c.x0;return parts.map(q=>{const w=(c.x1-c.x0)*q.length/tot,cc={s:q,x0:x,x1:x+w};x+=w;return cc;});})];
         const pick=name=>{const x=cols[name];if(x==null)return null;let best=null,bd=1e9;for(const c of r.cells.slice(1)){const d=Math.abs((c.x0+c.x1)/2-x);if(d<bd){bd=d;best=c;}}
           if(!best)return null;const other=Object.entries(cols).filter(([k])=>k!==name).some(([,ox])=>Math.abs((best.x0+best.x1)/2-ox)<bd);return other?null:best.s;};
         const daily=pick('daily'),clinic=pick('clinic'),ok=v=>v&&!/記録なし/.test(v);
@@ -856,6 +860,10 @@ function parseTV(items){
         const rest=cells.slice(1).filter(c=>!RH.test(tvClean(c.s))),rh=cells.find(c=>RH.test(tvClean(c.s)));if(rh){grp.R=tvClean(rh.s);}
         put(`set:${c0}`,c0,rest.map(c=>c.s).join(' / '),{o:oL++});last={L:null,R:null};continue;}
       const mx=midX!=null?midX-3:1e9;
+      // 左に項目名だけ・右の端に値だけ（例：Ventricular Tachy EGM 保存 …… On）→ 1つの組にする
+      {const L=cells.filter(c=>c.x0<mx),R=cells.filter(c=>c.x0>=mx),rv=R.length===1?tvClean(R[0].s):'';
+        if(L.length===1&&R.length===1&&!RH.test(rv)&&!TV_CH.test(rv)&&(/\d/.test(rv)||/^(On|Off|オン|オフ|Passive|Active|双極|単極)$/i.test(rv))){
+          const lab=tvClean(L[0].s),k=`set:${lab}`;put(k,lab,R[0].s,{o:oL++});last={L:k,R:null};continue;}}
       for(const side of ['L','R']){const H=cells.filter(c=>side==='L'?c.x0<mx:c.x0>=mx);if(!H.length)continue;
         const t0=tvClean(H[0].s);
         if(H.length===1){
