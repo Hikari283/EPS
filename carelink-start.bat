@@ -8,6 +8,8 @@ rem look at the last part of the profile path (e.g. Profile 2) and put it after 
 setlocal
 set "PROFILE_NAME=CareLink"
 set "PROFILE_DIR="
+rem If Chrome uses its own data folder (e.g. C:\LATITUDE-Chrome), put it after USER_DATA= below.
+set "USER_DATA="
 set "CL="
 set "HTML=%~dp0paceguard-carelink.html"
 set "URL="
@@ -17,19 +19,23 @@ if exist "%ProgramFiles%\Google\Chrome\Application\chrome.exe" set "B=%ProgramFi
 if not defined B if exist "%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe" set "B=%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"
 if not defined B if exist "%LocalAppData%\Google\Chrome\Application\chrome.exe" set "B=%LocalAppData%\Google\Chrome\Application\chrome.exe"
 if not defined B goto nochrome
+set "UD=%USER_DATA%"
+if not defined UD set "UD=%LOCALAPPDATA%\Google\Chrome\User Data"
+set "UDARG="
+if defined USER_DATA set UDARG=--user-data-dir="%USER_DATA%"
 set "DIR=%PROFILE_DIR%"
 if defined DIR goto run
-for /f "usebackq delims=" %%P in (`powershell -NoProfile -ExecutionPolicy Bypass -Command "try{$n=$env:PROFILE_NAME.Trim();$j=Get-Content (Join-Path $env:LOCALAPPDATA 'Google\Chrome\User Data\Local State') -Raw -Encoding UTF8 | ConvertFrom-Json; ($j.profile.info_cache.PSObject.Properties | Where-Object { ([string]$_.Value.name).Trim() -ieq $n -or ([string]$_.Value.shortcut_name).Trim() -ieq $n } | Select-Object -First 1).Name}catch{}"`) do set "DIR=%%P"
+for /f "usebackq delims=" %%P in (`powershell -NoProfile -ExecutionPolicy Bypass -Command "try{$n=$env:PROFILE_NAME.Trim();$j=Get-Content (Join-Path $env:UD 'Local State') -Raw -Encoding UTF8 | ConvertFrom-Json; ($j.profile.info_cache.PSObject.Properties | Where-Object { ([string]$_.Value.name).Trim() -ieq $n -or ([string]$_.Value.shortcut_name).Trim() -ieq $n } | Select-Object -First 1).Name}catch{}"`) do set "DIR=%%P"
 if not defined DIR goto noprofile
 :run
-start "" "%B%" --profile-directory="%DIR%" %URL% %CL%
+start "" "%B%" %UDARG% --profile-directory="%DIR%" %URL% %CL%
 exit /b 0
 
 :noprofile
 echo Chrome profile "%PROFILE_NAME%" was not found.
 echo.
 echo Profiles on this PC  (folder : name):
-powershell -NoProfile -ExecutionPolicy Bypass -Command "try{$j=Get-Content (Join-Path $env:LOCALAPPDATA 'Google\Chrome\User Data\Local State') -Raw -Encoding UTF8 | ConvertFrom-Json; $j.profile.info_cache.PSObject.Properties | ForEach-Object { '  ' + $_.Name + ' : ' + $_.Value.name }}catch{ '  (could not read Chrome profile list: ' + $_.Exception.Message + ')' }"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "try{$j=Get-Content (Join-Path $env:UD 'Local State') -Raw -Encoding UTF8 | ConvertFrom-Json; $j.profile.info_cache.PSObject.Properties | ForEach-Object { '  ' + $_.Name + ' : ' + $_.Value.name }}catch{ '  (could not read Chrome profile list: ' + $_.Exception.Message + ')' }"
 echo.
 echo Put the folder name (e.g. Profile 2) after PROFILE_DIR= in this file, or fix PROFILE_NAME.
 pause
