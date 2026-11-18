@@ -47,6 +47,7 @@
   .wrap{max-width:1500px;margin:0 auto;padding:18px;display:grid;gap:16px}
   .grid{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
   @media(min-width:1400px){.grid{grid-template-columns:minmax(0,1.05fr) minmax(0,1fr)}}
+  .grid.one{grid-template-columns:minmax(0,1fr)!important} /* S-ICD以外：横いっぱい */
   .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;
     box-shadow:0 1px 0 rgba(255,255,255,.04) inset,0 18px 40px -24px rgba(0,0,0,.8);backdrop-filter:blur(6px)}
   .card h2,.sec-title{font-size:13px;margin:0 0 10px;color:var(--sub);font-weight:700;letter-spacing:.08em;display:flex;align-items:center;gap:8px}
@@ -1341,9 +1342,10 @@ async function runTV(){
 }
 // タイムラインの開閉：S-ICD以外の機種の時は自動で閉じる（覚えている開閉は変えない）。S-ICDの時は覚えている開閉に戻す
 let tlAutoSet=false;
-// S-ICD以外（波形の重ね描きが無い）の時は、空いている右の列に「設定・インピーダンスの推移」を置く（スクロールしなくても見える）
-function placeSetCard(side){const c=$('setCard'),home=$('setCardHome'),grid=document.querySelector('.grid');if(!c||!home||!grid)return;
-  if(side){if(c.parentElement!==grid){grid.appendChild(c);}c.open=true;}else if(c.previousElementSibling!==home){home.after(c);}}
+// S-ICD以外（波形の重ね描きが無い）の時は、「患者と判定」を横いっぱいにして、すぐ下に「設定・インピーダンスの推移」を置く（スクロールしなくても見える）
+function placeSetCard(tv){const c=$('setCard'),home=$('setCardHome'),grid=document.querySelector('.grid');if(!c||!home||!grid)return;
+  grid.classList.toggle('one',!!tv);
+  if(tv){if(c.previousElementSibling!==grid)grid.after(c);c.open=true;}else if(c.previousElementSibling!==home){home.after(c);}}
 function tlAutoOpen(sicd){placeSetCard(!sicd);let want;if(sicd){want=true;try{const v=localStorage.getItem('pg_lat_tlopen');if(v)want=v==='1';}catch(_){}}else want=false;
   if($('tlCard').open!==want){tlAutoSet=true;$('tlCard').open=want;}}
 let curSettings=null; // 今回のレポートから読んだ設定
