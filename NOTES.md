@@ -455,3 +455,9 @@ CARTO 3 の Export データ（フォルダ/ZIP）をブラウザだけで表示
 
 ## 2026-11-19 CareLink ICD の基準
 - ICDのシートの返事を反映（詳細は `PaceGuard_引き継ぎ.md`）：治療済みVF/VT・ショック総数・中断した充電＝1件以上で要確認、ハイレートNS・SVT Rx保留＝1件以上で注意、オブザベーション「アラート：」＝注意。`mdtEvRule`/`tvAlerts`。実PDFでの項目名の確認はこれから。
+
+## 2026-11-19 戻し地点（PDF・画像を残さない変更の前）
+- 変更前の版：コミット `0a69292`（タグ `restore-before-numbers-only-20261119`）／ファイル `paceguard-latitude-旧版_20261119.html`。
+  この版は、CareLink が元のPDFを残す標準・PM/ICD/CRTの波形画像を作る・画像を消すボタンなし、ICDの件数ルールとClaude用コピーは入っている。
+- 「前の版に戻して」と言われたらここに戻す（`git checkout restore-before-numbers-only-20261119 -- paceguard-latitude.html`、または旧版ファイルを paceguard-latitude.html の名前で置く）。
+- PCの中のデータ（基準・患者PDF）は、🗑ボタンで画像を消すと戻せない。消す前にフォルダごとコピーを取ること。
