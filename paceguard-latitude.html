@@ -1038,11 +1038,11 @@ function parseMDT(items,flat){
       const hd=cells.filter(c=>mdtCh(c.s));if(hd.length&&hd.length===cells.length){cols={};for(const c of hd)cols[mdtCh(c.s)]=(c.x0+c.x1)/2;if(hd.length===1)chDef=mdtCh(hd[0].s);continue;}
       if(/^電池電圧/.test(l0)){const v=(rest.match(/[\d.]+\s*V/)||[])[0],r=(all.match(/RRT\s*=?\s*[\d.]+\s*V/)||[])[0];if(v)put('bat:volt','電池電圧',v+(r?` (${r})`:''));continue;}
       if(/^予測(電池)?寿命/.test(l0)){const m=rest.match(/([<>]?\s*\d+(?:\.\d+)?\s*(?:months?|years?|年|か月|ヶ月))/i);if(m)put('bat:years','電池 予測寿命',m[1]);continue;}
+      if(/^SVC\s*=/.test(l0+' '+rest)){put('lead:ショック:SVC除細動インピーダンス','SVC除細動インピーダンス',(l0+' '+rest).replace(/^SVC\s*=\s*/,''));continue;}
       const vals=L.slice(1);if(!vals.length)continue;
       const each=fn=>{if(Object.keys(cols).length>1){for(const c of vals){const ch=near((c.x0+c.x1)/2);if(ch)fn(ch,c.s);}}else fn(chDef,vals.map(c=>c.s).join(' '));};
       if(/ペーシングインピーダンス|^リードインピーダンス/.test(l0)){each((ch,v)=>put(`lead:${ch}:ペーシングインピーダンス`,`${ch} ペーシングインピーダンス`,v));continue;}
       if(/除細動インピーダンス/.test(l0)){const v=rest.replace(/^(RV|SVC)\s*=?\s*/,'');put(/^SVC/.test(rest)?'lead:ショック:SVC除細動インピーダンス':'lead:ショック:ショックインピーダンス',/^SVC/.test(rest)?'SVC除細動インピーダンス':'ショックインピーダンス（RV除細動）',v);continue;}
-      if(/^SVC\s*=/.test(l0+' '+rest)){put('lead:ショック:SVC除細動インピーダンス','SVC除細動インピーダンス',(l0+' '+rest).replace(/^SVC\s*=\s*/,''));continue;}
       if(/ペーシング極性/.test(l0)&&rest){each((ch,v)=>put(`set:ペーシング極性 ${ch}`,`ペーシング極性 ${ch}`,v));continue;}
       if(/ペーシング閾値|キャプチャ閾値/.test(l0)){each((ch,v)=>{put(`lead:${ch}:ペーシング閾値`,`${ch} ペーシング閾値`,v);lastThr=`lead:${ch}:ペーシング閾値`;});continue;}
       if(/^測定日/.test(l0)){if(Object.keys(cols).length>1){for(const c of L.slice(1)){const ch=near((c.x0+c.x1)/2),k=`lead:${ch}:ペーシング閾値`;if(got[k])got[k].measDate=mdtDate(c.s);}}else if(lastThr&&got[lastThr])got[lastThr].measDate=mdtDate(rest);continue;}
