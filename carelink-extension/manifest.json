@@ -1,0 +1,74 @@
+{
+  "manifest_version": 3,
+  "name": "PaceGuard CareLink 取り込み",
+  "version": "0.1.0",
+  "description": "CareLink（Medtronic）で開いたPDFを自動でフォルダに保存し、PaceGuard（ローカルツール）で比較できるようにします。データは外部に送りません。",
+  "permissions": [
+    "downloads",
+    "webRequest",
+    "storage",
+    "scripting",
+    "notifications",
+    "tabs",
+    "system.display"
+  ],
+  "host_permissions": [
+    "https://*.medtronic.com/*",
+    "https://*.medtroniccarelink.net/*"
+  ],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.medtronic.com/*",
+        "https://*.medtroniccarelink.net/*"
+      ],
+      "js": [
+        "hook.js"
+      ],
+      "world": "MAIN",
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "https://*.medtronic.com/*",
+        "https://*.medtroniccarelink.net/*"
+      ],
+      "js": [
+        "bridge.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": [
+        "file:///*"
+      ],
+      "include_globs": [
+        "*paceguard-carelink*"
+      ],
+      "js": [
+        "toolbridge.js"
+      ],
+      "run_at": "document_start"
+    }
+  ],
+  "action": {
+    "default_title": "PaceGuard CareLink 取り込み",
+    "default_popup": "options.html",
+    "default_icon": {
+      "128": "icon128.png"
+    }
+  },
+  "options_page": "options.html",
+  "icons": {
+    "128": "icon128.png"
+  }
+}
