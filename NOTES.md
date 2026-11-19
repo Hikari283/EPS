@@ -464,3 +464,9 @@ CARTO 3 の Export データ（フォルダ/ZIP）をブラウザだけで表示
 
 ## 2026-11-19 方針
 - CareLink（Medtronic）版は実臨床では使わない（個人情報が心配）。CareLink関連の開発（CRT-D、ICDの実PDF確認、EV-ICD・LINQ）は保留。今あるコードは作り物のデータでの試験用として残す。S-ICD（LATITUDE）の作業を続ける。
+
+## 2026-11-19 S-ICD は「波形のみ版」で臨床使用する
+- 決定：臨床では、設定の読み取りや経静脈・CareLinkが入る前の S-ICD 波形比較だけの版を使う。
+- ファイル：`paceguard-latitude-波形のみ版_20261023.html`（コミット `a6f693e`＝2026-10-23 時点）。設定の読み取り・設定アラート・経静脈（Boston PM/ICD/CRT-D）・CareLink・「Claude用にコピー」は入っていない。
+- 入っているもの：S-ECG の比較（前回・基準）、タイムライン、要確認リスト、元のPDFを残さず波形の画像だけ残す標準、S-ICD以外は対象外、オフライン（pdf.js同梱）対応。外へ送る処理なし（fetch等なし）。
+- 拡張機能 `paceguard-extension/`（v0.6.0）はそのまま使える。

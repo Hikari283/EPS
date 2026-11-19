@@ -1,0 +1,2072 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PaceGuard LATITUDE 自動モード（β）</title>
+<script>try{document.documentElement.dataset.theme=localStorage.getItem('pg_lat_theme')||'light';}catch(_){document.documentElement.dataset.theme='light';}</script>
+<style>
+  /* PaceGuard LATITUDE — 心電図モニターの世界観（暗い画面に光る緑の線）。重要な判定ほど上・大きく */
+  :root{
+    --bg:#060a11; --bg2:#0a101a; --card:rgba(15,22,35,.78); --card2:#0d1522; --line:#1d2a3d; --line2:#2a3a54;
+    --tx:#e9eff8; --sub:#8a99b1; --dim:#5f6f88;
+    --accent:#3ee6a8; --accent2:#38bdf8; --ok:#34d399; --warn:#fbbf24; --bad:#fb7185;
+    --font:"BIZ UDPGothic","Yu Gothic UI","Segoe UI","Hiragino Kaku Gothic ProN","Meiryo",system-ui,sans-serif;
+    --num:"Segoe UI Variable","Segoe UI","Helvetica Neue",var(--font);
+    --r:16px; --inbg:rgba(3,8,14,.65); --tblh:rgba(255,255,255,.02); --hov:rgba(255,255,255,.025); --causebg:rgba(0,0,0,.28);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;color:var(--tx);font-family:var(--font);font-size:14px;line-height:1.65;min-height:100vh;
+    background:
+      radial-gradient(1200px 600px at 10% -10%,rgba(62,230,168,.10),transparent 60%),
+      radial-gradient(900px 500px at 110% 0%,rgba(56,189,248,.10),transparent 60%),
+      linear-gradient(rgba(62,230,168,.035) 1px,transparent 1px) 0 0/24px 24px,
+      linear-gradient(90deg,rgba(62,230,168,.035) 1px,transparent 1px) 0 0/24px 24px,
+      var(--bg);}
+  ::selection{background:rgba(62,230,168,.3)}
+  a{color:var(--accent2)}
+  code{font-family:"Cascadia Mono",Consolas,monospace;font-size:.9em;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:5px}
+  /* ── 上のバー ── */
+  .appbar{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:10px 18px;
+    background:rgba(6,10,17,.72);backdrop-filter:blur(14px) saturate(140%);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+  .brand{display:flex;align-items:center;gap:10px}
+  .brand svg{width:34px;height:34px;flex:0 0 auto;filter:drop-shadow(0 0 8px rgba(62,230,168,.55))}
+  .brand svg path.run{stroke-dasharray:120;stroke-dashoffset:120;animation:draw 2.4s ease-in-out infinite}
+  @keyframes draw{0%{stroke-dashoffset:120}55%{stroke-dashoffset:0}100%{stroke-dashoffset:-120}}
+  .brand h1{font-size:17px;margin:0;letter-spacing:.02em;font-weight:800;line-height:1.1}
+  .brand h1 small{display:block;font-size:10.5px;font-weight:500;color:var(--sub);letter-spacing:.14em}
+  .chips{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-left:auto}
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--sub);background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:999px;padding:4px 11px;max-width:420px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .live{width:8px;height:8px;border-radius:50%;background:var(--dim);flex:0 0 auto}
+  .live.on{background:var(--accent);box-shadow:0 0 0 0 rgba(62,230,168,.7);animation:ping 1.8s infinite}
+  @keyframes ping{0%{box-shadow:0 0 0 0 rgba(62,230,168,.6)}80%{box-shadow:0 0 0 9px rgba(62,230,168,0)}100%{box-shadow:0 0 0 0 rgba(62,230,168,0)}}
+  .iconbtn{padding:6px 10px!important;border-radius:10px!important}
+  .disclaimer{width:100%;font-size:10.5px;color:var(--dim);margin-top:-4px}
+  /* ── レイアウト ── */
+  .wrap{max-width:1500px;margin:0 auto;padding:18px;display:grid;gap:16px}
+  .grid{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
+  @media(min-width:1400px){.grid{grid-template-columns:minmax(0,1.05fr) minmax(0,1fr)}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;
+    box-shadow:0 1px 0 rgba(255,255,255,.04) inset,0 18px 40px -24px rgba(0,0,0,.8);backdrop-filter:blur(6px)}
+  .card h2,.sec-title{font-size:13px;margin:0 0 10px;color:var(--sub);font-weight:700;letter-spacing:.08em;display:flex;align-items:center;gap:8px}
+  .card h2::before,.sec-title::before{content:"";width:3px;height:14px;border-radius:2px;background:linear-gradient(var(--accent),var(--accent2))}
+  details.card>summary{list-style:none;cursor:pointer;font-weight:700;font-size:13px;color:var(--sub);letter-spacing:.06em;display:flex;align-items:center;gap:8px}
+  details.card>summary::-webkit-details-marker{display:none}
+  details.card>summary::after{content:"＋";margin-left:auto;color:var(--dim);font-weight:400}
+  details.card[open]>summary::after{content:"−"}
+  details.card[open]>summary{margin-bottom:12px}
+  .bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  /* ── 部品 ── */
+  button{font-family:inherit;background:linear-gradient(180deg,#172338,#121c2d);color:var(--tx);border:1px solid var(--line2);border-radius:11px;padding:8px 14px;font-size:13px;cursor:pointer;
+    transition:transform .08s,border-color .15s,box-shadow .15s,background .15s}
+  button:hover{border-color:var(--accent2);box-shadow:0 0 0 3px rgba(56,189,248,.12)}
+  button:active{transform:translateY(1px)}
+  button:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  button:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
+  button.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#03151a;border-color:transparent;font-weight:800;box-shadow:0 8px 22px -10px rgba(62,230,168,.8)}
+  button.primary:hover{box-shadow:0 10px 26px -8px rgba(62,230,168,.9),0 0 0 3px rgba(62,230,168,.18)}
+  button.ghost{background:transparent}
+  input[type=text],input:not([type]),input[type=search]{font-family:inherit}
+  .field{display:grid;gap:3px}
+  .field label{font-size:10.5px;color:var(--sub);letter-spacing:.08em}
+  .field input,.inp{width:100%;background:var(--inbg);color:var(--tx);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:14px;font-variant-numeric:tabular-nums;transition:border-color .15s}
+  .field input:focus,.inp:focus{border-color:var(--accent2);outline:none;box-shadow:0 0 0 3px rgba(56,189,248,.15)}
+  .fields{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+  @media(max-width:760px){.fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  .field.id input{font-size:17px;font-weight:800;letter-spacing:.04em;color:#fff}
+  input[type=checkbox]{accent-color:var(--accent)}
+  input[type=range]{accent-color:var(--accent);height:22px;cursor:pointer}
+  .drop{border:1.5px dashed var(--line2);border-radius:14px;padding:14px;text-align:center;color:var(--sub);cursor:pointer;transition:all .15s;
+    background:repeating-linear-gradient(135deg,transparent 0 10px,rgba(255,255,255,.015) 10px 20px)}
+  .drop:hover{border-color:var(--accent2);color:var(--tx)}
+  .drop.over{border-color:var(--accent);background:rgba(62,230,168,.08);color:var(--tx)}
+  body.dragging::after{content:"PDFをはなすと読み込みます";position:fixed;inset:12px;border:2px dashed var(--accent);border-radius:20px;background:rgba(6,10,17,.82);
+    display:grid;place-items:center;font-size:22px;font-weight:800;color:var(--accent);z-index:200;pointer-events:none}
+  canvas{display:block;max-width:100%;border-radius:12px;background:#04080d;border:1px solid var(--line);margin-top:8px}
+  #pageWrap{position:relative;overflow:auto;max-height:560px;border:1px solid var(--line);border-radius:12px;margin-top:10px;background:#fff}
+  #pageWrap canvas{border:0;border-radius:0;margin:0}
+  #cropHint{font-size:12px;color:var(--accent2);margin-top:8px}
+  /* ── 判定 ── */
+  .verdict{position:relative;margin-top:14px;border-radius:16px;padding:16px 18px 16px 22px;border:1px solid var(--line);overflow:hidden;background:var(--card2)}
+  .verdict::before{content:"";position:absolute;left:0;top:0;bottom:0;width:6px;background:var(--accent2)}
+  .verdict.ok{background:linear-gradient(120deg,rgba(52,211,153,.14),rgba(52,211,153,.03) 60%);border-color:rgba(52,211,153,.35)}
+  .verdict.ok::before{background:var(--ok);box-shadow:0 0 18px var(--ok)}
+  .verdict.warn{background:linear-gradient(120deg,rgba(251,191,36,.15),rgba(251,191,36,.03) 60%);border-color:rgba(251,191,36,.4)}
+  .verdict.warn::before{background:var(--warn);box-shadow:0 0 18px var(--warn)}
+  .verdict.bad{background:linear-gradient(120deg,rgba(251,113,133,.18),rgba(251,113,133,.04) 60%);border-color:rgba(251,113,133,.5)}
+  .verdict.bad::before{background:var(--bad);box-shadow:0 0 22px var(--bad)}
+  .verdict.info{background:linear-gradient(120deg,rgba(56,189,248,.12),rgba(56,189,248,.02) 60%)}
+  .verdict h2{margin:0 0 6px;font-size:23px;letter-spacing:.01em;line-height:1.3;color:var(--tx);display:block}
+  .verdict h2::before{display:none}
+  .cause{margin-top:10px;padding:10px 12px;border-radius:12px;background:var(--causebg);border:1px solid rgba(255,255,255,.06);font-weight:700}
+  table.crit{width:100%;border-collapse:separate;border-spacing:0;margin-top:8px;font-size:12.5px;font-variant-numeric:tabular-nums}
+  table.crit th,table.crit td{border-bottom:1px solid var(--line);padding:7px 8px;text-align:left;vertical-align:top}
+  table.crit th{color:var(--sub);font-weight:600;font-size:10.5px;letter-spacing:.06em;background:var(--tblh)}
+  table.crit tr:hover td{background:var(--hov)}
+  table.crit tr.lv2 td{background:rgba(251,113,133,.10)} table.crit tr.lv1 td{background:rgba(251,191,36,.08)}
+  .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:10px}
+  .m{background:var(--inbg);border:1px solid var(--line);border-radius:12px;padding:8px 10px}
+  .m .k{font-size:10.5px;color:var(--sub)} .m .v{font-size:18px;font-weight:800;font-family:var(--num)}
+  .m.flag{border-color:#7a2e2e} .m.good{border-color:#1f6b52}
+  .hint{font-size:11.5px;color:var(--sub)}
+  .status{font-size:12px;color:var(--sub)}
+  .ok-t{color:var(--ok)} .bad-t{color:var(--bad)} .warn-t{color:var(--warn)}
+  footer{color:var(--dim);font-size:11px;border-top:1px solid var(--line);padding:14px 2px 30px}
+  /* ── タイムライン ── */
+  #tlBase img,#tlCur img{cursor:zoom-in;border:1px solid #cbd5e1}
+  .seg{display:inline-flex;border:1px solid var(--line2);border-radius:10px;overflow:hidden}
+  .seg button{border:0;border-radius:0;background:transparent;padding:6px 12px}
+  .seg button.on{background:rgba(62,230,168,.18);color:var(--accent);font-weight:700}
+  .tlTh{border-radius:12px!important}
+  .tlp{display:grid;gap:12px;align-items:start}
+  .tlp.lr{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .tlp.tb,.tlp.ov{grid-template-columns:minmax(0,1fr)}
+  .tlp.ov #tlBase>img,.tlp.ov #tlCur>img{display:none!important}
+  .tlp.lr .tlnav{flex-wrap:wrap}
+  #tlOverlay canvas{display:block;width:100%;height:auto;border:0;border-radius:0;margin:0;background:#fff}
+  .tlnav{display:flex;gap:8px;align-items:center;margin:12px 0 6px;padding:6px 8px;border:1px solid var(--line);border-radius:12px;background:var(--inbg)}
+  .tlnav .lbl{font-size:11px;color:var(--sub);white-space:nowrap;letter-spacing:.06em}
+  #lightbox{position:fixed;inset:0;z-index:300;background:rgba(3,6,10,.92);backdrop-filter:blur(6px);display:none;overflow:auto;cursor:zoom-out;padding:24px}
+  #lightbox.on{display:block}
+  #lightbox img{display:block;margin:0 auto;max-width:none;width:min(2400px,96vw);background:#fff;border-radius:8px}
+  #lightbox .cap{position:sticky;top:0;color:#fff;font-weight:700;margin-bottom:10px;text-shadow:0 1px 6px #000}
+  /* ── 白いテーマ（標準）：PDF・印刷と同じ白地。心電図用紙のピンクの方眼をうっすら ── */
+  html[data-theme=light]{
+    --bg:#f5f7fa; --bg2:#fff; --card:#ffffff; --card2:#ffffff; --line:#e3e8ef; --line2:#cfd8e3;
+    --tx:#0f172a; --sub:#526079; --dim:#8794a8;
+    --accent:#059669; --accent2:#0284c7; --ok:#059669; --warn:#b45309; --bad:#e11d48;
+    --inbg:#f8fafc; --tblh:#f1f5f9; --hov:#f8fafc; --causebg:rgba(255,255,255,.75);
+  }
+  html[data-theme=light] body{background:
+      linear-gradient(rgba(239,68,68,.05) 1px,transparent 1px) 0 0/24px 24px,
+      linear-gradient(90deg,rgba(239,68,68,.05) 1px,transparent 1px) 0 0/24px 24px,
+      linear-gradient(180deg,#f8fafc,#eef2f7);}
+  html[data-theme=light] .appbar{background:rgba(255,255,255,.82);border-bottom-color:var(--line)}
+  html[data-theme=light] .card{box-shadow:0 1px 2px rgba(15,23,42,.05),0 12px 32px -20px rgba(15,23,42,.25);backdrop-filter:none}
+  html[data-theme=light] button{background:linear-gradient(180deg,#ffffff,#f3f6fa);color:var(--tx)}
+  html[data-theme=light] button.primary{background:linear-gradient(135deg,#10b981,#0ea5e9);color:#fff;box-shadow:0 8px 20px -12px rgba(5,150,105,.7)}
+  html[data-theme=light] button.ghost{background:#fff}
+  html[data-theme=light] .seg button{background:transparent}
+  html[data-theme=light] .seg button.on{background:rgba(5,150,105,.12)}
+  html[data-theme=light] .field.id input{color:#0f172a}
+  html[data-theme=light] .chip{background:#f8fafc}
+  html[data-theme=light] .verdict.ok{background:linear-gradient(120deg,rgba(16,185,129,.12),#fff 65%)}
+  html[data-theme=light] .verdict.warn{background:linear-gradient(120deg,rgba(245,158,11,.14),#fff 65%)}
+  html[data-theme=light] .verdict.bad{background:linear-gradient(120deg,rgba(225,29,72,.12),#fff 65%)}
+  html[data-theme=light] .verdict.info{background:linear-gradient(120deg,rgba(14,165,233,.10),#fff 65%)}
+  html[data-theme=light] .verdict::before{box-shadow:none!important}
+  html[data-theme=light] canvas{background:#fff;border-color:var(--line)}
+  html[data-theme=light] .drop{background:repeating-linear-gradient(135deg,transparent 0 10px,rgba(15,23,42,.02) 10px 20px)}
+  html[data-theme=light] body.dragging::after{background:rgba(255,255,255,.9)}
+  html[data-theme=light] .brand svg{filter:none}
+  #startScreen{position:fixed;inset:0;z-index:400;display:grid;place-items:center;background:rgba(245,247,250,.94);backdrop-filter:blur(8px)}
+  html[data-theme=dark] #startScreen{background:rgba(6,10,17,.92)}
+  #startScreen[hidden]{display:none}
+  .ss-box{text-align:center;display:grid;gap:14px;justify-items:center;padding:24px}
+  .ss-title{font-size:22px;font-weight:800;letter-spacing:.04em}
+  .ss-date{color:var(--sub);font-size:15px}
+  #ssStart{font-size:26px;font-weight:900;padding:26px 54px;border-radius:22px;border:0;color:#fff;background:linear-gradient(135deg,#10b981,#0ea5e9);
+    box-shadow:0 20px 50px -18px rgba(16,185,129,.9);animation:ssPulse 2.2s ease-in-out infinite}
+  #ssStart:hover{transform:translateY(-2px)}
+  @keyframes ssPulse{0%,100%{box-shadow:0 20px 50px -18px rgba(16,185,129,.9),0 0 0 0 rgba(16,185,129,.35)}50%{box-shadow:0 20px 50px -18px rgba(16,185,129,.9),0 0 0 16px rgba(16,185,129,0)}}
+  .ss-note{color:var(--sub);font-size:13px;line-height:1.7}
+  .ss-later{background:transparent!important;border:0!important;color:var(--sub)!important;font-size:12px!important;text-decoration:underline;box-shadow:none!important}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+  #printArea{display:none}
+  .prbtns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  @media print{
+    @page{size:A4;margin:8mm}
+    body{background:#fff!important;color:#000!important}
+    body>*:not(#printArea){display:none!important}
+    #printArea{display:block!important;--tx:#000;--sub:#444;--line:#aaa;--card:#fff;--bg:#fff;--accent:#0369a1;color:#000;font-size:11px}
+    #printArea .pp{break-after:page;text-align:center}
+    #printArea .pp:last-child{break-after:auto}
+    #printArea .pp img{width:100%;height:auto;max-height:280mm;object-fit:contain}
+    #printArea .ov{width:100%;filter:invert(1) hue-rotate(180deg)}
+    #printArea .verdict{border-width:2px;padding:8px 10px}
+    #printArea .verdict h2{font-size:16px}
+    #printArea button{display:none}
+    #printArea .prhead{display:flex;justify-content:space-between;border-bottom:2px solid #000;padding-bottom:4px;margin-bottom:6px;font-size:12px}
+  }
+</style>
+</head>
+<body>
+<header class="appbar">
+  <div class="brand">
+    <svg viewBox="0 0 40 40" aria-hidden="true"><rect x="1" y="1" width="38" height="38" rx="11" fill="#0b1a1a" stroke="rgba(62,230,168,.45)"/><path class="base" d="M4 22h8l3-5 4 13 4-21 3 13h10" fill="none" stroke="#3ee6a8" stroke-opacity=".35" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path class="run" d="M4 22h8l3-5 4 13 4-21 3 13h10" fill="none" stroke="#3ee6a8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <h1>PaceGuard <span style="color:var(--accent)">LATITUDE</span><small>S-ICD WAVEFORM MONITOR · β</small></h1>
+  </div>
+  <div class="chips">
+    <button class="chip" id="rvChip" title="医師がまだ確認していない、注意・要確認の記録（押すと一覧へ）" hidden style="cursor:pointer"></button>
+    <button class="chip" id="lastChip" title="最新の結果（押すとその場所へ）" hidden style="cursor:pointer"></button>
+    <span class="chip" title="自動比較の状態"><span class="live" id="liveDot"></span><span id="liveTxt">自動比較 停止中</span></span>
+    <span class="chip" id="netChip" hidden></span>
+    <span class="chip" id="folderStatus">フォルダ未選択（比較結果の保存に必要）</span>
+    <button id="pickFolder" class="iconbtn" title="データフォルダを選ぶ">📁 フォルダ</button>
+    <button id="themeBtn" class="iconbtn ghost" title="白／黒の切り替え">🌙</button>
+    <button id="openSettings" class="iconbtn ghost" title="設定">⚙</button>
+  </div>
+  <div class="disclaimer">研究・院内検証用｜完全ローカル処理（患者情報はこのPCの外に出ません）｜最終判断は医師</div>
+</header>
+
+<main class="wrap">
+  <button id="startBanner" hidden style="width:100%;padding:16px;font-size:17px;font-weight:800;border-radius:16px;border:0;color:#fff;background:linear-gradient(135deg,#10b981,#0ea5e9);box-shadow:0 12px 30px -14px rgba(16,185,129,.9)">▶ ここを押して今日の波形比較を開始（1日1回）<span style="display:block;font-size:12px;font-weight:500;opacity:.9">許可の画面が出たら「許可する」を押してください</span></button>
+
+  <div class="grid">
+    <section class="card" id="patientCard">
+      <h2>患者と判定</h2>
+      <div class="drop" id="drop">📄 PDFをここにドロップ／クリックして選択<span class="hint">（画面のどこにドロップしてもOK）</span></div>
+      <div class="fields" style="margin-top:12px">
+        <div class="field id"><label>患者ID</label><input id="fId" placeholder="自動抽出"></div>
+        <input id="fName" type="hidden" value="">
+        <div class="field"><label>照会日</label><input id="fDate" placeholder="自動抽出"></div>
+        <div class="field"><label>デバイス</label><input id="fDev" placeholder="自動抽出"></div>
+      </div>
+      <div class="hint" id="fMeta" style="margin-top:6px"></div>
+      <div class="row" style="margin-top:12px">
+        <button class="primary" id="evalBtn">🔍 前回と比較</button>
+        <button class="primary" id="evalBaseBtn" style="background:linear-gradient(135deg,#a78bfa,#38bdf8)">📌 基準と比較</button>
+        <span style="flex:1"></span>
+        <button class="prWith ghost">🖨 比較結果つき</button><button class="prPlain ghost">🖨 PDFのまま</button>
+      </div>
+      <label class="hint row" style="margin-top:8px"><input type="checkbox" id="autoEval" checked> PDFを開いたら自動で評価する（前回があれば前回、なければ基準と比較）</label>
+      <div class="hint" id="baseInfo">前回＝今回より前の日付で一番新しいレポート／基準＝固定した基準レポート（同じ日付でも比べられます）</div>
+      <div id="result"></div>
+    </section>
+
+    <div class="card" id="overlayCard" hidden>
+      <h2>代表拍の重ね描き（青＝比較相手／橙＝今回）</h2>
+      <div class="hint">全段の代表拍どうし（横 ms・縦 mV の実寸）。赤い帯＝形が違う所</div>
+      <canvas id="overlay" height="220"></canvas>
+      <canvas id="diff" height="80"></canvas>
+      <div id="row2Wrap" hidden></div>
+    </div>
+  </div>
+
+  <details class="card" id="tlCard" open>
+    <summary>🎞 タイムライン（保存したPDFを時系列で）<span class="hint" id="tlSum" style="margin-left:8px;font-weight:400;letter-spacing:0"></span></summary>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span class="status">患者ID</span>
+      <input id="tlId" placeholder="空なら今の患者" class="inp" style="width:170px">
+      <button class="primary" id="tlShow">🎞 表示</button>
+      <span class="seg" title="表示のしかた"><button id="tlModeFull">📄 ページそのまま</button><button id="tlModeCrop">〰 波形の部分だけ</button></span>
+      <span class="seg" title="表示するPDF" hidden><button id="tlFAll">すべて</button><button id="tlFSecg">〰 S-ECGだけ</button><button id="tlFEv">⚡ イベントだけ</button></span>
+      <span class="hint" id="tlMsg">「患者PDF」に整理したPDFを、加工せずにそのまま表示し、日付順にめくって見られます。</span>
+    </div>
+    <div id="tlBody" hidden>
+      <div class="row" style="margin-top:10px">
+        <span class="seg" title="並べ方"><button id="tlLayLR">◧ 左右</button><button id="tlLayTB">⬒ 上下</button><button id="tlLayOV">◩ 重ねる</button></span>
+        <span id="tlOvCtl" class="row hint" hidden>上の濃さ <input type="range" id="tlOvA" min="0" max="100" value="50" style="width:160px"> 下（色：<span style="color:#16a34a;font-weight:700">緑＝上</span>／<span style="color:#c026d3;font-weight:700">紫＝下</span>、重なる所は黒っぽく）</span>
+      </div>
+      <div id="tlVs" class="hint" style="margin:8px 0;padding:6px 10px;border:1px solid var(--line);border-radius:8px"></div>
+      <div id="tlPanels" class="tlp lr">
+        <div class="tlcol">
+          <div class="tlnav">
+            <span class="lbl">上</span>
+            <button id="tlTPrev" title="前の日付">◀</button>
+            <input type="range" id="tlTSlider" min="0" max="0" value="0" style="flex:1;min-width:60px">
+            <button id="tlTNext" title="次の日付">▶</button>
+            <button id="tlTBase" title="基準に戻す">📌</button>
+          </div>
+          <div id="tlBase"></div>
+        </div>
+        <div class="tlcol">
+          <div class="tlnav">
+            <span class="lbl">下</span>
+            <button id="tlPrev" title="前の日付">◀</button>
+            <input type="range" id="tlSlider" min="0" max="0" value="0" style="flex:1;min-width:60px">
+            <button id="tlNext" title="次の日付">▶</button>
+          </div>
+          <div id="tlCur"></div>
+        </div>
+      </div>
+      <div id="tlOverlay" hidden style="position:relative;margin-top:8px;background:#fff;border:1px solid #cbd5e1;border-radius:6px;overflow:hidden"></div>
+      <div class="hint" style="margin-top:8px">全部の日付（クリックで下の波形をその日に。キーボードの ← → で下、Shift＋← → で上をめくれます）</div>
+      <div style="display:flex;gap:8px;align-items:flex-start">
+        <button id="tlBaseTh" class="tlTh" title="基準の波形（押すと上に基準を表示）" style="flex:0 0 auto;padding:4px;width:150px;text-align:left;margin:26px 0 6px;border:2px solid var(--accent)!important;box-shadow:4px 0 0 -1px var(--line)" hidden><div style="font-size:11px;line-height:1.35"></div><div class="tlImg" style="height:46px;background:#fff;border-radius:4px;overflow:hidden"></div></button>
+        <div style="flex:1;min-width:0">
+          <div class="hint" style="margin-top:4px">〰 S-ECG</div>
+          <div id="tlStrip" style="display:flex;gap:6px;overflow-x:auto;padding:4px 0"></div>
+          <div id="tlEvRow" hidden><div class="hint" style="margin-top:4px">⚡ イベント</div>
+          <div id="tlStripEv" style="display:flex;gap:6px;overflow-x:auto;padding:4px 0"></div></div>
+        </div>
+      </div>
+    </div>
+  </details>
+  <details class="card" id="rvCard">
+    <summary>📋 要確認リスト（ツールが🟡注意・⚠️要確認と判定した記録）<span class="hint" id="rvSum" style="margin-left:8px;font-weight:400;letter-spacing:0"></span></summary>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0">
+      <span class="seg" title="表示する記録"><button id="rvFNew">未確認</button><button id="rvFBad">異常あり</button><button id="rvFAll">すべて</button><button id="rvFHid">外したもの</button></span>
+      <button id="rvReload" class="ghost">🔄 読み直す</button><button id="rvCsv" class="ghost">⬇ CSVで書き出す</button>
+      <span class="hint" id="rvMsg"></span>
+    </div>
+    <div style="overflow-x:auto"><table class="crit" id="rvTable"></table></div>
+    <div class="hint" style="margin-top:6px">行の「🎞 波形」でタイムラインに基準と並べて表示、「🔬 詳しく」で今の基準と評価し直して解析の全部を表示します。「最初の判定」は評価し直しても変わりません。医師の判断は「基準」フォルダの記録に保存されます（氏名は入りません）。</div>
+  </details>
+
+  <section class="card" id="watchCard">
+    <h2>自動比較</h2>
+    <div class="row">
+      <button class="primary" id="watchStart">👀 自動比較を始める</button>
+      <button id="watchStop" disabled>■ 止める</button>
+      <div class="status" id="watchStatus" style="flex:1;min-width:240px">止まっています。「👀 自動比較を始める」で、LATITUDEのPDFを保存するフォルダを選んでください。</div>
+    </div>
+    <details style="margin-top:8px"><summary class="hint" style="cursor:pointer">自動比較の設定・注意</summary>
+      <div class="row" style="margin-top:6px">
+        <label class="hint row"><input type="checkbox" id="watchPick"> 別のフォルダを選ぶ</label>
+        <label class="hint row"><input type="checkbox" id="watchExisting"> フォルダに今あるPDFも処理する</label>
+        <label class="hint row"><input type="checkbox" id="watchMove" checked> 処理したPDFを患者ごとのフォルダへ移動する</label>
+      </div>
+      <div class="hint" style="margin-top:4px;color:var(--warn)">⚠ 「ダウンロード」フォルダそのものはChromeの制限で選べません（「システム ファイルが含まれている」と出ます）。ダウンロードの中に <b>LATITUDE</b> などのフォルダを作り、Chromeの設定 → ダウンロード → 保存先 をそのフォルダにするか、「ダウンロード前に各ファイルの保存場所を確認する」をオンにしてそこへ保存してください。</div>
+      <div class="prbtns"><button class="prWith">🖨 最後のPDFを印刷（比較結果つき）</button><button class="prPlain">🖨 最後のPDFを印刷（そのまま）</button><span class="hint" style="align-self:center">※印刷は --kiosk-printing なしのChromeで</span></div>
+    </details>
+    <div id="watchLog" style="margin-top:10px"></div>
+  </section>
+
+  <details class="card" id="pdfSec" open>
+    <summary>📄 読み込んだPDFと段の読み取り</summary>
+    <div class="row">
+      <button id="redrawCrop">✂️ 範囲の指定を解除</button>
+      <button id="teachId">🔢 IDの位置を教える</button>
+      <button id="demoBtn">▶ 動作デモ</button>
+    </div>
+    <div id="pageWrap"><canvas id="page"></canvas></div>
+    <div id="pageBtns" class="hint" style="margin:8px 0"></div>
+    <div id="cropHint">PDFを読み込むと、S-ECGの段をページ全体から自動で見つけます。</div>
+    <div id="previews"></div>
+    <div id="traceMsg" class="hint"></div>
+    <div id="dbg" class="hint" style="margin-top:10px;padding:8px 10px;background:var(--inbg);border:1px solid var(--line);border-radius:10px;word-break:break-all">抽出テキスト：（PDFを読み込むと表示）</div>
+    <div id="ocrDbg" class="hint" style="margin-top:6px"></div>
+  </details>
+
+  <details class="card" id="inside">
+    <summary>🔬 解析の裏側（このPDFを実際にどう解析したか）</summary>
+    <div class="hint" style="margin:6px 0">段ごとに、①PDFの画像となぞった線 ②mVに換算した線と基線 ③基線を引いた線とR波 ④傾きとしきい値 を同じ横軸で並べています。横にスクロールできます（横1px＝約3.5ms）。</div>
+    <div id="insideBody"></div>
+  </details>
+
+  <details class="card" id="settings">
+    <summary>⚙ 設定（保存先）</summary>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
+      <span class="status">基準フォルダの名前</span>
+      <input id="baseDirName" class="inp" style="width:200px">
+      <button id="baseDirSave">保存</button>
+      <span class="status" id="baseDirMsg"></span>
+    </div>
+    <div class="hint" style="margin-top:6px">データフォルダの中で、患者ごとのデータ（患者ID.json）を入れるフォルダの名前です。フォルダの名前を手で変えたときは、ここも同じ名前に変えてください。無い名前を入れると新しく作ります。</div>
+    <div id="baseDirCands" class="hint" style="margin-top:4px"></div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px">
+      <span class="status">患者ファイルの名前</span>
+      <input id="filePat" class="inp" style="width:240px">
+      <button id="filePatSave">保存</button>
+      <span class="status" id="filePatMsg"></span>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px">
+      <span class="status">PDFを整理するフォルダ</span>
+      <input id="pdfDirName" class="inp" style="width:200px">
+      <button id="pdfDirSave">保存</button>
+      <span class="status" id="pdfDirMsg"></span>
+    </div>
+    <div style="margin-top:10px;padding:8px 10px;border:1px solid var(--line);border-radius:8px">
+      <b>元のPDFの保存</b>
+      <label class="hint row"><input type="radio" name="keepPdf" id="keepPdfNo"> 残さない（標準）：波形の部分だけの画像と数値を残す。氏名などが入ったPDFはこのPCに残さない</label>
+      <label class="hint row"><input type="radio" name="keepPdf" id="keepPdfYes"> 残す：情報セキュリティの許可を得た場合だけ（元のPDFを患者ごとのフォルダに保存）</label>
+      <div style="margin-top:4px"><button id="purgePdf">今ある元のPDFを、波形の画像に置き換える</button> <span class="status" id="purgeMsg"></span></div>
+    </div>
+    <div class="hint" style="margin-top:6px">評価したPDFを「データフォルダ／このフォルダ／患者ごとのフォルダ／日付.pdf」に保存します。患者ごとのフォルダ名は下の「患者ファイルの名前」と同じ形（.jsonを除いたもの）です。</div>
+    <div class="hint" style="margin-top:6px">新しい患者のファイルを作るときの名前です。使える項目：<code>{ID}</code>（患者ID）・<code>{機種}</code>　例：<code>{ID}.json</code>、<code>{ID}_{機種}.json</code>。<br>既にあるファイルは今の名前のまま使います。ファイル名を手で変えても、ファイルの中に書かれた患者IDで自動的に見つけます。</div>
+  </details>
+
+  <footer>
+    PaceGuard LATITUDE β — Boston LATITUDE の S-ICD 波形（S-ECG）を前回・基準と自動比較します。pdf.jsをCDNから読み込みます（初回のみ要ネット）。<br>
+    データフォルダの「基準」フォルダに <code>&lt;患者ID&gt;.json</code> として波形の記録を保存します。医療機器ではありません。
+  </footer>
+</main>
+<div id="lightbox"></div>
+<div id="startScreen" hidden>
+  <div class="ss-box">
+    <svg viewBox="0 0 40 40" aria-hidden="true" style="width:72px;height:72px"><path d="M4 22h8l3-5 4 13 4-21 3 13h10" fill="none" stroke="#10b981" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <div class="ss-title">PaceGuard LATITUDE</div>
+    <div class="ss-date" id="ssDate"></div>
+    <button id="ssStart">▶ 今日の波形比較を開始</button>
+    <div class="ss-note">押したあと、許可の画面が出たら「許可する」を押してください。<br>初めての時は、LATITUDEのPDFが入るフォルダ（波形認識\LATITUDE）を選びます。</div>
+    <div class="ss-note" id="ssNote2" style="color:var(--accent);font-weight:700"></div>
+    <button id="ssLater" class="ss-later">あとで（自動比較なしで使う）</button>
+  </div>
+</div>
+
+<script type="module">
+const PDFJS_URL='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs';
+const PDFJS_WORKER='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs';
+let pdfjsLib=null;
+// 同じフォルダの「pdfjs」フォルダに pdf.js 3.11.174（pdf.min.js / pdf.worker.min.js）があれば、それを使う＝インターネットに一切つながない（オフライン版）
+// file:// ではモジュールやWorkerを読めないため、通常のscriptで読み込み、PDFの処理は画面と同じスレッドで行う
+let PDFJS_LOCAL=false;
+const loadScript=src=>new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>rej(new Error(src));document.head.appendChild(s);});
+async function ensurePdfjs(){
+  if(pdfjsLib)return pdfjsLib;
+  try{
+    await loadScript('pdfjs/pdf.min.js');await loadScript('pdfjs/pdf.worker.min.js');
+    if(window.pdfjsLib&&window.pdfjsWorker){pdfjsLib=window.pdfjsLib;pdfjsLib.GlobalWorkerOptions.workerSrc='pdfjs/pdf.worker.min.js';PDFJS_LOCAL=true;}
+  }catch(_){}
+  if(!pdfjsLib){pdfjsLib=await import(PDFJS_URL);pdfjsLib.GlobalWorkerOptions.workerSrc=PDFJS_WORKER;}
+  const c=document.getElementById('netChip');if(c){c.hidden=false;c.textContent=PDFJS_LOCAL?'🔒 オフライン':'🌐 pdf.jsをネットから読込';c.title=PDFJS_LOCAL?'pdf.jsを同じフォルダから読み込みました。インターネットには一切つないでいません。':'pdf.jsをcdnjsから読み込みました（患者データは送っていません）。pdfjsフォルダを置くとオフラインになります。';}
+  return pdfjsLib;
+}
+const $=id=>document.getElementById(id);
+
+// ===== 信号エンジン（PaceGuard共通）=====
+const mean=a=>{let s=0;for(const x of a)s+=x;return s/a.length;};
+const std=a=>{const m=mean(a);let s=0;for(const x of a)s+=(x-m)**2;return Math.sqrt(s/a.length);};
+const normalize=a=>{const m=mean(a),sd=std(a)||1;return a.map(x=>(x-m)/sd);};
+function resample(a,N){const o=new Float32Array(N),n=a.length;for(let i=0;i<N;i++){const t=i*(n-1)/(N-1),j=Math.floor(t),f=t-j;o[i]=a[j]*(1-f)+a[Math.min(n-1,j+1)]*f;}return o;}
+function bestXcorr(a,b,maxLag){const A=normalize(Array.from(a)),B=normalize(Array.from(b));let best=-2,bl=0;for(let lag=-maxLag;lag<=maxLag;lag++){let s=0,n=0;for(let i=0;i<A.length;i++){const j=i+lag;if(j<0||j>=B.length)continue;s+=A[i]*B[j];n++;}if(n){const c=s/n;if(c>best){best=c;bl=lag;}}}return {corr:best,lag:bl};}
+function autoPeriod(sig){const s=normalize(Array.from(sig)),N=s.length;let best=-1,bl=Math.round(N*0.1);const mn=Math.round(N*0.05),mx=Math.round(N*0.45);for(let lag=mn;lag<=mx;lag++){let a=0,n=0;for(let i=0;i+lag<N;i++){a+=s[i]*s[i+lag];n++;}const c=a/n;if(c>best){best=c;bl=lag;}}return bl;}
+function foldTemplate(sig){const T=autoPeriod(sig),s=Array.from(sig),N=s.length;if(T<8)return resample(sig,200);const half=Math.round(T/2);const acc=new Float64Array(2*half);let cnt=0;for(let st=0;st+T<=N;st+=T){let ri=st,rv=-1;for(let i=st;i<st+T;i++){const v=Math.abs(s[i]);if(v>rv){rv=v;ri=i;}}if(ri-half<0||ri+half>=N)continue;for(let k=0;k<2*half;k++)acc[k]+=s[ri-half+k];cnt++;}if(!cnt)return resample(sig,200);return resample(Float32Array.from(acc.map(x=>x/cnt)),200);}
+function qrsWidth(t){const a=Array.from(t).map(Math.abs),mx=Math.max(...a),th=mx*0.2;let b=0,c=0;for(const v of a){if(v>th){c++;b=Math.max(b,c);}else c=0;}return b/t.length;}
+// キャンバス矩形から波形を1次元トレース。LATITUDEのS-ECGは「白＋グリッド背景に緑の線」なので
+// “最も暗い画素”ではなく“最も緑の画素”を各列で拾う（枠・グリッド・S等の黒文字を無視）。
+function traceRegion(ctx,r){
+  const d=ctx.getImageData(r.x,r.y,Math.max(1,r.w),Math.max(1,r.h));const {width:W,height:H,data:D}=d;
+  const sig=new Float32Array(W).fill(NaN);
+  const valid=new Uint8Array(W);
+  for(let x=0;x<W;x++){ // 各列の「緑の線」の重心（線の太さに左右されない）
+    let sw=0,sy=0;
+    for(let y=0;y<H;y++){const i=(y*W+x)*4;const green=D[i+1]-Math.max(D[i],D[i+2]);if(green>18){const w=green-18;sw+=w;sy+=w*y;}}
+    if(sw>0){sig[x]=H/2-sy/sw;valid[x]=1;}
+  }
+  // 緑が無い列（コマの隙間・枠）は線形補間
+  let first=-1;for(let x=0;x<W;x++)if(!isNaN(sig[x])){first=x;break;}
+  if(first<0){return new Float32Array(W);} // 緑が全く無い＝範囲外
+  for(let x=0;x<first;x++)sig[x]=sig[first];
+  let last=first;
+  for(let x=first+1;x<W;x++){
+    if(isNaN(sig[x]))continue;
+    if(x-last>1){const a=sig[last],b=sig[x];for(let k=last+1;k<x;k++)sig[k]=a+(b-a)*(k-last)/(x-last);}
+    last=x;
+  }
+  for(let x=last+1;x<W;x++)sig[x]=sig[last];
+  // 平滑化
+  const sm=new Float32Array(W);for(let x=0;x<W;x++){let s=0,n=0;for(let k=-1;k<=1;k++){const j=x+k;if(j>=0&&j<W){s+=sig[j];n++;}}sm[x]=s/n;}
+  sm.raw=sig;sm.valid=valid; // ノイズ検出・心電図計測用に平滑化前と「線があった列」も保持
+  return sm;
+}
+// ノイズ検出：細かい上下の折り返し（ギザギザ）が局所的に多い区間を探す。前回データ不要（同じ列の中で比較）。
+function noiseScan(sig){
+  const x=sig.raw||sig,n=x.length;const res={max:0,med:0,thr:8,bad:[],W:0};if(n<40)return res;
+  const d=new Float32Array(n-1);for(let i=0;i<n-1;i++)d[i]=x[i+1]-x[i];
+  const W=Math.max(16,Math.round(n/24)),step=W>>1,wins=[];
+  for(let st=0;st+W<=n-1;st+=step){let c=0;for(let i=st+1;i<st+W;i++)if(d[i]*d[i-1]<0&&Math.abs(d[i])>=1&&Math.abs(d[i-1])>=1)c++;wins.push({st,c});}
+  const cs=wins.map(w=>w.c).sort((a,b)=>a-b);
+  res.W=W;res.med=cs[cs.length>>1]||0;res.max=cs[cs.length-1]||0;res.thr=Math.max(8,3*(res.med+1));
+  res.bad=wins.filter(w=>w.c>=res.thr);return res;
+}
+
+// ===== PDF 読み込み・描画・抽出 =====
+let pageCanvas=$('page'), pctx=pageCanvas.getContext('2d');
+let renderScale=1.6, curSigs=[], curFeat=[], curNoise=[], curPool=null, meta={};
+// ---- PDFのテキストをpdf.jsに頼らず自前抽出（FlateDecodeを展開しTj/TJ文字列を回収）----
+// LATITUDEはpdf.jsのgetTextContentが空を返すため、圧縮ストリームを直接展開して数字（ID・日付）を得る。
+// DecompressionStreamは圧縮データ後ろの余分なバイト（streamとendstreamの間の改行）でエラーになるため、
+// /Length があればその長さで切り、無ければ末尾のCR/LFを削ったものから順に試す。
+async function inflateOnce(bytes,fmt){
+  try{const ds=new DecompressionStream(fmt);const rd=new Response(ds.readable).arrayBuffer();
+    const w=ds.writable.getWriter();w.write(bytes).catch(()=>{});w.close().catch(()=>{});
+    return new Uint8Array(await rd);}catch(e){return null;}
+}
+async function inflateMaybe(bytes,len){
+  const cands=[];
+  if(len>0&&len<=bytes.length)cands.push(bytes.subarray(0,len));
+  let n=bytes.length;while(n>0&&(bytes[n-1]===10||bytes[n-1]===13))n--;
+  for(let k=n;k<=bytes.length;k++)cands.push(bytes.subarray(0,k));
+  for(const c of cands)for(const fmt of ['deflate','deflate-raw']){
+    const out=await inflateOnce(c,fmt);if(out&&out.length)return out;
+  }
+  return null;
+}
+let rawDiag={streams:0,inflated:0};
+async function extractRawPdfText(ab){
+  const bytes=new Uint8Array(ab);
+  let bin='';const CH=8192;for(let o=0;o<bytes.length;o+=CH)bin+=String.fromCharCode.apply(null,bytes.subarray(o,o+CH));
+  let text='',extra='',i=0,streams=0,inflated=0;
+  while((i=bin.indexOf('stream',i))!==-1){
+    if(bin.substr(i-3,3)==='end'){i+=6;continue;}
+    streams++;
+    let start=i+6;if(bytes[start]===13)start++;if(bytes[start]===10)start++;
+    const end=bin.indexOf('endstream',start);if(end===-1){i=start+6;continue;}
+    const dict=bin.slice(Math.max(0,bin.lastIndexOf('obj',i)),i);const lm=dict.match(/\/Length\s+(\d+)(?!\d)(?!\s+\d+\s+R)/);
+    const dec=await inflateMaybe(bytes.subarray(start,end),lm?+lm[1]:0);i=end+9;
+    let s='';
+    if(dec){inflated++;for(let o=0;o<dec.length;o+=CH)s+=String.fromCharCode.apply(null,dec.subarray(o,o+CH));}
+    else if(!/\/Filter/.test(dict))s=bin.slice(start,end); // 圧縮されていないストリーム
+    if(!s)continue;
+    if(/\bBT\b/.test(s)){ // 画面に描く文字（Tj/TJ）。( )の文字列と < >の16進文字列の両方
+      for(const m of s.matchAll(/\(((?:[^()\\]|\\.)*)\)\s*Tj/g))text+=decodePdfStr(m[1])+' ';
+      for(const m of s.matchAll(/<([0-9A-Fa-f\s]+)>\s*Tj/g))text+=decodeHexStr(m[1])+' ';
+      for(const m of s.matchAll(/\[([^\]]*)\]\s*TJ/g)){for(const p of m[1].matchAll(/\(((?:[^()\\]|\\.)*)\)|<([0-9A-Fa-f\s]+)>/g))text+=p[1]!=null?decodePdfStr(p[1]):decodeHexStr(p[2]);text+=' ';}
+    }else{ // 注釈・フォーム欄など（/Contents (…) /V (…) など）に入った文字
+      for(const m of s.matchAll(/\(((?:[^()\\]|\\.){1,200})\)/g))extra+=decodePdfStr(m[1])+' ';
+    }
+  }
+  // ストリームの外（圧縮されていない辞書）にある文字列も拾う
+  const outside=bin.replace(/stream[\s\S]*?endstream/g,' ');
+  for(const m of outside.matchAll(/\(((?:[^()\\]|\\.){1,200})\)/g))extra+=decodePdfStr(m[1])+' ';
+  rawDiag={streams,inflated};
+  const clean=x=>x.replace(/[\x00-\x1f\x7f]/g,'').replace(/ +/g,'');
+  return clean(text)+' '+clean(extra);
+}
+// PDFの文字列をふつうの文字に（エスケープ・8進数・UTF-16・UTF-8に対応）
+function decodePdfStr(raw){
+  let o='';for(let i=0;i<raw.length;i++){const c=raw[i];if(c!=='\\'){o+=c;continue;}const n=raw[++i];
+    if(n==='n')o+='\n';else if(n==='r')o+='\r';else if(n==='t')o+='\t';else if(n==='b')o+='\b';else if(n==='f')o+='\f';
+    else if(/[0-7]/.test(n)){let d=n;while(d.length<3&&/[0-7]/.test(raw[i+1]))d+=raw[++i];o+=String.fromCharCode(parseInt(d,8));}
+    else if(n==='\r'||n==='\n'){}else o+=n;}
+  return bytesToText(o);
+}
+function decodeHexStr(h){h=h.replace(/\s/g,'');if(h.length%2)h+='0';let o='';for(let i=0;i<h.length;i+=2)o+=String.fromCharCode(parseInt(h.substr(i,2),16));return bytesToText(o);}
+function bytesToText(o){
+  const b=Uint8Array.from(o,ch=>ch.charCodeAt(0)&255);
+  if(b[0]===0xFE&&b[1]===0xFF){let r='';for(let i=2;i+1<b.length;i+=2)r+=String.fromCharCode(b[i]<<8|b[i+1]);return r;}
+  if(/[\x80-\xff]/.test(o)){try{return new TextDecoder('utf-8',{fatal:true}).decode(b);}catch(_){}}
+  return o;
+}
+document.addEventListener('click',e=>{const b=e.target.closest('.idopt');if(b){$('fId').value=b.dataset.id;meta.id=b.dataset.id;}});
+// S-ECGの段：ページ全体（または手で指定した範囲）から自動で全部見つける。段の数はレポートごとに違ってよい
+const regionKey='pg_lat_region';
+let region=JSON.parse(localStorage.getItem(regionKey)||'null'); // 手で指定した範囲（無ければページ全体）
+let strips=[];                                                    // 見つけた段（正規化 {x,y,w,h}）
+try{localStorage.removeItem('pg_lat_crop');localStorage.removeItem('pg_lat_crop2');}catch(_){}
+const toPx=c=>({x:c.x*pageCanvas.width,y:c.y*pageCanvas.height,w:c.w*pageCanvas.width,h:c.h*pageCanvas.height});
+// 範囲の中で「緑の線がある行」を数え、すき間で区切って波形の段を見つける（左右の端も緑の範囲に合わせる）
+function splitRows(r){
+  const src=pageBackup.width?pageBackup.getContext('2d'):pctx;
+  const x0=Math.max(0,Math.round(r.x)),y0=Math.max(0,Math.round(r.y)),w=Math.max(1,Math.round(r.w)),h=Math.max(1,Math.round(r.h));
+  const d=src.getImageData(x0,y0,w,h).data,cnt=new Array(h).fill(0),isG=i=>d[i+1]-Math.max(d[i],d[i+2])>18;
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(isG((y*w+x)*4))cnt[y]++;
+  const runs=[];let st=-1,gap=0;const maxGap=Math.max(6,Math.round(pageCanvas.height*0.006));
+  for(let y=0;y<=h;y++){const on=y<h&&cnt[y]>0;
+    if(on){if(st<0)st=y;gap=0;}else if(st>=0){gap++;if(gap>maxGap||y===h){const b=y-gap+1;runs.push({a:st,b,mass:cnt.slice(st,b).reduce((s,c)=>s+c,0)});st=-1;gap=0;}}}
+  const big=runs.filter(q=>q.b-q.a>=10);const mm=Math.max(0,...big.map(q=>q.mass));
+  const pad=Math.max(4,Math.round(pageCanvas.height*0.004));
+  return big.filter(q=>q.mass>=mm*0.25).map(q=>{let xa=w,xb=0;for(let y=q.a;y<q.b;y++)for(let x=0;x<w;x++)if(isG((y*w+x)*4)){if(x<xa)xa=x;if(x>xb)xb=x;}
+      return {x:x0+Math.max(0,xa-pad),y:y0+Math.max(0,q.a-pad),w:Math.min(w,xb+pad)-Math.max(0,xa-pad),h:Math.min(h,q.b+pad)-Math.max(0,q.a-pad)};})
+    .filter(q=>q.w>pageCanvas.width*0.25); // 横に短いもの（ロゴ等）は除く
+}
+function detectStrips(){
+  const r=region?toPx(region):{x:0,y:0,w:pageCanvas.width,h:pageCanvas.height};
+  strips=splitRows(r).map(q=>({x:q.x/pageCanvas.width,y:q.y/pageCanvas.height,w:q.w/pageCanvas.width,h:q.h/pageCanvas.height}));
+}
+function updateCropHint(){
+  $('cropHint').innerHTML = (strips.length?`S-ECGを<b>${strips.length}段</b>見つけました（ページ全体から自動）。`:'S-ECGの段が見つかりません。')
+    +(region?'　範囲を手で指定中（全体に戻すには✂️）。':'　うまく拾えない時は、使いたい段をまとめてドラッグして範囲を指定できます。');
+}
+const idBoxKey='pg_lat_idbox';
+let idBox=JSON.parse(localStorage.getItem(idBoxKey)||'null');
+let drawMode='crop'; // 'crop' | 'id'
+// ---- 数字OCR（Tesseract.js を遅延読み込み。院内実データで完結・PHIは端末外に出ません）----
+let _tess=null;
+function ensureTesseract(){
+  if(PDFJS_LOCAL)return Promise.reject(new Error('オフライン版では文字認識（OCR）は使えません。患者IDは欄に手で入力してください'));
+  if(window.Tesseract)return Promise.resolve(window.Tesseract);
+  if(_tess)return _tess;
+  _tess=new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.0/tesseract.min.js';s.onload=()=>res(window.Tesseract);s.onerror=()=>rej(new Error('Tesseract読込失敗'));document.head.appendChild(s);});
+  return _tess;
+}
+async function ocrId(){
+  if(!idBox||!pageBackup.width)return;
+  const r={x:idBox.x*pageCanvas.width,y:idBox.y*pageCanvas.height,w:idBox.w*pageCanvas.width,h:idBox.h*pageCanvas.height};
+  const sc=3,tmp=document.createElement('canvas');tmp.width=Math.max(1,r.w*sc);tmp.height=Math.max(1,r.h*sc);
+  const tc=tmp.getContext('2d');tc.imageSmoothingEnabled=false;
+  tc.drawImage(pageBackup,r.x,r.y,r.w,r.h,0,0,tmp.width,tmp.height);
+  // 2値化（数字を黒くくっきり）
+  const im=tc.getImageData(0,0,tmp.width,tmp.height),D=im.data;
+  for(let i=0;i<D.length;i+=4){const l=(D[i]+D[i+1]+D[i+2])/3,v=l<130?0:255;D[i]=D[i+1]=D[i+2]=v;}
+  tc.putImageData(im,0,0);
+  $('ocrDbg').innerHTML='🔎 OCR実行中…（初回はライブラリ読込に少し時間がかかります）';
+  try{
+    const T=await ensureTesseract();
+    const {data}=await T.recognize(tmp,'eng',{tessedit_char_whitelist:'0123456789'});
+    const digits=(data.text.match(/\d/g)||[]).join('');
+    const id=(digits.match(/\d{8}/)||[digits])[0]||'';
+    if(id) $('fId').value=id; // 取れた時だけ反映（空で上書きしない）
+    $('ocrDbg').innerHTML = `OCR読取：<code>${(data.text.trim()||'（空）').replace(/</g,'&lt;')}</code> → <b>ID候補：${id||'（8桁が取れませんでした）'}</b>`;
+  }catch(e){ $('ocrDbg').innerHTML='OCR失敗：'+e; }
+}
+$('teachId').onclick=()=>{ if(!pageBackup.width){alert('先にPDFを読み込んでください');return;} drawMode='id'; $('dbg').innerHTML='<b>IDの数字の上をドラッグして囲んでください</b>（8桁の数字だけを枠に入れる）。'; };
+
+// 複数ページのPDF（サマリー＋波形など）から、波形のページを選ぶ。
+// 「緑の画素の量」ではなく「細い緑の線が横に長く続き、上下に揺れている段」の長さで点数を付ける（緑のロゴ・表・帯は点数にならない）
+let curPageNo=1,pageScores=[];
+function ecgScore(x,W,H){
+  const d=x.getImageData(0,0,W,H).data,isG=i=>d[i+1]-Math.max(d[i],d[i+2])>18;
+  const cnt=new Uint32Array(H);for(let y=0;y<H;y++){let c=0;for(let xx=0;xx<W;xx++)if(isG((y*W+xx)*4))c++;cnt[y]=c;}
+  let score=0,y=0;
+  while(y<H){if(!cnt[y]){y++;continue;}let a=y,gap=0;while(y<H&&gap<=6){if(cnt[y])gap=0;else gap++;y++;}const b=y-gap,h=b-a;if(h<8)continue;
+    let thin=0;const cy=[];
+    for(let xx=0;xx<W;xx++){let n=0,sy=0;for(let yy=a;yy<b;yy++)if(isG((yy*W+xx)*4)){n++;sy+=yy;}
+      if(n>0&&n<=Math.max(4,h*0.3)){thin++;cy.push(sy/n);}}
+    if(thin<W*0.25||cy.length<10)continue;
+    const m=cy.reduce((p,v)=>p+v,0)/cy.length,sd=Math.sqrt(cy.reduce((p,v)=>p+(v-m)**2,0)/cy.length);
+    if(sd<1)continue; // まっすぐな緑の線（罫線）は除く
+    score+=thin;}
+  return score;
+}
+async function pickEcgPage(pdf){
+  const n=Math.min(pdf.numPages||1,30);pageScores=[];if(n<=1){pageScores=[1];return 1;}
+  // 本物のPDFの波形の線はとても細いので、2倍で描いて調べる（低い倍率だと色が薄まって見つからない）
+  let best=1,bestS=0,best2=1,bestT=-1;const c=document.createElement('canvas'),x=c.getContext('2d',{willReadFrequently:true});
+  for(let i=1;i<=n;i++){let sc=0,thin=0;try{const pg=await pdf.getPage(i),vp=pg.getViewport({scale:2});c.width=Math.round(vp.width);c.height=Math.round(vp.height);x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);
+    await pg.render({canvasContext:x,viewport:vp}).promise;sc=ecgScore(x,c.width,c.height);thin=thinGreen(x,c.width,c.height);}catch(_){}
+    pageScores.push(sc);if(sc>bestS){bestS=sc;best=i;}if(thin>bestT){bestT=thin;best2=i;}}
+  return bestS>0?best:best2; // 波形らしい段が見つからない時は、太い緑の塊（電池マークなど）を除いた緑の量で選ぶ
+}
+// 縦に細い緑だけを数える（電池マークや緑の帯のような太い塗りは数えない）
+function thinGreen(x,W,H){
+  const d=x.getImageData(0,0,W,H).data;let cnt=0;
+  for(let xx=0;xx<W;xx+=2){let run=0;for(let y=0;y<=H;y++){const g=y<H&&(()=>{const i=(y*W+xx)*4;return d[i+1]-Math.max(d[i],d[i+2])>18;})();if(g)run++;else{if(run>0&&run<=8)cnt+=run;run=0;}}}
+  return cnt;
+}
+async function loadPDF(file,{forceEval=false,pageNo=0}={}){
+  try{
+    const lib=await ensurePdfjs();
+    const buf=await file.arrayBuffer();lastPdfFile=file;lastPdfBytes=buf.slice(0);
+    // ★pdf.jsはdataのArrayBufferを転送（detach）して空にするため、先にコピーから自前抽出しておく
+    let rawPdfText=''; try{ rawPdfText=await extractRawPdfText(buf.slice(0)); }catch(_){}
+    const pdf=await lib.getDocument({data:new Uint8Array(buf),isEvalSupported:false}).promise;lastPdfDoc=pdf;
+    const pno=pageNo&&pageNo<=(pdf.numPages||1)?pageNo:await pickEcgPage(pdf);curPageNo=pno;renderPageBtns(pdf.numPages||1,pno,!!pageNo);
+    const page=await pdf.getPage(pno);
+    const vp=page.getViewport({scale:renderScale});
+    pageCanvas.width=vp.width; pageCanvas.height=vp.height;
+    await page.render({canvasContext:pctx,viewport:vp}).promise;
+    savePageBackup(); pdfLoaded=true; hiReady=false;
+    const tc=await page.getTextContent();
+    // 患者情報は FreeText 注釈に入っていることがある（通常描画・テキスト抽出では出ない）→ 注釈からも取得
+    let annotStrs=[];
+    try{ const ans=await page.getAnnotations(); annotStrs=ans.map(a=>(a.contentsObj&&a.contentsObj.str)||a.contents||'').filter(s=>s&&s.trim()); }catch(_){}
+    extractFields(tc.items.map(it=>({s:it.str,x:it.transform[4],y:it.transform[5]})), annotStrs, rawPdfText); // ID・日付は先に読む
+    {const nid=$('fId').value.trim();if(tl.id&&nid&&tl.id!==nid)tlReset(nid,'読み込み中…');} // 別の患者になったら前の患者のタイムラインを消す
+    curNonSicd=nonSicdOf(tc.items.map(it=>it.str).join(' ')+' '+annotStrs.join(' ')+' '+rawPdfText,$('fDev').value.trim());
+    if(curNonSicd){ // S-ICD以外：波形の比較・保存はしない
+      curSigs=[];curFeat=[];curNoise=[];curPool=null;$('overlayCard').hidden=true;$('traceMsg').textContent='';
+      $('result').innerHTML=`<div class="verdict info"><h2>S-ICD以外のPDFです（対象外）</h2>機種：${escH(curNonSicd)}　患者ID：${escH($('fId').value||'—')}<br><span class="hint">このツールはS-ICDのS-ECGだけを比較します。このPDFは比較・保存しません。</span></div>`;
+      tlReset($('fId').value.trim(),'S-ICD以外のため対象外');return;}
+    // 計測用に高解像度でも描く（1px≒3.5ms）。時間がかかっても他の処理を止めないよう、最大15秒で打ち切る
+    try{const vh=page.getViewport({scale:HI});hiCanvas.width=vh.width;hiCanvas.height=vh.height;
+      await Promise.race([page.render({canvasContext:hctx,viewport:vh}).promise,new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),15000))]);hiReady=true;}
+    catch(e){hiReady=false;$('traceMsg').innerHTML='<span class="warn-t">計測用の高解像度描画に失敗しました（'+String(e&&e.message||e)+'）。PDFを読み込み直してください。</span>';}
+    autoTrace();
+    // 注釈/テキストでIDが取れていれば優先。取れない時だけOCRを試す（枠を教えてある場合）。
+    if(idBox){ drawIdBox(); if(!$('fId').value) await ocrId(); }
+    // 自動評価：ID・照会日・段の認識が終わったらそのまま評価する
+    try{const ae=localStorage.getItem('pg_lat_autoeval');if(ae!==null)$('autoEval').checked=ae==='1';}catch(_){}
+    if($('autoEval').checked||forceEval) await runEval('auto');
+  }catch(e){ $('result').innerHTML=`<div class="verdict bad"><h2>PDF読み込みエラー</h2>${e}<br><span class="hint">pdf.jsの読み込みにインターネットが必要です（初回のみ）。院内でCDNが塞がれている場合はpdf.jsを同梱版に切り替えます。</span></div>`; }
+}
+// PDFの文字から、送信日時・イベント・S-ECGの記録日時を読む（タイムラインで、保存済みのPDFにも使う）
+function headerInfo(t,wt,interro){
+  const lab=re=>{const m=t.match(re);return m?`${m[1]}年${m[2].padStart(2,'0')}月${m[3].padStart(2,'0')}日${m[4]?' '+m[4]:''}`:'';};
+  const tx=lab(/デバイスからの送信[:：]?(\d{4})年(\d{1,2})月(\d{1,2})日(\d{1,2}:\d{2})?/)||(wt?interro:'');
+  const clinic=lab(/診察室での情報読込み?[:：]?(\d{4})年(\d{1,2})月(\d{1,2})日(\d{1,2}:\d{2})?/);
+  const implant=lab(/植込み日[:：]?(\d{4})年(\d{1,2})月(\d{1,2})日/);
+  // イベント記録の見出し：「002: 2025年10月13日 23:41 JST, AF」（番号・発生日時・種類）
+  const events=[...t.matchAll(/(?:^|[^\d])(\d{3})[:：](\d{4})年(\d{1,2})月(\d{1,2})日(\d{1,2}:\d{2})(?:JST)?[,，、]?\s*([A-Za-z][A-Za-z/\-]{0,11}|[一-龯ぁ-んァ-ヶー]{1,8}?(?=頻拍治療|頻拍検出|デバイス|前回|治療設定|\d|$))?/g)]
+    .map(m=>({no:m[1],dt:`${m[2]}年${m[3].padStart(2,'0')}月${m[4].padStart(2,'0')}日 ${m[5]}`,type:(m[6]||'').trim()}));
+  if(!events.length)for(const m of t.matchAll(/(?:^|[^\d])(\d{3})[:：]\s*(\d{4})\D{1,4}?(\d{1,2})\D{1,4}?(\d{1,2})\D{0,6}?(\d{1,2}:\d{2})\D{0,6}?([A-Za-z]{2,5})?/g))
+    events.push({no:m[1],dt:`${m[2]}年${m[3].padStart(2,'0')}月${m[4].padStart(2,'0')}日 ${m[5]}`,type:m[6]||''}); // 漢字が読めない時
+  const evs=[...new Map(events.map(e=>[e.no+e.dt,e])).values()];
+  // 確認用：PDFの中で見つけた「日付＋時刻」を全部
+  const allDT=[...new Set([...t.matchAll(/(\d{4})\D{1,4}?(\d{1,2})\D{1,4}?(\d{1,2})\D{0,6}?(\d{1,2}:\d{2})/g)].map(m=>`${m[1]}/${m[2].padStart(2,'0')}/${m[3].padStart(2,'0')} ${m[4]}`))];
+  // S-ECGの記録日時：「S-ECG表示(2026年09月28日 06:50 JST)」
+  // 漢字（表示・年月日）が文字化けしていても読めるよう、「ECG」の直後の日時を探す（ハイフンの種類も問わない）
+  const secg=lab(/S.?ECG表示[(（](\d{4})年(\d{1,2})月(\d{1,2})日(\d{1,2}:\d{2})/)||lab(/ECG[^\d]{0,12}?(\d{4})\D{1,4}?(\d{1,2})\D{1,4}?(\d{1,2})\D{0,6}?(\d{1,2}:\d{2})/);
+  return {tx,clinic,implant,events:evs,secg,allDT};
+}
+function extractFields(items, annotStrs, rawPdfText){
+  annotStrs=annotStrs||[]; rawPdfText=rawPdfText||'';
+  // pdf.jsの文字・注釈・自前抽出（圧縮ストリーム）を合わせて解析
+  const raw=items.map(i=>i.s).join('')+' '+annotStrs.join(' ')+' '+rawPdfText;
+  const t=raw.replace(/\s+/g,'');
+  // 行を再構成（同じy付近の項目をxでソートして連結）＝氏名など人が読む単位
+  const rows={};
+  for(const it of items){ if(!it.s.trim())continue; const key=Math.round(it.y/3); (rows[key]=rows[key]||[]).push(it); }
+  const lines=Object.keys(rows).sort((a,b)=>b-a).map(k=>rows[k].sort((p,q)=>p.x-q.x).map(o=>o.s).join('').replace(/\s+/g,' ').trim()).filter(Boolean);
+  // 日付：まず「YYYY年MM月DD日」。取れない（年月日が文字化け）時は JST 時刻を手がかりに緩く抽出
+  const dts=[...t.matchAll(/(\d{4})年(\d{1,2})月(\d{1,2})日(\d{2}:\d{2})?/g)];
+  const wt=dts.find(m=>m[4]);
+  let interro=wt?`${wt[1]}年${wt[2]}月${wt[3]}日 ${wt[4]}`:(dts[0]?`${dts[0][1]}年${dts[0][2]}月${dts[0][3]}日`:'');
+  if(!interro){ const j=t.match(/(\d{4})\D{1,4}(\d{1,2})\D{1,4}(\d{1,2})\D{0,6}(\d{1,2}:\d{2})\D{0,4}JST/);
+    if(j) interro=`${j[1]}年${j[2]}月${j[3]}日 ${j[4]} JST`; }
+  // デバイス：型式/シリアル（A219/156652 等）
+  const dev=(t.match(/[A-Z]\d{3}\/\d{4,8}/)||t.match(/[A-Z]{1,6}\d{2,4}\/\d{4,8}/)||raw.match(/EMBLEM[^\s|]*/)||[''])[0].trim();
+  // 患者ID：LATITUDEは「氏名（ふりがな）（8桁ID）」形式 → 括弧内8桁を最優先
+  const serial=(dev.match(/\/(\d+)/)||[])[1];
+  const idParen=(t.match(/[（(](\d{8})[）)]/)||t.match(/[（(](\d{6,10})[）)]/)||[])[1];
+  const nums=[...t.matchAll(/\d{8}/g)].map(m=>m[0]).filter(n=>n!==serial&&!/^(19|20)\d\d(0[1-9]|1[0-2])/.test(n));
+  const idCand=idParen||nums[0]||'';
+  // IDが決まらない時のために、それらしい数字（6〜10桁）を候補として出す
+  const idOpts=[...new Set([...t.matchAll(/\d{6,10}/g)].map(m=>m[0]).filter(n=>n!==serial&&!/^(19|20)\d\d(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])/.test(n)))].slice(0,8);
+  // 氏名は読み取らない（個人情報保護のため。患者はIDだけで管理する）
+  const nameCand='';
+  $('fId').value=idCand||''; $('fName').value=nameCand; $('fDate').value=interro; $('fDev').value=dev;
+  // 右上の日付：前回のデバイスからの送信／前回の診察室での情報読込み／植込み日（ラベルが読めた時）
+  const {tx,clinic,implant,events:evs,secg,allDT}=headerInfo(t,wt,interro);
+  meta={id:idCand||'',name:nameCand,date:interro,device:dev,tx,clinic,implant,events:evs,secg,allDT};
+  if($('fMeta'))$('fMeta').innerHTML=[secg&&`〰 S-ECG記録：<b>${secg}</b>`,evs.length&&`⚡ イベント ${evs.map(e=>`<b>${e.no}：${e.dt}${e.type?'（'+e.type+'）':''}</b>`).join('、')}`,tx&&`📡 前回のデバイスからの送信：<b>${tx}</b>`,clinic&&`🏥 前回の診察室での情報読込み：<b>${clinic}</b>`,implant&&`🫀 植込み日：<b>${implant}</b>`].filter(Boolean).join('　')||'';
+  // デバッグ：文字項目数＋注釈数＋抽出テキスト先頭を表示
+  const dbg=$('dbg');
+  if(dbg) dbg.innerHTML = `文字項目：<b>${items.length}</b>／注釈：<b>${annotStrs.length}</b>／自前抽出：<b>${rawPdfText.length}</b>字（stream ${rawDiag.streams}／展開 ${rawDiag.inflated}）`
+    + (idCand?'':(idOpts.length?`<br><span class="warn-t">IDを自動で決められませんでした。候補：</span>${idOpts.map(n=>`<button class="idopt" data-id="${n}" style="padding:1px 8px;margin:2px">${n}</button>`).join('')}（押すと入ります）`:'<br><span class="warn-t">IDらしい数字が見つかりませんでした。手で入力するか「🔢 IDの位置を教える」を使ってください。</span>'))
+    + `<br>ID:<b>${idCand||'—'}</b> 照会:<b>${interro||'—'}</b> 機種:<b>${dev||'—'}</b>`
+    + `<br>見つけた日時：${allDT.length?allDT.map(x=>'<b>'+x+'</b>').join('、'):'なし'}`
+    + (()=>{const k=t.search(/ECG/);return k>=0?`<br>「ECG」の周り：<code>${escH(t.slice(Math.max(0,k-6),k+40))}</code>`:'<br>「ECG」という文字は見つかりませんでした';})();
+  updateCropHint();
+}
+function autoTrace(){
+  if(!pdfLoaded)return;
+  detectStrips();
+  const toHi=c=>({x:Math.round(c.x*hiCanvas.width),y:Math.round(c.y*hiCanvas.height),w:Math.round(c.w*hiCanvas.width),h:Math.round(c.h*hiCanvas.height)});
+  const tr=c=>hiReady?traceRegion(hctx,toHi(c)):traceRegion(pctx,toPx(c));
+  curSigs=strips.map(tr);
+  curNoise=curSigs.map(sg=>noiseScan(sg));
+  curFeat=curSigs.map(sg=>hiReady?analyzeRow(sg):null);
+  curPool=hiReady?poolRows(curFeat,curNoise):null;
+  strips.forEach((c,k)=>{const r=toPx(c);drawCropBox(r);pctx.save();pctx.fillStyle='#38bdf8';pctx.font='bold 14px sans-serif';pctx.fillText(String(k+1),r.x-14,r.y+r.h/2+5);pctx.restore();});
+  showSigPreview();updateCropHint();renderInside();
+}
+function drawCropBox(r){ pctx.save();pctx.strokeStyle='#38bdf8';pctx.lineWidth=2;pctx.setLineDash([6,4]);pctx.strokeRect(r.x,r.y,r.w,r.h);pctx.setLineDash([]);pctx.restore(); }
+function drawIdBox(){ if(!idBox)return;const r={x:idBox.x*pageCanvas.width,y:idBox.y*pageCanvas.height,w:idBox.w*pageCanvas.width,h:idBox.h*pageCanvas.height};pctx.save();pctx.strokeStyle='#fbbf24';pctx.lineWidth=2;pctx.setLineDash([4,3]);pctx.strokeRect(r.x,r.y,r.w,r.h);pctx.setLineDash([]);pctx.restore(); }
+// 描画したページのバックアップ（ドラッグ中の再描画用）
+let pageBackup=document.createElement('canvas'), pdfLoaded=false;
+function savePageBackup(){ pageBackup.width=pageCanvas.width;pageBackup.height=pageCanvas.height;pageBackup.getContext('2d').drawImage(pageCanvas,0,0); }
+function restorePage(){ if(pageBackup.width){pctx.drawImage(pageBackup,0,0);} }
+// 切り出した波形のプレビュー（認識できたか一目で分かる）
+// 高精細キャンバス（画面の拡大率に合わせて、にじまずくっきり描く）
+function hiDPI(cv,W,H){const r=Math.min(3,window.devicePixelRatio||1);cv.width=Math.round(W*r);cv.height=Math.round(H*r);cv.style.width=W+'px';cv.style.height=H+'px';const c=cv.getContext('2d');c.setTransform(r,0,0,r,0,0);return c;}
+// 波形の図の色（白テーマ＝心電図用紙のピンクの方眼／黒テーマ＝モニター風の緑の方眼）
+function pal(){return document.documentElement.dataset.theme==='dark'
+  ?{bg:'#03080c',minor:'rgba(62,230,168,.06)',major:'rgba(62,230,168,.15)',trace:'#46f0b2',prev:'#60a5fa',cur:'#fbbf24',bad:'251,113,133',diff:'#fb7185',text:'#6b7d96',peak:'#fbbf24',peakLine:'rgba(251,191,36,.22)',glow:true}
+  :{bg:'#ffffff',minor:'rgba(239,68,68,.10)',major:'rgba(239,68,68,.28)',trace:'#0b8a4a',prev:'#2563eb',cur:'#d97706',bad:'225,29,72',diff:'#e11d48',text:'#64748b',peak:'#d97706',peakLine:'rgba(217,119,6,.25)',glow:false};}
+// 心電図モニター風の方眼（細線＝1目盛り、太線＝5目盛り）
+function monitorGrid(c,W,H,step,y0=H/2){
+  const P=pal();c.fillStyle=P.bg;c.fillRect(0,0,W,H);
+  const lines=(st,a)=>{c.strokeStyle=a;c.lineWidth=1;c.beginPath();
+    for(let x=0;x<=W;x+=st){const xx=Math.round(x)+.5;c.moveTo(xx,0);c.lineTo(xx,H);}
+    for(let y=y0%st;y<=H;y+=st){const yy=Math.round(y)+.5;c.moveTo(0,yy);c.lineTo(W,yy);}c.stroke();};
+  if(step>=3)lines(step,P.minor);lines(step*5,P.major);
+}
+function glowLine(c,pts,col,w=1.7){
+  c.save();c.lineJoin='round';c.lineCap='round';
+  if(!pal().glow){c.strokeStyle=col;c.lineWidth=w;c.beginPath();pts(c);c.stroke();c.restore();return;}
+  c.strokeStyle=col;c.globalAlpha=.25;c.lineWidth=w*3.2;c.shadowColor=col;c.shadowBlur=10;c.beginPath();pts(c);c.stroke();
+  c.globalAlpha=1;c.lineWidth=w;c.shadowBlur=4;c.beginPath();pts(c);c.stroke();c.restore();
+}
+function drawSigPreview(cv,sig,feat,nz){
+  const W=Math.max(320,cv.parentElement&&cv.parentElement.clientWidth||520),H=78,c=hiDPI(cv,W,H),n=sig.length,sx=(W-1)/(n-1);
+  monitorGrid(c,W,H,PX_PER_MM*sx);
+  if(nz&&nz.bad.length){for(const b of nz.bad){const P=pal(),g=c.createLinearGradient(0,0,0,H);g.addColorStop(0,`rgba(${P.bad},.30)`);g.addColorStop(1,`rgba(${P.bad},.06)`);c.fillStyle=g;c.fillRect(b.st*sx,0,nz.W*sx,H);}}
+  const z=normalize(Array.from(sig));const mx=Math.max(1,...z.map(Math.abs));
+  if(feat&&feat.peaks){const P=pal();c.strokeStyle=P.peakLine;c.lineWidth=1;c.beginPath();for(const p of feat.peaks){const x=Math.round(p*sx)+.5;c.moveTo(x,10);c.lineTo(x,H);}c.stroke();
+    const ev=new Set((feat.ect||[]).map(e=>e.r));
+    for(const p of feat.peaks){const x=p*sx,isV=ev.has(p);c.fillStyle=isV?`rgb(${P.bad})`:P.peak;c.beginPath();c.moveTo(x-4.5,2);c.lineTo(x+4.5,2);c.lineTo(x,9);c.closePath();c.fill();
+      if(isV){c.font='bold 11px "Segoe UI",sans-serif';c.fillText('V',x+5,11);}}}
+  glowLine(c,cx=>{for(let i=0;i<n;i++){const x=i*sx,y=H/2+4-z[i]/mx*(H/2-12);i?cx.lineTo(x,y):cx.moveTo(x,y);}},pal().trace,1.5);
+}
+function rowStatusText(k){const f=curFeat[k],u=curPool&&curPool.rowInfo[k];
+  if(!f)return '';if(f.error)return `<span class="warn-t">${f.error}</span>`;
+  return `R波 ${f.nBeats}拍・心拍 ${f.hr??'—'}bpm・波高 ${f.amp.toFixed(2)}mV・QRS ${f.width}ms`+(u?(u.used?'　<span class="ok-t">代表拍に使用</span>':`　<span class="warn-t">除外：${u.reason}</span>`):'');}
+function showSigPreview(){
+  const box=$('previews');box.innerHTML='';
+  if(!curSigs.length){$('traceMsg').textContent='';return;}
+  curSigs.forEach((sg,k)=>{const d=document.createElement('div');d.className='hint';d.style.marginTop='6px';d.innerHTML=`<b>${k+1}段目</b>　${rowStatusText(k)}`;const cv=document.createElement('canvas');cv.style.width='100%';d.appendChild(cv);box.appendChild(d);drawSigPreview(cv,sg,curFeat[k],curNoise[k]);});
+  const p=curPool;
+  $('traceMsg').innerHTML=`<span class="ok-t">✅ ${curSigs.length}段を読み取りました。</span>`+(p&&!p.error?`　代表拍：${p.usedRows.length}段・${p.nBeats}拍から作成（心拍 ${p.hr??'—'}bpm・波高 ${p.amp.toFixed(2)}mV・QRS ${p.width}ms）`:p&&p.error?`<br><span class="warn-t">${p.error}</span>`:'')
+    +'<br><span class="hint">▼＝見つけたR波（赤い▼V＝心室性期外収縮の疑い）。赤い帯＝ノイズ疑い。心拍数がレポートの値と大きく違う場合は教えてください（換算の確認用）。</span>';
+}
+
+// クロップのドラッグ
+let dragging=false,sx=0,sy=0;
+pageCanvas.addEventListener('mousedown',e=>{const b=pageCanvas.getBoundingClientRect();const sc=pageCanvas.width/b.width;sx=(e.clientX-b.left)*sc;sy=(e.clientY-b.top)*sc;dragging=true;});
+pageCanvas.addEventListener('mousemove',e=>{if(!dragging)return;const b=pageCanvas.getBoundingClientRect();const sc=pageCanvas.width/b.width;const x=(e.clientX-b.left)*sc,y=(e.clientY-b.top)*sc;
+  restorePage(); // 元のページを描き直してから枠を重ねる（ライブ表示）
+  pctx.save();pctx.strokeStyle='#38bdf8';pctx.lineWidth=2;pctx.setLineDash([6,4]);
+  pctx.strokeRect(Math.min(sx,x),Math.min(sy,y),Math.abs(x-sx),Math.abs(y-sy));pctx.setLineDash([]);pctx.restore();
+});
+pageCanvas.addEventListener('mouseup',e=>{if(!dragging)return;dragging=false;const b=pageCanvas.getBoundingClientRect();const sc=pageCanvas.width/b.width;const x=(e.clientX-b.left)*sc,y=(e.clientY-b.top)*sc;
+  const r={x:Math.min(sx,x),y:Math.min(sy,y),w:Math.abs(x-sx),h:Math.abs(y-sy)};
+  if(r.w<10||r.h<6){restorePage();return;}
+  if(drawMode==='id'){
+    idBox={x:r.x/pageCanvas.width,y:r.y/pageCanvas.height,w:r.w/pageCanvas.width,h:r.h/pageCanvas.height};
+    localStorage.setItem(idBoxKey,JSON.stringify(idBox));drawMode='crop';
+    restorePage();pctx.save();pctx.strokeStyle='#fbbf24';pctx.lineWidth=2;pctx.setLineDash([4,3]);pctx.strokeRect(r.x,r.y,r.w,r.h);pctx.setLineDash([]);pctx.restore();
+    autoTrace(); ocrId();
+    return;
+  }
+  // 囲んだ範囲の中から段を自動で見つける（何段でもよい）
+  restorePage();
+  region={x:r.x/pageCanvas.width,y:r.y/pageCanvas.height,w:r.w/pageCanvas.width,h:r.h/pageCanvas.height};localStorage.setItem(regionKey,JSON.stringify(region));
+  autoTrace();if(idBox)drawIdBox();
+});
+$('redrawCrop').onclick=()=>{region=null;localStorage.removeItem(regionKey);restorePage();autoTrace();};
+
+// ドロップ/選択
+const drop=$('drop');
+drop.onclick=()=>{const i=document.createElement('input');i.type='file';i.accept='application/pdf';i.onchange=e=>e.target.files[0]&&loadPDF(e.target.files[0]);i.click();};
+drop.addEventListener('dragover',e=>{e.preventDefault();drop.classList.add('over');});
+drop.addEventListener('dragleave',()=>drop.classList.remove('over'));
+drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('over');e.dataTransfer.files[0]&&loadPDF(e.dataTransfer.files[0]);});
+
+// ===== データフォルダ（File System Access）=====
+let dirHandle=null, savedHandle=null;
+// 選んだフォルダをIndexedDBに記憶し、次回から選び直さずに使う（ブラウザが再許可を求めることがある）
+function idb(mode,fn){return new Promise((res,rej)=>{const o=indexedDB.open('pg_lat',1);o.onupgradeneeded=()=>o.result.createObjectStore('kv');
+  o.onerror=()=>rej(o.error);o.onsuccess=()=>{let tx,r;try{tx=o.result.transaction('kv',mode);r=fn(tx.objectStore('kv'));}catch(e){rej(e);return;}tx.oncomplete=()=>res(r&&r.result);tx.onerror=()=>rej(tx.error);};});}
+const setFolderStatus=(html)=>{$('folderStatus').innerHTML=html;if(dirHandle){showBaseDirStatus();setTimeout(()=>rvLoad(),300);if(!KEEP_PDF&&!purgeAutoDone){purgeAutoDone=true;setTimeout(()=>purgePdfs(true),800);}}};
+$('settings').addEventListener('toggle',()=>{if($('settings').open)showBaseDirStatus();});
+$('pickFolder').onclick=async()=>{
+  if(!dirHandle&&savedHandle&&await ensureDir())return; // 記憶済みフォルダは許可だけで再接続
+  try{ dirHandle=await window.showDirectoryPicker({mode:'readwrite'}); savedHandle=dirHandle;
+    try{await idb('readwrite',st=>st.put(dirHandle,'dir'));}catch(_){}
+    setFolderStatus('<span class="ok-t">フォルダ選択済み：'+dirHandle.name+'（次回から自動）</span>'); }
+  catch(e){ if(!dirHandle) $('folderStatus').textContent='選択がキャンセルされました'; }
+};
+// 評価ボタンなどのクリック時に呼ぶ（再許可のダイアログはクリック操作の中でしか出せない）
+async function ensureDir(){
+  if(dirHandle)return true;
+  if(!savedHandle)return false;
+  try{ if(await savedHandle.requestPermission({mode:'readwrite'})==='granted'){dirHandle=savedHandle;
+    setFolderStatus('<span class="ok-t">フォルダ接続済み：'+dirHandle.name+'（自動）</span>');return true;} }catch(_){}
+  setFolderStatus('<span class="warn-t">フォルダ「'+savedHandle.name+'」へのアクセスが許可されませんでした。📁から選び直してください。</span>');
+  return false;
+}
+(async()=>{
+  try{ savedHandle=await idb('readonly',st=>st.get('dir')); }catch(_){ savedHandle=null; }
+  if(!savedHandle)return;
+  let perm='prompt'; try{ perm=await savedHandle.queryPermission({mode:'readwrite'}); }catch(_){}
+  if(perm==='granted'){ dirHandle=savedHandle; setFolderStatus('<span class="ok-t">フォルダ接続済み：'+dirHandle.name+'（自動）</span>'); }
+  else setFolderStatus('<span class="ok-t">前回のフォルダ：'+savedHandle.name+'</span>（評価時に自動で接続。許可を聞かれたら「許可」）');
+})();
+// 患者ごとのデータ（基準・レポート）は、データフォルダの中の「基準」フォルダに <患者ID>.json で保存する
+let BASE_DIR='基準';
+try{const v=localStorage.getItem('pg_lat_basedir');if(v)BASE_DIR=v;}catch(_){}
+$('baseDirName').value=BASE_DIR;
+// 今の基準フォルダの状態を表示。見つからなければ、.json が入っているフォルダを候補として出す
+async function showBaseDirStatus(){
+  if(!dirHandle){$('baseDirMsg').textContent='データフォルダに接続すると状態を表示します';$('baseDirCands').innerHTML='';return;}
+  let n=null;try{const d=await dirHandle.getDirectoryHandle(BASE_DIR);n=0;for await(const [name,h] of d.entries())if(h.kind==='file'&&name.endsWith('.json'))n++;}catch(_){}
+  $('baseDirMsg').innerHTML=n==null?`<span class="warn-t">「${BASE_DIR}」フォルダはまだありません（最初の保存で作ります）</span>`:`<span class="ok-t">「${BASE_DIR}」フォルダを使用中（患者 ${n}人分）</span>`;
+  const cands=[];try{for await(const [name,h] of dirHandle.entries()){if(h.kind!=='directory'||name===BASE_DIR)continue;let c=0;for await(const [fn,fh] of h.entries())if(fh.kind==='file'&&fn.endsWith('.json'))c++;if(c)cands.push([name,c]);}}catch(_){}
+  $('baseDirCands').innerHTML=cands.length?'患者データが入っている別のフォルダ：'+cands.map(([nm,c])=>`<button class="bdc" data-n="${nm.replace(/"/g,'&quot;')}" style="padding:1px 8px;margin:2px">${nm}（${c}人分）</button>`).join('')+'（押すとそのフォルダを使います）':'';
+}
+function setBaseDir(name){name=String(name||'').trim().replace(/[\\/:*?"<>|]/g,'');if(!name){$('baseDirMsg').innerHTML='<span class="warn-t">名前を入れてください</span>';return;}
+  BASE_DIR=name;idIndex=null;$('baseDirName').value=name;try{localStorage.setItem('pg_lat_basedir',name);}catch(_){}showBaseDirStatus();}
+$('baseDirSave').onclick=()=>setBaseDir($('baseDirName').value);
+document.addEventListener('click',e=>{const b=e.target.closest('.bdc');if(b)setBaseDir(b.dataset.n);});
+async function baseDir(create){ if(!dirHandle)return null; try{return await dirHandle.getDirectoryHandle(BASE_DIR,{create});}catch(e){return null;} }
+async function readJson(dir,name){ try{const fh=await dir.getFileHandle(name);const f=await fh.getFile();return JSON.parse(await f.text());}catch(e){return null;} }
+// 患者ファイルの名前の形式（新しく作る時だけ使う）。既存ファイルは中のIDで見つけるので、名前を変えても大丈夫
+let FILE_PAT='{ID}.json';
+try{const v=localStorage.getItem('pg_lat_filepat');if(v)FILE_PAT=v;}catch(_){}
+$('filePat').value=FILE_PAT;
+const safeName=x=>String(x||'').replace(/[\\/:*?"<>|\r\n]/g,'').trim();
+function fileNameFor(id,obj){let n=FILE_PAT.replace(/\{ID\}/g,id).replace(/\{氏名\}/g,safeName(obj&&obj.name)||'').replace(/\{機種\}/g,safeName(obj&&obj.device)||'');n=safeName(n).replace(/_+\.json$/,'.json').replace(/^_+/,'');if(!/\.json$/i.test(n))n+='.json';return n||id+'.json';}
+$('filePatSave').onclick=()=>{const v=$('filePat').value.trim();if(!/\{ID\}/.test(v)){$('filePatMsg').innerHTML='<span class="warn-t">{ID} を必ず入れてください（例：{ID}.json）</span>';return;}
+  FILE_PAT=v;try{localStorage.setItem('pg_lat_filepat',v);}catch(_){}$('filePatMsg').innerHTML=`<span class="ok-t">保存しました。例：${fileNameFor('01652389',{name:'',device:'A219'})}</span>`;};
+// ===== PDFを患者ごとのフォルダに整理 =====
+// 元のPDFを残すか（標準は残さない＝波形の部分だけの画像を残す）。許可を得たら「残す」に切り替える
+let KEEP_PDF=false;try{KEEP_PDF=localStorage.getItem('pg_lat_keeppdf')==='1';}catch(_){}
+let PDF_DIR='患者PDF';try{const v=localStorage.getItem('pg_lat_pdfdir');if(v)PDF_DIR=v;}catch(_){}
+$('pdfDirName').value=PDF_DIR;
+$('pdfDirSave').onclick=()=>{const v=safeName($('pdfDirName').value);if(!v){$('pdfDirMsg').innerHTML='<span class="warn-t">名前を入れてください</span>';return;}PDF_DIR=v;$('pdfDirName').value=v;try{localStorage.setItem('pg_lat_pdfdir',v);}catch(_){}$('pdfDirMsg').innerHTML='<span class="ok-t">保存しました</span>';};
+try{const v=localStorage.getItem('pg_lat_watchmove');if(v)$('watchMove').checked=v==='1';}catch(_){}
+$('watchMove').addEventListener('change',()=>{try{localStorage.setItem('pg_lat_watchmove',$('watchMove').checked?'1':'0');}catch(_){}});
+let lastPdfFile=null,lastPdfBytes=null,lastArchive=null,curNonSicd=null;
+// S-ICD以外（ペースメーカー・ICDなど）のPDFは比較しない。文字が読めない時は判断しない（S-ICDとして扱う）
+function nonSicdOf(text,dev){const t=String(text||'');if(t.replace(/\s+/g,'').length<200)return null;
+  return /S-?ICD|S-?ECG|EMBLEM|SQ-?RX|A209|A219/i.test(t)?null:(dev||'機種不明');}
+// S-ICD以外のPDFを、患者PDF\_対象外 に移す（元の名前のまま）
+async function archiveNonSicd(file){if(!dirHandle||!file)return null;
+  try{const top=await dirHandle.getDirectoryHandle(PDF_DIR,{create:true}),od=await top.getDirectoryHandle('_対象外',{create:true});
+    const fh=await od.getFileHandle(safeName(file.name),{create:true}),w=await fh.createWritable();await w.write(await file.arrayBuffer());await w.close();return `${PDF_DIR}/_対象外/${safeName(file.name)}`;}catch(_){return null;}}
+const pdfKey=f=>f?`${f.name}|${f.size}|${f.lastModified}`:''; // 読み込んだPDF／最後に整理したPDF
+let reloadArchived=null; // タイムラインから「評価し直す」で読み込んだ時：すでに患者PDFにあるので保存し直さない
+// 波形のページのうち、ページ上部の枠（Boston Scientificのロゴと患者情報の欄）より下だけを、解析と同じ倍率（HI）で画像にする。
+// 枠の下には患者情報は入っていない（設定・凡例・S-ECG表示の見出し・波形）。念のため、範囲の中に患者IDやふりがなの文字があれば、その下から切り出す
+async function regionImage(doc,pageNo){
+  const pno=pageNo||await pickEcgPage(doc),pg=await doc.getPage(pno),v1=pg.getViewport({scale:1});
+  // 緑の線の範囲（pt）
+  const s1=1.5,va=pg.getViewport({scale:s1}),c=document.createElement('canvas');c.width=Math.round(va.width);c.height=Math.round(va.height);
+  const x=c.getContext('2d',{willReadFrequently:true});x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);await pg.render({canvasContext:x,viewport:va}).promise;
+  const d=x.getImageData(0,0,c.width,c.height).data;let gy0=c.height,gy1=0;
+  for(let yy=0;yy<c.height;yy++)for(let xx=0;xx<c.width;xx+=2){const i=(yy*c.width+xx)*4;if(d[i+1]-Math.max(d[i],d[i+2])>18){if(yy<gy0)gy0=yy;if(yy>gy1)gy1=yy;}}
+  if(gy1<=gy0){gy0=0;gy1=c.height;}
+  gy0/=s1;gy1/=s1;
+  // ページ上部の枠：上から30%までにある、横幅の6割以上に伸びる濃い横線のうち、いちばん下の線を枠の下端とみなす
+  let frameBottom=-1;
+  for(let yy=0;yy<Math.min(c.height*0.3,gy0*s1);yy++){let run=0,best=0;for(let xx=0;xx<c.width;xx++){const i=(yy*c.width+xx)*4;if(d[i]<110&&d[i+1]<110&&d[i+2]<110){run++;if(run>best)best=run;}else run=0;}
+    if(best>c.width*0.6)frameBottom=yy;}
+  // 見出しの文字の位置（pt）
+  let top=gy0-45,items=[];
+  try{const tc=await pg.getTextContent();items=tc.items.map(it=>{const [px,py]=v1.convertToViewportPoint(it.transform[4],it.transform[5]);return {s:String(it.str||'').replace(/\s+/g,''),y:py,h:Math.abs(it.transform[3])||10};}).filter(it=>it.s);}catch(_){}
+  const anchors=items.filter(it=>/ゲイン設定|センシング構成|S-?ECG表示|^\d{3}[:：]\d{4}年/.test(it.s)&&it.y<gy0+5);
+  if(frameBottom>=0)top=frameBottom/s1+3;                       // 枠が見つかった：枠のすぐ下から
+  else if(anchors.length)top=Math.min(...anchors.map(a=>a.y-a.h))-6; // 枠が見つからない：設定・S-ECG表示などの見出しの上から
+  const bottom=Math.min(v1.height,gy1+30);top=Math.max(0,top);
+  for(const it of items)if(it.y>top&&it.y-it.h<bottom&&(/\d{8}|[（(][ぁ-ゟ]/.test(it.s)))top=Math.max(top,it.y+4); // 患者ID・ふりがなは入れない
+  const o=document.createElement('canvas');o.width=Math.round(v1.width*HI);o.height=Math.max(1,Math.round((bottom-top)*HI));
+  const ox=o.getContext('2d');ox.fillStyle='#fff';ox.fillRect(0,0,o.width,o.height);
+  await pg.render({canvasContext:ox,viewport:pg.getViewport({scale:HI,offsetY:-top*HI})}).promise;
+  return {canvas:o,meta:{imgScale:HI,imgTop:Math.round(top*10)/10,page:pno}};
+}
+// 上の範囲を画像にして保存する（元のPDFを残さない設定）。倍率も返すので、あとからこの画像で評価し直せる
+let lastImgMeta=null;
+async function saveWaveImg(dir,fname,doc,pageNo){
+  const {canvas,meta}=await regionImage(doc,pageNo),blob=await new Promise(r=>canvas.toBlob(r,'image/png'));
+  const w=await (await dir.getFileHandle(fname,{create:true})).createWritable();await w.write(blob);await w.close();
+  lastImgMeta=meta;return meta;
+}
+async function archivePdf(id,obj,tag){
+  if(reloadArchived&&!tag)return reloadArchived;
+  if(!dirHandle||!lastPdfFile||!id)return null;
+  if(!KEEP_PDF&&tag)return null; // 元のPDFを残さない設定：波形のない書類は保存しない
+  try{
+    const top=await dirHandle.getDirectoryHandle(PDF_DIR,{create:true});
+    const folder=fileNameFor(id,obj).replace(/\.json$/i,'')||id;
+    const pd=await top.getDirectoryHandle(folder,{create:true});
+    const m=String(obj.date||'').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})(?:\D+(\d{1,2}):(\d{2}))?/);
+    const name=m?`${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}${m[4]?'_'+m[4].padStart(2,'0')+m[5]:''}.pdf`:safeName(lastPdfFile.name);
+    if(lastArchive&&lastArchive.key===pdfKey(lastPdfFile)&&lastArchive.path.startsWith(`${PDF_DIR}/${folder}/`))return lastArchive.path; // 同じPDFを評価し直した時は二重に保存しない
+    let fname=name;
+    if(tag){const stem=name.replace(/\.pdf$/i,'');for(let k=1;k<100;k++){fname=`${stem}_${tag}${k}.pdf`;try{await pd.getFileHandle(fname);}catch(_){break;}}}
+    else{ // 毎回別のファイルにする：照会日＋保存した日時（同じ患者・同じ照会日を何度保存しても上書きしない）
+      const d=new Date(),p2=v=>String(v).padStart(2,'0');
+      fname=`${name.replace(/\.pdf$/i,'')}_保存${d.getFullYear()}${p2(d.getMonth()+1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}.pdf`;}
+    if(!KEEP_PDF)fname=fname.replace(/\.pdf$/i,'.png');
+    if(!tag){const stem=fname.replace(/\.(pdf|png)$/i,''),ext=fname.slice(stem.length);for(let k=2;k<50;k++){try{await pd.getFileHandle(fname);fname=`${stem}_${k}${ext}`;}catch(_){break;}}} // 同じ秒に保存しても上書きしない
+    if(!KEEP_PDF){await saveWaveImg(pd,fname,lastPdfDoc,curPageNo);} // 元のPDFは残さず、波形の画像だけ
+    else{const fh=await pd.getFileHandle(fname,{create:true});const w=await fh.createWritable();await w.write(await lastPdfFile.arrayBuffer());await w.close();}
+    lastArchive={file:lastPdfFile,key:pdfKey(lastPdfFile),path:`${PDF_DIR}/${folder}/${fname}`};return lastArchive.path;
+  }catch(e){return null;}
+}
+// 患者ID → ファイル名 の対応表（フォルダ内の .json を読んで中の id で作る）
+let idIndex=null,idIndexDir=null;
+async function buildIndex(d){idIndex=new Map();idIndexDir=BASE_DIR;
+  try{for await(const [name,h] of d.entries()){if(h.kind!=='file'||!/\.json$/i.test(name))continue;try{const f=await h.getFile();const j=JSON.parse(await f.text());if(j&&j.id&&!idIndex.has(String(j.id)))idIndex.set(String(j.id),name);}catch(_){}}}catch(_){}}
+async function readBaseline(id){
+  if(!dirHandle)return null;
+  const d=await baseDir(false);
+  if(d){
+    let v=await readJson(d,fileNameFor(id,{}));if(v&&(!v.id||String(v.id)===id)){if(idIndex&&idIndexDir===BASE_DIR)idIndex.set(id,fileNameFor(id,{}));return v;}
+    v=await readJson(d,id+'.json');if(v&&(!v.id||String(v.id)===id))return v;
+    if(!idIndex||idIndexDir!==BASE_DIR)await buildIndex(d);
+    let nm=idIndex.get(id);if(nm){v=await readJson(d,nm);if(v)return v;}
+    await buildIndex(d);nm=idIndex.get(id);if(nm){v=await readJson(d,nm);if(v)return v;} // 手で名前を変えた直後など：探し直す
+  }
+  return await readJson(dirHandle,id+'.json'); // 以前の保存場所（データフォルダ直下）も読む。次の保存で「基準」フォルダへ移る
+}
+async function writeBaseline(id,obj){ const d=await baseDir(true);if(!d)return false;
+  if(!idIndex||idIndexDir!==BASE_DIR)await buildIndex(d);
+  let name=idIndex.get(id);
+  if(name&&!(await readJson(d,name))){await buildIndex(d);name=idIndex.get(id);} // 名前が変わっていたら探し直す
+  if(!name){const exact=await readJson(d,id+'.json');name=exact?id+'.json':fileNameFor(id,obj);}
+  try{const fh=await d.getFileHandle(name,{create:true});const w=await fh.createWritable();await w.write(JSON.stringify(obj));await w.close();idIndex.set(id,name);return true;}catch(e){return false;} }
+
+// ===== 評価 =====
+// ===== 心電図として測る（記録条件 25mm/秒・2.5mm/mV を使って ms と mV に換算）=====
+const HI=4;                                   // 解析用にPDFを高解像度で描く倍率（1pt=4px）
+const PX_PER_MM=72/25.4*HI;                   // 1mm あたりのピクセル
+const MS_PER_PX=1000/(25*PX_PER_MM);          // 25mm/秒 → 1px あたりの ms（約3.5ms）
+const PX_PER_MV=2.5*PX_PER_MM;                // 2.5mm/mV → 1mV あたりのピクセル
+const DT=2,PRE=100,POST=150;                  // 代表拍：R波の前100ms〜後150msを2ms刻みで保存
+const QRS_A=-80,QRS_B=120;                    // QRSを比べる範囲（R波基準のms）
+const hiCanvas=document.createElement('canvas'),hctx=hiCanvas.getContext('2d',{willReadFrequently:true});let hiReady=false;
+const pct=(arr,p)=>{const s=Float32Array.from(arr).sort();return s.length?s[Math.min(s.length-1,Math.max(0,Math.floor(p*(s.length-1))))]:0;};
+const median2=arr=>pct(arr,0.5);
+function movingMedian(x,win){const n=x.length,out=new Float32Array(n),h=win>>1,step=Math.max(1,win>>3);
+  // 計算量を抑えるため間引いて中央値を取り、間を線形補間
+  const pts=[];for(let i=0;i<n;i+=step){const a=Math.max(0,i-h),b=Math.min(n,i+h+1);pts.push([i,median2(x.subarray(a,b))]);}
+  pts.push([n-1,pts[pts.length-1][1]]);
+  for(let k=0;k<pts.length-1;k++){const [i0,v0]=pts[k],[i1,v1]=pts[k+1];for(let i=i0;i<=i1&&i<n;i++)out[i]=v0+(v1-v0)*(i-i0)/Math.max(1,i1-i0);}
+  return out;}
+function sampleAt(y,pos){const i=Math.floor(pos),f=pos-i;if(i<0||i+1>=y.length)return NaN;return y[i]*(1-f)+y[i+1]*f;}
+function pearson(a,b){let n=0,sa=0,sb=0;for(let i=0;i<a.length;i++){if(isNaN(a[i])||isNaN(b[i]))continue;sa+=a[i];sb+=b[i];n++;}if(n<5)return 0;const ma=sa/n,mb=sb/n;let num=0,da=0,db=0;
+  for(let i=0;i<a.length;i++){if(isNaN(a[i])||isNaN(b[i]))continue;const x=a[i]-ma,y=b[i]-mb;num+=x*y;da+=x*x;db+=y*y;}return da&&db?num/Math.sqrt(da*db):0;}
+const idxOf=ms=>Math.round((ms+PRE)/DT);       // 代表拍の配列位置
+function shiftCorr(a,b,from,to,maxLag){let best=-2,bl=0;for(let L=-maxLag;L<=maxLag;L++){const A=[],B=[];for(let i=from;i<=to;i++){const j=i+L;if(j<0||j>=b.length)continue;A.push(a[i]);B.push(b[j]);}const c=pearson(A,B);if(c>best){best=c;bl=L;}}return {corr:best,lag:bl};}
+// 1段分の波形 → R波検出 → 時間固定で切り出し → 中央値の代表拍 → 波高・QRS幅・向き・心拍数
+function analyzeRow(sig){
+  if(!sig||sig.length<200)return null;
+  const n=sig.length,valid=sig.valid||new Uint8Array(n).fill(1);
+  const x=Float32Array.from(sig.raw||sig,v=>v/PX_PER_MV);                       // mV
+  const base=movingMedian(x,Math.round(400/MS_PER_PX));const y=x.map((v,i)=>v-base[i]); // 基線（呼吸のゆれ）を除く
+  const sl=new Float32Array(n);for(let i=1;i<n-1;i++)sl[i]=valid[i-1]&&valid[i+1]?Math.abs(y[i+1]-y[i-1]):0;
+  const thr=0.45*pct(sl,0.995),refr=Math.round(260/MS_PER_PX),w60=Math.round(60/MS_PER_PX),peaks=[];
+  for(let i=1;i<n-1;i++){if(sl[i]<thr)continue;let r=i,rv=0;for(let k=Math.max(0,i-w60);k<=Math.min(n-1,i+w60);k++)if(Math.abs(y[k])>rv){rv=Math.abs(y[k]);r=k;}
+    if(!peaks.length||r-peaks[peaks.length-1]>refr)peaks.push(r);i+=refr;}
+  const dbg={x,base,y,sl,thr,valid}; // 🔬解析の裏側で表示する途中経過
+  const pre=PRE/MS_PER_PX,post=POST/MS_PER_PX,L=Math.round((PRE+POST)/DT)+1;
+  let beats=[];
+  for(const r of peaks){if(r-pre<0||r+post>=n)continue;let ok=0,tot=0;for(let k=Math.floor(r-pre);k<=r+post;k++){tot++;ok+=valid[k];}if(ok/tot<0.9)continue;
+    const b=new Float32Array(L);for(let j=0;j<L;j++)b[j]=sampleAt(y,r+(j*DT-PRE)/MS_PER_PX);const bl=median2(b.subarray(0,idxOf(-60)));beats.push({r,b:b.map(v=>v-bl)});}
+  if(beats.length<2)return {peaks,dbg,nBeats:beats.length,error:'R波を2拍以上見つけられませんでした（枠の位置を確認してください）'};
+  const sum=summarizeBeats(beats);
+  // 枠の細い線（線が数px消えるだけ）はまたいでもよい。約40ms以上線が消えている所（コマのすき間）をまたぐRRは使わない
+  const rrs=[],rrSeq=[];for(let k=1;k<peaks.length;k++){let gap=false,run=0;for(let i=peaks[k-1];i<peaks[k];i++){run=valid[i]?0:run+1;if(run>12){gap=true;break;}}const ms=(peaks[k]-peaks[k-1])*MS_PER_PX;const ok=!gap&&ms>250&&ms<2400;if(ok)rrs.push(ms);rrSeq.push(ok?ms:null);}
+  const hr=rrs.length?60000/median2(rrs):null;
+  // 心室性期外収縮の疑い：代表拍と形が違い（相関<0.85 か QRSが30ms以上広い）、かつ早く来る（直前のRRがいつもの85%未満）拍。
+  // 形がかなり違う（相関<0.7）拍は、RRが測れなくても数える。直後に長い間（代償性休止）があれば記録する
+  const medRR=rrs.length?median2(rrs):null,qa=idxOf(QRS_A),qb=idxOf(QRS_B),ect=[];
+  for(const q of sum.beats){const k=peaks.indexOf(q.r),pre=k>0?rrSeq[k-1]:null,post=k>=0&&k<rrSeq.length?rrSeq[k]:null;
+    const c=pearson(sum.tpl.slice(qa,qb+1),Array.from(q.b.slice(qa,qb+1))),w=qrsSpan(q.b).width;
+    const odd=c<0.85||w>sum.width+30,prem=!!(medRR&&pre!=null&&pre<0.85*medRR),pause=!!(medRR&&post!=null&&post>1.1*medRR);
+    if(odd&&(prem||c<0.7))ect.push({r:q.r,corr:+c.toFixed(2),width:w,prem,pause});}
+  return {...sum,hr:hr&&Math.round(hr),peaks,dbg,rrSeq,ect};
+}
+// QRS幅：代表拍の傾きが「最大傾きの12%」と「基線部分（−100〜−60ms）のノイズの傾きの3倍」の大きい方を超えている範囲。
+// ノイズが多い記録でQRSの始まり・終わりが外側に伸びて、幅が長く測られるのを防ぐ
+function qrsSpan(tpl,noiseRel){
+  const L=tpl.length,qa=idxOf(QRS_A),qb=idxOf(QRS_B);
+  const ts=new Float32Array(L);for(let j=1;j<L-1;j++){const a=tpl[j+1],b=tpl[j-1];ts[j]=isNaN(a)||isNaN(b)?0:Math.abs(a-b);}
+  let smax=0;for(let j=qa;j<=qb;j++)smax=Math.max(smax,ts[j]);
+  // noiseRel：2つを比べる時は、両方で同じノイズの基準（最大の傾きに対する割合）を使う
+  const noise=noiseRel!=null?noiseRel*smax:median2(Array.from(ts.slice(1,idxOf(-60))));
+  const st=Math.max(smax*0.12,noise*3);let on=idxOf(0),off=idxOf(0);
+  while(on>qa&&(ts[on]>st||ts[on-1]>st||ts[on-2]>st))on--;while(off<qb&&(ts[off]>st||ts[off+1]>st||ts[off+2]>st))off++;
+  return {on,off,width:(off-on)*DT};
+}
+// 拍の集まり → 中央値の代表拍・波高（とゆれ）・QRS幅・向き
+function summarizeBeats(beats){
+  const L=beats[0].b.length;
+  const tplOf=bs=>{const t=new Float32Array(L);for(let j=0;j<L;j++)t[j]=median2(bs.map(q=>q.b[j]).filter(v=>!isNaN(v)));return t;};
+  let tpl=tplOf(beats);
+  const qa=idxOf(QRS_A),qb=idxOf(QRS_B);
+  // 各拍を代表拍に±10ms合わせ直してから、もう一度中央値を取る
+  beats=beats.map(q=>{const {lag}=shiftCorr(tpl,q.b,qa,qb,5);if(!lag)return q;const s=new Float32Array(L).fill(NaN);for(let j=0;j<L;j++){const k=j+lag;if(k>=0&&k<L)s[j]=q.b[k];}return {...q,b:s};});
+  tpl=tplOf(beats);
+  const amps=beats.map(q=>{let mx=-1e9,mn=1e9;for(let j=idxOf(-60);j<=idxOf(80);j++){const v=q.b[j];if(isNaN(v))continue;if(v>mx)mx=v;if(v<mn)mn=v;}return mx-mn;});
+  const amp=median2(amps),ampVar=amp?(pct(amps,0.9)-pct(amps,0.1))/2/amp:0;
+  const beatCorr=median2(beats.map(q=>pearson(Array.from(tpl.slice(qa,qb+1)),Array.from(q.b.slice(qa,qb+1)))));
+  const {on,off}=qrsSpan(tpl);
+  let pk=idxOf(0);for(let j=qa;j<=qb;j++)if(Math.abs(tpl[j])>Math.abs(tpl[pk]))pk=j;
+  return {tpl:Array.from(tpl,v=>+v.toFixed(4)),amp:+amp.toFixed(3),ampVar:+ampVar.toFixed(3),width:(off-on)*DT,on:(on*DT-PRE),off:(off*DT-PRE),pol:tpl[pk]>=0?1:-1,nBeats:beats.length,beatCorr:+beatCorr.toFixed(3),beats};
+}
+// リズム（RR間隔）の解析：心房細動のような「不規則に不規則」なRRを見分ける。
+//  ・呼吸性のゆっくりした揺れ → 連続するRRの差は小さい（反応しない）
+//  ・期外収縮が1〜2拍 → 大きな差は一部だけ（連続差の中央値は小さい → 反応しない）
+//  ・二段脈など規則的な交互 → 奇数番目・偶数番目それぞれは揃っている（心房細動とは区別）
+//  ・心房細動 → ほとんどの連続差が大きく、ばらつきも大きい
+function rhythmOf(feats,noises){
+  const rr=[],diffs=[],seqs=[];let altA=[],altB=[];
+  feats.forEach((f,k)=>{if(!f||f.error||!f.rrSeq||(noises[k]&&noises[k].bad.length))return;
+    const sq=f.rrSeq;seqs.push(sq);
+    sq.forEach((v,i)=>{if(v==null)return;rr.push(v);(i%2?altA:altB).push(v);if(i>0&&sq[i-1]!=null)diffs.push(Math.abs(v-sq[i-1]));});});
+  const n=rr.length;if(n<8)return {n,enough:false,seqs};
+  const med=median2(rr),mean=rr.reduce((a,b)=>a+b,0)/n,sd=Math.sqrt(rr.reduce((a,b)=>a+(b-mean)**2,0)/n),cv=sd/mean;
+  const madsd=diffs.length?median2(diffs)/med:0,irr=diffs.length?diffs.filter(d=>d>0.08*med).length/diffs.length:0;
+  const cvOf=a=>{if(a.length<3)return 1;const m=a.reduce((x,y)=>x+y,0)/a.length;return Math.sqrt(a.reduce((x,y)=>x+(y-m)**2,0)/a.length)/m;};
+  const bigem=cvOf(altA)<0.06&&cvOf(altB)<0.06&&Math.abs(median2(altA)-median2(altB))/med>0.12;
+  const af=!bigem&&madsd>=0.06&&irr>=0.5&&cv>=0.08;
+  return {n,enough:true,med,hr:Math.round(60000/med),cv:+cv.toFixed(3),madsd:+madsd.toFixed(3),irr:+irr.toFixed(2),af,bigem,seqs};
+}
+// 全段の拍をまとめて代表拍を作る。頻拍・ノイズ・拍が少ない段は除外し、形が大きく違う段には印を付ける
+function poolRows(feats,noises){
+  const rowInfo=feats.map((f,k)=>{
+    if(!f||f.error)return {used:false,reason:'R波を検出できない'};
+    if(noises[k]&&noises[k].bad.length)return {used:false,reason:'ノイズ疑い'};
+    if(f.hr&&f.hr>150)return {used:false,reason:`頻拍の記録（${f.hr}bpm）`,tachy:true};
+    if(f.nBeats<2)return {used:false,reason:'拍が少ない'};
+    return {used:true};});
+  // 他の段より心拍が明らかに速い段（ノイズやT波を二重に数えている可能性）も除く
+  const hrsAll=feats.map((f,k)=>rowInfo[k].used&&f.hr?f.hr:null).filter(Boolean);
+  if(hrsAll.length>=2){const mh=median2(hrsAll);feats.forEach((f,k)=>{if(rowInfo[k].used&&f.hr&&f.hr>mh*1.35){rowInfo[k]={used:false,reason:`他の段より心拍が速い（${f.hr}bpm、他は${Math.round(mh)}bpm：ノイズ・T波の二重カウント・頻拍の可能性）`,fast:true};}});}
+  let use=feats.map((f,k)=>rowInfo[k].used?k:-1).filter(k=>k>=0);
+  const rhythm=rhythmOf(feats,noises);
+  // 期外収縮（心室性）の疑い：ノイズのない段から数える
+  const ectopy={n:0,rows:[]};feats.forEach((f,k)=>{if(!f||f.error||!f.ect||(noises[k]&&noises[k].bad.length))return;ectopy.n+=f.ect.length;if(f.ect.length)ectopy.rows.push(k+1);});
+  rhythm.pvc=ectopy.n;rhythm.pvcRows=ectopy.rows;
+  if(!use.length)return {error:'代表拍に使える段がありません（全段が頻拍・ノイズ・検出不能）',rowInfo,usedRows:[],rhythm};
+  let pooled=summarizeBeats(use.flatMap(k=>feats[k].beats));
+  // 代表拍と形が大きく違う段（イベント中など）は除いて作り直す
+  const qa=idxOf(QRS_A),qb=idxOf(QRS_B);
+  feats.forEach((f,k)=>{if(!f||f.error)return;const {corr}=shiftCorr(pooled.tpl,f.tpl,qa,qb,8);rowInfo[k].corr=+corr.toFixed(3);
+    if(rowInfo[k].used&&corr<0.85&&use.length>1){rowInfo[k].used=false;rowInfo[k].reason=`この段だけ形が違う（相関 ${corr.toFixed(2)}、イベント中の可能性）`;rowInfo[k].outlier=true;}});
+  const use2=feats.map((f,k)=>rowInfo[k].used?k:-1).filter(k=>k>=0);
+  if(use2.length&&use2.length<use.length){use=use2;pooled=summarizeBeats(use.flatMap(k=>feats[k].beats));}
+  const hrs=use.map(k=>feats[k].hr).filter(Boolean);
+  return {...pooled,hr:hrs.length?Math.round(median2(hrs)):null,rowInfo,usedRows:use,rhythm};
+}
+// 前回と今回の比較 → 3段階の判定と理由
+// 評価と同じ基準で判定だけを出す（タイムラインで、今の基準とその場で比べ直すため）
+function featLevel(b,c){
+  if(!b||!c||!b.tpl||!c.tpl)return null;
+  const r=compareFeat(b,c),ar=r.ampRatio,hiT=1+r.tol*1.6,hiY=1+r.tol;
+  const lv=[r.corr<0.80?2:r.corr<0.90?1:0,(ar>hiT||ar<1/hiT)?2:(ar>hiY||ar<1/hiY)?1:0,
+    r.wGate?0:(r.dW>=30||(r.c.width>=120&&r.dW>=20))?2:r.dW>=20?1:0,r.polFlip?2:0];
+  const why=[...(r.red||[]),...(r.yel||[])];
+  (c.rows||[]).forEach((x,k)=>{if(x&&!x.error&&x.used===false){lv.push(1);why.push(`${k+1}段目：${String(x.reason||'除外').replace(/（.*$/,'')}`);}}); // 頻拍・ノイズ・形の違う段
+  if(c.rh&&c.rh.af){lv.push(1);why.push('RR不規則（心房細動の疑い）');}else if(c.rh&&c.rh.bigem&&!c.rh.pvc){lv.push(1);why.push('二段脈の可能性');}
+  return {level:Math.max(...lv),causes:why};
+}
+function compareFeat(b,c){
+  const qa=idxOf(QRS_A),qb=idxOf(QRS_B);
+  const {corr,lag}=shiftCorr(b.tpl,c.tpl,qa,qb,10);
+  const ampRatio=c.amp/(b.amp||1),tol=Math.max(0.30,2*Math.hypot(b.ampVar||0,c.ampVar||0));
+  // QRS幅は保存値ではなく、両方の代表拍から同じ方法で測り直す（測り方を改良しても古い記録と公平に比べられる）
+  // 同じ物差しで測る：ノイズの基準を「最大の傾きに対する割合」にそろえ、2つのうち大きい方を両方に使う
+  const relN=t=>{const L=t.length,qa=idxOf(QRS_A),qb=idxOf(QRS_B),ts=[];let mx=0;for(let j=1;j<L-1;j++){const v=isNaN(t[j+1])||isNaN(t[j-1])?0:Math.abs(t[j+1]-t[j-1]);ts.push(v);if(j>=qa&&j<=qb)mx=Math.max(mx,v);}return mx?median2(ts.slice(0,idxOf(-60)-1))/mx:0;};
+  const nr=Math.max(relN(b.tpl),relN(c.tpl));
+  const sb=qrsSpan(b.tpl,nr),sc=qrsSpan(c.tpl,nr);b={...b,width:sb.width,on:sb.on*DT-PRE,off:sb.off*DT-PRE};c={...c,width:sc.width,on:sc.on*DT-PRE,off:sc.off*DT-PRE};
+  const dW=c.width-b.width,polFlip=b.pol!==c.pol;
+  // 形がほぼ同じ（相関0.97以上）なら、QRS幅の差は測定のぶれとみなして判定に使わない（本当に幅が広がると形も変わるため）
+  const wGate=corr>=0.97;
+  const red=[],yel=[];
+  if(polFlip)red.push('QRSの主な向きが逆転（上向き⇄下向き）');
+  if(corr<0.80)red.push(`QRSの形が大きく変化（相関 ${corr.toFixed(2)}）`);else if(corr<0.90)yel.push(`QRSの形がやや変化（相関 ${corr.toFixed(2)}）`);
+  if(wGate){}else if(dW>=30||(c.width>=120&&dW>=20))red.push(`QRS幅の延長 ${b.width}→${c.width}ms（+${dW}ms）＝脚ブロック等を確認`);else if(dW>=20)yel.push(`QRS幅がやや延長 ${b.width}→${c.width}ms（+${dW}ms）`);
+  const hiT=1+tol*1.6,hiY=1+tol;
+  if(ampRatio>hiT||ampRatio<1/hiT)red.push(`波高が大きく変化 ${b.amp.toFixed(2)}→${c.amp.toFixed(2)}mV（${Math.round(ampRatio*100)}%、呼吸のゆれの範囲 ±${Math.round(tol*100)}%を大きく超える）`);
+  else if(ampRatio>hiY||ampRatio<1/hiY)yel.push(`波高の変化 ${b.amp.toFixed(2)}→${c.amp.toFixed(2)}mV（${Math.round(ampRatio*100)}%、呼吸のゆれの範囲 ±${Math.round(tol*100)}%を超える）`);
+  return {corr,lag,ampRatio,tol,dW,polFlip,wGate,level:red.length?2:yel.length?1:0,red,yel,b,c};
+}
+const THR=0.94;
+function compareRow(base,cur){
+  const a=Float32Array.from(base), b=Float32Array.from(cur);
+  const {corr,lag}=bestXcorr(a,b,Math.round(a.length*0.25));
+  const ampRatio=(std(Array.from(b))||1)/(std(Array.from(a))||1);
+  const widthRatio=qrsWidth(b)/(qrsWidth(a)||1);
+  const flags=[];
+  if(corr<THR)flags.push(`波形相関の低下（${corr.toFixed(3)} < ${THR}）＝形態変化`);
+  if(ampRatio<0.7)flags.push(`振幅低下（前回比 ${(ampRatio*100|0)}%）＝センシング/リード要確認`);
+  if(ampRatio>1.4)flags.push(`振幅増大（前回比 ${(ampRatio*100|0)}%）`);
+  if(widthRatio>1.4)flags.push(`波形幅の増大（${widthRatio.toFixed(2)}倍）`);
+  return {a,b,corr,lag,ampRatio,widthRatio,flags};
+}
+
+// ===== 🔬 解析の裏側：実際のPDFの途中経過を図で見る =====
+let insideRow=0;
+$('inside').addEventListener('toggle',()=>renderInside());
+document.addEventListener('click',e=>{const b=e.target.closest('.inRow');if(!b)return;insideRow=b.dataset.k==='pool'?'pool':+b.dataset.k;renderInside();});
+const inFmt=(v,d=2)=>v==null||isNaN(v)?'—':(+v).toFixed(d);
+function renderInside(){
+  const box=$('insideBody');if(!box||!$('inside').open)return;
+  if(!pdfLoaded||!curSigs.length||!hiReady){box.innerHTML='<div class="hint">PDFを読み込むと、ここに実際の解析の途中経過が出ます。</div>';return;}
+  if(insideRow!=='pool'&&insideRow>=curSigs.length)insideRow=0;
+  const tabs=curSigs.map((_,i)=>`<button class="inRow${i===insideRow?' primary':''}" data-k="${i}">${i+1}段目</button>`).join(' ')
+    +` <button class="inRow${insideRow==='pool'?' primary':''}" data-k="pool">まとめ（代表拍）</button>`;
+  if(insideRow==='pool'){box.innerHTML=tabs+'<div id="inPool"></div>';drawInsidePool();return;}
+  const k=insideRow,f=curFeat[k];
+  box.innerHTML=tabs+`<div style="overflow-x:auto;margin-top:8px;border:1px solid var(--line);border-radius:8px"><canvas id="inTrace"></canvas></div>
+    <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;align-items:flex-start"><div style="overflow-x:auto;max-width:100%"><canvas id="inBeats"></canvas></div><div id="inNums" style="flex:1;min-width:260px"></div></div>`;
+  if(!f||!f.dbg){$('inNums').innerHTML='<div class="hint">この段は解析できませんでした。</div>';return;}
+  drawInsideTrace(k);drawInsideBeats($('inBeats'),f.beats.map(q=>q.b),f.tpl,f,null);insideNums(k);
+}
+function drawInsideTrace(k){
+  const f=curFeat[k],D=f.dbg,n=D.y.length,nz=curNoise[k],sg=curSigs[k];
+  const c=strips[k],r={x:Math.round(c.x*hiCanvas.width),y:Math.round(c.y*hiCanvas.height),w:Math.round(c.w*hiCanvas.width),h:Math.round(c.h*hiCanvas.height)};
+  const IH=Math.min(240,Math.max(120,Math.round(r.h*0.5))),P=[{t:'① PDFの画像（4倍）と、なぞった線の重心（赤）',h:IH},{t:'② mVに換算した線（緑）と、400ms移動中央値の基線（黄の点線）',h:140},{t:'③ 基線を引いた線。▼＝R波、青＝切り出した拍（−100〜+150ms）、灰＝使わなかった拍、赤帯＝ノイズ疑い',h:150},{t:'④ 傾き |y[i+1]−y[i−1]| と、R波のしきい値（赤の点線）',h:100}];
+  const cv=$('inTrace'),W=n,H=P.reduce((a,p)=>a+p.h+18,0)+22;cv.width=W;cv.height=H;cv.style.width=W+'px';cv.style.maxWidth='none';
+  const g=cv.getContext('2d');g.fillStyle='#050a12';g.fillRect(0,0,W,H);g.font='12px sans-serif';
+  let top=0;const tops=P.map(p=>{const t=top+18;top=t+p.h;return t;});
+  // 線が無い列（灰）・ノイズ区間（赤）を全パネルに
+  for(let i=0;i<n;i++)if(!D.valid[i]){g.fillStyle='rgba(148,163,184,.18)';g.fillRect(i,0,1,H-22);}
+  if(nz)for(const b of nz.bad){g.fillStyle='rgba(248,113,113,.18)';g.fillRect(b.st,tops[1],nz.W,H-22-tops[1]);}
+  P.forEach((p,i)=>{g.fillStyle='#9aa8bf';g.fillText(p.t,6,tops[i]-5);g.strokeStyle='#22314a';g.strokeRect(0.5,tops[i]+.5,W-1,p.h-1);});
+  // ① 画像＋重心
+  g.drawImage(hiCanvas,r.x,r.y,r.w,r.h,0,tops[0],n,IH);
+  const raw=sg.raw||sg;g.strokeStyle='#f87171';g.lineWidth=1.2;g.beginPath();let pen=false;
+  for(let i=0;i<n;i++){if(!D.valid[i]){pen=false;continue;}const yy=tops[0]+(r.h/2-raw[i])*IH/r.h;pen?g.lineTo(i,yy):g.moveTo(i,yy);pen=true;}g.stroke();
+  const line=(arr,t,h,lo,hi,col,dash)=>{g.strokeStyle=col;g.lineWidth=1.3;g.setLineDash(dash||[]);g.beginPath();for(let i=0;i<n;i++){const yy=t+h-4-(arr[i]-lo)/(hi-lo||1)*(h-8);i?g.lineTo(i,yy):g.moveTo(i,yy);}g.stroke();g.setLineDash([]);};
+  const rng=a=>{let lo=1e9,hi=-1e9;for(const v of a){if(v<lo)lo=v;if(v>hi)hi=v;}return[lo,hi];};
+  // ②
+  const[l2,h2]=rng(D.x);line(D.x,tops[1],P[1].h,l2,h2,'#34d399');line(D.base,tops[1],P[1].h,l2,h2,'#fbbf24',[6,4]);
+  // ③
+  const[l3,h3]=rng(D.y),Y3=v=>tops[2]+P[2].h-4-(v-l3)/(h3-l3||1)*(P[2].h-8);
+  const used=new Set(f.beats?f.beats.map(q=>q.r):[]),pre=PRE/MS_PER_PX,post=POST/MS_PER_PX;
+  for(const pk of f.peaks){g.fillStyle=used.has(pk)?'rgba(56,189,248,.16)':'rgba(148,163,184,.16)';g.fillRect(pk-pre,tops[2],pre+post,P[2].h);}
+  g.strokeStyle='#22314a';g.beginPath();g.moveTo(0,Y3(0));g.lineTo(W,Y3(0));g.stroke();
+  line(D.y,tops[2],P[2].h,l3,h3,'#34d399');
+  for(const pk of f.peaks){g.fillStyle='#f87171';g.beginPath();g.moveTo(pk-5,tops[2]+3);g.lineTo(pk+5,tops[2]+3);g.lineTo(pk,tops[2]+11);g.fill();}
+  // ④
+  const[,h4]=rng(D.sl);line(D.sl,tops[3],P[3].h,0,h4*1.05,'#e6eefb');
+  const ty=tops[3]+P[3].h-4-D.thr/(h4*1.05||1)*(P[3].h-8);g.strokeStyle='#f87171';g.setLineDash([5,4]);g.beginPath();g.moveTo(0,ty);g.lineTo(W,ty);g.stroke();g.setLineDash([]);
+  // 時間軸
+  g.fillStyle='#9aa8bf';g.strokeStyle='#9aa8bf';const sec=1000/MS_PER_PX;
+  for(let t=0;t*sec/5<n;t++){const x=Math.round(t*sec/5);g.beginPath();g.moveTo(x+.5,H-22);g.lineTo(x+.5,H-(t%5?18:14));g.stroke();if(t%5===0)g.fillText(t/5+'秒',x+3,H-6);}
+}
+function drawInsideBeats(cv,beats,tpl,f,extra){
+  const W=640,H=300,L=tpl.length;cv.width=W;cv.height=H;const g=cv.getContext('2d');g.fillStyle='#050a12';g.fillRect(0,0,W,H);
+  let lo=1e9,hi=-1e9;for(const b of beats.concat([tpl],extra?extra.map(e=>e.tpl):[]))for(const v of b){if(isNaN(v))continue;lo=Math.min(lo,v);hi=Math.max(hi,v);}
+  const m=36,X=ms=>m+(ms+PRE)/(PRE+POST)*(W-m-24),Y=v=>18+(hi-v)/(hi-lo||1)*(H-50);
+  g.fillStyle='rgba(148,163,184,.12)';g.fillRect(X(QRS_A),18,X(QRS_B)-X(QRS_A),H-50);
+  g.fillStyle='rgba(56,189,248,.10)';g.fillRect(X(-60),18,X(80)-X(-60),H-50);
+  g.strokeStyle='#22314a';g.beginPath();g.moveTo(m,Y(0));g.lineTo(W-10,Y(0));g.stroke();
+  const ln=(arr,col,w,a)=>{g.strokeStyle=col;g.lineWidth=w;g.globalAlpha=a;g.beginPath();let pen=false;for(let j=0;j<L;j++){const v=arr[j];if(isNaN(v)){pen=false;continue;}const x=X(j*DT-PRE),y=Y(v);pen?g.lineTo(x,y):g.moveTo(x,y);pen=true;}g.stroke();g.globalAlpha=1;};
+  for(const b of beats)ln(b,'#34d399',1,.35);
+  const cols=['#fbbf24','#a78bfa','#f472b6','#60a5fa','#fb923c'];if(extra)extra.forEach((e,i)=>ln(e.tpl,cols[i%5],1.4,.9));
+  ln(tpl,'#ffffff',2.4,1);
+  g.strokeStyle='#f87171';g.lineWidth=1.5;for(const t of [f.on,f.off]){g.beginPath();g.moveTo(X(t),18);g.lineTo(X(t),H-32);g.stroke();}
+  g.fillStyle='#9aa8bf';g.font='11px sans-serif';for(const t of [-100,-80,-60,0,80,120,150]){g.fillText((t>0?'+':'')+t,X(t)-10,H-16);}
+  g.fillText('R波からの時間(ms)　灰＝比較範囲 −80〜+120　青＝波高を測る範囲 −60〜+80　赤線＝QRSの始まり/終わり',m,H-3);
+  g.fillStyle='#e6eefb';g.fillText(`細線＝各拍 ${beats.length}拍　白＝代表拍（中央値）　QRS ${f.width}ms　波高 ${inFmt(f.amp)}mV`,m,13);
+  for(const v of [Math.ceil(lo*2)/2,0,Math.floor(hi*2)/2]){if(v<lo||v>hi)continue;g.fillStyle='#9aa8bf';g.fillText(v+'mV',2,Y(v)+4);}
+}
+function insideNums(k){
+  const f=curFeat[k],D=f.dbg,n=D.y.length,nz=curNoise[k],info=curPool&&curPool.rowInfo?curPool.rowInfo[k]:null;
+  const gaps=D.valid.reduce((a,v)=>a+(v?0:1),0);
+  const rows=[['段の長さ',`${n}px ＝ ${(n*MS_PER_PX/1000).toFixed(2)}秒`],['線が無い列',`${gaps}列（${Math.round(gaps/n*100)}%）`],
+    ['R波のしきい値',`${D.thr.toFixed(3)}（傾き上位0.5%×0.45）`],['見つけたR波',`${f.peaks.length}個`],
+    ['切り出した拍',f.error?'—':`${f.nBeats}拍（窓が端にかかる・線の切れ目が10%超の拍は除外）`],
+    ['心拍数',f.hr?f.hr+' bpm':'—'],['波高',f.error?'—':`${inFmt(f.amp)} mV（呼吸のゆれ ±${Math.round((f.ampVar||0)*100)}%）`],
+    ['QRS幅',f.error?'—':`${f.width} ms（${f.on}〜+${f.off} ms）`],['極性',f.error?'—':(f.pol>0?'上向き':'下向き')],
+    ['拍のそろい',f.error?'—':`相関 ${inFmt(f.beatCorr)}（各拍と代表拍）`],
+    ['ノイズ',nz?`ギザギザ最大 ${nz.max}回／中央値 ${nz.med}回（しきい値 ${nz.thr}）${nz.bad.length?' → ノイズ疑い':''}`:'—'],
+    ['まとめでの扱い',info?(info.used?'<span class="ok-t">使用</span>':`<span class="warn-t">除外：${info.reason}</span>`)+(info.corr!=null?`（代表拍との相関 ${info.corr}）`:''):'—']];
+  if(f.error)rows.push(['エラー',f.error]);
+  $('inNums').innerHTML='<table style="width:100%;border-collapse:collapse;font-size:12px">'+rows.map(([a,b])=>`<tr><td style="color:var(--sub);padding:3px 8px 3px 0;white-space:nowrap;vertical-align:top">${a}</td><td style="padding:3px 0">${b}</td></tr>`).join('')+'</table>';
+}
+function drawInsidePool(){
+  const p=curPool,box=$('inPool');
+  if(!p||p.error){box.innerHTML=`<div class="hint" style="margin-top:8px">${p?p.error:'まだ代表拍がありません。'}</div>`;return;}
+  box.innerHTML=`<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;align-items:flex-start"><div style="overflow-x:auto;max-width:100%"><canvas id="inPoolCv"></canvas></div><div id="inPoolNums" style="flex:1;min-width:260px"></div></div>`;
+  const extra=curFeat.map((f,k)=>f&&!f.error?{tpl:f.tpl,k}:null).filter(Boolean);
+  drawInsideBeats($('inPoolCv'),p.beats.map(q=>q.b),p.tpl,p,extra);
+  const cols=['#fbbf24','#a78bfa','#f472b6','#60a5fa','#fb923c'];
+  $('inPoolNums').innerHTML=`<div class="hint">使った段の拍をすべて集め、±10msずらして合わせ直してから中央値を取ったものが代表拍（白）です。色の線は各段の代表拍です。</div>
+    <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:6px"><tr style="color:var(--sub)"><td>段</td><td>心拍</td><td>相関</td><td>扱い</td></tr>`+
+    curFeat.map((f,k)=>{const u=p.rowInfo[k]||{};const ci=extra.findIndex(e=>e.k===k);return `<tr><td style="padding:3px 6px 3px 0"><span style="color:${ci>=0?cols[ci%5]:'var(--sub)'}">■</span> ${k+1}</td><td>${f&&f.hr?f.hr:'—'}</td><td>${u.corr??'—'}</td><td>${u.used?'<span class="ok-t">使用</span>':`<span class="warn-t">${u.reason||'除外'}</span>`}</td></tr>`;}).join('')+
+    `</table><div class="hint" style="margin-top:6px">代表拍：${p.usedRows.length}段・${p.nBeats}拍／心拍 ${p.hr??'—'}bpm／波高 ${inFmt(p.amp)}mV（ゆれ ±${Math.round(p.ampVar*100)}%）／QRS ${p.width}ms／${p.pol>0?'上向き':'下向き'}</div>`;
+}
+
+
+// 複数ページの時：どのページを使っているか表示し、手で選び直せるボタン
+function renderPageBtns(n,cur,manual){
+  const b=$('pageBtns');if(!b)return;if(n<=1){b.innerHTML='';return;}
+  b.innerHTML=`このPDFは${n}ページあります。${manual?'選んだ':'波形があると判断した'}<b>${cur}ページ目</b>で評価しています。違う時は押してください：`+
+    Array.from({length:n},(_,i)=>`<button class="pgSel${i+1===cur?' primary':''}" data-p="${i+1}" style="padding:2px 10px;margin:2px">${i+1}</button>`).join('');
+}
+document.addEventListener('click',e=>{const b=e.target.closest('.pgSel');if(!b||!lastPdfBytes)return; // 患者フォルダへ移動済みでも読めるよう、メモリに残した中身から読み直す
+  loadPDF(new File([lastPdfBytes],lastPdfFile.name,{lastModified:lastPdfFile.lastModified}),{forceEval:true,pageNo:+b.dataset.p});});
+// ===== 👁 比較相手（前回・基準）のPDFの波形を、今回と並べて表示 =====
+async function fileFromPath(path){
+  if(!dirHandle||!path)return null;
+  try{const parts=path.split('/');let d=dirHandle;for(const p of parts.slice(0,-1))d=await d.getDirectoryHandle(p);return await (await d.getFileHandle(parts[parts.length-1])).getFile();}catch(_){return null;}
+}
+async function findRefPdf(ref,id,obj){
+  let f=await fileFromPath(ref&&ref.pdf);if(f)return f;
+  // 記録が無い古いデータ：患者PDFフォルダから照会日で探す
+  const m=String(ref&&ref.date||'').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})(?:\D+(\d{1,2}):(\d{2}))?/);if(!m||!dirHandle)return null;
+  const stem=`${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}${m[4]?'_'+m[4].padStart(2,'0')+m[5]:''}`;
+  try{const top=await dirHandle.getDirectoryHandle(PDF_DIR);const pd=await top.getDirectoryHandle(fileNameFor(id,obj).replace(/\.json$/i,'')||id);
+    const names=[];for await(const [n,h] of pd.entries())if(h.kind==='file'&&n.startsWith(stem)&&/\.(pdf|png)$/i.test(n)&&!/_書類\d|_イベント\d/.test(n))names.push(n);
+    names.sort();if(!names.length)return null;return await (await pd.getFileHandle(names[names.length-1])).getFile();}catch(_){return null;}
+}
+async function ecgImage(doc,pageNo,full){ // 波形のページを描く。full＝ページをそのまま全部／それ以外＝緑の線がある範囲だけを高い倍率で（どちらもPDFの見た目は加工しない）
+  const pno=pageNo||await pickEcgPage(doc),pg=await doc.getPage(pno);
+  if(full){const v0=pg.getViewport({scale:1}),S=Math.min(6,2400/v0.width),v=pg.getViewport({scale:S}),o=document.createElement('canvas');o.width=Math.round(v.width);o.height=Math.round(v.height);
+    const ox=o.getContext('2d');ox.fillStyle='#fff';ox.fillRect(0,0,o.width,o.height);await pg.render({canvasContext:ox,viewport:v}).promise;return o;}
+  // ① まず低い倍率で描いて、緑の線がある範囲を探す
+  const s1=1.5,v1=pg.getViewport({scale:s1}),c=document.createElement('canvas');c.width=Math.round(v1.width);c.height=Math.round(v1.height);
+  const x=c.getContext('2d',{willReadFrequently:true});x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);await pg.render({canvasContext:x,viewport:v1}).promise;
+  const d=x.getImageData(0,0,c.width,c.height).data;let x0=c.width,y0=c.height,x1=0,y1=0;
+  for(let yy=0;yy<c.height;yy++)for(let xx=0;xx<c.width;xx++){const i=(yy*c.width+xx)*4;if(d[i+1]-Math.max(d[i],d[i+2])>18){if(xx<x0)x0=xx;if(xx>x1)x1=xx;if(yy<y0)y0=yy;if(yy>y1)y1=yy;}}
+  if(x1<=x0||y1<=y0){x0=0;y0=0;x1=c.width;y1=c.height;}
+  const pad=12;x0=Math.max(0,x0-pad);y0=Math.max(0,y0-pad);x1=Math.min(c.width,x1+pad);y1=Math.min(c.height,y1+pad);
+  // ② その範囲だけを、横が約3000pxになる倍率で描き直す
+  const S=Math.min(8,3000/((x1-x0)/s1)),k=S/s1,o=document.createElement('canvas');o.width=Math.round((x1-x0)*k);o.height=Math.round((y1-y0)*k);
+  const ox=o.getContext('2d');ox.fillStyle='#fff';ox.fillRect(0,0,o.width,o.height);
+  await pg.render({canvasContext:ox,viewport:pg.getViewport({scale:S,offsetX:-x0*k,offsetY:-y0*k})}).promise;
+  return o;
+}
+
+// ===== 🎞 タイムライン：保存した元のPDFの波形を、スライドバーで日付順にめくる（上に基準を固定）=====
+const tl={id:'',obj:{},items:[],base:null,cache:new Map(),idx:0,top:-1}; // top=-1 は「基準」
+// 並べ方：左右（標準）／上下／重ねる
+let tlLay='lr';try{tlLay=localStorage.getItem('pg_lat_tllay')||'lr';}catch(_){}
+function tlApplyLay(){$('tlPanels').className='tlp '+tlLay;setTimeout(()=>{try{tlEqualize();}catch(_){}},0);['LR','TB','OV'].forEach(k=>$('tlLay'+k).classList.toggle('on',tlLay===k.toLowerCase()));
+  $('tlOvCtl').hidden=tlLay!=='ov';$('tlOverlay').hidden=tlLay!=='ov';if(tlLay==='ov')tlRenderOverlay();}
+['LR','TB','OV'].forEach(k=>$('tlLay'+k).onclick=()=>{tlLay=k.toLowerCase();try{localStorage.setItem('pg_lat_tllay',tlLay);}catch(_){}tlApplyLay();});
+tlApplyLay();
+// 重ねる：上（緑）と下（紫）を重ね、違う所だけ色が分かれて見える。スライダーで上の濃さを変える
+let tlOvData=null;
+function tlRenderOverlay(){
+  if(tlLay!=='ov')return;const a=document.querySelector('#tlBase img'),b=document.querySelector('#tlCur img'),box=$('tlOverlay');
+  if(!a||!b){box.innerHTML='<div class="hint" style="padding:10px">上と下の両方のPDFが必要です。</div>';tlOvData=null;return;}
+  const go=()=>{ // 2枚の「線の濃さ」を取り出し、上＝緑・下＝紫で重ねる（紙の白はそのまま）。重なる所は黒っぽくなる
+    const W=Math.min(1600,Math.max(a.naturalWidth,b.naturalWidth)),H=Math.round(W*a.naturalHeight/a.naturalWidth);
+    const dark=im=>{const c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,W,H);x.drawImage(im,0,0,W,Math.round(W*im.naturalHeight/im.naturalWidth));
+      const d=x.getImageData(0,0,W,H).data,o=new Float32Array(W*H);for(let i=0,j=0;i<d.length;i+=4,j++)o[j]=1-(0.3*d[i]+0.59*d[i+1]+0.11*d[i+2])/255;return o;};
+    tlOvData={W,H,ta:dark(a),tb:dark(b)};box.innerHTML='<canvas></canvas>';tlOvA();};
+  if(a.complete&&b.complete)go();else Promise.all([a,b].map(im=>im.decode().catch(()=>{}))).then(go);
+}
+function tlOvA(){
+  if(!tlOvData)return;const {W,H,ta,tb}=tlOvData,v=+$('tlOvA').value/100,wa=Math.min(1,2*(1-v)),wb=Math.min(1,2*v);
+  const cv=document.querySelector('#tlOverlay canvas');if(!cv)return;cv.width=W;cv.height=H;const x=cv.getContext('2d'),img=x.createImageData(W,H),d=img.data;
+  const A=[255-22,255-163,255-74],B=[255-192,255-38,255-211]; // 緑（上）・紫（下）が白から引く量
+  for(let j=0,i=0;j<ta.length;j++,i+=4){const p=ta[j]*wa,q=tb[j]*wb;
+    d[i]=255-p*A[0]-q*B[0];d[i+1]=255-p*A[1]-q*B[1];d[i+2]=255-p*A[2]-q*B[2];d[i+3]=255;}
+  x.putImageData(img,0,0);
+}
+let ovT=0;$('tlOvA').oninput=()=>{clearTimeout(ovT);ovT=setTimeout(tlOvA,30);};
+// 表示するPDFの絞り込み：すべて／S-ECGだけ（イベントなし）／イベントだけ
+// イベントの記録かどうか：イベントの見出しがある（S-ECGの日時がない）か、波形が3段以上（S-ECGはいつも2段＝12秒、イベントは5段＝30秒など）
+const EV_ROWS=3;
+const evLike=x=>!!(x&&((!x.secg&&(x.events||[]).length)||(x.feat&&Array.isArray(x.feat.rows)&&x.feat.rows.length>=EV_ROWS)));
+const tlIsEv=it=>!!(it.split||evLike(it));
+let tlFilt='all'; // 絞り込みはやめた：いつも全部を表示
+function tlFiltBtns(){$('tlFAll').classList.toggle('on',tlFilt==='all');$('tlFSecg').classList.toggle('on',tlFilt==='secg');$('tlFEv').classList.toggle('on',tlFilt==='ev');}
+tlFiltBtns();
+for(const [b,v] of [['tlFAll','all'],['tlFSecg','secg'],['tlFEv','ev']])$(b).onclick=()=>{tlFilt=v;try{localStorage.setItem('pg_lat_tlfilt',v);}catch(_){}tlFiltBtns();if(tl.id)tlLoad(tl.id);};
+let tlFull=true;try{tlFull=localStorage.getItem('pg_lat_tlmode')!=='crop';}catch(_){}
+function tlModeBtns(){$('tlModeFull').classList.toggle('on',tlFull);$('tlModeCrop').classList.toggle('on',!tlFull);}
+tlModeBtns();
+async function tlSetMode(full){tlFull=full;try{localStorage.setItem('pg_lat_tlmode',full?'full':'crop');}catch(_){}tlModeBtns();
+  if(!tl.items.length)return;await tlTop(tl.top);await tlGo(tl.idx);tlThumbs();}
+$('tlModeFull').onclick=()=>tlSetMode(true);$('tlModeCrop').onclick=()=>tlSetMode(false);
+// 複数のイベントがまとまったPDF：ページごとに左上のイベント見出し（例 035: 2025年02月09日 12:44 JST, AF）を読み、イベントとページの対応を返す
+const tlEvPages=new Map();
+async function eventPagesDoc(doc){
+  const out=[];
+  for(let pg=1;pg<=(doc.numPages||1);pg++){const tc=await (await doc.getPage(pg)).getTextContent();const t=tc.items.map(x=>x.str).join('').replace(/\s+/g,'');
+    const ev=headerInfo(t,false,'').events[0];if(ev&&!out.some(e=>e.no===ev.no&&e.dt===ev.dt))out.push({...ev,page:pg});}
+  return out;
+}
+async function eventPages(path){
+  if(tlEvPages.has(path))return tlEvPages.get(path);
+  let out=[];
+  if(/\.pdf$/i.test(path||''))try{const f=await fileFromPath(path);if(f){const lib=await ensurePdfjs();out=await eventPagesDoc(await lib.getDocument({data:new Uint8Array(await f.arrayBuffer()),isEvalSupported:false}).promise);}}catch(_){}
+  tlEvPages.set(path,out);return out;
+}
+async function dirOfPath(path){if(!dirHandle||!path)return null;try{let d=dirHandle;for(const p of path.split('/').slice(0,-1))d=await d.getDirectoryHandle(p);return d;}catch(_){return null;}}
+async function tlImage(rep){
+  const k=(tlFull?'F|':'C|')+(rep.pdf||'')+'|'+(rep.key||rep.date)+'|'+(rep.page||0);if(tl.cache.has(k))return tl.cache.get(k);
+  let url=null;
+  try{const f=await findRefPdf(rep,tl.id,tl.obj);
+    if(f&&/\.png$/i.test(f.name)){url=await new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result);fr.onerror=()=>r(null);fr.readAsDataURL(f);});} // 波形の画像（元のPDFを残さない設定）
+    else if(f){const lib=await ensurePdfjs();const doc=await lib.getDocument({data:new Uint8Array(await f.arrayBuffer()),isEvalSupported:false}).promise;url=(await ecgImage(doc,rep.page||0,tlFull)).toDataURL('image/png');}}catch(_){}
+  tl.cache.set(k,url);return url;
+}
+const tlPill=lv=>lv==null?'':`<span class="${['ok-t','warn-t','bad-t'][lv]}" style="font-weight:700">${['✅ 変化なし','🟡 注意','⚠️ 要確認'][lv]}</span>`;
+const tlNums=f=>f?`波高 ${(+f.amp).toFixed(2)} mV・QRS幅 ${f.width} ms・心拍 ${f.hr??'—'} bpm`:'';
+function tlWhy(h){ // 今の基準と比べた時の判定の理由
+  if(!h)return '';
+  let c=h.causes;
+  if(!c){c=[];if(h.dW>=20)c.push(`QRS幅 +${h.dW}ms`);if(h.corr!=null&&h.corr<0.9)c.push(`形 相関${(+h.corr).toFixed(2)}`);
+    if(h.ampRatio&&(h.ampRatio<0.77||h.ampRatio>1.3))c.push(`波高 ${Math.round(h.ampRatio*100)}%`);
+    (h.rows||[]).forEach((r,k)=>{if(r&&!r.used&&r.reason)c.push(`${k+1}段目：${r.reason.replace(/（.*$/,'')}`);});}
+  return `<div class="hint">比較相手：${escH(String(h.ref||'?').replace(/\s*JST/,''))}（${h.mode==='base'?'基準':'前回'}）${c.length?'　理由：'+escH(c.join('／')):''}</div>`;
+}
+async function tlPanel(box,rep,title){
+  const need=rep.file&&!rep.own&&/\.pdf$/i.test(rep.pdf||'');
+  const sent=rep.tx||rep.date||'',fmt=d=>String(d).replace(/(\d{4})年(\d{2})月(\d{2})日\s*/,'$1/$2/$3 ').replace(/\s*JST/,'');
+  const evLine=(rep.events||[]).length?`<div class="hint" style="margin-top:2px">⚡ イベント ${rep.events.map(e=>`<b style="color:var(--tx)">${escH(e.no)}：${escH(fmt(e.dt))}</b>${e.type?`（<b style="color:var(--warn)">${escH(e.type)}</b>）`:''}`).join('、')}</div>`:'';
+  const sgLine=rep.secg?`<div class="hint" style="margin-top:2px">〰 S-ECG記録 <b style="color:var(--tx)">${escH(fmt(rep.secg))}</b></div>`:'';
+  const txLine=evLine+sgLine+`<div class="hint" style="margin-top:2px">📡 デバイスからの送信 <b style="color:var(--tx)">${escH(fmt(sent)||'—')}</b></div>`;
+  box.innerHTML=`<div class="tlhead"><div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap"><b>${escH(title)}</b>${tlPill(rep.lv)}<span class="hint">${tlNums(rep.feat)}</span>${rep.file?`<button class="tlDel ghost" data-pdf="${escH(rep.pdf)}" title="このPDFを削除（_削除済みフォルダへ移す）" style="padding:2px 9px;font-size:12px;margin-left:auto">🗑 削除</button>`:''}${need?`<button class="tlReeval" data-pdf="${escH(rep.pdf)}" style="padding:3px 10px;font-size:12px">📥 このPDFで評価し直す（数値を作る）</button><span class="hint warn-t">このPDFの数値はまだありません</span>`:''}</div>${txLine}${rep.lv?tlWhy(rep.h):''}</div><div class="hint">読み込み中…</div>`;
+  box.style.boxShadow=rep.lv===2?'0 0 0 3px var(--bad)':rep.lv===1?'0 0 0 2px var(--warn)':'';box.style.borderRadius='12px'; // 要確認＝赤枠、注意＝黄枠
+  const url=await tlImage(rep);
+  setTimeout(tlRenderOverlay,0);
+  tlEqualize();
+  box.lastElementChild.outerHTML=url?`<img src="${url}" style="width:100%;background:#fff;border-radius:6px;display:block;margin-top:4px">`:'<div class="hint warn-t">この日のPDFが「'+escH(PDF_DIR)+'」に見つかりません（このツールで整理する前のレポート）。</div>';
+}
+// 左右に並べた時、見出しの高さをそろえて、波形が同じ高さから始まるようにする
+// サムネイルの日付：S-ECGの記録日時 → イベント（番号・日時・種類）→ 照会日
+function tlThumbLabel(it){
+  const f=d=>escH(String(d||'').replace(/(\d{4})年(\d{2})月(\d{2})日\s*/,'$1/$2/$3 ').replace(/\s*(JST|ＪＳＴ)/g,''));const ev=(it.events||[])[0];
+  if(!tlIsEv(it))return `〰 ${f(it.secg||it.tx||it.date||'?')}${it.secg?'':'<span class="hint">（送信）</span>'}`; // S-ECG：記録日時、なければ送信日時
+  if(it.secg)return `⚡ ${f(it.secg)}`; // 波形が3段以上＝イベントの記録（S-ECGの欄に載ったもの）
+  if(ev)return `⚡${escH(ev.no)} ${f(ev.dt)}${ev.type?` <b style="color:var(--warn)">${escH(ev.type)}</b>`:''}`;
+  return `<span class="hint">日時不明</span>（📡送信 ${f(it.tx||it.date||'?')}）`; // 記録日時が読めない時は、送信日を記録日時のように見せない
+}
+function tlEqualize(){
+  const hs=[...document.querySelectorAll('#tlBase .tlhead,#tlCur .tlhead')];hs.forEach(h=>h.style.minHeight='');
+  if(tlLay!=='lr'||hs.length<2)return;const m=Math.max(...hs.map(h=>h.offsetHeight));hs.forEach(h=>h.style.minHeight=m+'px');
+}
+window.addEventListener('resize',()=>{try{tlEqualize();}catch(_){}});
+function tlVs(){ // 今表示している上と下を、その場で比べる（同じ物差し）
+  const top=tl.top<0?tl.base:tl.items[tl.top],bot=tl.items[tl.idx],b=top&&top.feat,c=bot&&bot.feat;
+  if((top&&tlIsEv(top))||(bot&&tlIsEv(bot))){$('tlVs').innerHTML='⚡ イベントの波形は、不整脈のときの記録なので数値では比べません。画像を並べて目で見比べてください。';return;}
+  if(!b||!c||!b.tpl||!c.tpl){$('tlVs').innerHTML=top&&bot?'上と下をこの場で比べるには、両方のPDFの数値が必要です（「📥 このPDFで評価し直す」を押してください）':'';return;}
+  const r=compareFeat(b,c);
+  $('tlVs').innerHTML=`<b>上と下をこの場で比べると：</b>${tlPill(r.level)}　形 相関 ${r.corr.toFixed(2)}・QRS幅 ${r.dW>=0?'+':''}${r.dW} ms・波高 ${Math.round(r.ampRatio*100)}%（許容 ±${Math.round(r.tol*100)}%）${r.polFlip?'・<b>向きが逆</b>':''}`
+    +(r.red.length+r.yel.length?`<br>理由：${escH([...r.red,...r.yel].join('／'))}`:'');
+}
+async function tlGo(i){
+  if(!tl.items.length)return;i=Math.max(0,Math.min(tl.items.length-1,i));tl.idx=i;$('tlSlider').value=i;
+  const it=tl.items[i];tlVs();
+  document.querySelectorAll('#tlStrip .tlTh,#tlStripEv .tlTh').forEach(c=>c.style.outline=+c.dataset.k===i?'3px solid var(--accent)':'none');
+  const th=document.querySelector(`#tlStrip .tlTh[data-k="${i}"],#tlStripEv .tlTh[data-k="${i}"]`);if(th){const sp=th.parentElement;sp.scrollLeft=th.offsetLeft-sp.offsetLeft-sp.clientWidth/2+th.clientWidth/2;}
+  await tlPanel($('tlCur'),it,`${i+1}/${tl.items.length}　${it.when?it.when.replace(/\s*JST/,''):'日時不明（📡送信 '+String(it.tx||it.date||'?').replace(/\s*JST/,'')+'）'}`);
+}
+async function tlLoad(idArg,quiet){
+  if(!dirHandle)await ensureDir();if(!dirHandle){$('tlMsg').innerHTML='<span class="warn-t">データフォルダに接続できません。📁で選んでください。</span>';return;}
+  const id=idArg||$('tlId').value.trim()||$('fId').value.trim();if(!id){$('tlMsg').innerHTML='<span class="warn-t">患者IDを入れてください。</span>';return;}
+  const st=await readBaseline(id);if(!st||!((st.reports||[]).length||(st.saves||[]).length)){tlReset(id,'記録がありません');return;}
+  tl.id=id;tl.obj={name:st.name,device:st.device};tl.cache.clear();
+  const lvOf=r=>{const h=(st.history||[]).filter(x=>x.date===r.date&&x.level!=null).pop();return h?h.level:null;};
+  const hOf=r=>(st.history||[]).filter(x=>x.date===r.date&&x.level!=null).pop()||null;
+  const reps=[...(st.reports||[])].sort((a,b)=>a.key<b.key?-1:1).map(r=>({...r,lv:lvOf(r),h:hOf(r)}));
+  // 患者PDFフォルダのPDFを全部並べる（同じ照会日に何度保存したPDFも1枚ずつ）。判定・数値は同じ照会日の記録から付ける
+  const files=[];
+  try{const top=await dirHandle.getDirectoryHandle(PDF_DIR);
+    for(const fname of [...new Set([fileNameFor(id,tl.obj).replace(/\.json$/i,''),id])]){let pd=null;try{pd=await top.getDirectoryHandle(fname);}catch(_){}if(!pd)continue;
+      for await(const [n,h] of pd.entries()){if(h.kind!=='file'||!/\.(pdf|png)$/i.test(n))continue;
+        const m=n.match(/^(\d{4})-(\d{2})-(\d{2})(?:_(\d{2})(\d{2}))?/);const key=m?m[1]+m[2]+m[3]+(m[4]||'00')+(m[5]||'00'):'';
+        files.push({n,key,path:`${PDF_DIR}/${fname}/${n}`,doc:/_書類\d/.test(n)});}}}catch(_){}
+  const items=[];
+  for(const f of files.filter(f=>!f.doc).sort((a,b)=>a.key===b.key?(a.n<b.n?-1:1):(a.key<b.key?-1:1))){
+    const sv=(st.saves||[]).find(x=>x.pdf===f.path);
+    const r=sv?{...sv,lv:sv.level,h:sv.level!=null?{level:sv.level,causes:sv.causes,ref:sv.ref,mode:sv.mode}:null}:null; // このPDF自身の記録だけを使う
+    const saved=(f.n.match(/保存(\d{8})-(\d{2})(\d{2})/)||[]);
+    items.push({...(r||{}),date:(r&&r.date)||f.key.replace(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})$/,'$1年$2月$3日 $4:$5'),key:f.key,pdf:f.path,file:f.n,
+      saved:saved[1]?`${saved[1].slice(4,6)}/${saved[1].slice(6,8)} ${saved[2]}:${saved[3]}保存`:'',lv:r?r.lv:null,h:r?r.h:null,feat:r?r.feat:null,own:!!r});}
+  // PDF・画像のファイルが見つからない記録は、タイムラインには出さない（数値の記録は基準・前回の比較用に残す）
+  items.sort((a,b)=>a.key===b.key?((a.file||'')<(b.file||'')?-1:1):(a.key<b.key?-1:1));
+  // 保存済みのPDFで送信日時やS-ECGの記録日時が記録されていないものは、PDFの文字から直接読む
+  for(const it of items){if(!it.pdf||/\.png$/i.test(it.pdf)||(it.secg&&it.tx))continue;
+    try{const f=await fileFromPath(it.pdf);if(!f)continue;const h=headerInfo((await extractRawPdfText(await f.arrayBuffer())).replace(/\s+/g,''),false,'');
+      if(!it.secg&&h.secg)it.secg=h.secg;if(!it.tx&&h.tx)it.tx=h.tx;if(!(it.events||[]).length&&h.events.length)it.events=h.events;}catch(_){}}
+  // まとめて作ったイベントのPDFは、イベントごとの項目に分ける（同じイベントが複数のPDFにあれば1つだけ）
+  {const out=[],seenEv=new Set(),pickS=new Map(),bp=st.baseline&&st.baseline.pdf;
+    for(const it of items){const k=sameRecKey(it);if(!k)continue;const o=pickS.get(k);if(!o||(it.pdf&&it.pdf===bp)||(o.pdf!==bp&&(it.ts||0)>(o.ts||0)))pickS.set(k,it);}
+    for(const it of items){
+      if(it.pdf&&!it.secg&&(it.events||[]).length){const pages=await eventPages(it.pdf);
+        if(pages.length>1){for(const ev of pages){const k=ev.no+'|'+ev.dt;if(seenEv.has(k))continue;seenEv.add(k);
+          out.push({...it,events:[ev],page:ev.page,lv:null,h:null,feat:null,split:true});}continue;}}
+      {const k=sameRecKey(it);if(k&&pickS.get(k)!==it)continue;} // 同じPDFを何度も取り込んだ重複
+      const ev=!it.secg&&(it.events||[])[0];if(ev){const k=ev.no+'|'+ev.dt;if(seenEv.has(k))continue;seenEv.add(k);}
+      out.push(it);}
+    items.length=0;items.push(...out);}
+  // 並び順（左が古い）：S-ECGの記録日時 → イベントの日時 → 照会日 の順に使える日時で
+  const dk=d=>{const m=String(d||'').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})(?:\D+(\d{1,2}):(\d{2}))?/);return m?m[1]+m[2].padStart(2,'0')+m[3].padStart(2,'0')+(m[4]||'00').padStart(2,'0')+(m[5]||'00'):'';};
+  // 記録された日時：S-ECG＝S-ECGの記録日時（読めなければ送信日時。S-ECGは送信のときに記録される）／イベント＝イベントの日時（読めなければ不明）
+  items.forEach(it=>{const ev=(it.events||[])[0],isEv=tlIsEv(it);it.when=isEv?(it.secg||(ev&&ev.dt)||''):(it.secg||it.tx||it.date||'');it.sk=dk(it.when)||dk(it.tx)||it.key||'';});
+  items.sort((a,b)=>a.sk===b.sk?((a.file||'')<(b.file||'')?-1:1):(a.sk<b.sk?-1:1));
+  tl.all=items;tl.items=items.filter(it=>tlFilt==='all'||(tlIsEv(it)?tlFilt==='ev':tlFilt==='secg'));
+  tl.fb=!tl.items.length&&items.length>0;if(tl.fb)tl.items=items; // 該当なしの時は全部を出す
+  tl.base=st.baseline?{...st.baseline,...(items.find(it=>it.pdf&&st.baseline.pdf&&it.pdf===st.baseline.pdf)||{})}:items[0];
+  // 判定マークは保存した時のものではなく、今の基準とその場で比べ直したもの（基準を変えても画面の評価とそろう）
+  const bf=tl.base&&tl.base.feat;
+  for(const it of items){if(evLike(it)){it.lv=null;it.h=null;continue;}const l=bf?featLevel(bf,it.feat):null;if(!l)continue;const self=it.pdf&&tl.base.pdf===it.pdf;
+    it.lv=self?0:l.level;it.h=self?null:{ref:tl.base.secg||tl.base.date,mode:'base',causes:l.causes};}
+  const nPdf=items.filter(it=>it.file).length;
+  $('tlMsg').textContent=`ID ${id}：波形 ${nPdf}枚・評価の記録 ${reps.length}日分`+(tlFilt==='all'?'':tl.fb?`（${tlFilt==='secg'?'S-ECG':'イベント'}のPDFが無いので、すべて表示）`:`（${tlFilt==='secg'?'S-ECGだけ':'イベントだけ'} ${tl.items.length}件を表示）`);$('tlSum').textContent=`ID ${id}・${items.length}枚`;$('tlBody').hidden=false;$('tlId').value=id;
+  $('tlSlider').max=tl.items.length-1;
+  const isBase=it=>!!(tl.base&&it.pdf&&tl.base.pdf===it.pdf);
+  // 判定の枠：要確認＝赤、注意＝黄（基準は緑）
+  const lvBorder=it=>isBase(it)?';border:2px solid var(--accent)!important':it.lv===2?';border:3px solid var(--bad)!important;background:rgba(225,29,72,.06)':it.lv===1?';border:2px solid var(--warn)!important':'';
+  const thumb=(it,k)=>`<button class="tlTh" data-k="${k}" style="flex:0 0 auto;padding:4px;width:150px;text-align:left${lvBorder(it)}"><div style="font-size:11px;line-height:1.35">${isBase(it)?'<b style="color:var(--accent)">📌基準</b> ':''}${tlThumbLabel(it)} ${it.lv==null?'':['✅','🟡','⚠️'][it.lv]}</div><div class="tlImg" style="height:46px;background:#fff;border-radius:4px;overflow:hidden"></div></button>`;
+  // S-ECGとイベントを分けて2列に並べる（どちらも左から時系列。番号 k は全体の通し番号のまま）
+  const all=tl.items.map((it,k)=>({it,k}));$('tlStrip').innerHTML=all.filter(x=>!tlIsEv(x.it)).map(x=>thumb(x.it,x.k)).join('');
+  const evs=all.filter(x=>tlIsEv(x.it));$('tlStripEv').innerHTML=evs.map(x=>thumb(x.it,x.k)).join('');$('tlEvRow').hidden=!evs.length;
+  $('tlTSlider').max=tl.items.length-1;
+  await tlTop(-1);
+  await tlGo(tl.items.length-1);
+  tlThumbs();
+}
+$('tlShow').onclick=()=>tlLoad();
+// タイムラインのPDFを削除：完全には消さず「患者PDF\_削除済み」へ移す。記録（数値・判定）も整理する
+async function tlDelete(path){
+  const it=tl.items.find(x=>x.pdf===path);if(!it||!dirHandle)return;
+  const st=await readBaseline(tl.id);
+  if(st&&st.baseline&&st.baseline.pdf&&st.baseline.pdf===path){alert('このPDFは今の「基準」なので削除できません。\n先に別の日の波形で「📌 今回の波形を基準にする」を押してから削除してください。');return;}
+  if(!confirm(`このPDFを削除しますか？\n\n${it.date||''}${it.saved?'（'+it.saved+'）':''}\n${it.file}\n\n「${PDF_DIR}\\_削除済み」フォルダに移します（あとで戻せます）。`))return;
+  try{
+    const parts=path.split('/');let d=dirHandle;for(const p of parts.slice(0,-1))d=await d.getDirectoryHandle(p);const name=parts[parts.length-1];
+    const f=await (await d.getFileHandle(name)).getFile();
+    const trash=await (await dirHandle.getDirectoryHandle(PDF_DIR)).getDirectoryHandle('_削除済み',{create:true});
+    const w=await (await trash.getFileHandle(`${parts[parts.length-2]}_${name}`,{create:true})).createWritable();await w.write(await f.arrayBuffer());await w.close();
+    await d.removeEntry(name);
+    if(st){
+      st.saves=(st.saves||[]).filter(x=>x.pdf!==path);
+      const others=tl.items.filter(x=>x.pdf!==path&&x.file&&x.key===it.key);
+      if(!others.length)st.reports=(st.reports||[]).filter(r=>r.key!==it.key); // この照会日のPDFがもう無い → その日の記録も消す
+      else{const rem=st.saves.filter(x=>x.key===it.key).pop();if(rem)st.reports=(st.reports||[]).map(r=>r.key===it.key?{...r,pdf:rem.pdf,feat:rem.feat}:r);}
+      await writeBaseline(tl.id,st);}
+    const keep=tl.idx;await tlLoad(tl.id);if(tl.items.length)await tlGo(Math.min(keep,tl.items.length-1));
+    $('tlMsg').innerHTML+='　<span class="ok-t">🗑 削除しました（_削除済みフォルダへ移動）</span>';
+  }catch(e){alert('削除できませんでした：'+(e.message||e));}
+}
+document.addEventListener('click',e=>{const b=e.target.closest('.tlDel');if(b)tlDelete(b.dataset.pdf);});
+// タイムラインの「このPDFで評価し直す」：患者PDFのファイルを読み込み直して数値を作る（PDFは二重に保存しない）
+document.addEventListener('click',async e=>{const b=e.target.closest('.tlReeval');if(!b)return;b.disabled=true;b.textContent='評価中…';
+  const keep0={id:tl.id,idx:tl.idx,top:tl.top};
+  if(/\.png$/i.test(b.dataset.pdf)){const err=await loadImageRecord(b.dataset.pdf,tl.id);if(err){b.textContent=err;return;}await tlLoad(keep0.id);await tlTop(keep0.top);await tlGo(keep0.idx);return;}
+  const f=await fileFromPath(b.dataset.pdf);if(!f){b.textContent='PDFが見つかりません';return;}
+  const keep={id:tl.id,idx:tl.idx,top:tl.top};reloadArchived=b.dataset.pdf;
+  try{await loadPDF(f,{forceEval:true});}finally{reloadArchived=null;}
+  await tlLoad(keep.id);await tlTop(keep.top);await tlGo(keep.idx);});
+// 保存した波形の画像（元のPDFを残さない設定）で評価し直す：数値は画像から測り直し、ID・日時は記録から使う
+async function loadImageRecord(path,id){
+  const st=await readBaseline(id),sv=st&&(st.saves||[]).find(x=>x.pdf===path),f=await fileFromPath(path);
+  if(!sv||!f)return 'PDF・画像が見つかりません';
+  if(!sv.imgScale)return 'この画像は倍率の記録がないため、評価し直せません（LATITUDEからPDFを開き直してください）';
+  const img=await createImageBitmap(f),k=sv.imgScale/HI; // 解析用の倍率（HI）にそろえる
+  hiCanvas.width=Math.round(img.width/k);hiCanvas.height=Math.round(img.height/k);hctx.fillStyle='#fff';hctx.fillRect(0,0,hiCanvas.width,hiCanvas.height);hctx.drawImage(img,0,0,hiCanvas.width,hiCanvas.height);hiReady=true;
+  const r=renderScale/HI;pageCanvas.width=Math.round(hiCanvas.width*r);pageCanvas.height=Math.round(hiCanvas.height*r);pctx.fillStyle='#fff';pctx.fillRect(0,0,pageCanvas.width,pageCanvas.height);pctx.drawImage(hiCanvas,0,0,pageCanvas.width,pageCanvas.height);
+  savePageBackup();pdfLoaded=true;lastPdfFile=f;lastPdfDoc=null;curPageNo=sv.page||0;curNonSicd=null;renderPageBtns(1,1,false);
+  $('fId').value=id;$('fName').value='';$('fDate').value=sv.date||'';$('fDev').value=(st&&st.device)||'';
+  meta={id,name:'',date:sv.date||'',device:(st&&st.device)||'',tx:sv.tx||'',clinic:sv.clinic||'',implant:'',events:sv.events||[],secg:sv.secg||'',allDT:[]};
+  autoTrace();
+  reloadArchived=path;try{await runEval('auto');}finally{reloadArchived=null;}
+  return '';
+}
+// 同じ記録（同じPDFを何度も取り込んだもの）かどうか：S-ECGの記録日時に加えて、測った数値まで完全に同じときだけ
+function sameRecKey(x){const f=x&&x.feat;if(!x||!x.secg||!f||f.amp==null)return '';return [x.secg,(+f.amp).toFixed(4),f.width,f.hr,f.nBeats].join('|');}
+// 重複として外すファイルは消さずに _削除済み へ移す（あとで戻せるように）
+async function trashFile(path){try{const d=await dirOfPath(path);if(!d)return;const name=path.split('/').pop(),f=await (await d.getFileHandle(name)).getFile();
+  const parts=path.split('/'),trash=await (await dirHandle.getDirectoryHandle(PDF_DIR)).getDirectoryHandle('_削除済み',{create:true});
+  const w=await (await trash.getFileHandle(`${parts[parts.length-2]}_${name}`,{create:true})).createWritable();await w.write(await f.arrayBuffer());await w.close();await d.removeEntry(name);}catch(_){}}
+// ===== 元のPDFの保存：残す／残さない =====
+function keepPdfUi(){$('keepPdfYes').checked=KEEP_PDF;$('keepPdfNo').checked=!KEEP_PDF;$('purgePdf').disabled=KEEP_PDF;}
+keepPdfUi();
+$('keepPdfNo').onchange=()=>{KEEP_PDF=false;try{localStorage.setItem('pg_lat_keeppdf','0');}catch(_){}keepPdfUi();$('purgeMsg').textContent='これから評価するPDFは、波形の画像だけを残します。今ある元のPDFも自動で置き換えます…';purgePdfs(true);};
+$('keepPdfYes').onchange=()=>{if(!confirm('元のPDF（氏名などが入っています）をこのPCに保存するようにします。\n情報セキュリティの許可を得ている場合だけ切り替えてください。よろしいですか？')){keepPdfUi();return;}
+  KEEP_PDF=true;try{localStorage.setItem('pg_lat_keeppdf','1');}catch(_){}keepPdfUi();$('purgeMsg').textContent='これから評価するPDFは、元のPDFのまま保存します。';};
+// 今ある元のPDFを、波形の部分だけの画像に置き換える（_削除済み・_対象外・波形のない書類のPDFは消す）。元のPDFはLATITUDEから出し直せる
+// 自動：元のPDFを残さない設定では、フォルダに接続したときに、残っている元のPDFを自動で画像に置き換える（確認なし）
+let purgeBusy=false,purgeAutoDone=false;
+async function purgePdfs(auto){
+  if(!dirHandle||purgeBusy)return;
+  purgeBusy=true;try{await purgeRun(auto);}catch(e){if(!auto)$('purgeMsg').textContent='置き換えできませんでした：'+(e&&e.message||e);}finally{purgeBusy=false;}
+}
+$('purgePdf').onclick=async()=>{
+  if(!dirHandle){$('purgeMsg').textContent='先にデータフォルダに接続してください。';return;}
+  if(!confirm('保存してある元のPDFを、波形の部分だけの画像に置き換えて、元のPDFを消します。\n・_削除済み、_対象外、波形のない書類のPDFも消します\n・消したPDFはこのツールからは戻せません（LATITUDEから出し直せます）\nよろしいですか？'))return;
+  purgePdfs(false);
+};
+async function purgeRun(auto){
+  const msg=t=>$('purgeMsg').textContent=t,bd=await baseDir(false),jsons=[];
+  if(bd)for await(const [n,h] of bd.entries()){if(h.kind!=='file'||!/\.json$/i.test(n))continue;try{jsons.push({n,j:JSON.parse(await (await h.getFile()).text()),dirty:false});}catch(_){}}
+  let top;try{top=await dirHandle.getDirectoryHandle(PDF_DIR);}catch(_){if(!auto)msg('元のPDFはありません。');return;}
+  const lib=await ensurePdfjs(),toDel=[];let conv=0,del=0,fail=0;
+  for await(const [folder,fh] of top.entries()){if(fh.kind!=='directory')continue;const pd=await top.getDirectoryHandle(folder);
+    const names=[];for await(const [n,h] of pd.entries())if(h.kind==='file'&&/\.pdf$/i.test(n))names.push(n);
+    for(const n of names){const path=`${PDF_DIR}/${folder}/${n}`;msg(`処理中：${folder}/${n}`);
+      if(folder.startsWith('_')||/_書類\d/.test(n)){toDel.push([pd,n]);continue;}
+      try{const f=await (await pd.getFileHandle(n)).getFile(),doc=await lib.getDocument({data:new Uint8Array(await f.arrayBuffer()),isEvalSupported:false}).promise;
+        const png=n.replace(/\.pdf$/i,'.png'),newPath=`${PDF_DIR}/${folder}/${png}`;
+        const refs=[];for(const J of jsons)for(const sv of J.j.saves||[])if(sv.pdf===path)refs.push({J,sv});
+        // 消す前に、記録に足りない日時（送信・S-ECG記録・イベント）をPDFの文字から読んで書き込む（画像からは読めないため）
+        try{const h=headerInfo((await extractRawPdfText(await f.arrayBuffer())).replace(/\s+/g,''),false,'');
+          for(const r of refs){if(!r.sv.secg&&h.secg)r.sv.secg=h.secg;if(!r.sv.tx&&h.tx)r.sv.tx=h.tx;if(!(r.sv.events||[]).length&&h.events.length)r.sv.events=h.events;}}catch(_){}
+        const sv0=refs[0]&&refs[0].sv;let page=(sv0&&sv0.page)||0;
+        if(sv0&&!sv0.secg&&(sv0.events||[]).length>1&&(doc.numPages||1)>1){ // まとめたイベントのPDF：ページごとに分ける
+          const pages=await eventPagesDoc(doc);
+          if(pages.length>1){const mine=pages.find(x=>x.page===page)||pages[0];page=mine.page;sv0.events=[{no:mine.no,dt:mine.dt,type:mine.type}];
+            for(const ev of pages){if(ev===mine)continue;const fn=`${png.replace(/\.png$/i,'')}_イベント${ev.no}.png`;const mt=await saveWaveImg(pd,fn,doc,ev.page);
+              refs[0].J.j.saves.push({imgScale:mt.imgScale,pdf:`${PDF_DIR}/${folder}/${fn}`,page:0,date:sv0.date,tx:sv0.tx,clinic:sv0.clinic,events:[{no:ev.no,dt:ev.dt,type:ev.type}],secg:'',key:sv0.key,feat:null,ts:sv0.ts,level:null});conv++;}}}
+        const mt=await saveWaveImg(pd,png,doc,page);conv++;for(const r of refs)r.sv.imgScale=mt.imgScale;
+        for(const J of jsons){const t=JSON.stringify(J.j);if(t.includes(JSON.stringify(path))){J.j=JSON.parse(t.split(JSON.stringify(path)).join(JSON.stringify(newPath)));J.dirty=true;}}
+        for(const r of refs)r.J.dirty=true;
+        toDel.push([pd,n]);
+      }catch(e){fail++;}}}
+  // 同じS-ECG記録（記録日時が同じ）が重なって保存されていたら、1つにまとめる（基準のもの→新しいもの を残し、最初の判定・医師の判断は引き継ぐ）
+  let dup=0;const dupFiles=[];
+  for(const J of jsons){const sv=J.j.saves||[],bp=J.j.baseline&&J.j.baseline.pdf,groups=new Map();
+    for(const x of sv){const k=sameRecKey(x);if(k)(groups.get(k)||groups.set(k,[]).get(k)).push(x);}
+    for(const g of groups.values()){if(g.length<2)continue;
+      const keep=g.find(x=>x.pdf===bp)||[...g].sort((a,b)=>(b.ts||0)-(a.ts||0))[0];
+      for(const o of g){if(o===keep)continue;
+        if(o.first&&(!keep.first||(o.first.ts||0)<(keep.first.ts||0)))keep.first=o.first;if(o.review&&!keep.review)keep.review=o.review;if(o.rvHidden)keep.rvHidden=true;
+        sv.splice(sv.indexOf(o),1);(J.j.reports||[]).forEach(r=>{if(r.pdf===o.pdf)r.pdf=keep.pdf;});
+        if(o.pdf&&o.pdf!==keep.pdf)dupFiles.push(o.pdf);dup++;J.dirty=true;}}}
+  // 記録を書き直してから、元のPDFを消す（途中で失敗しても記録とファイルが食い違わないように）
+  for(const J of jsons)if(J.dirty){try{const w=await (await bd.getFileHandle(J.n,{create:true})).createWritable();await w.write(JSON.stringify(J.j));await w.close();}catch(_){msg('記録を書き直せなかったので、元のPDFは消していません。');return;}}
+  for(const [pd,n] of toDel){try{await pd.removeEntry(n);del++;}catch(_){}}
+  for(const pth of dupFiles)await trashFile(pth);
+  tl.cache.clear();tlEvPages.clear();idIndex=null;
+  const done=`波形の画像 ${conv}枚を作り、元のPDF ${del}個を消しました${fail?`（読めなかったPDF ${fail}個は残しています）`:''}${dup?`。重なっていた同じ記録 ${dup}件を1つにまとめました`:''}。`;
+  if(!(auto&&!conv&&!del&&!dup))msg((auto?'自動で置き換え：':'完了：')+done);
+  if(auto&&dup&&!conv&&!del)setFolderStatus(`<span class="ok-t">フォルダ接続済み：${escH(dirHandle.name)}</span>　重なっていた同じ記録 ${dup}件を1つにまとめました`);
+  if(auto&&(conv||del))setFolderStatus(`<span class="ok-t">フォルダ接続済み：${escH(dirHandle.name)}</span>　🔒 元のPDFを画像に置き換えました（${del}個）`);
+  if(tl.id)tlLoad(tl.id);rvLoad();
+}
+// ===== 📋 要確認リスト：ツールが🟡注意・⚠️要確認と判定した記録と、医師の判断 =====
+let rvRows=[],rvFilt='new';try{rvFilt=localStorage.getItem('pg_lat_rvfilt')||'new';}catch(_){}
+const rvJ={'':'未確認',ok:'問題なし',abn:'異常あり'};
+const rvIc=l=>l==null?'—':['✅ 変化なし','🟡 注意','⚠️ 要確認'][l];
+function rvFiltBtns(){for(const [b,v] of [['rvFNew','new'],['rvFBad','bad'],['rvFAll','all'],['rvFHid','hid']])$(b).classList.toggle('on',rvFilt===v);}
+async function rvLoad(){
+  const d=dirHandle?await baseDir(false):null;if(!d){$('rvMsg').textContent='データフォルダに接続すると表示されます。';return;}
+  const rows=[];
+  try{for await(const [name,h] of d.entries()){if(h.kind!=='file'||!/\.json$/i.test(name))continue;let j;try{j=JSON.parse(await (await h.getFile()).text());}catch(_){continue;}
+    for(const sv of (j&&j.saves)||[]){
+      if(evLike(sv))continue; // イベントの記録は比較の対象外
+      const f=sv.first||(sv.level!=null?{level:sv.level,causes:sv.causes||null,ref:sv.ref||null,mode:sv.mode||null,ts:sv.ts}:null);
+      if(!f||!(f.level>=1))continue;
+      rows.push({rk:sameRecKey(sv),secg:sv.secg||'',ts:sv.ts||0,id:String(j.id||name.replace(/\.json$/i,'')),pdf:sv.pdf,when:String(sv.secg||sv.date||'').replace(/\s*JST/,''),key:sv.key||'',first:f,now:sv.level,review:sv.review||{judge:'',memo:''},hid:!!sv.rvHidden});}}}catch(_){}
+  rows.sort((a,b)=>(b.key||b.when)<(a.key||a.when)?-1:1); // 新しい順
+  // 同じ患者・同じS-ECG記録が重なっていたら1行にまとめる（医師の判断があるもの→新しいもの を残す）
+  const uniq=new Map();
+  for(const r of rows){const k=r.rk?r.id+'|'+r.rk:'pdf|'+r.pdf;const o=uniq.get(k);
+    if(!o||(!o.review.judge&&r.review.judge)||(!!o.review.judge===!!r.review.judge&&r.ts>o.ts))uniq.set(k,r);}
+  rvRows=rows.filter(r=>uniq.get(r.rk?r.id+'|'+r.rk:'pdf|'+r.pdf)===r);rvRender();
+}
+function rvRender(){
+  const live=rvRows.filter(r=>!r.hid),n=live.filter(r=>!r.review.judge).length;
+  $('rvChip').hidden=!n;$('rvChip').textContent=`📋 未確認 ${n}件`;
+  $('rvSum').textContent=live.length?`未確認 ${n}件／全 ${live.length}件`:'';
+  const show=rvRows.map((r,i)=>({r,i})).filter(({r})=>rvFilt==='hid'?r.hid:!r.hid&&(rvFilt==='all'||(rvFilt==='new'?!r.review.judge:r.review.judge==='abn')));
+  $('rvMsg').textContent=rvRows.length?'':'注意・要確認と判定された記録はありません。';
+  $('rvTable').innerHTML=show.length?`<tr><th>患者ID</th><th>記録日時</th><th>最初の判定（比較相手）</th><th>理由</th><th>医師の判断</th><th>メモ</th><th></th></tr>`+show.map(({r,i})=>{
+    const why=(r.first.causes||[]).join('／');
+    return `<tr class="lv${r.first.level}" data-i="${i}"><td><b>${escH(r.id)}</b></td><td>${escH(r.when)}</td>
+      <td>${rvIc(r.first.level)}${r.first.ref?`<div class="hint">${r.first.mode==='base'?'📌基準':'前回'}（${escH(String(r.first.ref).replace(/(\d{4})年(\d{2})月(\d{2})日\s*/,'$1/$2/$3 ').replace(/\s*JST/,''))}）と比較</div>`:''}${r.now!=null&&r.now!==r.first.level?`<div class="hint">今の評価：${rvIc(r.now)}</div>`:''}</td>
+      <td class="hint" style="max-width:300px">${escH(why.length>90?why.slice(0,90)+'…':why)||'—'}</td>
+      <td><select class="rvJudge">${Object.entries(rvJ).map(([k,v])=>`<option value="${k}"${r.review.judge===k?' selected':''}>${v}</option>`).join('')}</select></td>
+      <td><input class="rvMemo inp" value="${escH(r.review.memo||'')}" placeholder="メモ" style="width:160px"></td>
+      <td style="white-space:nowrap"><button class="rvView ghost">🎞 波形</button> <button class="rvDeep ghost">🔬 詳しく</button> ${r.hid?'<button class="rvHide ghost" title="リストに戻す">↩ 戻す</button>':'<button class="rvHide ghost" title="リストから外す（PDFと記録は残ります）">🗑</button>'}</td></tr>`;}).join('')
+    :`<tr><td class="hint">${rvRows.length?(rvFilt==='new'?'未確認の記録はありません。':rvFilt==='hid'?'外した記録はありません。':'該当する記録はありません。'):''}</td></tr>`;
+}
+async function rvSave(i,judge,memo){
+  const r=rvRows[i];if(!r)return;
+  const st=await readBaseline(r.id);const sv=st&&(st.saves||[]).find(x=>x.pdf===r.pdf);
+  if(!sv){$('rvMsg').textContent='記録が見つからず、保存できませんでした。';return;}
+  sv.review={judge,memo,ts:Date.now()};
+  if(!(await writeBaseline(r.id,st))){$('rvMsg').textContent='保存できませんでした（フォルダの許可を確認してください）。';return;}
+  r.review=sv.review;rvRender();$('rvMsg').textContent=`${r.id} の判断を保存しました。`;
+}
+// リストから外す／戻す：PDFと評価の記録は消さず、「外した」印だけを付ける（「外したもの」から戻せる）
+async function rvHide(i){
+  const r=rvRows[i];if(!r)return;const hide=!r.hid;
+  if(hide&&!confirm(`${r.id}（${r.when}）を要確認リストから外します。\nPDFと評価の記録は消えません（「外したもの」から戻せます）。\nPDFそのものを消したいときは、タイムラインの🗑を使ってください。`))return;
+  const st=await readBaseline(r.id);const sv=st&&(st.saves||[]).find(x=>x.pdf===r.pdf);if(!sv){$('rvMsg').textContent='記録が見つかりませんでした。';return;}
+  if(hide)sv.rvHidden=true;else delete sv.rvHidden;
+  if(!(await writeBaseline(r.id,st))){$('rvMsg').textContent='保存できませんでした（フォルダの許可を確認してください）。';return;}
+  r.hid=hide;rvRender();$('rvMsg').textContent=`${r.id} を${hide?'リストから外しました':'リストに戻しました'}。`;
+}
+async function rvOpen(r){ // タイムラインで、基準と並べてその記録を表示
+  $('tlCard').open=true;await tlLoad(r.id);
+  let k=tl.items.findIndex(it=>it.pdf===r.pdf);
+  if(k<0&&tlFilt!=='all'){tlFilt='all';tlFiltBtns();await tlLoad(r.id);k=tl.items.findIndex(it=>it.pdf===r.pdf);}
+  if(k>=0){await tlTop(-1);await tlGo(k);}
+  $('tlCard').scrollIntoView({block:'start'});
+}
+document.addEventListener('change',e=>{const tr=e.target.closest('#rvTable tr[data-i]');if(!tr)return;
+  if(e.target.classList.contains('rvJudge')||e.target.classList.contains('rvMemo'))rvSave(+tr.dataset.i,tr.querySelector('.rvJudge').value,tr.querySelector('.rvMemo').value);});
+document.addEventListener('click',async e=>{const tr=e.target.closest('#rvTable tr[data-i]');if(!tr)return;const r=rvRows[+tr.dataset.i];if(!r)return;
+  if(e.target.closest('.rvView'))return rvOpen(r);
+  if(e.target.closest('.rvHide'))return rvHide(+tr.dataset.i);
+  if(e.target.closest('.rvDeep')){const b=e.target.closest('.rvDeep');b.disabled=true;b.textContent='評価中…';
+    if(/\.png$/i.test(r.pdf||'')){const err=await loadImageRecord(r.pdf,r.id);b.disabled=false;b.textContent='🔬 詳しく';if(err){$('rvMsg').textContent=err;return;}$('result').scrollIntoView({block:'start'});rvLoad();return;}
+    const f=await fileFromPath(r.pdf);if(!f){b.textContent='PDFが見つかりません';return;}
+    reloadArchived=r.pdf;try{await loadPDF(f,{forceEval:true});}finally{reloadArchived=null;}
+    $('result').scrollIntoView({block:'start'});}});
+for(const [b,v] of [['rvFNew','new'],['rvFBad','bad'],['rvFAll','all'],['rvFHid','hid']])$(b).onclick=()=>{rvFilt=v;try{localStorage.setItem('pg_lat_rvfilt',v);}catch(_){}rvFiltBtns();rvRender();};
+rvFiltBtns();
+$('rvReload').onclick=()=>rvLoad();
+$('rvChip').onclick=()=>{$('rvCard').open=true;rvFilt='new';rvFiltBtns();rvRender();$('rvCard').scrollIntoView({block:'start'});};
+$('rvCard').addEventListener('toggle',()=>{if($('rvCard').open)rvLoad();});
+// CSV（研究の集計用）：氏名は入らない。Excelで文字化けしないよう先頭にBOMを付ける
+$('rvCsv').onclick=async()=>{
+  const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"',lv=l=>l==null?'':['変化なし','注意','要確認'][l];
+  const lines=[['患者ID','記録日時','最初の判定','最初の判定の比較相手','理由','今の評価','医師の判断','メモ','判断した日時'].map(q).join(',')]
+    .concat(rvRows.filter(r=>!r.hid).map(r=>[r.id,r.when,lv(r.first.level),r.first.ref||'',(r.first.causes||[]).join('／'),lv(r.now),rvJ[r.review.judge||''],r.review.memo||'',r.review.ts?new Date(r.review.ts).toLocaleString('ja-JP'):''].map(q).join(',')));
+  const d=new Date(),p2=v=>String(v).padStart(2,'0'),name=`PaceGuard_要確認リスト_${d.getFullYear()}${p2(d.getMonth()+1)}${p2(d.getDate())}.csv`,text='\ufeff'+lines.join('\r\n');
+  // 保存先を選ぶ画面で保存（file:// の画面では、普通のダウンロードだとファイル名が付かないことがあるため）
+  if(window.showSaveFilePicker){try{const fh=await window.showSaveFilePicker({suggestedName:name,types:[{description:'CSV',accept:{'text/csv':['.csv']}}]});const w=await fh.createWritable();await w.write(text);await w.close();$('rvMsg').textContent='CSVを保存しました：'+fh.name;}catch(e){if(e&&e.name!=='AbortError')$('rvMsg').textContent='保存できませんでした：'+(e.message||e);}return;}
+  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(text);a.download=name;document.body.appendChild(a);a.click();a.remove();
+};
+// 評価が終わったら、その患者のタイムラインを自動で表示（たたんであれば中身だけ準備）
+function tlAuto(id){if(id)tlLoad(id,true).catch(()=>{});}
+// タイムラインを別の患者に切り替える時、前の患者の表示を残さない
+function tlReset(id,msg){tl.id=id||'';tl.items=[];tl.cache.clear();$('tlId').value=id||'';$('tlSum').textContent=id?`ID ${id}・${msg}`:'';$('tlMsg').textContent=id?`ID ${id}：${msg}`:'';$('tlBody').hidden=true;}
+try{const v=localStorage.getItem('pg_lat_tlopen');if(v)$('tlCard').open=v==='1';}catch(_){}
+$('tlCard').addEventListener('toggle',()=>{try{localStorage.setItem('pg_lat_tlopen',$('tlCard').open?'1':'0');}catch(_){}});
+async function tlThumbs(){ // サムネイルは後から順番に読み込む
+  const id=tl.id,mode=tlFull,bt=$('tlBaseTh');
+  // 一番左に固定：基準の波形（時系列の中にも📌付きで入る）
+  bt.hidden=!tl.base;if(tl.base){bt.querySelector('div').innerHTML=`<b style="color:var(--accent)">📌 基準</b><br>${tlThumbLabel(tl.base)}`;bt.querySelector('.tlImg').innerHTML='';
+    tlImage(tl.base).then(url=>{if(url&&tl.id===id)bt.querySelector('.tlImg').innerHTML=`<img src="${url}" style="width:100%;height:100%;object-fit:cover;object-position:left top">`;});}
+  for(let k=0;k<tl.items.length;k++){if(tl.id!==id||tlFull!==mode)return;const url=await tlImage(tl.items[k]);const c=document.querySelector(`#tlStrip .tlTh[data-k="${k}"],#tlStripEv .tlTh[data-k="${k}"]`);if(c&&url)c.querySelector('.tlImg').innerHTML=`<img src="${url}" style="width:100%;height:100%;object-fit:cover;object-position:left top">`;}
+}
+// 上の波形：基準（-1）か、スライドバーで選んだ日付
+async function tlTop(i){
+  if(!tl.items.length)return;
+  if(i>=0){i=Math.max(0,Math.min(tl.items.length-1,i));tl.top=i;$('tlTSlider').value=i;$('tlTSlider').style.opacity=1;
+    const it=tl.items[i];tlVs();await tlPanel($('tlBase'),it,`⬆ ${i+1}/${tl.items.length}　${it.when?it.when.replace(/\s*JST/,''):'日時不明（📡送信 '+String(it.tx||it.date||'?').replace(/\s*JST/,'')+'）'}`);}
+  else{tl.top=-1;const bi=tl.items.findIndex(it=>it.key===tl.base.key);$('tlTSlider').value=bi>=0?bi:0;$('tlTSlider').style.opacity=.5;
+    tlVs();await tlPanel($('tlBase'),{...tl.base,lv:null},`📌 基準：${tl.base.date||'?'}`);}
+}
+$('tlTSlider').oninput=e=>tlTop(+e.target.value);
+$('tlTPrev').onclick=()=>tlTop((tl.top<0?+$('tlTSlider').value:tl.top)-1);
+$('tlTNext').onclick=()=>tlTop((tl.top<0?+$('tlTSlider').value:tl.top)+1);
+$('tlTBase').onclick=()=>tlTop(-1);
+$('tlSlider').oninput=e=>tlGo(+e.target.value);
+$('tlPrev').onclick=()=>tlGo(tl.idx-1);$('tlNext').onclick=()=>tlGo(tl.idx+1);
+document.addEventListener('click',e=>{const b=e.target.closest('.tlTh');if(!b)return;if(b.id==='tlBaseTh'){tlTop(-1);$('tlBase').scrollIntoView({block:'nearest'});}else tlGo(+b.dataset.k);});
+document.addEventListener('keydown',e=>{if($('tlBody').hidden||/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))return; // スライドバー自体は矢印キーで動く
+  const d=e.key==='ArrowLeft'?-1:e.key==='ArrowRight'?1:0;if(!d)return;e.preventDefault();
+  if(e.shiftKey)tlTop((tl.top<0?+$('tlTSlider').value:tl.top)+d);else tlGo(tl.idx+d);});
+// ===== 🖨 印刷（PDFそのまま／比較結果つき）=====
+let lastPdfDoc=null;
+async function pdfPagesHtml(){
+  let h='';
+  for(let i=1;i<=(lastPdfDoc.numPages||1);i++){const pg=await lastPdfDoc.getPage(i),vp=pg.getViewport({scale:2.5});
+    const c=document.createElement('canvas');c.width=vp.width;c.height=vp.height;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);
+    await pg.render({canvasContext:x,viewport:vp}).promise;h+=`<div class="pp"><img src="${c.toDataURL('image/png')}"></div>`;}
+  return h;
+}
+async function doPrint(withResult){
+  const pa=$('printArea');
+  if(!pdfLoaded||!lastPdfDoc){alertMsg('印刷するPDFがありません。先にPDFを読み込んでください。');return;}
+  let h='';
+  if(withResult){
+    const res=$('result').cloneNode(true);res.querySelectorAll('button,#setBaseMsg').forEach(e=>e.remove());
+    const ov=!$('overlayCard').hidden?['overlay','diff'].map(id=>{try{return `<img class="ov" src="${$(id).toDataURL()}">`;}catch(_){return '';}}).join(''):'';
+    h+=`<div class="pp" style="text-align:left"><div class="prhead"><b>PaceGuard LATITUDE　比較結果</b><span>印刷 ${new Date().toLocaleString('ja-JP')}</span></div>
+      <div>患者ID：<b>${escH($('fId').value||'—')}</b>　照会日：${escH($('fDate').value||'—')}　機種：${escH($('fDev').value||'—')}</div>
+      ${res.innerHTML.trim()?res.innerHTML:'<div class="verdict info"><h2>比較結果がありません</h2>評価を行ってから印刷してください。</div>'}
+      ${ov?`<div style="margin-top:8px"><b>重ね描き</b>（青＝比較相手／橙＝今回、赤＝形が違う所）</div>${ov}`:''}
+      <div class="hint" style="margin-top:8px">研究・院内検証用の参考情報です。最終判断は医師が行ってください。</div></div>`;
+  }
+  h+=await pdfPagesHtml();
+  pa.innerHTML=h;
+  await Promise.all([...pa.querySelectorAll('img')].map(im=>im.complete?0:new Promise(r=>{im.onload=im.onerror=r;})));
+  window.print();
+}
+function alertMsg(t){$('result').insertAdjacentHTML('afterbegin',`<div class="verdict info"><h2>${t}</h2></div>`);}
+window.addEventListener('afterprint',()=>{$('printArea').innerHTML='';});
+document.addEventListener('click',e=>{if(e.target.closest('.prWith'))doPrint(true);else if(e.target.closest('.prPlain'))doPrint(false);});
+$('evalBtn').onclick=()=>runEval('prev');
+$('autoEval').addEventListener('change',()=>{try{localStorage.setItem('pg_lat_autoeval',$('autoEval').checked?'1':'0');}catch(_){}});
+$('evalBaseBtn').onclick=()=>runEval('base');
+let lastEval=null; // 「この波形を基準にする」用
+document.addEventListener('click',async e=>{if(!e.target.closest('#setBaseBtn')||!lastEval)return;
+  const st=await readBaseline(lastEval.id);if(!st){$('setBaseMsg').textContent='保存先に接続できません';return;}
+  st.baseline={date:lastEval.date,key:lastEval.key,feat:lastEval.feat,ts:lastEval.ts,pdf:lastEval.pdf||null};await writeBaseline(lastEval.id,st);
+  $('setBaseMsg').innerHTML='<span class="ok-t">✅ '+(lastEval.date||'今回')+'の波形を基準にしました</span>';});
+async function runEval(mode){
+  const auto=mode==='auto';
+  await ensureDir(); // 記憶したフォルダに接続（最初に呼ぶ：許可ダイアログはクリック直後のみ可）
+  if(auto&&!dirHandle){$('result').innerHTML='<div class="verdict info"><h2>自動評価できませんでした</h2>保存フォルダに接続されていません。「🔍 前回と比較」か「📌 基準と比較」を押してください（許可を聞かれたら「許可」）。</div>';return;}
+  if(auto&&!$('fId').value.trim()){$('result').innerHTML='<div class="verdict info"><h2>患者IDを決めてください</h2>IDを自動で読み取れませんでした。上の候補を押すかIDを入力してから、評価ボタンを押してください。</div>';return;}
+  const id=$('fId').value.trim();
+  if(!pdfLoaded){ $('result').innerHTML=`<div class="verdict info"><h2>PDFを読み込んでください</h2>${dirHandle?'フォルダは接続済みです。':''}LATITUDEのPDFをドロップしてから、もう一度押してください。</div>`;return; }
+  if(!curSigs.length){ $('result').innerHTML='<div class="verdict bad"><h2>波形が見つかりません</h2>S-ECGの段を自動で見つけられませんでした。使いたい段をまとめてドラッグして範囲を指定してください。</div>';return; }
+  if(!id){ $('result').innerHTML='<div class="verdict bad"><h2>患者IDがありません</h2>IDを入力してください。</div>';return; }
+  const pool=curPool&&!curPool.error?curPool:null;
+  const store=await readBaseline(id);
+  // レポートは照会日ごとに保存。前回＝今回より前の日付で一番新しいもの／基準＝固定した基準（評価で上書きしない）
+  const dateKey=d=>{const m=String(d||'').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})(?:\D+(\d{1,2}):(\d{2}))?/);return m?m[1]+m[2].padStart(2,'0')+m[3].padStart(2,'0')+(m[4]||'0').padStart(2,'0')+(m[5]||'00'):'';};
+  const reports=store?(store.reports||(store.feat?[{date:store.date,key:dateKey(store.date),feat:store.feat,ts:store.ts||0}]:[])):[];
+  const curKey=dateKey($('fDate').value);
+  const older=reports.filter(r=>!evLike(r)&&(curKey?(r.key&&r.key<curKey):true)); // 以前の記録に混ざったイベントは比較相手にしない
+  const baseRep=store&&store.baseline?store.baseline:(reports.filter(r=>!evLike(r)).length?[...reports.filter(r=>!evLike(r))].sort((a,b)=>a.key<b.key?-1:1)[0]:null);
+  const prevRep=[...older].sort((a,b)=>a.key<b.key?1:-1)[0]||null;
+  if(auto)mode=prevRep?'prev':'base'; // 自動：前の日付があれば前回、なければ基準（同じ日付でも比べられる）
+  const ref=mode==='base'?baseRep:prevRep,refLabel=mode==='base'?'基準':'前回';
+  const pooledOf=f=>!f?null:Array.isArray(f)?(f.find(Boolean)||null):f; // 以前の保存形式（上段・下段）にも対応
+  const bp=ref?pooledOf(ref.feat):null;
+  const rowsSave=curFeat.map((f,k)=>{const u=curPool&&curPool.rowInfo[k]||{};return f&&!f.error?{hr:f.hr,amp:f.amp,width:f.width,nBeats:f.nBeats,noise:curNoise[k].max,used:!!u.used,reason:u.reason||'',corr:u.corr??null}:{error:true};});
+  const poolSave=pool?{tpl:pool.tpl,amp:pool.amp,ampVar:pool.ampVar,width:pool.width,on:pool.on,off:pool.off,pol:pool.pol,hr:pool.hr,nBeats:pool.nBeats,rows:rowsSave,rh:(r0=>r0&&r0.enough?{cv:r0.cv,madsd:r0.madsd,irr:r0.irr,af:r0.af,bigem:r0.bigem,hr:r0.hr}:null)(curPool&&curPool.rhythm)}:null;
+  const now={id,name:$('fName').value,date:$('fDate').value,device:$('fDev').value,ts:Date.now(),tx:meta.tx||'',clinic:meta.clinic||'',events:meta.events||[],secg:meta.secg||''};
+  const isEvent=(!now.secg&&(now.events||[]).length>0)||curSigs.length>=EV_ROWS; // イベントの記録（見出し、または波形が3段以上）：その日の比較相手（前回・基準）にはしない
+  let nowPdf=null; // 患者PDFフォルダに整理したこのPDFの場所（基準・前回のPDFを後で表示するために記録）
+  const saveStore=async(histEntry)=>{
+    nowPdf=await archivePdf(id,now);
+    // 元のPDFを残さない設定で、まとめて作ったイベントのPDF：イベントのページごとに波形の画像を作って、別々の記録にする
+    const extra=[];
+    if(!KEEP_PDF&&isEvent&&nowPdf&&/\.png$/i.test(nowPdf)&&lastPdfDoc&&(lastPdfDoc.numPages||1)>1){
+      try{const pages=await eventPagesDoc(lastPdfDoc);
+        if(pages.length>1){const mine=pages.find(x=>x.page===curPageNo)||pages[0],dir=await dirOfPath(nowPdf),stem=nowPdf.split('/').pop().replace(/\.png$/i,''),folderPath=nowPdf.split('/').slice(0,-1).join('/');
+          now.events=[{no:mine.no,dt:mine.dt,type:mine.type}];
+          for(const ev of pages){if(ev===mine||!dir)continue;const fn=`${stem}_イベント${ev.no}.png`;const mt=await saveWaveImg(dir,fn,lastPdfDoc,ev.page);
+            extra.push({imgScale:mt.imgScale,pdf:`${folderPath}/${fn}`,page:0,date:now.date,tx:now.tx,clinic:now.clinic,events:[{no:ev.no,dt:ev.dt,type:ev.type}],secg:'',key:curKey,feat:null,ts:now.ts,level:null});}}}catch(_){}
+    }
+    // PDF1枚ごとの記録（照会日が同じ別のイベント記録でも上書きしない）
+    const old=((store&&store.saves)||[]).find(x=>nowPdf&&x.pdf===nowPdf)||null;
+    const saves=((store&&store.saves)||[]).filter(x=>!(nowPdf&&x.pdf===nowPdf));
+    // 最初の判定（評価し直しても消さない）と、医師の判断（要確認リストで入力）は引き継ぐ
+    const lvNow=histEntry&&histEntry.level!=null?histEntry.level:null;
+    const first=old?(old.first||(old.level!=null?{level:old.level,causes:old.causes||null,ref:old.ref||null,mode:old.mode||null,ts:old.ts}:null)):null;
+    saves.push({...(/\.png$/i.test(nowPdf||'')&&lastImgMeta?{imgScale:lastImgMeta.imgScale}:{}),first:first||(lvNow!=null?{level:lvNow,causes:histEntry.causes||null,ref:histEntry.ref||null,mode:histEntry.mode||null,ts:now.ts}:null),review:old&&old.review||null,...(old&&old.rvHidden?{rvHidden:true}:{}),pdf:nowPdf,page:curPageNo,date:now.date,tx:now.tx,clinic:now.clinic,events:now.events,secg:now.secg,key:curKey,feat:poolSave,ts:now.ts,level:histEntry&&histEntry.level!=null?histEntry.level:null,causes:histEntry&&histEntry.causes||null,ref:histEntry&&histEntry.ref||null,mode:histEntry&&histEntry.mode||null});
+    for(const x of extra){const i=saves.findIndex(y=>y.pdf===x.pdf);if(i>=0)saves.splice(i,1);saves.push(x);}
+    // イベントのPDF（S-ECGの記録日時がなくイベントの見出しがある）は、その日の比較相手（前回・基準）にしない。PDFごとの記録（saves）にだけ残す
+    const rs=isEvent?[...reports]:reports.filter(r=>!(curKey&&r.key===curKey));if(!isEvent)rs.push({date:now.date,key:curKey,feat:poolSave,ts:now.ts,pdf:nowPdf});rs.sort((a,b)=>a.key<b.key?-1:1);
+    const hist=((store&&store.history)||[]).filter(h=>!(curKey&&dateKey(h.date)===curKey));if(histEntry)hist.push(histEntry);
+    // 同じS-ECGの記録（記録日時が同じ）を何度も保存した時は、新しい1つだけ残す（最初の判定・医師の判断は引き継ぎ、古いファイルは消す）
+    let baseOut=baseRep?{...baseRep}:null;
+    const mine0=saves.find(x=>x.pdf===nowPdf),myKey=sameRecKey(mine0);
+    if(!isEvent&&myKey&&nowPdf){const mine=mine0;
+      for(const o of saves.filter(x=>x.pdf!==nowPdf&&sameRecKey(x)===myKey)){
+        if(mine){if(o.first&&(!mine.first||(o.first.ts||0)<(mine.first.ts||0)))mine.first=o.first;if(o.review&&!mine.review)mine.review=o.review;if(o.rvHidden)mine.rvHidden=true;}
+        saves.splice(saves.indexOf(o),1);rs.forEach(r=>{if(r.pdf===o.pdf)r.pdf=nowPdf;});if(baseOut&&baseOut.pdf===o.pdf)baseOut.pdf=nowPdf;
+        await trashFile(o.pdf);}}
+    await writeBaseline(id,{...now,reports:rs,history:hist,saves,baseline:baseOut||(isEvent?null:{date:now.date,key:curKey,feat:poolSave,ts:now.ts,pdf:nowPdf})});
+  };
+  // 段ごとの一覧（使った段・除外した段と理由）
+  const ic=l=>l===2?'⚠️':l===1?'🟡':'✅';
+  const rowNotes=[];
+  curFeat.forEach((f,k)=>{const u=curPool&&curPool.rowInfo[k];if(!u)return;
+    if(u.tachy||u.fast)rowNotes.push({lv:1,row:`${k+1}段目`,why:u.reason});
+    else if(u.outlier)rowNotes.push({lv:1,row:`${k+1}段目`,why:u.reason});
+    else if(u.reason==='ノイズ疑い')rowNotes.push({lv:1,row:`${k+1}段目`,why:`ノイズ疑い（${curNoise[k].max}／閾値 ${curNoise[k].thr}）`});});
+  const rh=curPool&&curPool.rhythm;
+  if(rh&&rh.pvc)rowNotes.push({lv:0,info:true,row:'PVC',why:`心室性期外収縮の疑い ${rh.pvc}拍（形が違って早く来る拍：${rh.pvcRows.map(n=>n+'段目').join('・')}）`});
+  const pvcTag=rh&&rh.pvc?`＋ PVCあり（${rh.bigem?'二段脈・':''}${rh.pvc}拍）`:'';
+  if(rh&&rh.af)rowNotes.unshift({lv:1,row:'リズム',why:`RR間隔が不規則（心房細動の疑い：RRのばらつき ${Math.round(rh.cv*100)}%・連続する差 ${Math.round(rh.madsd*100)}%）`});
+  else if(rh&&rh.bigem&&!rh.pvc)rowNotes.push({lv:1,row:'リズム',why:'RRが規則的に長短を繰り返す（二段脈などの可能性）'});
+  const rowTable=`<div style="margin-top:12px"><b>段ごとの記録</b>（${curSigs.length}段）</div>
+    <table class="crit"><tr><th>段</th><th>拍</th><th>心拍</th><th>波高</th><th>QRS幅</th><th>代表拍との形</th><th>ノイズ</th><th>扱い</th></tr>
+    ${curFeat.map((f,k)=>{const u=curPool&&curPool.rowInfo[k]||{},nz=curNoise[k];if(!f||f.error)return `<tr class="lv1"><td>${k+1}</td><td colspan="7">${f&&f.error||'読み取れません'}</td></tr>`;
+      const lv=u.used?0:1;return `<tr class="lv${lv}"><td>${k+1}</td><td>${f.nBeats}</td><td>${f.hr??'—'} bpm</td><td>${f.amp.toFixed(2)} mV</td><td>${f.width} ms</td><td>${u.corr!=null?u.corr.toFixed(2):'—'}</td><td>${nz.max}/${nz.thr}</td><td>${u.used?'✅ 使用':'🟡 除外：'+u.reason}</td></tr>`;}).join('')}</table>
+    <div class="hint">全段の拍をまとめて代表拍を作り、頻拍・ノイズ・形が大きく違う段は代表拍から外しています。</div>`;
+  const measure=f=>`代表拍（${pool.usedRows.length}段・${f.nBeats}拍）：心拍 ${f.hr??'—'}bpm・波高 ${f.amp.toFixed(2)}mV（呼吸のゆれ ±${Math.round(f.ampVar*100)}%）・QRS幅 ${f.width}ms・向き ${f.pol>0?'上':'下'}`;
+  if(!pool){$('result').innerHTML=`<div class="verdict bad"><h2>代表拍を作れませんでした</h2>${curPool&&curPool.error||'波形を読み取れませんでした'}</div>${rowTable}`;$('overlayCard').hidden=true;return;}
+  // イベントのPDF：不整脈のときの記録なので、基準・前回とは比べない（判定を出さない）。保存してタイムラインで見られるようにする
+  if(isEvent){
+    await saveStore({date:now.date,note:'イベント'});
+    const evs=(now.events||[]).map(e=>`${escH(e.no)}：${escH(String(e.dt).replace(/\s*JST/,''))}${e.type?`（${escH(e.type)}）`:''}`).join('、');
+    $('result').innerHTML=`<div class="verdict info"><h2>⚡ イベントの記録（比較の対象外）</h2>イベント ${evs||'—'} の波形を保存しました。イベントの波形は不整脈のときの記録なので、基準・前回とは比べません。タイムラインの「⚡ イベントだけ」で見られます。
+      <div class="hint" style="margin-top:6px">${measure(pool)}</div>${rowNotes.length?`<div class="cause">記録の中の所見：${rowNotes.map(x=>`${x.info?'ℹ️':ic(x.lv)} ${x.row}：${x.why}`).join('　')}</div>`:''}</div>${rowTable}`;
+    $('overlayCard').hidden=true;showRhythm();tlAuto(id);rvLoad();return;
+  }
+  if(!bp||!bp.tpl){
+    await saveStore({date:now.date,note:'登録'});
+    const first=!baseRep;
+    const why=isEvent?'イベントの記録として保存しました（基準・前回にはS-ECGのレポートを使います）':first?((store&&store.feat&&!store.reports)?'新しい計測方式で登録しました（この波形が基準になります）':'初回登録しました（この波形が基準になります）'):'比較できる前の日付のレポートがありません';
+    $('result').innerHTML=`<div class="verdict info"><h2>${why}</h2>この患者（ID:${id}）の${now.date||'今回'}のレポートとして保存しました。${first?'次から「📌 基準と比較」で、同じ日付のレポートでも比べられます。':'同じ日付どうしを比べるときは「📌 基準と比較」を使ってください。'}${curKey?'':'<br><b>※照会日が読み取れていません。照会日を入力すると前後関係で正しく比較できます。</b>'}${dirHandle?'':'<br><b>※フォルダ未選択のため保存できていません。</b>'}
+      <div class="hint" style="margin-top:6px">${measure(pool)}</div>${rowNotes.length?`<div class="cause">記録の中の所見：${rowNotes.map(x=>`${x.info?'ℹ️':ic(x.lv)} ${x.row}：${x.why}`).join('　')}</div>`:''}</div>${rowTable}`;
+    $('overlayCard').hidden=true; showRhythm(); tlAuto(id); rvLoad(); return;
+  }
+  const r={k:0,b:bp,c:pool,...compareFeat(bp,pool)};
+  const sign=v=>(v>0?'+':'')+v;
+  const lvCorr=r.corr<0.80?2:r.corr<0.90?1:0,ar=r.ampRatio,hiT=1+r.tol*1.6,hiY=1+r.tol,lvAmp=(ar>hiT||ar<1/hiT)?2:(ar>hiY||ar<1/hiY)?1:0;
+  const lvW=r.wGate?0:(r.dW>=30||(r.c.width>=120&&r.dW>=20))?2:r.dW>=20?1:0,lvP=r.polFlip?2:0;
+  const crit=[
+    {lv:lvCorr,name:'QRSの形',prev:'—',cur:'—',chg:`相関 ${r.corr.toFixed(3)}`,rule:'0.90未満で注意／0.80未満で要確認',why:'QRSの形が変わった（ブロック・リード位置など）'},
+    {lv:lvAmp,name:'波高',prev:`${r.b.amp.toFixed(2)} mV`,cur:`${r.c.amp.toFixed(2)} mV`,chg:`${Math.round(ar*100)}%`,rule:`±${Math.round(r.tol*100)}%を超えると注意／±${Math.round(r.tol*160)}%で要確認（呼吸のゆれから自動）`,why:ar<1?'波高が低下':'波高が増加'},
+    {lv:lvW,name:'QRS幅',prev:`${r.b.width} ms`,cur:`${r.c.width} ms`,chg:`${sign(r.dW)} ms`,rule:r.wGate?'形がほぼ同じ（相関0.97以上）なので、幅の差は測定のぶれとして判定に使わない':'+20msで注意／+30ms（120ms以上なら+20ms）で要確認',why:'QRSが広がった（脚ブロック等）'},
+    {lv:lvP,name:'向き',prev:r.b.pol>0?'上向き':'下向き',cur:r.c.pol>0?'上向き':'下向き',chg:r.polFlip?'逆転':'同じ',rule:'逆転で要確認',why:'主な振れの向きが逆転'},
+    {lv:0,name:'心拍数（参考）',prev:`${r.b.hr??'—'} bpm`,cur:`${r.c.hr??'—'} bpm`,chg:'',rule:'判定には使わない',why:''},
+  ];
+  const level=Math.max(...crit.map(x=>x.lv),...rowNotes.map(x=>x.lv),0);
+  const cls=['ok','warn','bad'][level],title=[`✅ 変化なし（${refLabel}と同等）`,'🟡 注意 — 変化の兆候・記録内の所見','⚠️ 要確認 — 明らかな変化'][level]+(pvcTag?`<span style="font-size:15px;font-weight:800;color:var(--accent2);margin-left:8px">${pvcTag}</span>`:'')+(auto?'<small style="font-size:12px;font-weight:400;opacity:.7">（自動評価）</small>':'');
+  const causes=[...crit.filter(x=>x.lv>0).map(x=>({lv:x.lv,txt:`${x.why}（${x.prev!=='—'?x.prev+'→'+x.cur:x.chg}）`})),...rowNotes.filter(x=>!x.info).map(x=>({lv:x.lv,txt:`${x.row}：${x.why}`}))].sort((a,b)=>b.lv-a.lv);
+  const causeHtml=`<div class="cause">主な原因：${causes.length?causes.slice(0,4).map(x=>`${ic(x.lv)} ${x.txt}`).join('　'):'なし（すべての項目が基準内）'}</div>`;
+  $('result').innerHTML=`<div class="verdict ${cls}"><h2>${title}</h2>
+    <div>比較：${ref.date||'?'}（${refLabel}） → ${now.date||'?'}（今回）</div>
+    ${causeHtml}
+    <div style="margin-top:12px"><b>総合（全段の代表拍どうし）</b>　${ic(Math.max(...crit.map(x=>x.lv)))}　<span class="hint">今回 ${pool.usedRows.length}段・${pool.nBeats}拍／${refLabel} ${r.b.nBeats??'—'}拍</span></div>
+    <table class="crit"><tr><th>項目</th><th>${refLabel}</th><th>今回</th><th>変化</th><th>判定基準</th><th>判定</th></tr>
+    ${crit.map(x=>`<tr class="lv${x.lv}"><td>${x.name}</td><td>${x.prev}</td><td>${x.cur}</td><td>${x.chg}</td><td class="hint">${x.rule}</td><td>${x.name==='心拍数（参考）'?'—':ic(x.lv)}</td></tr>`).join('')}</table>
+    ${rowTable}
+    <div class="hint" style="margin-top:6px">下の重ね描きで、形が違う部分を赤く塗っています（青＝${refLabel}、橙＝今回）。</div></div>`;
+  lastEval={id,date:now.date,key:curKey,feat:poolSave,ts:now.ts,name:now.name,device:now.device};
+  $('result').insertAdjacentHTML('beforeend','<div style="margin-top:8px"><button id="setBaseBtn">📌 今回の波形を基準にする</button> <span class="hint" id="setBaseMsg"></span></div>');
+  await saveStore({date:now.date,ref:ref.date,mode,level,corr:+r.corr.toFixed(3),amp:pool.amp,ampRatio:+r.ampRatio.toFixed(2),width:pool.width,dW:r.dW,pol:pool.pol,hr:pool.hr,rows:rowsSave,causes:causes.map(x=>x.txt),af:!!(rh&&rh.af)});
+  lastEval.pdf=nowPdf;
+  $('overlayCard').hidden=false; // 先に表示してから描く（幅を正しく取るため）
+  drawBeat(r);
+  showRhythm();
+  tlAuto(id); rvLoad();
+};
+// 代表拍の重ね描き（実寸：横 ms・縦 mV。青＝前回、橙＝今回。QRSの始まりと終わりに縦線）
+let lastBeatR=null;
+function drawBeat(r,ovId='overlay',diffId='diff'){
+  const cv=$(ovId),W=Math.max(320,cv.parentElement.clientWidth-2||900),H=240,c=hiDPI(cv,W,H);
+  const A=r.b.tpl,B=r.c.tpl,L=A.length,mx=Math.max(0.3,...A.map(Math.abs),...B.map(Math.abs))*1.12,X=j=>j*(W-1)/(L-1),Y=v=>H/2-v/mx*(H/2-18),xMs=ms=>X(idxOf(ms));
+  // 方眼：横 10ms（細）／50ms（太）、縦 0.1mV（細）／0.5mV（太）
+  lastBeatR=r;const P=pal();c.fillStyle=P.bg;c.fillRect(0,0,W,H);
+  const vgrid=(st,a)=>{c.strokeStyle=a;c.lineWidth=1;c.beginPath();for(let ms=-100;ms<=150;ms+=st){const x=Math.round(xMs(ms))+.5;c.moveTo(x,0);c.lineTo(x,H);}
+    const mvSt=st===10?0.1:0.5;for(let v=0;v<=mx;v+=mvSt){for(const s2 of [1,-1]){const y=Math.round(Y(v*s2))+.5;c.moveTo(0,y);c.lineTo(W,y);}}c.stroke();};
+  vgrid(10,P.minor);vgrid(50,P.major);
+  c.fillStyle=P.text;c.font='11px "Segoe UI",sans-serif';for(let ms=-100;ms<=150;ms+=50)c.fillText(ms+' ms',xMs(ms)+4,H-5);c.fillText(`1目盛り 0.1 mV`,6,13);
+  // 形が違う所（差が波高の20%を超える）を赤い帯で
+  const thrD=0.2*Math.max(r.b.amp,r.c.amp);
+  {let st=-1;for(let j=0;j<=L;j++){const v=j<L?B[j+r.lag]:null,on=j<L&&v!=null&&!isNaN(v)&&!isNaN(A[j])&&Math.abs(A[j]-v)>thrD;if(on&&st<0)st=j;
+    if(!on&&st>=0){const g=c.createLinearGradient(0,0,0,H);g.addColorStop(0,`rgba(${P.bad},.26)`);g.addColorStop(1,`rgba(${P.bad},.05)`);c.fillStyle=g;c.fillRect(X(st)-2,0,X(j-1)-X(st)+4,H-16);st=-1;}}}
+  const mark=(f,col)=>{c.strokeStyle=col;c.setLineDash([3,4]);c.lineWidth=1;for(const ms of [f.on,f.off]){if(ms==null)continue;const x=Math.round(xMs(ms))+.5;c.beginPath();c.moveTo(x,12);c.lineTo(x,H-18);c.stroke();}c.setLineDash([]);};
+  mark(r.b,P.prev);mark(r.c,P.cur);
+  const path=(arr,off)=>cx=>{let st=false;for(let j=0;j<L;j++){const v=arr[j+off];if(v==null||isNaN(v)){st=false;continue;}const x=X(j),y=Y(v);st?cx.lineTo(x,y):cx.moveTo(x,y);st=true;}};
+  glowLine(c,path(A,0),P.prev,2);glowLine(c,path(B,r.lag),P.cur,2.2);
+  // 波高とQRS幅の書き込み
+  const ann=(arr,off,f,col,xLab,yRow)=>{let a=-1e9,b=1e9;for(let j=idxOf(-60);j<=idxOf(80);j++){const v=arr[j+off];if(v==null||isNaN(v))continue;if(v>a)a=v;if(v<b)b=v;}
+    c.strokeStyle=col;c.fillStyle=col;c.lineWidth=2;c.beginPath();c.moveTo(xLab,Y(a));c.lineTo(xLab,Y(b));c.moveTo(xLab-5,Y(a));c.lineTo(xLab+5,Y(a));c.moveTo(xLab-5,Y(b));c.lineTo(xLab+5,Y(b));c.stroke();
+    c.font='bold 12px "Segoe UI",sans-serif';c.fillText(`${(a-b).toFixed(2)} mV`,xLab+8,Y((a+b)/2)+4);
+    if(f.on!=null&&f.off!=null){const xa=xMs(f.on),xb=xMs(f.off);c.beginPath();c.moveTo(xa,yRow);c.lineTo(xb,yRow);c.moveTo(xa,yRow-4);c.lineTo(xa,yRow+4);c.moveTo(xb,yRow-4);c.lineTo(xb,yRow+4);c.stroke();c.fillText(`QRS ${f.width} ms`,xb+6,yRow+4);}};
+  ann(A,0,r.b,P.prev,xMs(-95),22);ann(B,r.lag,r.c,P.cur,xMs(-80),40);
+  // 差分
+  const d=$(diffId),DH=80,dc=hiDPI(d,W,DH);monitorGrid(dc,W,DH,(xMs(10)-xMs(0)),DH/2);
+  glowLine(dc,cx=>{for(let j=0;j<L;j++){const v=(A[j]-(B[j+r.lag]??A[j])),x=X(j),y=DH/2-v/mx*(DH/2-8);j?cx.lineTo(x,y):cx.moveTo(x,y);}},P.diff,1.4);
+  dc.fillStyle=P.text;dc.font='11px "Segoe UI",sans-serif';dc.fillText('差（比較相手 − 今回）',8,14);
+}
+function drawOverlay(a,b,lag,ovId='overlay',diffId='diff'){const cv=$(ovId);const W=cv.parentElement.clientWidth||900;cv.width=W;cv.height=180;const c=cv.getContext('2d');c.clearRect(0,0,W,180);
+  const A=normalize(Array.from(a)),B=normalize(Array.from(b));const mx=Math.max(1,...A.map(Math.abs),...B.map(Math.abs));
+  const pl=(arr,col,off)=>{c.strokeStyle=col;c.lineWidth=1.8;c.beginPath();for(let i=0;i<arr.length;i++){const x=i*(W-1)/(arr.length-1),y=90-(arr[i+off]||arr[i])/mx*72;i?c.lineTo(x,y):c.moveTo(x,y);}c.stroke();};
+  c.strokeStyle='#1a2740';c.beginPath();c.moveTo(0,90);c.lineTo(W,90);c.stroke();pl(A,'#38bdf8',0);pl(B,'#fbbf24',lag);
+  const d=$(diffId);d.width=W;d.height=80;const dc=d.getContext('2d');dc.clearRect(0,0,W,80);dc.strokeStyle='#f87171';dc.lineWidth=1.4;dc.beginPath();
+  for(let i=0;i<A.length;i++){const df=(A[i]-(B[i+lag]||B[i])),x=i*(W-1)/(A.length-1),y=40-df/mx*34;i?dc.lineTo(x,y):dc.moveTo(x,y);}dc.stroke();
+  dc.fillStyle='#7c8aa0';dc.font='11px sans-serif';dc.fillText('差分（前回−今回）',8,14);}
+
+// ===== デモ（PDFなしで動作確認）=====
+$('demoBtn').onclick=()=>{
+  function ecg(N,{amp=1,width=1}={}){const o=new Float32Array(N),fs=250,beat=60/75*fs;const w=t=>{const g=(c,ww,a)=>a*Math.exp(-((t-c)**2)/(2*ww*ww));let v=0;v+=g(.16*fs,.03*fs,.12);v+=g(.33*fs,.012*fs*width,1*amp);v+=g(.36*fs,.012*fs*width,-.3*amp);v+=g(.55*fs,.05*fs,.22);return v;};for(let i=0;i<N;i++)o[i]=w(i%beat)+(Math.random()-.5)*.05;return o;}
+  const base={id:'DEMO001',name:'',date:'2026年06月01日',template:Array.from(foldTemplate(ecg(1000,{}))),history:[]};
+  const now=foldTemplate(ecg(1000,{width:2.0,amp:0.8}));
+  const a=Float32Array.from(base.template),b=now;const {corr,lag}=bestXcorr(a,b,50);
+  const ampRatio=(std(Array.from(b)))/(std(Array.from(a)));const widthRatio=qrsWidth(b)/qrsWidth(a);
+  $('fId').value='DEMO001';$('fName').value='';$('fDate').value='2026年09月28日';$('fDev').value='EMBLEM MRI S-ICD';
+  $('result').innerHTML=`<div class="verdict bad"><h2>⚠️ 変化あり — 要確認（デモ）</h2><div>前回:2026年06月01日 → 今回:2026年09月28日</div><div>・S-ECG波形の相関が低下（${corr.toFixed(3)}）＝形態変化（新規伝導異常/リード移動などを要確認）</div><div class="metrics"><div class="m flag"><div class="k">波形相関</div><div class="v">${corr.toFixed(3)}</div></div><div class="m"><div class="k">振幅比</div><div class="v">${(ampRatio*100).toFixed(0)}%</div></div><div class="m"><div class="k">幅比</div><div class="v">${widthRatio.toFixed(2)}倍</div></div></div></div>`;
+  $('row2Wrap').hidden=true;$('overlayCard').hidden=false;drawOverlay(a,b,lag);
+};
+// ===== ダウンロードフォルダの自動比較：新しいPDFが来たら自動で読み込み→評価→通知 =====
+let watchDir=null,watchTimer=null,watchBusy=false,watchSeen=new Map(),watchLog=[];
+const WSEEN='pg_lat_watch_seen';
+try{for(const [k,v] of JSON.parse(localStorage.getItem(WSEEN)||'[]'))watchSeen.set(k,v);}catch(_){}
+const wkey=f=>f.name+'|'+f.size+'|'+f.lastModified;
+function saveSeen(){try{localStorage.setItem(WSEEN,JSON.stringify([...watchSeen].slice(-500)));}catch(_){}}
+function setWatchStatus(h){$('watchStatus').innerHTML=h;const on=!!watchDir;if(on){$('startBanner').hidden=true;$('startScreen').hidden=true;}$('liveDot').classList.toggle('on',on);$('liveTxt').textContent=on?'自動比較中：'+watchDir.name:'自動比較 停止中';}
+// ☀／🌙：白と黒の切り替え（覚えておく）。波形の図も描き直す
+function themeBtnLabel(){$('themeBtn').textContent=document.documentElement.dataset.theme==='dark'?'☀':'🌙';}
+themeBtnLabel();
+$('themeBtn').onclick=()=>{const t=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=t;try{localStorage.setItem('pg_lat_theme',t);}catch(_){}
+  themeBtnLabel();try{if(curSigs.length)showSigPreview();if(lastBeatR&&!$('overlayCard').hidden)drawBeat(lastBeatR);}catch(_){}};
+// リズム（RR間隔）のグラフと判定を、結果の下に出す
+function showRhythm(){
+  const rh=curPool&&curPool.rhythm;if(!rh||!$('result'))return;
+  const box=document.createElement('div');box.style.marginTop='12px';
+  if(!rh.enough){box.innerHTML=`<b>リズム（RR間隔）</b>　<span class="hint">RR間隔が少ないため判定できません（${rh.n}個）</span>${rh.pvc?`　<span style="font-weight:800;color:var(--accent2)">ℹ️ PVCあり（心室性期外収縮の疑い ${rh.pvc}拍）</span>`:''}`;$('result').appendChild(box);return;}
+  const verdict=rh.af?'<span class="warn-t" style="font-weight:800">🟡 不規則（心房細動の疑い）</span>':rh.bigem&&rh.pvc?'<span style="font-weight:800;color:var(--accent2)">ℹ️ PVCの二段脈</span>':rh.bigem?'<span class="warn-t" style="font-weight:800">🟡 規則的な長短の繰り返し（二段脈などの可能性）</span>':'<span class="ok-t" style="font-weight:800">✅ 規則的</span>';
+  box.innerHTML=`<b>リズム（RR間隔）</b>　${verdict}${rh.pvc?`　<span style="font-weight:800;color:var(--accent2)">ℹ️ PVCあり（心室性期外収縮の疑い ${rh.pvc}拍）</span>`:''}<div class="hint">RR 中央値 ${Math.round(rh.med)} ms（${rh.hr} bpm）・ばらつき ${Math.round(rh.cv*100)}%・連続するRRの差 ${Math.round(rh.madsd*100)}%・大きく変わった割合 ${Math.round(rh.irr*100)}%（${rh.n}個）　<span title="心房細動の疑い：ばらつき8%以上 かつ 連続する差6%以上 かつ 大きく変わった割合50%以上（二段脈のような規則的な交互は除く）">ⓘ判定の目安</span></div><canvas class="rrcv"></canvas>`;
+  $('result').appendChild(box);
+  const cv=box.querySelector('canvas'),W=Math.max(320,box.clientWidth||600),H=130,c=hiDPI(cv,W,H),P=pal();
+  c.fillStyle=P.bg;c.fillRect(0,0,W,H);
+  const all=rh.seqs.flat().filter(v=>v!=null),lo=Math.min(...all,rh.med*0.8),hi=Math.max(...all,rh.med*1.2),Y=v=>H-18-(v-lo)/(hi-lo||1)*(H-34);
+  const total=rh.seqs.reduce((a,q)=>a+q.length,0)+rh.seqs.length,X=i=>14+i*(W-28)/Math.max(1,total-1);
+  c.strokeStyle=P.minor;c.lineWidth=1;c.beginPath();for(let v=Math.ceil(lo/100)*100;v<=hi;v+=100){const y=Math.round(Y(v))+.5;c.moveTo(0,y);c.lineTo(W,y);}c.stroke();
+  c.fillStyle=P.text;c.font='11px "Segoe UI",sans-serif';for(let v=Math.ceil(lo/200)*200;v<=hi;v+=200)c.fillText(v+' ms',4,Y(v)-2);
+  c.strokeStyle=P.major;c.setLineDash([4,4]);c.beginPath();c.moveTo(0,Y(rh.med));c.lineTo(W,Y(rh.med));c.stroke();c.setLineDash([]);
+  let i=0;const col=rh.af||rh.bigem?(document.documentElement.dataset.theme==='dark'?'#fbbf24':'#d97706'):P.trace;
+  rh.seqs.forEach(sq=>{c.strokeStyle=col;c.lineWidth=1.5;c.beginPath();let pen=false;
+    sq.forEach(v=>{if(v==null){pen=false;i++;return;}const x=X(i),y=Y(v);pen?c.lineTo(x,y):c.moveTo(x,y);pen=true;i++;});c.stroke();
+    let j=i-sq.length;c.fillStyle=col;sq.forEach(v=>{if(v!=null){c.beginPath();c.arc(X(j),Y(v),3,0,7);c.fill();}j++;});i++;});
+  c.fillStyle=P.text;c.fillText('拍の順番（段ごとに区切り）→',W-170,H-4);
+}
+// 最新の結果を上のバーにも出す（押すと「患者と判定」へ）
+new MutationObserver(()=>{const h=document.querySelector('#result .verdict h2');const c=$('lastChip');if(!h){return;}
+  const v=h.closest('.verdict'),t=h.textContent.replace('（自動評価）','').trim(),id=$('fId').value.trim();
+  c.hidden=false;c.textContent=(id?'ID '+id+'　':'')+t;c.style.color=v.classList.contains('bad')?'var(--bad)':v.classList.contains('warn')?'var(--warn)':v.classList.contains('ok')?'var(--ok)':'var(--accent2)';c.style.fontWeight='700';
+}).observe($('result'),{childList:true,subtree:true});
+$('lastChip').onclick=()=>$('patientCard').scrollIntoView({block:'start'});
+// 自動比較の一覧：行を押すと、その患者のタイムラインを開く
+document.addEventListener('click',e=>{const tr=e.target.closest('#watchLog tr[data-id]');if(!tr)return;$('tlCard').open=true;tlLoad(tr.dataset.id).then(()=>$('tlCard').scrollIntoView({block:'start'}));});
+// ⚙ ボタン → 設定を開いてそこへ移動
+$('openSettings').onclick=()=>{$('settings').open=true;$('settings').scrollIntoView({block:'start'});};
+// 「PDFと段の読み取り」を開いているか閉じているかを覚える
+try{const v=localStorage.getItem('pg_lat_pdfsec');if(v)$('pdfSec').open=v==='1';}catch(_){}
+$('pdfSec').addEventListener('toggle',()=>{try{localStorage.setItem('pg_lat_pdfsec',$('pdfSec').open?'1':'0');}catch(_){};if($('pdfSec').open&&curSigs.length)showSigPreview();});
+// 画面のどこにPDFをドロップしても読み込む
+let dragDepth=0;
+document.addEventListener('dragenter',e=>{if([...(e.dataTransfer?.types||[])].includes('Files')){dragDepth++;document.body.classList.add('dragging');}});
+document.addEventListener('dragleave',()=>{if(--dragDepth<=0){dragDepth=0;document.body.classList.remove('dragging');}});
+document.addEventListener('dragover',e=>{if([...(e.dataTransfer?.types||[])].includes('Files'))e.preventDefault();});
+document.addEventListener('drop',e=>{dragDepth=0;document.body.classList.remove('dragging');if(e.target.closest&&e.target.closest('#drop'))return;
+  const f=[...(e.dataTransfer?.files||[])].find(f=>/\.pdf$/i.test(f.name)||f.type==='application/pdf');if(f){e.preventDefault();loadPDF(f);}});
+// タイムラインの波形をクリック → 大きく表示（Escかクリックで閉じる）
+document.addEventListener('click',e=>{const im=e.target.closest('#tlBase img,#tlCur img');if(im){const box=im.closest('#tlBase,#tlCur'),cap=box.querySelector('b');
+  $('lightbox').innerHTML=`<div class="cap">${cap?escH(cap.textContent):''}　（クリックかEscで閉じる）</div><img src="${im.src}">`;$('lightbox').classList.add('on');return;}
+  if(e.target.closest('#lightbox'))$('lightbox').classList.remove('on');});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')$('lightbox').classList.remove('on');});
+// 画面の幅が変わったら波形を描き直す
+let rsT=0;window.addEventListener('resize',()=>{clearTimeout(rsT);rsT=setTimeout(()=>{try{if(curSigs.length)showSigPreview();}catch(_){}},200);});
+function renderWatchLog(){
+  $('watchLog').innerHTML=watchLog.length?`<table class="crit"><tr><th>時刻</th><th>ファイル</th><th>患者ID</th><th>照会日</th><th>判定</th><th>主な原因</th></tr>${watchLog.map(r=>`<tr class="lv${r.lv>0?r.lv:0}"${r.id?` data-id="${escH(r.id)}" style="cursor:pointer" title="押すとこの患者のタイムラインを開きます"`:''}><td>${r.t}</td><td>${escH(r.file)}${r.moved?`<div class="hint">${escH(r.moved)}</div>`:''}</td><td>${escH(r.id||'—')}</td><td>${escH(r.date||'—')}</td><td>${escH(r.verdict)}</td><td class="hint">${escH(r.cause||'')}</td></tr>`).join('')}</table>`:'<div class="hint">まだ処理したPDFはありません。</div>';}
+// 通知：拡張機能が入っていれば拡張機能から出す（ファイルとして開いたページからは通知が出ないことがあるため）。無ければブラウザの通知
+function notifyResult(title,body,level){
+  if(document.documentElement.dataset.pgExt){window.postMessage({__pgNotify:true,title,body,level},'*');return;}
+  try{if(window.Notification&&Notification.permission==='granted')new Notification(title,{body});}catch(_){}
+}
+const escH=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function startWatch(dir,{processExisting=false}={}){
+  watchDir=dir;
+  if(!processExisting){for await(const [name,h] of dir.entries()){if(h.kind!=='file'||!/\.pdf$/i.test(name))continue;try{const f=await h.getFile();if(!watchSeen.has(wkey(f)))watchSeen.set(wkey(f),'existing');}catch(_){}}saveSeen();}
+  try{if(window.Notification&&Notification.permission==='default')await Notification.requestPermission();}catch(_){}
+  clearInterval(watchTimer);watchTimer=setInterval(pollWatch,3000);pollWatch();
+  setWatchStatus(`<span class="ok-t">👀 自動比較中：${escH(dir.name)}</span>（新しいPDFをダウンロードすると自動で評価します。このタブは開いたままにしてください）`+
+    (document.documentElement.dataset.pgExt?'　🔔 通知：拡張機能から出します':'<br><span class="warn-t">🔔 通知が出ない時は、chrome://extensions →「PaceGuard LATITUDE 取り込み」の「詳細」→「ファイルの URL へのアクセスを許可する」をオンにして、このタブを再読み込みしてください。</span>'));
+  $('watchStop').disabled=false;
+}
+const sizeSeen=new Map();
+async function pollWatch(){
+  if(!watchDir||watchBusy||purgeBusy)return;watchBusy=true;
+  try{
+    const todo=[];
+    for await(const [name,h] of watchDir.entries()){
+      if(h.kind!=='file'||!/\.pdf$/i.test(name))continue;
+      let f;try{f=await h.getFile();}catch(_){continue;}
+      const k=wkey(f);if(watchSeen.has(k))continue;
+      // ダウンロード中のファイルを避ける：サイズが2回続けて同じになってから処理
+      if(sizeSeen.get(name)!==f.size){sizeSeen.set(name,f.size);continue;}
+      todo.push(f);
+    }
+    todo.sort((a,b)=>a.lastModified-b.lastModified);
+    for(const f of todo){
+      watchSeen.set(wkey(f),'done');saveSeen();
+      setWatchStatus(`<span class="ok-t">⏳ 処理中：${escH(f.name)}</span>`);
+      const prevRes=$('result').innerHTML,prevOv=$('overlayCard').hidden;
+      $('result').innerHTML='';
+      await loadPDF(f,{forceEval:true});
+      if(curNonSicd){ // S-ICD以外：_対象外 フォルダへ移して、通知は出さない
+        let moved='';
+        if(!KEEP_PDF){try{await watchDir.removeEntry(f.name);moved='保存せずに削除（元のPDFを残さない設定）';}catch(_){}}
+        else{const to=await archiveNonSicd(f);moved=to?'コピー：'+to:'';if(to&&$('watchMove').checked){try{await watchDir.removeEntry(f.name);moved='→ '+to;}catch(_){}}}
+        watchLog.unshift({t:new Date().toLocaleTimeString('ja-JP'),file:f.name,moved,id:$('fId').value,date:$('fDate').value,verdict:'S-ICD以外（対象外）',cause:curNonSicd,lv:0});renderWatchLog();continue;}
+      const isEcg=curSigs.length>0;
+      if(!isEcg){ // 波形のない書類（一緒に印刷した他のPDF）：IDが読めれば患者フォルダへ一緒に整理し、画面の結果は前の波形のものに戻す
+        const id=$('fId').value.trim();if(id&&dirHandle)await archivePdf(id,{name:$('fName').value,date:$('fDate').value,device:$('fDev').value},'書類');
+        if(!KEEP_PDF&&id){try{await watchDir.removeEntry(f.name);}catch(_){}} // 元のPDFを残さない設定：波形のない書類は保存せずに消す
+        $('result').innerHTML=prevRes;$('overlayCard').hidden=prevOv;}
+      const h2=isEcg?document.querySelector('#result h2'):null,cause=isEcg?document.querySelector('#result .cause'):null;
+      const verdict=h2?h2.textContent.replace('（自動評価）','').trim():(isEcg?'評価なし':'波形なしの書類'+($('fId').value.trim()?(KEEP_PDF?'（患者フォルダへ）':'（保存せずに削除）'):'（IDが読めず残しました）'));
+      const lv=/要確認/.test(verdict)?2:/注意/.test(verdict)?1:0;
+      let moved='';
+      if(lastArchive&&lastArchive.file===f){moved=lastArchive.path;if($('watchMove').checked||!KEEP_PDF){try{await watchDir.removeEntry(f.name);moved='→ '+moved;}catch(_){moved='コピー：'+moved;}}else moved='コピー：'+moved;}
+      const row={t:new Date().toLocaleTimeString('ja-JP'),file:f.name,moved,id:$('fId').value,date:$('fDate').value,verdict,cause:cause?cause.textContent.replace(/^主な原因：/,''):'',lv};
+      watchLog.unshift(row);renderWatchLog();
+      if(isEcg&&!/イベントの記録/.test(verdict))notifyResult('PaceGuard LATITUDE：'+verdict,`ID ${row.id||'—'}　${row.date||''}\n${row.cause}`,lv);
+      if(isEcg&&!/イベントの記録/.test(verdict))document.title=(lv===2?'⚠️ ':lv===1?'🟡 ':'✅ ')+'PaceGuard LATITUDE';
+    }
+    setWatchStatus(`<span class="ok-t">👀 自動比較中：${escH(watchDir.name)}</span>（最終確認 ${new Date().toLocaleTimeString('ja-JP')}）`);
+  }catch(e){setWatchStatus(`<span class="warn-t">自動比較でエラー：${escH(e.message||e)}。「👀 自動比較を始める」を押し直してください。</span>`);clearInterval(watchTimer);watchDir=null;}
+  finally{watchBusy=false;}
+}
+$('watchStart').onclick=async()=>{
+  await ensureDir(); // 保存先（データフォルダ）にもここで接続しておく（許可はクリックの時しか出せない）
+  if(!dirHandle){setWatchStatus('<span class="warn-t">先に「📁 データフォルダを選択」で保存先を選んでください。</span>');return;}
+  try{
+    let dir=null;try{dir=await idb('readonly',st=>st.get('watch'));}catch(_){}
+    if(dir&&!$('watchPick').checked){if(await dir.requestPermission({mode:'readwrite'})!=='granted')dir=null;}else dir=null;
+    if(!dir){dir=await window.showDirectoryPicker({mode:'readwrite',startIn:'downloads'});try{await idb('readwrite',st=>st.put(dir,'watch'));}catch(_){}}
+    $('watchPick').checked=false;
+    await startWatch(dir,{processExisting:$('watchExisting').checked});
+  }catch(e){setWatchStatus(`<span class="warn-t">開始できませんでした（${escH(e.message||e)}）</span>`);}
+};
+$('watchStop').onclick=()=>{clearInterval(watchTimer);watchDir=null;$('watchStop').disabled=true;setWatchStatus('停止中');};
+// 自動比較の自動開始：前回のフォルダの許可が残っていれば、開いただけで始める。
+// 残っていなければ（Chromeの決まりで許可はクリックの時しか聞けない）、スタート画面を出して1回押してもらう。
+function showStartScreen(){const d=new Date();$('ssDate').textContent=`${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${'日月火水木金土'[d.getDay()]}）`;$('startScreen').hidden=false;$('ssStart').focus();}
+$('ssStart').onclick=async()=>{
+  if(!dirHandle&&!savedHandle){ // 初めての時：先にデータフォルダ（波形認識）を選ぶ → もう一度押して受け取りフォルダ
+    await $('pickFolder').onclick();
+    if(dirHandle){$('ssStart').textContent='▶ 受け取りフォルダ（LATITUDE）を選んで開始';$('ssNote2').textContent='データフォルダを選びました。もう一度押して、LATITUDEのPDFが入るフォルダを選んでください。';}
+    return;}
+  $('startScreen').hidden=true;$('watchStart').click();};
+$('ssLater').onclick=()=>{$('startScreen').hidden=true;$('startBanner').hidden=false;};
+$('startBanner').onclick=()=>$('watchStart').click();
+(async()=>{
+  let w=null,d=null;try{w=await idb('readonly',st=>st.get('watch'));d=await idb('readonly',st=>st.get('dir'));}catch(_){}
+  const granted=async h=>{try{return (await h.queryPermission({mode:'readwrite'}))==='granted';}catch(_){return false;}};
+  if(w&&d&&await granted(d)&&await granted(w)){
+    dirHandle=d;savedHandle=d;setFolderStatus('<span class="ok-t">フォルダ接続済み：'+escH(d.name)+'（自動）</span>');
+    await startWatch(w);return;
+  }
+  if(!watchDir)showStartScreen();
+})();
+renderWatchLog();
+</script>
+<div id="printArea"></div>
+</body>
+</html>
