@@ -253,6 +253,7 @@ try{document.documentElement.dataset.theme=localStorage.getItem('pg_lat_theme')|
         <button class="primary" id="evalBtn">🔍 前回と比較</button>
         <button class="primary" id="evalBaseBtn" style="background:linear-gradient(135deg,#a78bfa,#38bdf8)">📌 基準と比較</button>
         <span style="flex:1"></span>
+        <button class="ghost" id="aiCopy" hidden title="読み取った文字を、患者ID・シリアル番号・氏名などを消してからコピーします（Claudeに見せる用）">📋 Claude用にコピー（個人情報なし）</button>
         <button class="prWith ghost">🖨 比較結果つき</button><button class="prPlain ghost">🖨 PDFのまま</button>
       </div>
       <label class="hint row" style="margin-top:8px"><input type="checkbox" id="autoEval" checked> PDFを開いたら自動で評価する（前回があれば前回、なければ基準と比較）</label>
@@ -439,6 +440,16 @@ try{document.documentElement.dataset.theme=localStorage.getItem('pg_lat_theme')|
   </footer>
 </main>
 <div id="lightbox"></div>
+<div id="aiModal" hidden style="position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;padding:16px">
+  <div style="background:var(--card,#fff);color:var(--ink,#111);border-radius:12px;max-width:920px;width:100%;max-height:92vh;display:flex;flex-direction:column;padding:14px 16px;box-shadow:0 10px 40px rgba(0,0,0,.3)">
+    <b>📋 Claude用にコピー（個人情報なし）</b>
+    <div class="hint" style="margin:4px 0 8px">貼り付ける前に、下の中身に<b>患者ID・氏名・シリアル番号などが残っていないか</b>見てください。日付は、間隔はそのままで、全部同じ日数だけ前にずらしています（送信日時＝2000.01.01）。</div>
+    <div id="aiSum" class="hint" style="margin-bottom:6px"></div>
+    <textarea id="aiText" readonly style="flex:1;min-height:320px;width:100%;font:12px/1.45 ui-monospace,Consolas,monospace;white-space:pre;overflow:auto"></textarea>
+    <div style="margin-top:8px;display:flex;gap:8px;align-items:center"><button class="primary" id="aiDo">コピーする</button><button class="ghost" id="aiClose">閉じる</button><span class="status" id="aiMsg"></span></div>
+    <div class="hint" style="margin-top:6px">消すもの：ページ上の患者・施設の欄（ID・氏名・医師・施設など）、6桁以上の数字、シリアル番号、リードの型番、氏名・医師・施設・住所・電話の行、長い文（オブザベーションなど。文字数と決まった言葉だけ残す）。日付はずらす。<br>残すもの：見出し・項目名・数値と単位・機種名（形の確認に必要。機種名だけでは人は分かりません）。</div>
+  </div>
+</div>
 <div id="startScreen" hidden>
   <div class="ss-box">
     <svg viewBox="0 0 40 40" aria-hidden="true" style="width:72px;height:72px"><path d="M4 22h8l3-5 4 13 4-21 3 13h10" fill="none" stroke="#10b981" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -1631,7 +1642,78 @@ async function runTVEvents(){
   tlAuto(id);
 }
 // 経静脈デバイスのレポートを記録して、前回と比べる（波形の比較はしない）
+// ===== Claude用にコピー（個人情報なし）：読み取った文字の行と、ツールが読めた項目を、個人情報を消して文字にする =====
+const AI_KNOWN_WORDS=['OptiVol','アラート','警告','リードインテグリティ','センシング','インピーダンス','ハイレート','AT/AF','AF','VF','VT','ショック','充電','電池','RRT','ERI','テンプレート','Wavelet','MRI','SureScan','体液','アクティビティ','チェック','ペーシング','閾値','キャプチャ','ノイズ','検出','オーバーセンシング','ポジション','CRT','LV','左心室','右心室','心房'];
+const AI_HEAD=/デバイスステータス|臨床ステータス|パラメータサマリ|予測(電池)?寿命|電池電圧|前回チェック|前回セッション|タイプ|エピソード|インターバル|EGM|チャートスピード|治療サマリ|オブザベーション|検出|リードインピーダンス|センシング|時間%|Quick\s*Look|予測寿命/;
+const AI_PERSON=/氏名|患者名|Patient|Name|医師|担当|施設|病院|クリニック|医院|生年月日|ふりがな|フリガナ|住所|電話|TEL|性別|年齢/i;
+function aiDays(y,m,d){return Math.floor(Date.UTC(+y,+m-1,+d)/864e5);}
+function aiYmd(n){const t=new Date(n*864e5);return {y:t.getUTCFullYear(),m:t.getUTCMonth()+1,d:t.getUTCDate()};}
+function aiMakeShift(text){ // 送信日時（無ければ一番新しい日付）が 2000.01.01 になるようにずらす日数
+  const T=String(text||''),ds=[];const MON=MDT_MON;
+  const sent=T.match(/送信日時\s*[:：]?\s*(\d{1,2})-([A-Z][a-z]{2})-(\d{4})|送信日時\s*[:：]?\s*(\d{4})\.(\d{1,2})\.(\d{1,2})/);
+  if(sent){if(sent[1])return aiDays(sent[3],MON[sent[2]],sent[1])-aiDays(2000,1,1);return aiDays(sent[4],sent[5],sent[6])-aiDays(2000,1,1);}
+  for(const m of T.matchAll(/(\d{1,2})-([A-Z][a-z]{2})-(\d{4})/g))if(MON[m[2]])ds.push(aiDays(m[3],MON[m[2]],m[1]));
+  for(const m of T.matchAll(/(\d{4})[.\/年](\d{1,2})[.\/月](\d{1,2})/g))ds.push(aiDays(m[1],m[2],m[3]));
+  return ds.length?Math.max(...ds)-aiDays(2000,1,1):0;}
+function aiClean(str,st){let t=String(str||'');const MON=MDT_MON,MN=Object.keys(MON),sh=st.shift,p2=n=>String(n).padStart(2,'0');
+  const mv=(y,m,d)=>aiYmd(aiDays(y,m,d)-sh);
+  t=t.replace(/(\d{1,2})-([A-Z][a-z]{2})-(\d{4})/g,(a,d,mo,y)=>{if(!MON[mo])return a;const r=mv(y,MON[mo],d);st.dates++;return `${p2(r.d)}-${MN[r.m-1]}-${r.y}`;});
+  t=t.replace(/(\d{4})([.\/])(\d{1,2})\2(\d{1,2})/g,(a,y,sp,m,d)=>{const r=mv(y,m,d);st.dates++;return `${r.y}${sp}${p2(r.m)}${sp}${p2(r.d)}`;});
+  t=t.replace(/(\d{4})年(\d{1,2})月(\d{1,2})日/g,(a,y,m,d)=>{const r=mv(y,m,d);st.dates++;return `${r.y}年${p2(r.m)}月${p2(r.d)}日`;});
+  t=t.replace(/(?<!\d-)\b([A-Z][a-z]{2})-(\d{4})\b/g,(a,mo,y)=>{if(!MON[mo])return a;const r=mv(y,MON[mo],15);st.dates++;return `${MN[r.m-1]}-${r.y}`;}); // 月だけ（Sep-2025）
+  t=t.replace(/(\d{4})\.(\d{1,2})(?![\d.])/g,(a,y,m)=>{const r=mv(y,m,15);st.dates++;return `${r.y}.${p2(r.m)}`;}); // 月だけ（2024.12）
+  t=t.replace(/(?<![A-Za-z])(ID\s*[:：#]?\s*)[A-Za-z0-9-]{3,}/g,(a,k)=>{st.ids++;return k+'●';});
+  t=t.replace(/(シリアル(?:番号)?\s*[:：]?\s*)[A-Za-z0-9-]{4,}/g,(a,k)=>{st.serial++;return k+'●';});
+  t=t.replace(/\b[A-Z]{2,4}\d{5,}[A-Z]{0,2}\b/g,()=>{st.serial++;return '●';}); // シリアル番号の形
+  t=t.replace(/\d{6,}/g,()=>{st.ids++;return '●';});
+  t=t.replace(/(?<![A-Za-z])(RA|RV|LV|心房|右心室|左心室|SVC)\s*\(\s*[A-Za-z0-9-]{2,}\s*\)/g,(a,ch)=>{st.leads++;return `${ch}(●)`;}); // リードの型番
+  return t;}
+function aiFreeText(t,st){const kw=AI_KNOWN_WORDS.filter(w=>t.includes(w));st.free++;return `（自由な文：${[...t].length}文字${kw.length?'・言葉：'+kw.join('、'):''}）`;}
+function aiBuild(){
+  const items=(lastAllItems||[]).length>=(lastRawItems||[]).length?lastAllItems:lastRawItems;if(!items||!items.length)return null;
+  const flat=items.map(x=>x.s).join(' ');const st={shift:aiMakeShift(flat),dates:0,ids:0,serial:0,leads:0,person:0,head:0,free:0};
+  const rows=tvRows(items),byP=new Map();for(const r of rows){if(!byP.has(r.p))byP.set(r.p,[]);byP.get(r.p).push(r);}
+  const out=[`[${PG_BRAND} 読み取り結果（個人情報なし）]`];
+  if(curTV)out.push(`機種：${curTV.tv||''}${curTV.model?'（'+aiClean(curTV.model,st)+'）':''}`);
+  let inObs=false;
+  for(const [p,rs] of [...byP].sort((a,b)=>a[0]-b[0])){out.push('',`--- ${p}ページ ---`);
+    const ys=rs.map(r=>r.y),top=Math.max(...ys),bot=Math.min(...ys),span=Math.max(1,top-bot);
+    const firstHead=rs.findIndex(r=>AI_HEAD.test(r.cells.map(c=>c.s).join(' ')));let hidden=0;
+    rs.forEach((r,i)=>{const txt=r.cells.map(c=>c.s).join(' | ');
+      // ページ上の患者・施設の欄（最初の見出しより上、見出しが無いページは上の1割）
+      const inHead=firstHead>=0?i<firstHead:(top-r.y)<span*0.1;
+      // ページ上の欄：知っている「項目：値」だけを取り出す（行のほかの文字＝氏名などは出さない）
+      if(inHead||(/ID\s*[:：]|送信日時|シリアル番号/.test(txt)&&AI_PERSON.test(txt))){
+        const kv=[];const T=r.cells.map(c=>c.s).join(' ');
+        const sd=T.match(/送信日時\s*[:：]?\s*((?:\d{1,2}-[A-Z][a-z]{2}-\d{4}|\d{4}\.\d{1,2}\.\d{1,2})(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?)/);if(sd)kv.push('送信日時：'+aiClean(sd[1],st));
+        const dv=T.match(/デバイス\s*[:：]\s*(.+?)(?=\s+(?:シリアル|送信|ID\b)|$)/);if(dv)kv.push('デバイス：'+aiClean(dv[1],st));
+        if(/(?<![A-Za-z])ID\s*[:：]/.test(T)){kv.push('ID：●');st.ids++;}if(/シリアル/.test(T)){kv.push('シリアル番号：●');st.serial++;}
+        if(kv.length)out.push(kv.join(' | '));st.head++;hidden++;return;}
+      if(AI_PERSON.test(txt)){st.person++;hidden++;return;}
+      if(/^オブザベーション/.test(r.cells[0].s)){inObs=true;out.push(aiClean(txt,st));return;}
+      if(inObs&&AI_HEAD.test(txt)&&!/^[-・•]/.test(r.cells[0].s))inObs=false;
+      if(inObs||[...txt].length>80){out.push(aiFreeText(txt,st));return;} // 長い文（説明・オブザベーション）は中身を出さない
+      out.push(aiClean(txt,st));});
+    if(hidden)out.push(`（患者・施設の欄など ${hidden}行を伏せました）`);
+    inObs=false;}
+  if(curTV&&curTV.items){out.push('','--- ツールが読めた項目 ---');
+    for(const [k,x] of Object.entries(curTV.items)){let v=String(x.v);if(k==='obs'||[...v].length>60)v=aiFreeText(v,st);else v=aiClean(v,st);
+      const extra=[x.measDate?'測定日 '+aiClean(x.measDate,st):'',x.start?'開始 '+aiClean(x.start,st):''].filter(Boolean).join('・');out.push(`${k} = ${v}${extra?'（'+extra+'）':''}`);}}
+  else if(curNonSicd)out.push('','（ツールはこのPDFを「対象外」としました）');
+  // 念のため：最後にもう一度、6桁以上の数字とシリアル番号の形を消す
+  const text=out.join('\n').replace(/\d{6,}/g,'●').replace(/\b[A-Z]{2,4}\d{5,}[A-Z]{0,2}\b/g,'●');
+  return {text,st};}
+function aiOpen(){const r=aiBuild();if(!r){alert('先にPDFを読み込んでください。');return;}
+  $('aiText').value=r.text;const s0=r.st;
+  $('aiSum').innerHTML=`消したもの：ID・6桁以上の数字 ${s0.ids}か所／シリアル番号 ${s0.serial}か所／リードの型番 ${s0.leads}か所／氏名・医師・施設などの行 ${s0.person}行／ページ上の欄 ${s0.head}行／長い文 ${s0.free}か所。日付 ${s0.dates}か所をずらしました。`;
+  $('aiMsg').textContent='';$('aiModal').hidden=false;$('aiModal').style.display='flex';}
 const PG_BRAND=window.PG_CL?'PaceGuard CareLink':'PaceGuard LATITUDE';
+// ボタン：CareLink版だけ出す（LATITUDEのPDFは氏名が見出しの無い形で入っているため、まだ使わない）
+if(window.PG_CL&&$('aiCopy'))$('aiCopy').hidden=false;
+$('aiCopy')&&($('aiCopy').onclick=aiOpen);
+$('aiClose').onclick=()=>{$('aiModal').hidden=true;$('aiModal').style.display='none';};
+$('aiDo').onclick=async()=>{const t=$('aiText').value;let ok=false;try{await navigator.clipboard.writeText(t);ok=true;}catch(_){try{$('aiText').select();ok=document.execCommand('copy');}catch(__){}}
+  $('aiMsg').innerHTML=ok?'<span class="ok-t">コピーしました。Claudeの会話に貼り付けてください。</span>':'<span class="warn-t">コピーできませんでした。中身を選んで Ctrl+C でコピーしてください。</span>';};
 let mdtPendNote='',mdtPendSerial='',mdtKeepId='',mdtPendEgm=[]; // mdtPendEgm：待っていたPDFから作った波形の画像（runTVで記録に入れる） // mdtKeepId：記録する項目は無いが患者が分かるMedtronicのPDF（グラフだけのページなど）→ その患者のフォルダへ
 const tvDateKey=d=>{const m=String(d||'').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})(?:\D+(\d{1,2}):(\d{2}))?/);return m?m[1]+m[2].padStart(2,'0')+m[3].padStart(2,'0')+(m[4]||'0').padStart(2,'0')+(m[5]||'00'):'';};
 const tvClinic=x=>x&&x.clinic?`<div class="hint">医療施設での最後の測定：${escH(LV(x.clinic))}${x.clinicDate?`（${escH(String(x.clinicDate).replace(/(\d{4})年(\d{1,2})月(\d{1,2})日/,'$1/$2/$3'))}）`:''}</div>`:'';
