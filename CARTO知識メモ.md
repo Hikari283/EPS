@@ -378,3 +378,10 @@ Export_Study-…/
 - **トラブルシュート**：シースが出ない→Sheath Image を確認、マトリクスを作る。カテーテルの再接続後にシースが消える→表示が戻るまで待つ。S 字やループの曲線→シャフト表示が乱れる。
 - **通常の流れ**：シースの IFU に従って準備 → 血管にアクセス → シースをケーブルに → PIU へ → 対応するアブレーションカテーテルを MAP ソケットへ → 磁気センサー付きカテーテル（治療用または診断用）でマトリクスを作成してシースを表示。
 - **CARTOFINDER / COHERENT の章の目次**（PRIME 章、印刷 248〜）：CARTOFINDER（サイトとROI電極の表示、CL マップ、Dynamic マップ）、COHERENT マッピング（周期の変更、再計算）、Parallel Mapping、Map Replay、CARTOREPLAY の Continuous Mapping。
+### 印刷ページ249〜256（CARTO PRIME：CARTOFINDER）【確認済】
+- **CARTOFINDER**：複数の同時心電図（**PENTARAY NAV** のみ対応）を分析し、ユニポーラのアノテーションから、高密度の動的マップ。フォーカル（早期の連続的な QS 形態）と回転（Rotational）の興奮パターンを検出。**AF の複雑な興奮は必ずしも検出されない**（診断目的のみ）。
+- **プリファレンス**：Automatically Acquire EA Points（既定オフ）、**Discard Low Quality Signals（既定オン）**（接触不良、重度のスカー、低振幅を除外）、CL マッピングフィルターの最大 CL 標準偏差。
+- **レコーディング**：Tools > CARTOFINDER Module On で Acquisition パネルに追加。**最初の 10 秒は、10 秒経つ前に止めるとサイトができない。30 秒で自動停止**（20 秒以上を推奨）。無効になる条件：サポート外のカテーテル、体表電極の断線、FAM 取得中など。
+- **サイトの表示**：中心はリング状のタグ（計算完了で白）、電極は ROI（関心領域）を囲む長方形（ROI が検出されないと白）。計算中は灰色から白へ変わる。動きが閾値を超えたサイトは縞模様。Focal の電極は**緑**、Rotational の電極は**青**に拡大。
+- **表示設定（Visualization Setup）**：Site Indications（既定オン）、All ROI electrodes（既定オン）、Apply to All Maps。
+- **サイトはマップの電位情報のみを持ち、ジオメトリーには影響しない**（色分けのみ）。
