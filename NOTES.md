@@ -461,3 +461,6 @@ CARTO 3 の Export データ（フォルダ/ZIP）をブラウザだけで表示
   この版は、CareLink が元のPDFを残す標準・PM/ICD/CRTの波形画像を作る・画像を消すボタンなし、ICDの件数ルールとClaude用コピーは入っている。
 - 「前の版に戻して」と言われたらここに戻す（`git checkout restore-before-numbers-only-20261119 -- paceguard-latitude.html`、または旧版ファイルを paceguard-latitude.html の名前で置く）。
 - PCの中のデータ（基準・患者PDF）は、🗑ボタンで画像を消すと戻せない。消す前にフォルダごとコピーを取ること。
+
+## 2026-11-19 方針
+- CareLink（Medtronic）版は実臨床では使わない（個人情報が心配）。CareLink関連の開発（CRT-D、ICDの実PDF確認、EV-ICD・LINQ）は保留。今あるコードは作り物のデータでの試験用として残す。S-ICD（LATITUDE）の作業を続ける。
