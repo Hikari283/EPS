@@ -2015,7 +2015,7 @@ $('filePatSave').onclick=()=>{const v=$('filePat').value.trim();if(!/\{ID\}/.tes
   FILE_PAT=v;try{localStorage.setItem('pg_lat_filepat',v);}catch(_){}$('filePatMsg').innerHTML=`<span class="ok-t">保存しました。例：${fileNameFor('01652389',{name:'',device:'A219'})}</span>`;};
 // ===== PDFを患者ごとのフォルダに整理 =====
 // 元のPDFを残すか（標準は残さない＝波形の部分だけの画像を残す）。許可を得たら「残す」に切り替える
-let KEEP_PDF=false;try{const v=localStorage.getItem('pg_lat_keeppdf');KEEP_PDF=v==='1'||(v===null&&!!window.PG_CL);}catch(_){} // CareLinkは、決めていなければ元のPDFを患者ごとのフォルダに残す（LATITUDEと同じ管理）
+let KEEP_PDF=false;try{const v=localStorage.getItem('pg_lat_keeppdf');KEEP_PDF=v==='1';}catch(_){} // LATITUDEもCareLinkも、決めていなければ元のPDFは残さない（標準）。CareLinkの標準も同じ（2026-11-19）
 let PDF_DIR='患者PDF';try{const v=localStorage.getItem('pg_lat_pdfdir');if(v)PDF_DIR=v;}catch(_){}
 $('pdfDirName').value=PDF_DIR;
 $('pdfDirSave').onclick=()=>{const v=safeName($('pdfDirName').value);if(!v){$('pdfDirMsg').innerHTML='<span class="warn-t">名前を入れてください</span>';return;}PDF_DIR=v;$('pdfDirName').value=v;try{localStorage.setItem('pg_lat_pdfdir',v);}catch(_){}$('pdfDirMsg').innerHTML='<span class="ok-t">保存しました</span>';};
