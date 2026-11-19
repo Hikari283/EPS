@@ -422,6 +422,8 @@ try{document.documentElement.dataset.theme=localStorage.getItem('pg_lat_theme')|
       <label class="hint row"><input type="radio" name="keepPdf" id="keepPdfNo"> 残さない（標準）：波形の部分だけの画像と数値を残す。氏名などが入ったPDFはこのPCに残さない</label>
       <label class="hint row"><input type="radio" name="keepPdf" id="keepPdfYes"> 残す：情報セキュリティの許可を得た場合だけ（元のPDFを患者ごとのフォルダに保存）</label>
       <div style="margin-top:4px"><button id="purgePdf">今ある元のPDFを、波形の画像に置き換える</button> <span class="status" id="purgeMsg"></span></div>
+      <div style="margin-top:8px"><button id="purgeImg" class="ghost">🗑 ペースメーカー・ICD・CRTの保存済みの波形画像を消す</button> <span class="status" id="purgeImgMsg"></span>
+        <div class="hint">S-ICD・EV-ICD・LINQ以外は、波形の画像を残しません。以前に保存した画像（PNG）を全部消し、記録からも外します。数値の記録・前回との比較・アラートは残ります。元に戻せません。</div></div>
     </div>
     <div class="hint" style="margin-top:6px">評価したPDFを「データフォルダ／このフォルダ／患者ごとのフォルダ／日付.pdf」に保存します。患者ごとのフォルダ名は下の「患者ファイルの名前」と同じ形（.jsonを除いたもの）です。</div>
     <div class="hint" style="margin-top:6px">新しい患者のファイルを作るときの名前です。使える項目：<code>{ID}</code>（患者ID）・<code>{機種}</code>　例：<code>{ID}.json</code>、<code>{ID}_{機種}.json</code>。<br>既にあるファイルは今の名前のまま使います。ファイル名を手で変えても、ファイルの中に書かれた患者IDで自動的に見つけます。</div>
@@ -2691,10 +2693,40 @@ $('keepPdfYes').onchange=()=>{if(!confirm('元のPDF（氏名などが入って�
 // 今ある元のPDFを、波形の部分だけの画像に置き換える（_削除済み・_対象外・波形のない書類のPDFは消す）。元のPDFはLATITUDEから出し直せる
 // 自動：元のPDFを残さない設定では、フォルダに接続したときに、残っている元のPDFを自動で画像に置き換える（確認なし）
 let purgeBusy=false,purgeAutoDone=false;
+// 波形の画像を残さないデバイス（PM・ICD・CRT）の保存済みPNGを消す。数値の記録は残す。S-ICD・EV-ICD・LINQの画像は消さない
+let purgeImgBusy=false;
+async function purgeImages(){
+  const msg=t=>$('purgeImgMsg').textContent=t;if(purgeImgBusy)return;
+  if(!dirHandle){msg('先にデータフォルダに接続してください。');return;}
+  if(!confirm('ペースメーカー・ICD・CRTの保存済みの波形画像（PNG）を、すべて消します。\n数値の記録・前回との比較・アラートは残ります。\nS-ICD・EV-ICD・LINQの画像は消しません。\n元に戻せません。よろしいですか？'))return;
+  purgeImgBusy=true;
+  try{const bd=await baseDir(false),jsons=[];
+    if(bd)for await(const [n,h] of bd.entries()){if(h.kind!=='file'||!/\.json$/i.test(n))continue;try{jsons.push({n,j:JSON.parse(await (await h.getFile()).text()),dirty:false});}catch(_){}}
+    let top;try{top=await dirHandle.getDirectoryHandle(PDF_DIR);}catch(_){msg('消す画像はありません。');return;}
+    const wave=new Set(),other=new Set();
+    for(const J of jsons)for(const sv of J.j.saves||[]){const ps=[sv.pdf,...(sv.egmPages||[])].filter(Boolean);for(const x of ps)(sv.tv&&!WAVE_DEV.test(sv.tv)?other:wave).add(x);}
+    let del=0;
+    for await(const [folder,fh] of top.entries()){if(fh.kind!=='directory'||folder==='_待ち')continue;const pd=await top.getDirectoryHandle(folder),names=[];
+      for await(const [n,h] of pd.entries())if(h.kind==='file'&&/\.png$/i.test(n))names.push(n);
+      for(const n of names){const path=`${PDF_DIR}/${folder}/${n}`;msg(`消去中：${folder}/${n}`);
+        if(wave.has(path))continue; // 波形で比較するデバイスの画像は残す
+        if(!other.has(path)&&!window.PG_CL)continue; // LATITUDE版：どの記録にも属さない画像（S-ICDなど）は消さない
+        try{await pd.removeEntry(n);del++;other.add(path);}catch(_){}}}
+    for(const J of jsons){const L=J.j.saves||[],keep=[];
+      for(const sv of L){const isOther=sv.tv&&!WAVE_DEV.test(sv.tv);if(!isOther){keep.push(sv);continue;}
+        const had=!!sv.pdf||(sv.egmPages||[]).length>0,main=!!sv.settings;
+        if(main){if(had){sv.pdf=null;sv.egmPages=[];J.dirty=true;}keep.push(sv);}
+        else if(had){J.dirty=true;} // イベントの画像だけの記録：画像と一緒に外す
+        else keep.push(sv);}
+      if(J.dirty){J.j.saves=keep;try{const w=await (await bd.getFileHandle(J.n,{create:true})).createWritable();await w.write(JSON.stringify(J.j));await w.close();}catch(_){}}}
+    msg(`画像を${del}枚消しました。`);rvLoad&&rvLoad();
+  }catch(e){msg('消せませんでした：'+(e&&e.message||e));}finally{purgeImgBusy=false;}
+}
 async function purgePdfs(auto){
   if(!dirHandle||purgeBusy)return;
   purgeBusy=true;try{await purgeRun(auto);}catch(e){if(!auto)$('purgeMsg').textContent='置き換えできませんでした：'+(e&&e.message||e);}finally{purgeBusy=false;}
 }
+$('purgeImg').onclick=purgeImages;
 $('purgePdf').onclick=async()=>{
   if(!dirHandle){$('purgeMsg').textContent='先にデータフォルダに接続してください。';return;}
   if(!confirm('保存してある元のPDFを、波形の部分だけの画像に置き換えて、元のPDFを消します。\n・_削除済み、_対象外、波形のない書類のPDFも消します\n・消したPDFはこのツールからは戻せません（LATITUDEから出し直せます）\nよろしいですか？'))return;
