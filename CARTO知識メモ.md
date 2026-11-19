@@ -615,3 +615,20 @@ Export_Study-…/
 - **表41：システムフィルター（手動取得にも適用）**：**Tissue Proximity（組織付近にある点のみ、TPI）**、**Respiration Gated（呼吸ゲート閾値内のみ）**。
 - **設定変更**：取得中に Apply／OK で反映。
 → シミュレーターへの関係：**Cycle Length（Range・Stability）、Position Stability、LAT Stability、Density（球の中心の決まり方）**は、今の「3 mm 間隔・9 mm ジャンプ」より本物に近い取得条件として置き換えられる。
+
+---
+## 18. 1-100 ファイルの前半（印刷ページ1〜8）【確認済】
+- **適応**：EP 手技（電気生理学）。**特定の禁忌はない**。臨床的有用性：CARTO の誘導支援で、急性・長期の有効性と合併症が従来の X 線透視と同等以上、X 線透視時間と線量は著しく低い（論文）。
+- **有害事象**：カテーテル処置関連（血管損傷、血栓、塞栓、脳卒中、心タンポナーデ、死亡など）。高周波関連（胸痛、心室頻脈、TIA、CVA、完全房室ブロック、冠攣縮、心膜炎、心タンポナーデ、弁損傷など）。
+- **3 つの基礎**：ECG（体表・心内）、ロケーション（磁気＝CARTO 磁気センサー、ACL＝パッチ 6 つ）、マッピング（EA、FAM、超音波カテーテル）。
+- **FAM の上限（PRIME）**：各 Study は 35 マップ、Point-by-Point マップは 7,000 アイテム、FAM マップは 50,000 アイテム、**Study あたり 300,000 アイテム**（ポイント・Contour・CARTOFINDER サイトを含む）。
+- **構成品**：PIU（患者近く）、ロケーションパッド（テーブル下）、ワークステーション（手術室または隣接検査室。ケーブルはダクトに）、SPU（専用ホルダー）。**併用機器（別売）**：EP レコーディング、ペーシング、高周波発生装置、灌流ポンプ（互換品のみ）、超音波（CARTOSOUND）、X 線（CARTOUNIVU）。**互換性のない機器は接続しない**。
+- **初期設置**：Biosense Webster が認めたスタッフ以外は設置・開封不可。PIU はテーブルホルダー・近くの棚・IEC 60601 のカートに。パッチユニットは患者台の上または近く。リピーターモニタは主治医の見える場所に。
+- **モジュールの概要（ACCURESP・ARA・CARTOMERGE・CARTOSEG・CARTOREPLAY・CARTOSOUND・CARTOUNIVU・CFAE・CONFIDENSE・FAM Dx・PASO・PRIME・SMARTTOUCH・VISITAG・SURPOINT・VIZIGO）**：本書の内容は、お住まいの国で販売されているモジュールを前提。**モジュールのインストールとアクティブ化は Biosense Webster のサービス担当者**。
+- **システム情報**：Help > About CARTO System、System Information（Display Adapter・BIOS・マルウェア対策・OS・Windows Updates など）。USB にエクスポート可。
+- **本書について**：**本書と取扱説明書の内容が違う場合は、電子版（最新）が正しい**。
+- **注記**：SMARTTOUCH の力の大きさと方向、FAM Dx は LASSO・PENTARAY NAV など。Coherent Mapping は**伝導ブロック（遅延伝導部位・非伝導部位）を色とベクトルで表示**。Parallel Mapping は最大 4 マップ。LAT Hybrid は PVC のマッピング方法（位置は洞調律中の位置）。Map Merge は以前の Study の VISITAG とアブレーションを読み込む。
+→ シミュレーターへの関係：**Study あたりの上限（マップ 35、アイテム 300,000）**は、シミュレーターの上限表示に使える。
+
+## 19. 1-100 ファイルの残り（印刷ページ9〜62）— 未読
+- 注意・警告（9〜）、システムの基礎の安全情報、ハードウェア、ロケーションとマッピングの詳細、EMC、ワークステーション・ケーブル、ウイルス対策、RF やイリゲーションの安全など。**次のステップで読み込む**。
