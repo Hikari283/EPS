@@ -391,6 +391,12 @@ body,button,select,input,textarea{font-family:Tahoma,"Segoe UI",Verdana,"Meiryo 
       <div class="row"><span class="lb" style="min-width:auto">オクタレイの電極の並び</span><select id="simOctCfg"><option value="3-3-3-3-3" selected>3-3-3-3-3</option><option value="2-2-2-2-2">2-2-2-2-2</option><option value="2-5-2-5-2">2-5-2-5-2</option></select></div>
       <div class="row"><label><input type="radio" name="simCath" value="abl"> 焼灼カテーテル（先端1か所。通電用）</label></div>
       <div class="row"><label><input type="radio" name="simCath" value="cir"> 円形カテーテル（10極）</label></div>
+      <fieldset><legend>VARIPULSE風（PFA。円形10極で通電）</legend>
+        <div class="row"><label><input type="checkbox" id="simPfa"> 円形カテーテルをPFA（TRUPULSE）で通電する</label></div>
+        <div class="row" id="simPfaEl" style="gap:3px;flex-wrap:wrap"></div>
+        <div class="row"><button id="simPfaAll">全電極</button><button id="simPfaRe">再選択</button><button id="simPfaGo">通電（A）</button></div>
+        <div class="small">取説（TRUPULSE）：電極は最大10個、<b>連続した6個以上</b>を選びます。1回のアプリケーションは1秒未満で、開始すると<b>4回</b>連続して供給されます（間隔1秒）。実機では電極どうしが重なるとエラー（301）で通電できませんが、ここでは再現していません。通電ごとに、電極の選択は全部に戻ります。熱は使わないので、接触力・出力・Tag Index はありません。</div>
+      </fieldset>
       <div class="row"><label><input type="checkbox" id="simAuto" checked> 連続取得（カテーテルを動かすと自動で入る）</label></div>
       <div class="row"><span class="lb" style="min-width:auto">点の間隔</span><input type="number" id="simMin" value="3" min="1" max="10" step="0.5"> mm 以上</div>
       <div class="muted small">ゆっくり動かすと入ります。急に大きく動かした瞬間は、入りません（安定していないため）。条件は簡易的な想定で、CARTOの取得条件とは違います。</div>
@@ -1347,7 +1353,7 @@ class Viewer{
   updateVT(){
     const vt=S.study&&S.study.visitag;let items=[];
     if(vt&&S.opt.vtOn&&vtForMap(this.map)){const k=S.opt.vtParam,lo=S.opt.vtLo,hi=S.opt.vtHi;
-      items=vt.sites.map(s=>{const v=s.v[k];const c=fin(v)?tagColor(S.opt.vt3?(v<lo?0.1:v<=hi?0.55:1):(v-lo)/((hi-lo)||1)):[0.8,0.8,0.8];return{x:s.x,y:s.y,z:s.z,r:S.opt.vtSize,c:[...c,1]};});}
+      items=vt.sites.map(s=>{const v=s.v[k];const c=fin(v)?tagColor(S.opt.vt3?(v<lo?0.1:v<=hi?0.55:1):(v-lo)/((hi-lo)||1)):[0.8,0.8,0.8];return{x:s.x,y:s.y,z:s.z,r:S.opt.vtSize,c:s.pfa?[0.35,0.75,1,1]:[...c,1]};});}
     const s=buildSpheres(items);this.upload('vP',s.P);this.upload('vN',s.N);this.upload('vC',s.C);this.vtCount=s.count;this.vtDirty=false;
   }
   segments(){
@@ -2526,7 +2532,7 @@ const SIM_SPL='ABCDEFGH',SIM_OCT_COL=[[1,0.6,0.24],[0.36,0.45,1],[1,0.88,0.3],[1
 /* オクタレイの電極の並び：製品ページ（J&J）に載っている3種類「2-2-2-2-2 / 2-5-2-5-2 / 3-3-3-3-3」（単位の記載はなく、電極の間隔 mm と想定）。
    1本のスプラインに電極6つ＝双極5つ。最初の電極の位置（中心から 3 mm）は私の想定。 */
 function simOctRadii(cfg){const gaps=String(cfg).split('-').map(Number);let x=3;const e=[x];for(const g of gaps){x+=g;e.push(x);}return e.slice(0,5).map((v,j)=>(v+e[j+1])/2);}
-const SIM={tpi:false,tpiMode:'either',active:false,map:null,T:null,cath:'oct',octRot:0.3,octCfg:'3-3-3-3-3',octR:[4.5,7.5,10.5,13.5,16.5],sites:[],shaft:[],live:null,ver:0,hv:null,lastHv:null,dirtyLive:true,nextId:1,sess:1,
+const SIM={pfa:false,pfaSel:Array(10).fill(true),pfaPrev:Array(10).fill(true),tpi:false,tpiMode:'either',active:false,map:null,T:null,cath:'oct',octRot:0.3,octCfg:'3-3-3-3-3',octR:[4.5,7.5,10.5,13.5,16.5],sites:[],shaft:[],live:null,ver:0,hv:null,lastHv:null,dirtyLive:true,nextId:1,sess:1,
   auto:true,minDist:3,maxJump:9,grid:new Map(),autoPrev:null,autoDirty:false,autoT:0,autoN:0,autoSkip:0,
   cfg:{power:35,time:20,force:12},leads:null,sheath:[-14,-3,-4],sheathOut:[-38,-9,-16]};
 const simHash=i=>{const s=Math.sin(i*12.9898+78.233)*43758.5453;return s-Math.floor(s);};
@@ -2855,8 +2861,31 @@ function simClearPoints(){
   if(!SIM.active)return;if(!confirm('取得したポイントを全部消しますか？（通電の記録は残ります）'))return;
   SIM.map.points=[];SIM.map.version++;S.sel=null;SIM.nextId=1;simGridRebuild();SIM.autoPrev=null;dirtyAll('cp');renderWave();renderPtList(true);simRenderPanel();
 }
+function simPfaRender(){
+  const el=$('#simPfaEl');if(!el)return;
+  el.innerHTML=SIM.pfaSel.map((v,i)=>`<label style="border:1px solid #556;border-radius:4px;padding:1px 5px;background:${v?'#e8c33a':'#444'};color:${v?'#222':'#aaa'};cursor:pointer"><input type="checkbox" data-pe="${i}" ${v?'checked':''} style="display:none">${i+1}</label>`).join('');
+  el.querySelectorAll('input').forEach(c=>c.onchange=e=>{SIM.pfaSel[+e.target.dataset.pe]=e.target.checked;simPfaRender();});
+}
+/* VARIPULSE（TRUPULSE取説）：連続6電極以上、4回連続、電極の重なりはエラー301 */
+function simPfaAblate(){
+  const T=SIM.T,m=T.mesh,sel=SIM.pfaSel,N=SIM.sites.length;
+  if(N<10)return toast('円形カテーテルをマップの上に置いてください（10極）');
+  let run=0,best=0;for(let i=0;i<10;i++){if(sel[i]){run++;best=Math.max(best,run);}else run=0;}
+  if(best<6)return toast('アブレーションを開始するには、連続した6つ以上の電極を選択してください（取説）',6000);
+  const pts=[];for(let i=0;i<10;i++)if(sel[i]){pts.push(SIM.sites[i].pos);if(i<9&&sel[i+1])pts.push(v3.sc(v3.add(SIM.sites[i].pos,SIM.sites[i+1].pos),0.5));}
+  const rb=3.4,rq=4.2;let nb=0;
+  for(let i=0;i<m.nv;i++){if(!m.used[i])continue;const q=simPos(m,i);let d=1e9;for(const p of pts){const x=v3.dist(q,p);if(x<d)d=x;}
+    if(d<=rq){T.q[i]=Math.min(T.q[i],0.08);if(d<=rb){T.blocked[i]=1;nb++;}}}
+  const vt=S.study.visitag;if(!vt.params.find(p=>p.k==='pfa'))vt.params.push({k:'pfa',label:'PFA アプリケーション数'});
+  const prev=vt.sites[vt.sites.length-1];if(prev&&v3.dist([prev.x,prev.y,prev.z],SIM.sites[0].pos)>15)SIM.sess++;
+  for(let i=0;i<10;i++)if(sel[i])vt.sites.push({x:SIM.sites[i].pos[0],y:SIM.sites[i].pos[1],z:SIM.sites[i].pos[2],session:String(SIM.sess),idx:vt.sites.length+1,pfa:true,v:{pfa:4,dur:1}});
+  vt._chain=null;SIM.pfaPrev=sel.slice();SIM.pfaSel=Array(10).fill(true);simPfaRender();
+  if(nb)simActivate(T);if($('#simTruth').checked)simTruth(true);
+  SIM.dirtyLive=true;SIM.ver++;dirtyAll('v');simRenderPanel();
+  toast('PFA：アプリケーション 4/4（PFA 100%）。電極 '+sel.map((v,i)=>v?i+1:0).filter(Boolean).join(',')+' を使用しました',5000);
+}
 function simAblate(){
-  if(!SIM.active)return;if(SIM.cath!=='abl')return toast('通電は焼灼カテーテルで行います（Cキー、または「シミュ」タブでカテーテルを切り替えてください）');
+  if(!SIM.active)return;if(SIM.cath==='cir'&&SIM.pfa)return simPfaAblate();if(SIM.cath!=='abl')return toast('通電は焼灼カテーテルで行います（Cキー、または「シミュ」タブでカテーテルを切り替えてください）');
   const T=SIM.T,s=SIM.sites[0];if(!s)return toast('マップの上にマウスを動かして、カテーテルを置いてください');
   const c=SIM.cfg,F=Math.max(1,c.force+(Math.random()-0.5)*4),Q=(c.power/35)*(c.time/20)*(0.5+F/24),ai=Math.round(Q*420),m=T.mesh;
   const full=Q>=0.93,part=Q>=0.6,rb=full?3.4:0,rq=full?4.2:part?3.2:2.0,fac=full?0.08:part?0.5:0.9;let nb=0;
@@ -2961,6 +2990,8 @@ function simBind(){
   $$('input[name=simCath]').forEach(r=>r.onchange=e=>{if(!e.target.checked)return;SIM.cath=e.target.value;SIM.sites=[];SIM.shaft=[];if(SIM.lastHv)SIM.hv=SIM.lastHv;SIM.ver++;dirtyAll('');simRenderPanel();});
   $('#simFamGo').onclick=simFamGo;$('#simFamDone').onclick=simFamDone;$('#simFamAng').oninput=e=>{if(SIM.fam){if(SIM.fam.timer){clearInterval(SIM.fam.timer);SIM.fam.timer=null;}SIM.fam.ang=+e.target.value;simFamApply();}};
   $('#simTpi').onchange=e=>{SIM.tpi=e.target.checked;toast(SIM.tpi?'TPIフィルター：オン（B・C・E・F・G・H の5-6番電極を含むバイポーラは取得されません）':'TPIフィルター：オフ');};$('#simTpiMode').onchange=e=>{SIM.tpiMode=e.target.value;};
+  simPfaRender();$('#simPfa').onchange=e=>{SIM.pfa=e.target.checked;if(SIM.pfa){const r=document.querySelector('input[name=simCath][value=cir]');r.checked=true;r.dispatchEvent(new Event('change'));toast('PFA：円形カテーテルをマップに置いて、「通電（A）」で4回連続通電します');}};
+  $('#simPfaAll').onclick=()=>{SIM.pfaSel=Array(10).fill(true);simPfaRender();};$('#simPfaRe').onclick=()=>{SIM.pfaSel=SIM.pfaPrev.slice();simPfaRender();};$('#simPfaGo').onclick=simAblate;
   $('#simAcq').onclick=simAcquire;$('#simClear').onclick=simClearPoints;$('#simAbl').onclick=simAblate;$('#simChk').onclick=simCheck;
   const num=(id,k)=>$(id).addEventListener('input',e=>{const x=+e.target.value;if(fin(x))SIM.cfg[k]=x;});num('#simP','power');num('#simT','time');num('#simF','force');
   $('#simTruth').onchange=e=>{if(SIM.active)simTruth(e.target.checked);};
