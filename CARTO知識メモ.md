@@ -401,3 +401,12 @@ Export_Study-…/
 - **カラーサイクルバー**：Automatic（既定。最も早い LAT から開始、終わりは開始 + COHERENT 周期）、Manual（最早と最遅の LAT の 2 つのスライダー）、Custom（既定 −200〜200）。**色の範囲の変更は表示のみ、実際の LAT は変わらない**。
 - **Propagation マップ**の再生は、Automatic／Manual の両方で使える。
 → シミュレーターへの関係：Coherent は、LAT と伝導の矢印（LVV の元の考え方）の全体最適化。今のシミュレーターの「伝導速度の矢印」は、各点の局所計算なので、将来は全体最適化に寄せられる。
+### 印刷ページ273〜282（COHERENT の表示、Parallel Mapping、Map Replay、CARTOREPLAY）【確認済】
+- **Coherent Visualization Setup**：Transparent Slow or No Conduction Zone（遅延伝導・非伝導ゾーンを半透明に）、Conduction Velocity Vectors（伝導速度ベクトル。Static／Dynamic。**Threshold 既定 20**：低い速度は太く、速い速度は細い）。**速度ベクトルは、Anatomical Structures・認識された伝導ブロック・データ不足の領域には出ない**。Dynamic は FAM 取得を止める。
+- **周期の変更**：マップごとの Coherent 周期（LAT の平均周期で、内部点や LAT 外れ値は含まない）。変更にはマップの再計算が必要。
+- **再計算が必要になる操作**：FAM データの取得・削除・解像度変更、EA の追加・無視、ポイントの取得・削除・編集、内部点フィルターやマップ整合性による除外、コピー・移動、タグの変更、周期の変更、Anatomical Structures の変更。計算中は Acquisition パネルが無効。
+- **Parallel Mapping**：最大 **4 マップ**を 1 グループにして、マップごとに異なる取得フィルターで同時取得（Continuous Mapping 中、EA ポイントは適切なマップに）。**グループ条件：同じロケーションリファレンス、同じ Chamber of Interest、同じ取得モード（Gated か Stable）、同じリファレンス（チャネルと Criterion）**。LAT Hybrid と標準マップの混在は、心室のみ。**グループ内で FAM データは共有**。1 グループに同時に表示できるマップは 1 つ。
+- **既存 FAM データがあるときのグループ作成**：FAM のないマップに FAM を入れると、既存の FAM がコピーされる。両方に FAM があるとき、後から追加したマップの FAM が置き換わる（確認メッセージで取り消し可能）。
+- **Map Replay**：マップに接頭辞 **Rp-** を付けて再計算。Reference、Map Type（FAM を Point-by-Point に変換可）、LAT Hybrid、取得フィルターを変更可。**元のマップの過去の時点の電位データから計算**。計算を止めても取得はキャンセルされない（既存のポイントは残る）。CARTOFINDER のサイトはコピーされない。VISITAG サイトは再計算後のマップに表示。
+- **CARTOREPLAY の Continuous Mapping**：Timeline で体表信号を Retrospective に取得（**心内信号は Retrospective に取得できない**）。Timeline を右クリック → Continuous Mapping Start → End を指定して、現在のマップの取得フィルターで取得。
+→ シミュレーターへの関係：Parallel Mapping（同じ電位から異なるフィルターで複数マップ）、Map Replay（過去の時点から再計算）は、後の拡張の候補。
