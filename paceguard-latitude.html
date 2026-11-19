@@ -1475,8 +1475,11 @@ async function mdtPageImage(doc,pno,scale){
   const o=document.createElement('canvas');o.width=c.width;o.height=bottom-top;const ox=o.getContext('2d');ox.fillStyle='#fff';ox.fillRect(0,0,o.width,o.height);ox.drawImage(c,0,top,c.width,bottom-top,0,0,c.width,bottom-top);
   return o;
 }
+// 波形の画像を残して比較するのは S-ICD（別の処理）・EV-ICD・LINQ（植込み型心電計）だけ。ペースメーカー・ICD・CRT は数値だけ残す（2026-11-19 当院）
+const WAVE_DEV=/EV-?ICD|Aurora|LINQ|Reveal|ILR|ICM|植込み型心電/i;
+const wantWaveImg=()=>WAVE_DEV.test(String((curTV&&(curTV.model||curTV.tv))||'')+' '+String($('fDev')&&$('fDev').value||''));
 async function saveTvEgm(id,date,opt){opt=opt||{};const doc=opt.doc||lastPdfDoc;
-  if(!dirHandle||!doc||!id)return [];
+  if(!dirHandle||!doc||!id||!wantWaveImg())return [];
   const isM=opt.doc?true:!!(curTV&&curTV.mdt);let pages,map;
   if(isM){const r=mdtEgmPages(opt.items,null,doc.numPages);pages=r.map(x=>x.page);map=r.map(x=>({ev:x.ev}));}
   else{pages=await tvEgmPages(lastPdfDoc);const evs=tvStreamEvents(lastRawItems);map=evs.length===pages.length?evs:null;}

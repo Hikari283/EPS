@@ -33,6 +33,7 @@
   ├ paceguard-carelink.html
   ├ 基準\<ID>.json
   ├ 患者PDF\<ID>\（元のPDF・エピソードの画像）, 患者PDF\_待ち\<シリアル>\（IDの無いPDF）
+  ※波形の画像を残して比較するのは S-ICD・EV-ICD・LINQ（植込み型心電計）だけ。PM・ICD・CRT は数値だけ残す（`wantWaveImg`／`WAVE_DEV`。EV-ICD・LINQ の機種名の文字は実PDFで要確認）。
   ※元のPDFの保存は標準で「残さない」（2026-11-19〜、LATITUDEと同じ）。⚙設定で「残す」に切り替えた時だけ元のPDFと `_待ち` を使う。残さない時は、数値の記録とイベントの波形の画像だけ。
   └ CareLink\（拡張機能が保存するPDF。自動比較で見張る）
 ```
