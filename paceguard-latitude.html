@@ -1496,12 +1496,12 @@ const tvCh=k=>{const m=k.match(/^lead:([^:]*):/);return m?m[1]:'';};
 const TV_LEAD=(re)=>k=>/^lead:/.test(k)&&re.test(k);
 // ルールの値（全体）。患者ごとに上書きできる（基準JSONの tvRules。{none:true}＝この患者は決めない）
 const TV_DEF={nodata:{on:1},ampA:{v:0.5},ampV:{v:3.0},thr:{v:1.5},pimp:{lo:300,hi:1000},simp:{lo:50,hi:100},bat:{warn:1,alert:0.5},af:{v:1.0},chg:{on:1},margin:{out:2,sens:0.5},rel:{warn:10,alert:20},
-  sic:{warn:100,alert:300},apc:{on:1},afdur:{min:6}}; // sic・apc・afdur は Medtronic（CareLink）だけの項目（2026-11-18 当院のシート）
-const MDT_RULE_KEYS=new Set(['sic','apc','afdur']);
+  sic:{warn:100,alert:300},apc:{on:1},afdur:{min:6},evtx:{v:1},evnote:{v:1},obsalert:{on:1}}; // sic・apc・afdur は Medtronic（CareLink）だけの項目（2026-11-18 当院のシート）
+const MDT_RULE_KEYS=new Set(['sic','apc','afdur','evtx','evnote','obsalert']);
 const tvRuleKeys=()=>Object.keys(TV_DEF).filter(g=>window.PG_CL?!['nodata'].includes(g):!MDT_RULE_KEYS.has(g)); // CareLinkは「記録なし」が無い
 // 全体のルールの上書き（このPCに保存）：{g:{値}} または {g:{none:true}}＝全体で決めない
 let TV_G={};try{TV_G=JSON.parse(localStorage.getItem('pg_lat_tvglobal')||'{}')||{};}catch(_){}
-const TV_NAMES={sic:'SIC（センシング・インテグリティ・カウンタ）',apc:'心房リードポジションチェック',afdur:'AF持続時間（エピソード）',nodata:'最新の日常測定が「記録なし」',ampA:'心房 心内波高値',ampV:'心室（右心室・左心室） 心内波高値',thr:'ペーシング閾値',pimp:'ペーシングインピーダンス',simp:'ショックインピーダンス',bat:'交換までの予測期間',af:'%AT/AF',chg:'設定（ゾーン・ATR・モード・レート・AV Delayなど）',margin:'マージン（出力と閾値・感度と波高値）',rel:'前回からの変化（閾値・インピーダンス・波高値）'};
+const TV_NAMES={sic:'SIC（センシング・インテグリティ・カウンタ）',apc:'心房リードポジションチェック',afdur:'AF持続時間（エピソード）',evtx:'治療済みVF/VT・ショック・中断した充電の件数',evnote:'ハイレートNS・SVT Rx保留の件数',obsalert:'オブザベーションの「アラート：…」',nodata:'最新の日常測定が「記録なし」',ampA:'心房 心内波高値',ampV:'心室（右心室・左心室） 心内波高値',thr:'ペーシング閾値',pimp:'ペーシングインピーダンス',simp:'ショックインピーダンス',bat:'交換までの予測期間',af:'%AT/AF',chg:'設定（ゾーン・ATR・モード・レート・AV Delayなど）',margin:'マージン（出力と閾値・感度と波高値）',rel:'前回からの変化（閾値・インピーダンス・波高値）'};
 let PT_TV=null; // 今表示・評価している患者の上書き
 const TVP=g=>{const o=PT_TV&&PT_TV[g];if(o&&o.none)return null;const G=TV_G[g];if(!o&&G&&G.none)return null;return {...TV_DEF[g],...(G&&!G.none?G:{}),...(o||{})};};
 const tvIsPt=g=>!!(PT_TV&&PT_TV[g]);
@@ -1525,11 +1525,18 @@ const TV_REL=[
   {when:k=>/^lead:.*インピーダンス/.test(k),dir:0,name:'インピーダンスの変化',w:'変化'},
   {when:k=>/^lead:.*心内波高値/.test(k),dir:-1,name:'心内波高値の低下',w:'低下'},
 ];
+// Medtronic ICD：件数のルール（2026-11-19 当院）。治療済みVF/VT・ショック総数・中断した充電＝1件以上で要確認／ハイレートNS・SVT Rx保留＝1件以上で注意
+function mdtEvRule(k){if(!/^ev:/.test(k))return null;
+  if(/ハイレート\s*NS|SVT\s*Rx|Rx\s*保留/i.test(k))return {g:'evnote',lv:1};
+  if(/^ev:治療済み:(VF|VT|FVT|VT-?[12]|心室細動|心室頻拍)/i.test(k)&&!/NS/i.test(k))return {g:'evtx',lv:2};
+  if(/^ev:治療:/.test(k)&&/ショック総数|ショック.*総数|中断/.test(k))return {g:'evtx',lv:2};
+  return null;}
 function tvRuleText(k){const a=[],mk=g=>tvIsPt(g)?'（この患者）':'';
   if(/^lead:/.test(k)){a.push(TVP('nodata')?'記録なしで注意'+mk('nodata'):'記録なし：決めない'+mk('nodata'));}
   for(const R of TV_RULES)if(R.when(k)){const r=TVP(R.g);a.push(r?R.t(r)+mk(R.g):`決めない${mk(R.g)}`);}
   if(TV_CHG.test(k)){a.push(TVP('chg')?'前回から変わったら要確認'+mk('chg'):'決めない'+mk('chg'));}
   for(const R of TV_REL)if(R.when(k)){const r=TVP('rel');if(r)a.push(`前回から${R.w}（${r.warn}%以上で注意／${r.alert}%以上で要確認）${mk('rel')}`);}
+  {const e=mdtEvRule(k);if(e){const r=TVP(e.g);a.push(r?`${r.v}件以上で${e.lv===2?'要確認':'注意'}${mk(e.g)}`:`決めない${mk(e.g)}`);}if(k==='obs'){a.push(TVP('obsalert')?'「アラート：」の文があれば注意'+mk('obsalert'):'決めない'+mk('obsalert'));}}
   const m=TVP('margin');if(m){if(/^set:ペーシング出力/.test(k))a.push(`閾値の${m.out}倍未満で要確認${mk('margin')}`);if(/^set:感度/.test(k))a.push(`波高値の${m.sens}倍を超えたら要確認${mk('margin')}`);}
   return a.join('／');}
 // 1つの記録（items）と前回（prevItems）から、項目ごとのアラートを作る
@@ -1555,6 +1562,9 @@ function tvAlerts(cur,prev){
   // （SICはTV_RULESで判定）
   if(TVP('apc')&&C.leadpos&&!/^成功/.test(String(C.leadpos.v).trim()))out.push({k:'leadpos',lv:2,txt:`心房リードポジションチェック：${C.leadpos.v}${tvIsPt('apc')?'（この患者のルール）':''}`});
   {const r=TVP('afdur');if(r)for(const [k,x] of Object.entries(C))if(/^epi:/.test(k)&&x.ep&&mdtIsAF(x.ep.type)&&x.ep.sec>=r.min*60)out.push({k,lv:2,txt:`AF持続時間 ${x.v}：${r.min}分以上。抗凝固確認！${tvIsPt('afdur')?'（この患者のルール）':''}`});}
+  for(const [k,x] of Object.entries(C)){const e=mdtEvRule(k);if(!e)continue;const r=TVP(e.g);if(!r)continue;const n=(String(x.v).match(/(\d+)\s*件/g)||[]).reduce((t,m)=>t+(+m.match(/\d+/)[0]),0);
+    if(n>=r.v)out.push({k,lv:e.lv,txt:`${x.l} ${x.v}：${r.v}件以上${tvIsPt(e.g)?'（この患者のルール）':''}`});}
+  if(TVP('obsalert')&&C.obs&&/アラート\s*[:：]/.test(String(C.obs.v)))out.push({k:'obs',lv:1,txt:`オブザベーション：${C.obs.v}${tvIsPt('obsalert')?'（この患者のルール）':''}`});
   // マージン：ペーシング出力が閾値の○倍以上か／感度が波高値の○倍以下か（部屋ごと）
   if(mg){const chOf=lab=>{const m=String(lab).match(/(心房|右心室|右室|左心室|左室|心室)/);return m?m[1].replace('右室','右心室').replace('左室','左心室'):'';};
     const leadV=(ch,metric)=>{const k=Object.keys(C).find(k=>k.startsWith(`lead:${ch}:`)&&k.includes(metric));return k?{k,n:tvNum(LV(C[k].v))}:null;};
@@ -1566,7 +1576,7 @@ function tvAlerts(cur,prev){
   return out.sort((a,b)=>b.lv-a.lv);
 }
 // この患者だけのルール（経静脈）：画面と保存
-const TV_FIELDS={sic:[['warn','以上で注意'],['alert','以上で要確認']],apc:[],afdur:[['min','分以上で要確認']],nodata:[],ampA:[['v','mV未満']],ampV:[['v','mV未満']],thr:[['v','V以上']],pimp:[['lo','Ω（下限）'],['hi','Ω（上限）']],simp:[['lo','Ω（下限）'],['hi','Ω（上限）']],bat:[['warn','年以下で注意'],['alert','年以下で要確認']],af:[['v','%以上']],chg:[],margin:[['out','倍（出力÷閾値がこれ未満で要確認）'],['sens','倍（感度÷波高値がこれを超えたら要確認）']],rel:[['warn','%以上で注意'],['alert','%以上で要確認']]};
+const TV_FIELDS={evtx:[['v','件以上で要確認']],evnote:[['v','件以上で注意']],obsalert:[],sic:[['warn','以上で注意'],['alert','以上で要確認']],apc:[],afdur:[['min','分以上で要確認']],nodata:[],ampA:[['v','mV未満']],ampV:[['v','mV未満']],thr:[['v','V以上']],pimp:[['lo','Ω（下限）'],['hi','Ω（上限）']],simp:[['lo','Ω（下限）'],['hi','Ω（上限）']],bat:[['warn','年以下で注意'],['alert','年以下で要確認']],af:[['v','%以上']],chg:[],margin:[['out','倍（出力÷閾値がこれ未満で要確認）'],['sens','倍（感度÷波高値がこれを超えたら要確認）']],rel:[['warn','%以上で注意'],['alert','%以上で要確認']]};
 function tvPtRulesUi(){
   const box=$('tvPtRules');if(!box)return;const R=PT_TV||{};
   $('tvPtSum').textContent=Object.keys(R).length?`（${Object.keys(R).length}項目を変更中：${Object.keys(R).map(g=>TV_NAMES[g]).join('・')}）`:'（全体のルールのまま）';

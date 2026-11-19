@@ -451,3 +451,6 @@ CARTO 3 の Export データ（フォルダ/ZIP）をブラウザだけで表示
 - シミュレーター追加(2): 肺静脈の切り口を筒状に15mm伸ばして先を丸く閉じる（`simExtendVeins`：ふちが自分に触れる8の字があるため、順番にたどらず点・辺ごとに複製）／オクタレイ（`SIM.cath=oct`：中心＋8スプライン(A〜H)×5双極、チャンネル名 `SPU A1-A2` 形式、半径4〜19mm）が既定／取得点は値の色の小さな点（ptColor=value）／Cキーでカテーテル切替(oct→abl→cir)。電圧は伸ばした部分で切り口をなだらかにして複製。
 - J&J製品ページ（jnj.co.jp/jjmkk/medical-professionals/biosense/products/…）から: OCTARAY=48極・8スプライン(=6電極×8, 双極5/本)・電極0.5mm・TRUEref基準電極・配置3種「2-2-2-2-2 / 2-5-2-5-2 / 3-3-3-3-3」（単位記載なし→mm想定）。`simOctRadii()` に反映。CARTO 3 V8 の機能名: Local Velocity Vectors / Complex Signal Identification / Multipolar Mapping / Automatic Pattern Acquisition / VISITAG Stability+ / Enhanced CONFIDENSE。位置精度は磁気センサ±1mm・ACL ±3mm。展開時の直径・電極間隔の単位はページに無い。
 - J&J製品ページを全15ページ読了（CARTO 3 System/V8, OCTARAY, PENTARAY, LASSO, SMARTTOUCH SF, VARIPULSE, CARTOFINDER, CONFIDENSE, Coherent Mapping, VISITAG SURPOINT, CARTOREPLAY, CARTOUNIVU, CARTOSEG, CARTONET）。数値があったのは OCTARAY(48極・8本・0.5mm・配置3種)、PENTARAY(5本・20極)、LASSO(10/20極・輪15〜25mm)、VARIPULSE(10極スパイラルPFA)、精度(磁気±1mm/ACL±3mm)。取扱説明書は e-ifu.com（医療関係者向け・利用規約同意が必要）で、自動では読めない: V7.5取説 /52416 OCTARAY / 52320 LAM / 52336 VISITAG SURPOINT / 52419 TRUPULSE 等。LASSO 輪の半径を 7.5〜12.5mm に制限。
+
+## 2026-11-19 CareLink ICD の基準
+- ICDのシートの返事を反映（詳細は `PaceGuard_引き継ぎ.md`）：治療済みVF/VT・ショック総数・中断した充電＝1件以上で要確認、ハイレートNS・SVT Rx保留＝1件以上で注意、オブザベーション「アラート：」＝注意。`mdtEvRule`/`tvAlerts`。実PDFでの項目名の確認はこれから。
