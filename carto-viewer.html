@@ -894,16 +894,15 @@ const capOf=(a,dir,len)=>v3.add(a,v3.sc(v3.norm(dir),len));
    横に広い体部（約60×40×46 mm）に、付け根が太く先に向かって細くなる肺静脈4本（漏斗状）、左心耳、僧帽弁の開口。
    実際のCARTOの画像を参考にした簡易の形で、解剖学的な実測値ではありません。 */
 function laAnatomy(){
-  const U=[[1,0,0],[0,1,0],[0,0,1]],center=[0,0,0],body=[30,19,23];
+  const U=[[1,0,0],[0,1,0],[0,0,1]],center=[0,0,0],body=[33,22,26];
   const mk=(n,a,b,r0,r1)=>({n,a,b,r:[r0,r1],len:v3.dist(a,b)});
-  const veins=[mk('LSPV',[17,6,13],[43,12,30],10.5,7),mk('LIPV',[17,7,-5],[44,12,-17],10,7),mk('RSPV',[-17,6,12],[-44,10,30],11.5,8),mk('RIPV',[-17,7,-8],[-46,11,-24],11,7.5)];
+  const veins=[mk('LSPV',[18,6,13],[36,12,28],11,8),mk('LIPV',[18,7,-5],[37,12,-16],10.5,8),mk('RSPV',[-18,6,12],[-36,10,28],12,8.5),mk('RIPV',[-18,7,-8],[-38,11,-22],11.5,8)];
   const laa=[[[18,-10,10],[30,-21,15],7,5],[[30,-21,15],[35,-28,6],5,3]];
   const mitral={c:[0,-13,-17],n:v3.norm([0,-0.6,-0.8]),r:14};
-  const sdf=p=>{let d=smin(sdEllB(p,center,U,body),sdEllB(p,[0,6,-5],U,[25,15,19]),6);
-    for(const v of veins)d=smin(d,sdCap(p,v.a,v.b,v.r[0],v.r[1]),7);for(const s of laa)d=smin(d,sdCap(p,s[0],s[1],s[2],s[3]),4);return d;};
+  const sdf=p=>{let d=smin(sdEllB(p,center,U,body),sdEllB(p,[0,6,-5],U,[28,18,22]),8);
+    for(const v of veins)d=smin(d,sdCap(p,v.a,v.b,v.r[0],v.r[1]),9);for(const s of laa)d=smin(d,sdCap(p,s[0],s[1],s[2],s[3]),4);return d;};
   const mesh=sdfMesh(sdf,[-64,-40,-44],[64,44,50],1.4);
-  clipMesh(mesh,c=>{for(const v of veins){const h=segH(c,v.a,v.b);if(h>0.93&&sdCap(c,v.a,v.b,v.r[0]+4,v.r[1]+4)<0)return true;}
-    const d=v3.sub(c,mitral.c),ax=v3.dot(d,mitral.n);if(ax>-1.5&&v3.len(v3.sub(d,v3.sc(mitral.n,ax)))<mitral.r)return true;return false;});
+  clipMesh(mesh,c=>{const d=v3.sub(c,mitral.c),ax=v3.dot(d,mitral.n);if(ax>-1.5&&v3.len(v3.sub(d,v3.sc(mitral.n,ax)))<mitral.r)return true;return false;});
   // 肺静脈の入口（体部から出るところ）の位置と半径
   const ostiumAt=k=>{const v=veins[k],ax=v3.norm(v3.sub(v.b,v.a));let t=0;while(t<v.len&&sdEllB(v3.add(v.a,v3.sc(ax,t)),center,U,body)<=0)t+=0.5;t+=2;
     return{C:v3.add(v.a,v3.sc(ax,t)),ax,R:v.r[0]+(v.r[1]-v.r[0])*t/v.len,t};};
