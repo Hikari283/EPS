@@ -598,3 +598,20 @@ Export_Study-…/
 - **拡大縮小**：MAP ソケットのカテーテルの位置で関心領域を決定（無ければ 20 POLE A・B・ULTRASOUND・REF/DECA の順）。**拡大縮小は元に戻せない**（カテーテルが関心領域にあるか確認してから）。
 - **サポートされないモード**：患者テーブルの傾き・回転、検知器の回転、C アーム位置が頭でない→Geometry Information に表示、問題が解消するまで回転血管造影を避ける。
 → シミュレーターへの関係：**X 線のキャプチャ（AP 方向、呼気末期、10 件まで）**は、Study の流れの説明に使える。
+### 印刷ページ173〜182（CARTOUNIVU の残り、CFAE、CONFIDENSE の概要と Continuous Mapping フィルタ）【確認済】
+- **CARTOUNIVU ツールバー**：拡張シネプレイヤー（再生、呼吸ゲート状態、アノテーション、同期状態）。**フルモーション表示**：マイナスキーまたは左ペダルを押したまま、MAP ソケットのカテーテルだけを心臓・呼吸の動きのフィルターなしで表示（ポイント取得に影響しない）。対応：フォースカテーテルを含む局所アブレーションカテーテル。
+- **同期化**：心拍数の同期（対応 X 線：Artis-zee VC14G 以降・VC2・VD11、Artis Q・Q.zen VD10・VD11、Artis one VA10）。**同期は既定でオン**。使えない条件：クリップのフレームレートが 2 フレーム/秒未満、心拍数が 40 bpm 未満か 200 bpm 超、クリップ内のアノテーションが不足、取得中の心拍数が一定でない。**Chamber of Interest（心房・心室）の選択が同期の精度に影響**。
+- **CFAE（複合分裂心房電位図）**：EA ポイント取得が前提。**CFAE 有効化後にポイントを取ると Selected Point Viewer に線やピークが出ない→LAT に切り替えてから CFAE に戻す**。CFAE マップは最短コンプレックス間隔に応じて色分け（最長＝紫、最短＝赤、ms）。**警告：心房細動などの不整脈で、CFAE によるアブレーション領域の同定は臨床研究で確立されていない**。ABL タグのあるポイントは場所としてのみ定義。
+- **CONFIDENSE の概要**：Continuous Mapping、Pattern Matching、組織近接度、Wavefront、マップ整合性、リップルマップ。**手技中のカテーテル位置の検証に、X 線・心電図など一般的な手段を使うこと**。
+- **Continuous Mapping**：事前定義のフィルターに合う EA ポイントを、リファレンスのアノテーションごとに連続で取得。**同期モードでも、Continuous Acquisition で取得した点はレコーディングシステムと同期しない**。フィルターは Preferences > Acquisition Filters（マップごとに設定）。
+- **Acquisition Filters（表40：マップ関連）**：
+  - **Cycle Length（周期）**：Range（範囲内のみ）または Stability（現在周期と平均周期の中央値の差 % が閾値内）。フローティング・ロケーションオンリー・リサイクル範囲外は計算に含めない。
+  - **Pattern Matching**：パターンが無いと使えない。
+  - **Position Stability**：連続した心拍間のロケーションの安定性が閾値以下。
+  - **LAT Stability**：連続心拍の LAT の差が閾値以下（LAT 無しの連続点は安定とみなす）。
+  - **Force**：Above Minimum Threshold または Within Thresholds（**CONTACT FORCE 対応カテーテルのみ**）。
+  - **Do Not Acquire While Pacing**：ペーシング中は取得しない（PIU 接続のカテーテルのみ）。
+  - **Density**：既存の全点から設定距離以上離れている場合のみ取得。**最初の点で球の中心が決まり、球内の他の点は取得されない**（その点に LAT が無い場合を除く）。
+- **表41：システムフィルター（手動取得にも適用）**：**Tissue Proximity（組織付近にある点のみ、TPI）**、**Respiration Gated（呼吸ゲート閾値内のみ）**。
+- **設定変更**：取得中に Apply／OK で反映。
+→ シミュレーターへの関係：**Cycle Length（Range・Stability）、Position Stability、LAT Stability、Density（球の中心の決まり方）**は、今の「3 mm 間隔・9 mm ジャンプ」より本物に近い取得条件として置き換えられる。
