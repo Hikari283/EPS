@@ -393,3 +393,11 @@ Export_Study-…/
 - **CL マップ**：周期の標準偏差（既定しきい値 19 ms 程度）を超える電極は、白で投影されてフィルターで除外できる（Preferences の CARTOFINDER タブ）。
 - **Dynamic マップ**：再生のタイムスタンプごとの LAT を表示。最小 −250 ms〜最大 0 ms のスライダーで範囲を変更。**FAM 取得中は再生できない（どちらかが止まる）**。
 → シミュレーターへの関係：CARTOFINDER は PENTARAY NAV 専用。シミュレーターに入れるなら、Focal／Rotational の表示と、CL の標準偏差フィルターが候補。
+### 印刷ページ265〜272（CARTOFINDER の臨床ワークフロー、COHERENT マッピング）【確認済】
+- **推奨ワークフロー（AF、左房、PENTARAY NAV）**：PENTARAY を接続 → FAM の **Resolution Level 17 以上**、呼吸ゲート有効 → 通常のマッピング → Anatomical Structures → 肺静脈の隔離 → チャンバー壁に PENTARAY を置き、スパインが均等に広がっていることを確認 → TPI で接触を確認 → CARTOFINDER の記録を開始（**30 秒で自動停止、20 秒未満は削除して取り直し**）→ サイトとマップ、チャネルを確認。
+- **Coherent Mapping**：周期的な不整脈の興奮伝播を、**マップ全点の LAT を使ったグローバルな反復計算**で求める。伝導ブロック（遅延伝導部位や非伝導部位）を、色とベクトルで表示。対象は**通常型の心房粗動、非通常型の心房粗動、Focal 型の心房頻拍**。**AF では検証されていない**。
+- **入力条件**：スカー（Low Potential）、Double-Potential の点、点が均等に分布したチャンバーの高密度マップ。Double-Potential とスカーには適切なタグを付ける。Anatomical Structures をマークする。
+- **計算中**：ポイント取得は無効になり、一部の表示（VISITAG など）は遅れる。エラー時はマップが灰色。
+- **カラーサイクルバー**：Automatic（既定。最も早い LAT から開始、終わりは開始 + COHERENT 周期）、Manual（最早と最遅の LAT の 2 つのスライダー）、Custom（既定 −200〜200）。**色の範囲の変更は表示のみ、実際の LAT は変わらない**。
+- **Propagation マップ**の再生は、Automatic／Manual の両方で使える。
+→ シミュレーターへの関係：Coherent は、LAT と伝導の矢印（LVV の元の考え方）の全体最適化。今のシミュレーターの「伝導速度の矢印」は、各点の局所計算なので、将来は全体最適化に寄せられる。
