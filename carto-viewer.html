@@ -2841,13 +2841,23 @@ function simAcquire(){
 /* 連続取得：カテーテルを動かすと、条件を満たした点が自動で入る（条件はこちらの簡易想定）
    ・直前のフレームから大きくジャンプしていない（ゆっくり動かしている）
    ・すでにある点から、指定の間隔（mm）以上はなれている */
+/* 連続取得のフィルター（CARTO 3 取説の既定値：位置の安定 4 mm ／ LAT の安定 4 ms）
+   ・位置の安定：1拍（約0.8秒）前の位置からの動きが 4 mm 以内
+   ・LAT の安定：拍ごとのLATのゆらぎ（簡易に±2 msのばらつき）が 4 ms 以内 */
+const SIM_FILT={pos:4,lat:4,beat:800};
 function simAutoStep(){
   if(!SIM.auto||!SIM.sites.length)return;
-  const cur=SIM.sites[0].pos;
+  const cur=SIM.sites[0].pos,now=performance.now();
+  SIM.posBuf=(SIM.posBuf||[]).filter(e=>now-e.t<2000);SIM.posBuf.push({t:now,p:cur});
+  if(!SIM.rej)SIM.rej={pos:0,lat:0,den:0};
+  const old=SIM.posBuf.find(e=>now-e.t>=SIM_FILT.beat)||SIM.posBuf[0];
+  if(old&&v3.dist(cur,old.p)>SIM_FILT.pos){SIM.rej.pos++;SIM.autoPrev=cur;return;}
   if(SIM.autoPrev){const jump=v3.dist(cur,SIM.autoPrev);SIM.autoPrev=cur;if(jump>SIM.maxJump){SIM.autoSkip++;return;}}else{SIM.autoPrev=cur;}
   const r=SIM.minDist;let added=0;
-  if(SIM.cath==='abl'){if(!simNearPoint(cur,r)){simAddPoint(simPose(),0);added++;}}
-  else{const P=simPose(0);for(let j=0;j<P.bips.length;j++){const prm=P.bips[j];if(simTpiBlocked(j)||simNearPoint(prm.pos,r))continue;simAddPoint(P,j);added++;}}
+  const latOk=prm=>!Number.isFinite(prm.lat)||Math.abs((prm.lat+simGauss()*2)-(prm.lat+simGauss()*2))<=SIM_FILT.lat;
+  if(SIM.cath==='abl'){const prm=SIM.T&&SIM.sites[0]?simSiteParams(SIM.sites[0]):null;
+    if(prm&&!latOk(prm)){SIM.rej.lat++;}else if(simNearPoint(cur,r)){SIM.rej.den++;}else{simAddPoint(simPose(),0);added++;}}
+  else{const P=simPose(0);for(let j=0;j<P.bips.length;j++){const prm=P.bips[j];if(simTpiBlocked(j))continue;if(simNearPoint(prm.pos,r)){SIM.rej.den++;continue;}if(!latOk(prm)){SIM.rej.lat++;continue;}simAddPoint(P,j);added++;}}
   if(added){SIM.autoDirty=true;SIM.autoN+=added;}
 }
 function simAutoFlush(now){
@@ -2917,7 +2927,7 @@ function simTruth(on){
 function simRenderPanel(){
   const el=$('#simInfo');if(!el)return;
   if(!SIM.active){el.textContent='「症例をはじめる」を押すと始まります。';return;}
-  el.innerHTML=`ポイント <b>${SIM.map.points.length}</b> 点　通電 <b>${S.study.visitag.sites.length}</b> 回　カテーテル：<b>${SIM.cath==='abl'?'焼灼（先端）':SIM.cath==='oct'?'オクタレイ（40点）':'円形（10極）'}</b><br>Smart Index風（マップの充実度）：<b>${simSmartIndex()}</b> %<span class="small">　※ 色が付いた面積の割合。実際のSmart Indexとは計算が違います（Enhanced CONFIDENSE風）</span>`;
+  el.innerHTML=`ポイント <b>${SIM.map.points.length}</b> 点　通電 <b>${S.study.visitag.sites.length}</b> 回　カテーテル：<b>${SIM.cath==='abl'?'焼灼（先端）':SIM.cath==='oct'?'オクタレイ（40点）':'円形（10極）'}</b><br>フィルター（取説の既定値）：位置の安定 ${SIM_FILT.pos} mm ／ LAT の安定 ${SIM_FILT.lat} ms　不採用 位置 ${(SIM.rej||{}).pos||0} ／ LAT ${(SIM.rej||{}).lat||0} ／ 密度 ${(SIM.rej||{}).den||0}<br>Smart Index風（マップの充実度）：<b>${simSmartIndex()}</b> %<span class="small">　※ 色が付いた面積の割合。実際のSmart Indexとは計算が違います（Enhanced CONFIDENSE風）</span>`;
 }
 function simSmartIndex(){
   const m=SIM.map&&SIM.map.mesh,P=SIM.map&&SIM.map.points;if(!m||!P||!P.length)return 0;
