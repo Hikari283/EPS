@@ -325,3 +325,9 @@ Export_Study-…/
 - **Continuous Mapping 中の手動取得**：Tissue Proximity と Respiration Gated の現在の設定が、手動取得にも適用される。手動取得の点は Point List と Selected Point Viewer で区別される。
 - **組織近接度（TPI）**：インピーダンスで電極の近さを判定。距離が電極の半径未満なら接触とみなす。使えるのは PENTARAY NAV、LASSO NAV ファミリー、HD カテーテル。局所治療用カテーテルでは使えない。**20 POLE A、20 POLE B、DECA、QUAD B のソケットでサポート**。近接度の決定は、電極の「遠位」「両方」「いずれか」の 3 つから選ぶ（Catheter Setup で設定）。**RF 通電中は表示されない**。
 → シミュレーターへの関係：表43の数値（位置 4 mm、LAT 4 ms、PTRN 0.9、AFL の CL ± 10、AT・A SR の CL ± 20）は、**マップの種類別の取得条件の既定値**として、シミュレーターに入れられる。
+### 印刷ページ201〜208【確認済】
+- **組織近接度の表示（表44）**：Main Map Viewer は、電極の周りの白い枠＝近接、枠なし＝非近接、茶色の枠＝不明。Point List は緑系のハート（近接）、暗いハート（非近接）、黒のハート（不明）。既定でオン。Study 中に切り替え可能。**TPI が不正確と思ったら Catheter > Reset TPI**、カテーテルを動かして再トレーニング。オート ID のカテーテルは接続・切断で自動リセット。
+- **MEM の組織近接フィルタ**：Continuous Mapping と手動 MEM 取得の両方に適用。ペーシング中は、ペーシング電極と近くの電極も影響を受ける。**Internal Points フィルタと同時に使える**。
+- **Wavefront マッピング アノテーション**：各遠位ユニポーラの最大の陰性波（-dV/dt）を探して、LAT の基準にする。**Bipolar Noise Level（既定 0.03 mV）より低い電圧はノイズとして扱い、考慮しない**。内部ユニポーラが明確でノイズがないことを確認する。推奨の心拍数は、多極カテーテルでは「アノテーションされたチャネルの最大数と最大の減少率の平均」、フォーカルでは「最大の減少率の平均」。
+- **マップ整合性（Map Consistency）**：周囲の点の LAT と合わない外れ値を見つける（2 ステップ）。外れ値は LAT の色には影響せず、マップにも投影されない。**計算に入るのは、マップに反映されるポイントだけ**（スカー、アブレーション点、浮動点、ロケーションだけの点、LAT なしの連続点、手動で編集した LAT は除外）。計算には最小数の隣接点が必要。Map > Filtering の Point Filtering で設定：Show LAT Outlier Points、Narrow Results、Automatic（既定・取得中に自動計算）、Calculate、Calculate and Delete、Mark low density points など。
+→ シミュレーターへの関係：外れ値（周囲と合わない LAT）を除く処理は、マップの荒れを減らす処理として使える。
