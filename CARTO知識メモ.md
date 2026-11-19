@@ -385,3 +385,11 @@ Export_Study-…/
 - **サイトの表示**：中心はリング状のタグ（計算完了で白）、電極は ROI（関心領域）を囲む長方形（ROI が検出されないと白）。計算中は灰色から白へ変わる。動きが閾値を超えたサイトは縞模様。Focal の電極は**緑**、Rotational の電極は**青**に拡大。
 - **表示設定（Visualization Setup）**：Site Indications（既定オン）、All ROI electrodes（既定オン）、Apply to All Maps。
 - **サイトはマップの電位情報のみを持ち、ジオメトリーには影響しない**（色分けのみ）。
+### 印刷ページ257〜264（CARTOFINDER の表示と色分け）【確認済】
+- **チャネル**：各サイトに独自のユニポーラとバイポーラのセット。チャネルを外すと、そのサイトだけに影響（体表チャネルは全サイトに影響）。除外されたチャネルはマップの色分けに影響しない。
+- **Focal / Rotational の表示**：Focal は **緑**（ライト〜ダーク＝低〜高強度）、Rotational は **青**（同）、白は両方なし。電極が両方あれば緑の中心と青の境界線。
+- **マップの色分けの種類**：CARTOFINDER、CARTOFINDER CL（周期）、CARTOFINDER Dynamic（時間に沿った LAT の伝播）。**Isochronal、Propagation、Early Meets Late は無効**。CARTO の色分けで **CTRL + F** で切替（Main Map Viewer のみ）。
+- **注意（規定）**：Rotational の特定は、局所サイクル長の 50 % 以上をカバーし、2 回以上の連続した繰り返し。**臨床的な意味はまだ確立していない**。**局所の電位を必ず確認**。
+- **CL マップ**：周期の標準偏差（既定しきい値 19 ms 程度）を超える電極は、白で投影されてフィルターで除外できる（Preferences の CARTOFINDER タブ）。
+- **Dynamic マップ**：再生のタイムスタンプごとの LAT を表示。最小 −250 ms〜最大 0 ms のスライダーで範囲を変更。**FAM 取得中は再生できない（どちらかが止まる）**。
+→ シミュレーターへの関係：CARTOFINDER は PENTARAY NAV 専用。シミュレーターに入れるなら、Focal／Rotational の表示と、CL の標準偏差フィルターが候補。
