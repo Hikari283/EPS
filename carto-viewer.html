@@ -2896,7 +2896,10 @@ function simAblate(){
   if(nb)simActivate(T);
   if($('#simTruth').checked)simTruth(true);
   SIM.dirtyLive=true;SIM.ver++;dirtyAll('v');simRenderPanel();
-  $('#simAblRes').textContent=`AI ${ai}（簡易計算）：${full?'十分な通電です（ブロックができました）':part?'やや不足です（電位は下がったが、ブロックにはなりません）':'不足です（ほとんど効いていません）'}\n出力 ${c.power} W / ${c.time} 秒 / 接触力 ${F.toFixed(0)} g`;
+  const warn=[];if(c.power>35)warn.push('出力が35 Wを超えています（左房後壁・冠静脈洞は上限35 W。心房内の上限は45 W）');if(c.time>60)warn.push('通電時間が60秒を超えています（心房の上限）');if(F>40)warn.push('接触力が40 gを超えています（穿孔・タンポナーデのリスク）');
+  const irr=c.power>30?'15 mL/分':'8 mL/分';
+  $('#simAblRes').textContent=`AI ${ai}（簡易計算）：${full?'十分な通電です（ブロックができました）':part?'やや不足です（電位は下がったが、ブロックにはなりません）':'不足です（ほとんど効いていません）'}\n出力 ${c.power} W / ${c.time} 秒 / 接触力 ${F.toFixed(0)} g / イリゲーション ${irr}（SMARTTOUCH SF の設定）${warn.length?'\n⚠ '+warn.join('\n⚠ '):''}`;
+  if(warn.length)toast('注意（取説）：'+warn[0],6000);
   toast(`通電：AI ${ai}（${full?'十分':part?'やや不足':'不足'}）`);
 }
 function simCheck(){
