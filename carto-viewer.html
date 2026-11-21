@@ -53,6 +53,15 @@ table.list tbody tr:hover td{background:#1c2733}
 .view{position:relative;flex:1;min-width:0;border:2px solid transparent}
 .view.active{border-color:#2a5d93}
 #views.single .view.active{border-color:transparent}
+/* 検証（Verification）の配置：左＝超音波（CARTOSOUND）、右上＝PA、右下＝AP */
+body.verif #views{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:minmax(0,1fr) minmax(0,1fr)}
+body.verif #viewSplit{display:none}
+body.verif #usView{display:block;grid-column:1;grid-row:1/3}
+body.verif #view0{grid-column:2;grid-row:1;flex:none!important}
+body.verif #view1{grid-column:2;grid-row:2}
+#usView{display:none;position:relative;background:#000;min-width:0;min-height:0}
+#usCv{position:absolute;inset:0;width:100%;height:100%}
+#usView .us-note{position:absolute;left:8px;bottom:6px;font-size:12px;color:#9ab;background:rgba(0,0,0,.6);padding:2px 6px;border-radius:4px}
 .view.hidden{display:none}
 .view canvas.gl{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
 .vlabel{position:absolute;left:8px;top:6px;font-size:12px;color:#cfd8e3;text-shadow:0 0 3px #000;pointer-events:none}
@@ -450,6 +459,7 @@ body,button,select,input,textarea{font-family:Tahoma,"Segoe UI",Verdana,"Meiryo 
 </aside>
 <div class="split v" id="sideSplit" title="ドラッグで幅を変更（ダブルクリックで元に戻す）"></div>
 <section id="views" class="single">
+  <div id="usView"><canvas id="usCv"></canvas><div class="us-note" id="usNote">超音波（CARTOSOUND 風）：Aキーで輪郭を取得</div></div>
   <div class="view active" id="view0"><canvas class="gl"></canvas>
     <div class="vtop"><select class="vMap" title="マップ"></select><select class="vType" title="表示"></select><div class="vlabel"></div></div>
     <div class="cbar"><canvas width="340" height="64"></canvas></div>
@@ -1748,7 +1758,7 @@ function bindPanel(){
     const ae=document.activeElement;if(ae&&ae.matches('input[type=text],input[type=number],textarea,select'))return;if(ae&&ae.matches('input,button'))ae.blur();
     if(!$('#slideOv').classList.contains('hidden')){if(e.key==='ArrowRight')slideGo(1);else if(e.key==='ArrowLeft')slideGo(-1);else if(e.key==='Escape')closeSlides();return;}
     if(SIM.active&&(e.key==='c'||e.key==='C')&&!e.ctrlKey&&!e.metaKey){const order=['oct','abl','cir'],nx=order[(order.indexOf(SIM.cath)+1)%3],r=document.querySelector(`input[name=simCath][value=${nx}]`);r.checked=true;r.dispatchEvent(new Event('change'));toast('カテーテル：'+(nx==='oct'?'オクタレイ':nx==='abl'?'焼灼カテーテル':'円形カテーテル'));e.preventDefault();return;}
-    if(SIM.active&&(e.key==='Enter'||e.key==='a'||e.key==='A')&&!e.ctrlKey&&!e.metaKey){if(e.key==='Enter')simAcquire();else simAblate();e.preventDefault();return;}
+    if(SIM.active&&(e.key==='Enter'||e.key==='a'||e.key==='A')&&!e.ctrlKey&&!e.metaKey){if(e.key==='Enter')simAcquire();else if(document.body.classList.contains('verif'))usCapture();else simAblate();e.preventDefault();return;}
     if(e.key==='ArrowRight'){stepPoint(1);e.preventDefault();}else if(e.key==='ArrowLeft'){stepPoint(-1);e.preventDefault();}
     else if(e.key==='Delete'||e.key==='Backspace'){if(S.sel){toggleExclude(S.sel.map,S.sel.p);e.preventDefault();}}
     else if(e.key===' '){togglePropPlay();e.preventDefault();}
@@ -2097,18 +2107,91 @@ function bindMenus(){
   const z=n=>String(n).padStart(2,'0');
   const tick=()=>{const d=new Date(),h=d.getHours(),ap=h<12?'AM':'PM',h12=h%12||12;$('#clock').textContent=`${z(h12)}:${z(d.getMinutes())}:${z(d.getSeconds())} ${ap}　${z(d.getMonth()+1)}/${z(d.getDate())}/${d.getFullYear()}`;};tick();setInterval(tick,1000);
 }
+/* ===== 超音波（CARTOSOUND 風）：カテーテルから見た扇形の断面と、自動の輪郭 ===== */
+const US={fan:0.62,depth:70,bins:64,on:false,best:null,slab:null,g:null};
+function usGeom(){
+  const sh=SIM.sheath||[-14,-3,-4];
+  const tip=(SIM.sites&&SIM.sites[0])?SIM.sites[0].pos:[0,0,0];
+  let dir=v3.norm(v3.sub(tip,sh));if(!isFinite(dir[0]))dir=[0,0,1];
+  let L=v3.cross(dir,[0,0,1]);if(v3.len(L)<1e-3)L=[1,0,0];L=v3.norm(L);
+  const N=v3.norm(v3.cross(dir,L));
+  return{sh,dir,L,N,tip};
+}
+function usCompute(){
+  if(!SIM.active||!SIM.T)return;
+  const m=SIM.T.mesh,g=usGeom();
+  const slab=[],best=new Array(US.bins).fill(null);
+  for(let i=0;i<m.nv;i++){if(m.used&&!m.used[i])continue;
+    const x=m.verts[i*3]-g.sh[0],y=m.verts[i*3+1]-g.sh[1],z=m.verts[i*3+2]-g.sh[2];
+    const off=x*g.N[0]+y*g.N[1]+z*g.N[2];if(Math.abs(off)>1.6)continue;
+    const dep=x*g.dir[0]+y*g.dir[1]+z*g.dir[2],lat=x*g.L[0]+y*g.L[1]+z*g.L[2];
+    if(dep<0||dep>US.depth)continue;
+    const ang=Math.atan2(lat,dep);if(Math.abs(ang)>US.fan)continue;
+    slab.push([dep,lat,i]);
+    const b=Math.min(US.bins-1,Math.floor((ang+US.fan)/(2*US.fan)*US.bins));
+    if(!best[b]||dep<best[b][0])best[b]=[dep,lat,i];
+  }
+  US.slab=slab;US.best=best;US.g=g;
+}
+function usDraw(){
+  const cv=$('#usCv');if(!cv||!US.on)return;
+  const W=cv.clientWidth,H=cv.clientHeight;if(!W||!H)return;
+  const dpr=window.devicePixelRatio||1;
+  if(cv.width!==Math.round(W*dpr)||cv.height!==Math.round(H*dpr)){cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);}
+  const c=cv.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);
+  c.fillStyle='#050608';c.fillRect(0,0,W,H);
+  if(!US.slab)usCompute();
+  const ox=W/2,oy=H*0.06,sc=(H*0.9)/US.depth;
+  const pt=(dep,lat)=>[ox+lat*sc,oy+dep*sc];
+  c.beginPath();c.moveTo(ox,oy);
+  for(let a=-US.fan;a<=US.fan+1e-6;a+=0.02){const [x,y]=pt(US.depth,US.depth*Math.tan(a));c.lineTo(x,y);}
+  c.closePath();c.fillStyle='#0b0d10';c.fill();c.strokeStyle='#2a3440';c.stroke();
+  c.fillStyle='rgba(120,130,140,0.35)';
+  for(const [dep,lat] of US.slab){if(((dep*7.3+lat*3.1)|0)%3)continue;const [x,y]=pt(dep,lat);c.fillRect(x,y,1.6,1.6);}
+  c.beginPath();let started=false;
+  for(const b of US.best){if(!b){started=false;continue;}const [x,y]=pt(b[0],b[1]);if(!started){c.moveTo(x,y);started=true;}else c.lineTo(x,y);}
+  c.strokeStyle='#6dff8a';c.lineWidth=2;c.stroke();
+  const [tx,ty]=pt(0,0);c.fillStyle='#ffd166';c.beginPath();c.arc(tx,ty,4,0,6.3);c.fill();
+  c.fillStyle='#9ab';c.font='12px sans-serif';c.fillText('輪郭候補 '+US.best.filter(Boolean).length+' 点 ／ Aキーで取得',10,H-12);
+}
+function usCapture(){
+  if(!SIM.active||!US.best)return toast('超音波の画面で、左房の壁の輪郭を読み取れていません');
+  const T=SIM.T,m=T.mesh;let n=0;
+  for(const b of US.best){if(!b)continue;const vi=b[2];
+    const pos=[m.verts[vi*3],m.verts[vi*3+1],m.verts[vi*3+2]];
+    const p={id:SIM.nextId++,x:pos[0],y:pos[1],z:pos[2],bip:+(T.bip[vi]*T.q[vi]).toFixed(2),uni:+(T.uni[vi]*T.q[vi]).toFixed(2),lat:Number.isFinite(T.lat[vi])?T.lat[vi]:NaN,imp:100,ref:SIM_REF,woi:[-80,160],us:true,mapAnn:NaN};
+    p.egmGen=()=>simEGM({cath:'abl',tip:simSiteParams({vi,pos})});initPoint(p);p.loaded=false;
+    SIM.map.points.push(p);n++;}
+  SIM.map.version++;SIM.ver++;dirtyAll('cp');simRenderPanel();
+  toast('超音波の輪郭を '+n+' 点、マップに取りました（超音波由来）');
+}
+function verifOn(){
+  document.body.classList.add('verif');US.on=true;$('#usView').style.display='block';
+  if(!S.compare){S.compare=true;$('#compareOn').checked=true;$('#view1').classList.toggle('hidden',false);}
+  $('#views').classList.toggle('single',false);
+  if(S.viewers[0].map)S.viewers[0].setView('PA');if(S.viewers[1].map)S.viewers[1].setView('AP');
+  US.slab=null;applyLayout();
+}
+function verifOff(){
+  if(!document.body.classList.contains('verif'))return;
+  document.body.classList.toggle('verif',false);US.on=false;$('#usView').style.display='none';
+}
+setInterval(()=>{if(US.on&&SIM.active){usCompute();usDraw();}},400);
 function setWF(k,btn){
   if(k==='study')return $('#inDir').click();
   if(k==='check')return $('#btnDiag').click();
   if(k==='map'){openMenu==='maps'?closeMenu():showMenu('maps',btn);return;}
   if(!S.study)return toast('先に症例を開いてください（デモデータでも試せます）');
   $$('.wfb').forEach(x=>x.classList.toggle('on',x.dataset.wf===k));
+  if(k!=='verification')verifOff();
   if($('#wave').classList.contains('collapsed'))$('#waveToggle').click();
   if(k==='mapping'){if(S.compare)tog('#compareOn');clickTab('t-view',false);setSel('#wLayout','all');setMode('select');if(!S.sel)stepPoint(1);}
   else if(k==='ablation'){clickTab('t-abl',false);if(!isOn('#vtOn'))tog('#vtOn');setSel('#wLayout','map');if(!S.study.visitag)toast('この症例には焼灼点（VisiTag）のデータがありません');}
   else if(k==='verification'){
     if(S.study.maps.length>1){if(!S.compare)tog('#compareOn');const m0=S.viewers[0].map,m1=S.study.maps.find(m=>m!==m0);if(S.viewers[1].map===m0&&m1){S.viewers[1].setMap(m1,true);}S.viewers[1].type=S.viewers[0].type;S.viewers[1].colDirty=S.viewers[1].ptsDirty=true;syncViewOverlays();}
-    clickTab('t-abl',false);if(S.study.visitag)$('#btnGap').click();toast(S.study.maps.length>1?'左右に別のマップを並べました（視点は連動）':'マップが1つしかないため、2画面比較はできません');}
+    clickTab('t-abl',false);if(S.study.visitag)$('#btnGap').click();
+    if(S.study.sim){verifOn();toast('検証の配置：左＝超音波（輪郭を自動で表示）、右上＝PA、右下＝AP。Aキーで輪郭を取得');}
+    else toast(S.study.maps.length>1?'左右に別のマップを並べました（視点は連動）':'マップが1つしかないため、2画面比較はできません');}
   dirtyAll('');
 }
 
