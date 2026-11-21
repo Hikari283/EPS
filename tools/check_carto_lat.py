@@ -52,7 +52,9 @@ def check_dir(D, verbose=True):
             continue
         U = [r[ui] * gain for r in rows if len(r) > ui]
         cand = lat_candidate(U, ref, frm, to)
-        exp_lat = None if exp_map <= -9000 else exp_map - ref
+        exp_lat = exp_map - ref
+        if exp_lat <= -9000 or exp_map <= -9000:   # -10000 / -8000 は「LAT なし」の印
+            exp_lat = None
         rows_out.append((os.path.basename(base), exp_lat, cand))
     if verbose:
         comp = [r for r in rows_out if r[1] is not None]
