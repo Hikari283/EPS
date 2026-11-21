@@ -2797,6 +2797,8 @@ function simIsolation(){
 }
 
 /* --- カテーテルの位置 --- */
+/* カテーテル位置の誤差（平均、mm）。磁気ロケーション＝1 mm（取説）、ACL（体表パッチ）＝3 mm */
+const SIM_LOC_ERR=1.0;
 function simPlace(v,cx,cy){
   const T=SIM.T;if(!T)return;const h=v.pick(cx,cy);if(!h||!h.surf)return;
   const m=T.mesh,tr=h.surf.tri,cand=[m.tris[tr],m.tris[tr+1],m.tris[tr+2]];let vi=cand[0],bd=1e18;
@@ -2817,6 +2819,9 @@ function simPlace(v,cx,cy){
     const e1=v3.norm(v3.cross(ax,Math.abs(ax[2])<0.9?[0,0,1]:[1,0,0])),e2=v3.cross(ax,e1),d0=v3.sub(h.surf.pos,C),a0=Math.atan2(v3.dot(d0,e2),v3.dot(d0,e1));
     for(let k=0;k<10;k++){const th=a0+k*2*Math.PI/10,t=v3.add(C,v3.add(v3.sc(e1,R*Math.cos(th)),v3.sc(e2,R*Math.sin(th)))),vk=simNear(m,t);sites.push({pos:simPos(m,vk),vi:vk});}
   }
+  // 位置の誤差（取説：磁気ロケーションの平均精度 1 mm）。記録される座標にだけ乗せる（組織の本当の位置は変えない）
+  const se=SIM_LOC_ERR/Math.sqrt(3);
+  for(const s of sites)s.pos=v3.add(s.pos,[simGauss()*se,simGauss()*se,simGauss()*se]);
   SIM.sites=sites;
   // シャフト：シースの出口から先端まで、少し曲げてつなぐ
   const inw=s=>v3.add(s.pos,v3.sc(simNormal(T,s.vi),-0.9)),end=inw(sites[0]),S0=SIM.sheath,mid=v3.sc(v3.add(S0,end),0.5),ctl=v3.add(mid,v3.sc(v3.sub(T.LA.center,mid),0.3)),sh=[];
