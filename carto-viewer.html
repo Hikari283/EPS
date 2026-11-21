@@ -2136,9 +2136,14 @@ function usReadings(){
   const t=L?`LAT ${Number.isFinite(L.lat)?Math.round(L.lat):'N/A'} ms ｜ CL — ｜ Bi ${f(L.bip,2)} mV ｜ Imp ${L.imp?Math.round(L.imp)+' Ω':'N/A'} ｜ Force N/A`:'LAT N/A ｜ CL N/A ｜ Bi N/A ｜ Imp N/A ｜ Force N/A';
   const el=$('#usRead');if(el&&el.textContent!==t)el.textContent=t;
 }
+/* 超音波カテーテル（サウンド）の先端：左房の中心に置く（オクタレイとは別の位置） */
+function usTip(){
+  const T=SIM.T,c=(T&&T.LA&&T.LA.center)||[0,0,0];
+  return[c[0],c[1],c[2]];
+}
 function usGeom(){
   const sh=SIM.sheath||[-14,-3,-4];
-  const tip=(SIM.sites&&SIM.sites[0])?SIM.sites[0].pos:[0,0,0];
+  const tip=usTip();
   let dir=v3.norm(v3.sub(tip,sh));if(!isFinite(dir[0]))dir=[0,0,1];
   let L=v3.cross(dir,[0,0,1]);if(v3.len(L)<1e-3)L=[1,0,0];L=v3.norm(L);
   const N=v3.norm(v3.cross(dir,L));
