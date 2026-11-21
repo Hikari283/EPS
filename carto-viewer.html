@@ -2958,7 +2958,7 @@ function simStart(){
     setStudy(study);
     if(S.compare)tog('#compareOn');
     const v=S.viewers[0];v.type='Bipolar';v.ranges={Bipolar:{lo:0.08,hi:0.5},LAT:{lo:-25,hi:100}};v.setView('PA');
-    S.opt.fill=8;$('#fillR').value=8;S.opt.vtSize=3;$('#vtSize').value=3;S.opt.ptColor='value';$('#ptColor').value='value';S.opt.src='interp';$('#srcSel').value='interp';$('#simTruth').checked=false;$('#simAblRes').textContent='';$('#simIso').textContent='';
+    S.opt.fill=12;$('#fillR').value=12;S.opt.vtSize=3;$('#vtSize').value=3;S.opt.ptColor='value';$('#ptColor').value='value';S.opt.src='interp';$('#srcSel').value='interp';$('#simTruth').checked=false;$('#simAblRes').textContent='';$('#simIso').textContent='';
     simFamInit();
     syncPanel();setSel('#wLayout','all');setSide(true);clickTab('t-sim');simRenderPanel();dirtyAll('cpv');
     toast('シミュレーター開始：マップの上でマウスを動かすとカテーテルがついてきます（Enter：ポイント取得 ／ A：通電 ／ C：カテーテルの切り替え）',7000);
