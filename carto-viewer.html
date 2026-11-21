@@ -2163,7 +2163,7 @@ function bindMenus(){
   const tick=()=>{const d=new Date(),h=d.getHours(),ap=h<12?'AM':'PM',h12=h%12||12;$('#clock').textContent=`${z(h12)}:${z(d.getMinutes())}:${z(d.getSeconds())} ${ap}　${z(d.getMonth()+1)}/${z(d.getDate())}/${d.getFullYear()}`;};tick();setInterval(tick,1000);
 }
 /* ===== 超音波（CARTOSOUND 風）：カテーテルから見た扇形の断面と、自動の輪郭 ===== */
-const US={fan:0.62,depth:70,bins:96,on:false,best:null,slab:null,g:null,img:null,wall:null,frozen:false,showC:true,tagOS:false};
+const US={fan:0.62,depth:70,bins:96,on:false,best:null,slab:null,g:null,img:null,wall:null,frozen:false,showC:true,tagOS:false,tipPos:null};
 /* 画面下の数値（取説の Readings Dashboard）：最後に取った点（LIVE）の値。取れていなければ N/A */
 function usReadings(){
   const L=SIM.live,f=(v,d)=>(Number.isFinite(v)?v.toFixed(d):'N/A');
@@ -2172,8 +2172,16 @@ function usReadings(){
 }
 /* 超音波カテーテル（サウンド）の先端：左房の中心に置く（オクタレイとは別の位置） */
 function usTip(){
+  if(US.tipPos)return US.tipPos.slice();
   const T=SIM.T,c=(T&&T.LA&&T.LA.center)||[0,0,0];
   return[c[0],c[1],c[2]];
+}
+/* サウンドカテーテルを、マップ上の位置へ動かす（壁から少し内側に置く）。左の超音波画像は、その位置で作り直す */
+function usMoveTo(h){
+  const hit=h.v.pick(h.x,h.y);if(!hit||!hit.surf)return;
+  const p=hit.surf.pos,c=SIM.T.LA.center;const d=v3.norm(v3.sub(c,p));
+  US.tipPos=v3.add(p,v3.sc(d,12));
+  US.slab=null;usCompute();dirtyAll('v');
 }
 function usGeom(){
   const sh=SIM.sheath||[-14,-3,-4];
@@ -3154,7 +3162,7 @@ function simSmartIndex(){
 function simFrame(now){
   // 位置の履歴（VISITAG の安定性の判定に使う。連続取得の OFF でも記録する）
   if(SIM.active&&SIM.sites&&SIM.sites.length){const t=performance.now();SIM.posBuf=(SIM.posBuf||[]).filter(e=>t-e.t<3500);SIM.posBuf.push({t,p:SIM.sites[0].pos});}
-  if(SIM.hv){const h=SIM.hv;SIM.hv=null;SIM.lastHv=h;simPlace(h.v,h.x,h.y);simAutoStep();}
+  if(SIM.hv){const h=SIM.hv;SIM.hv=null;if(US.on){if(!US.frozen)usMoveTo(h);}else{SIM.lastHv=h;simPlace(h.v,h.x,h.y);simAutoStep();}}
   if(SIM.dirtyLive&&SIM.sites.length){SIM.dirtyLive=false;simRefreshLive();}
   simAutoFlush(now||performance.now());
 }
