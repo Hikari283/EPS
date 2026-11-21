@@ -1379,7 +1379,7 @@ class Viewer{
   }
   segments(){
     const segs=[],m=this.map;if(!m)return segs;
-    if(SIM.active&&SIM.map===m&&SIM.sites.length)for(const s of simShaftSegs())segs.push(s);
+    if(SIM.active&&SIM.map===m&&SIM.sites.length&&!(typeof US!=='undefined'&&US.on))for(const s of simShaftSegs())segs.push(s);   // 検証の画面では、マッピングのカテーテル（オクタレイ）は出さない
     if(S.opt.cvOn&&m.mesh)for(const s of cvArrows(m))segs.push({...s,depth:true});
     if(S.opt.ripple&&m.mesh)for(const s of rippleBars(m))segs.push({...s,depth:true});
     if(vtForMap(m)&&S.opt.vtOn&&S.opt.vtChain)for(const g of vtChain())segs.push({a:[g.a.x,g.a.y,g.a.z],b:[g.b.x,g.b.y,g.b.z],c:[0.45,0.7,1,1],w:Math.max(0.5,S.opt.vtSize*0.35),depth:true});
@@ -1387,9 +1387,10 @@ class Viewer{
     // サウンド（超音波カテーテル）：シースから先端までの線と、先端の扇形（検証の画面のとき）
     if(typeof US!=='undefined'&&US.on&&SIM.map===m&&SIM.sites&&SIM.sites.length){
       const g=usGeom(),R=25,cc=[1,0.85,0.4,1],P=(th,r)=>v3.add(g.tip,v3.add(v3.sc(g.dir,r*Math.cos(th)),v3.sc(g.L,r*Math.sin(th))));
-      segs.push({a:g.sh,b:g.tip,c:cc,w:3,depth:true});
-      segs.push({a:g.tip,b:P(-US.fan,R),c:cc,w:2,depth:true});segs.push({a:g.tip,b:P(US.fan,R),c:cc,w:2,depth:true});
-      for(let i=0;i<24;i++){const t0=-US.fan+i*2*US.fan/24,t1=-US.fan+(i+1)*2*US.fan/24;segs.push({a:P(t0,R),b:P(t1,R),c:cc,w:2,depth:true});}
+      // 左房の中にあるので、壁の奥に隠れないように手前に描く（depth:false）
+      segs.push({a:g.sh,b:g.tip,c:cc,w:3,depth:false});
+      segs.push({a:g.tip,b:P(-US.fan,R),c:cc,w:2,depth:false});segs.push({a:g.tip,b:P(US.fan,R),c:cc,w:2,depth:false});
+      for(let i=0;i<24;i++){const t0=-US.fan+i*2*US.fan/24,t1=-US.fan+(i+1)*2*US.fan/24;segs.push({a:P(t0,R),b:P(t1,R),c:cc,w:2,depth:false});}
     }
     if(typeof US!=='undefined'&&US.on&&US.showC&&US.c3&&SIM.map===m&&US.c3.length>1){const q=US.c3;for(let i=0;i<q.length;i++){const a=q[i],b=q[(i+1)%q.length];segs.push({a,b,c:[0.42,1,0.55,1],w:4,depth:true});}}
     if(vtForMap(m)&&S.opt.vtOn&&S.opt.gapShow&&S.gaps)for(const g of S.gaps)segs.push({a:[g.a.x,g.a.y,g.a.z],b:[g.b.x,g.b.y,g.b.z],c:[1,0.15,0.15,1],w:0.9,depth:false});
@@ -1438,7 +1439,7 @@ class Viewer{
     if(SIM.active&&SIM.map===this.map&&SIM.sites.length){if(this.catVer!==SIM.ver)this.updateCatheter();gl.disable(gl.DEPTH_TEST);this.drawLit('c',this.catCount,MVP,V,1);gl.enable(gl.DEPTH_TEST);}
     this.drawSegs(this.segments(),MVP);
   }
-  updateCatheter(){const s=buildSpheres(simCatItems());this.upload('cP',s.P);this.upload('cN',s.N);this.upload('cC',s.C);this.catCount=s.count;this.catVer=SIM.ver;}
+  updateCatheter(){const s=buildSpheres((typeof US!=='undefined'&&US.on)?[]:simCatItems());this.upload('cP',s.P);this.upload('cN',s.N);this.upload('cC',s.C);this.catCount=s.count;this.catVer=SIM.ver;}
   ray(cx,cy){const r=this.canvas.getBoundingClientRect();const x=(cx-r.left)/r.width*2-1,y=1-(cy-r.top)/r.height*2;
     const{MVP}=this.matrices();const inv=M4.inv(MVP);const a=M4.xf(inv,[x,y,-1,1]),b=M4.xf(inv,[x,y,1,1]);
     const o=[a[0]/a[3],a[1]/a[3],a[2]/a[3]],e=[b[0]/b[3],b[1]/b[3],b[2]/b[3]];return{o,d:v3.norm(v3.sub(e,o))};}
