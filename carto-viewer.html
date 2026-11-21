@@ -3057,8 +3057,15 @@ function simAblate(){
   const c=SIM.cfg,F=Math.max(1,c.force+(Math.random()-0.5)*4),Q=(c.power/35)*(c.time/20)*(0.5+F/24),ai=Math.round(Q*420),m=T.mesh;
   const full=Q>=0.93,part=Q>=0.6,rb=full?3.4:0,rq=full?4.2:part?3.2:2.0,fac=full?0.08:part?0.5:0.9;let nb=0;
   for(let i=0;i<m.nv;i++){if(!m.used[i])continue;const d=v3.dist(simPos(m,i),s.pos);if(d<=rq){T.q[i]=Math.min(T.q[i],fac);if(d<=rb){T.blocked[i]=1;nb++;}}}
+  // 取説：Initialize の後 40 秒以内は RF エネルギーが無効
+  const nowT=performance.now();if(SIM.initT&&nowT-SIM.initT<40000)return toast('通電は、Initialize の後 40 秒以内は無効です（取説）。あと '+Math.ceil((40000-(nowT-SIM.initT))/1000)+' 秒');
   const vt=S.study.visitag,prev=vt.sites[vt.sites.length-1];if(prev&&v3.dist([prev.x,prev.y,prev.z],s.pos)>15)SIM.sess++;
-  vt.sites.push({x:s.pos[0],y:s.pos[1],z:s.pos[2],session:String(SIM.sess),idx:vt.sites.length+1,v:{ai,fti:Math.round(ai*0.9),dur:c.time,force:+F.toFixed(1),power:c.power,temp:Math.round(36+c.power/6),impDrop:+(4+Q*6).toFixed(1),imp:Math.round(100+10*Math.random())}});
+  // 取説：VISITAG のサイトは、3 秒間 2〜3 mm 以内に安定し、フォースが 3 g 以上のときだけできる
+  const rec=(SIM.posBuf||[]).filter(e=>nowT-e.t<=3000);
+  const stable=rec.length>=3&&Math.max(...rec.map(e=>v3.dist(e.p,s.pos)))<=3&&c.time>=3;
+  const forceOK=F>=3;
+  if(!stable||!forceOK){toast('VISITAG サイトはできませんでした（'+(!stable?'カテーテルが 3 秒間安定していません':'フォースが 3 g 未満です')+'）。病変は作られています');}
+  else vt.sites.push({x:s.pos[0],y:s.pos[1],z:s.pos[2],session:String(SIM.sess),idx:vt.sites.length+1,v:{ai,fti:Math.round(ai*0.9),dur:c.time,force:+F.toFixed(1),power:c.power,temp:Math.round(36+c.power/6),impDrop:+(4+Q*6).toFixed(1),imp:Math.round(100+10*Math.random())}});
   vt._chain=null;S.opt.vtLo=300;S.opt.vtHi=520;$('#vtLo').value=300;$('#vtHi').value=520;
   if(nb)simActivate(T);
   if($('#simTruth').checked)simTruth(true);
@@ -3095,6 +3102,8 @@ function simSmartIndex(){
   return n?Math.round(100*c/n):0;
 }
 function simFrame(now){
+  // 位置の履歴（VISITAG の安定性の判定に使う。連続取得の OFF でも記録する）
+  if(SIM.active&&SIM.sites&&SIM.sites.length){const t=performance.now();SIM.posBuf=(SIM.posBuf||[]).filter(e=>t-e.t<3500);SIM.posBuf.push({t,p:SIM.sites[0].pos});}
   if(SIM.hv){const h=SIM.hv;SIM.hv=null;SIM.lastHv=h;simPlace(h.v,h.x,h.y);simAutoStep();}
   if(SIM.dirtyLive&&SIM.sites.length){SIM.dirtyLive=false;simRefreshLive();}
   simAutoFlush(now||performance.now());
@@ -3112,7 +3121,7 @@ function simStart(){
     const map=newMap('LA（シミュレーター）');map.mesh=T.mesh;
     const study={name:'シミュレーター AF（初回PVI）',maps:[map],vfs:null,warn:[],demo:true,sim:true,
       visitag:{mapNames:[map.name],sites:[],params:[{k:'ai',label:'Ablation Index'},{k:'fti',label:'FTI'},{k:'dur',label:'焼灼時間 (s)'},{k:'force',label:'平均Force (g)'},{k:'power',label:'最大出力 (W)'},{k:'temp',label:'最高温度 (℃)'},{k:'impDrop',label:'インピーダンス低下 (Ω)'},{k:'imp',label:'基礎インピーダンス (Ω)'}]}};
-    Object.assign(SIM,{active:true,map,T,sites:[],shaft:[],live:null,nextId:1,sess:1,hv:null,lastHv:null,leads:null,dirtyLive:true,autoPrev:null,autoDirty:false,autoN:0,autoSkip:0});SIM.ver++;simGridRebuild();
+    Object.assign(SIM,{active:true,initT:performance.now(),map,T,sites:[],shaft:[],live:null,nextId:1,sess:1,hv:null,lastHv:null,leads:null,dirtyLive:true,autoPrev:null,autoDirty:false,autoN:0,autoSkip:0});SIM.ver++;simGridRebuild();
     setStudy(study);
     if(S.compare)tog('#compareOn');
     const v=S.viewers[0];v.type='Bipolar';v.ranges={Bipolar:{lo:0.08,hi:0.5},LAT:{lo:-25,hi:100}};v.setView('PA');
