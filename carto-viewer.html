@@ -62,6 +62,10 @@ body.verif #view1{grid-column:2;grid-row:2}
 #usView{display:none;position:relative;background:#000;min-width:0;min-height:0}
 #usCv{position:absolute;inset:0;width:100%;height:100%}
 #usView .us-note{position:absolute;left:8px;bottom:6px;font-size:12px;color:#9ab;background:rgba(0,0,0,.6);padding:2px 6px;border-radius:4px}
+#usView .us-bar{position:absolute;left:6px;top:6px;display:flex;gap:6px;align-items:center;background:rgba(10,14,20,.75);padding:4px 6px;border-radius:6px;font-size:12px;color:#cfe}
+#usView .us-bar button{font-size:12px;padding:3px 8px;background:#1d2a3a;color:#cfe;border:1px solid #3a5070;border-radius:4px;cursor:pointer}
+#usView .us-bar button.on{background:#2a5d93;color:#fff}
+#usView .us-read{position:absolute;right:8px;bottom:6px;font-size:12px;color:#fff;background:rgba(0,0,0,.7);padding:4px 8px;border-radius:4px;font-variant-numeric:tabular-nums}
 .view.hidden{display:none}
 .view canvas.gl{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
 .vlabel{position:absolute;left:8px;top:6px;font-size:12px;color:#cfd8e3;text-shadow:0 0 3px #000;pointer-events:none}
@@ -459,7 +463,15 @@ body,button,select,input,textarea{font-family:Tahoma,"Segoe UI",Verdana,"Meiryo 
 </aside>
 <div class="split v" id="sideSplit" title="ドラッグで幅を変更（ダブルクリックで元に戻す）"></div>
 <section id="views" class="single">
-  <div id="usView"><canvas id="usCv"></canvas><div class="us-note" id="usNote">超音波（CARTOSOUND 風）：Aキーで輪郭を取得</div></div>
+  <div id="usView"><canvas id="usCv"></canvas>
+    <div class="us-bar" id="usBar">
+      <button id="usFreeze" title="画像を止める／動かす（取説：Ultrasound ウィンドウのフリーズ）">フリーズ</button>
+      <button id="usContour" class="on" title="自動の輪郭を表示／非表示（取説：Contour の表示）">輪郭</button>
+      <button id="usTapBtn" title="輪郭の点をマップに取る（A キーと同じ）">マップに取る（A）</button>
+      <label title="取った点に OS（解剖学的タグ）を付ける（取説：Contour タグ）"><input type="checkbox" id="usOS"> OS タグ</label>
+    </div>
+    <div class="us-read" id="usRead">LAT N/A ｜ CL N/A ｜ Bi N/A ｜ Imp N/A ｜ Force N/A</div>
+    <div class="us-note" id="usNote">超音波（CARTOSOUND 風）：A キーで輪郭を取得</div></div>
   <div class="view active" id="view0"><canvas class="gl"></canvas>
     <div class="vtop"><select class="vMap" title="マップ"></select><select class="vType" title="表示"></select><div class="vlabel"></div></div>
     <div class="cbar"><canvas width="340" height="64"></canvas></div>
@@ -1372,7 +1384,7 @@ class Viewer{
     if(S.opt.ripple&&m.mesh)for(const s of rippleBars(m))segs.push({...s,depth:true});
     if(vtForMap(m)&&S.opt.vtOn&&S.opt.vtChain)for(const g of vtChain())segs.push({a:[g.a.x,g.a.y,g.a.z],b:[g.b.x,g.b.y,g.b.z],c:[0.45,0.7,1,1],w:Math.max(0.5,S.opt.vtSize*0.35),depth:true});
     // 超音波の輪郭（緑の枠）：検証の画面で、左の超音波に引いた輪郭を、マップにも出す
-    if(typeof US!=='undefined'&&US.on&&US.c3&&SIM.map===m&&US.c3.length>1){const q=US.c3;for(let i=0;i<q.length;i++){const a=q[i],b=q[(i+1)%q.length];segs.push({a,b,c:[0.42,1,0.55,1],w:4,depth:true});}}
+    if(typeof US!=='undefined'&&US.on&&US.showC&&US.c3&&SIM.map===m&&US.c3.length>1){const q=US.c3;for(let i=0;i<q.length;i++){const a=q[i],b=q[(i+1)%q.length];segs.push({a,b,c:[0.42,1,0.55,1],w:4,depth:true});}}
     if(vtForMap(m)&&S.opt.vtOn&&S.opt.gapShow&&S.gaps)for(const g of S.gaps)segs.push({a:[g.a.x,g.a.y,g.a.z],b:[g.b.x,g.b.y,g.b.z],c:[1,0.15,0.15,1],w:0.9,depth:false});
     if(m.mesh&&S.meas.map===m){
       const V=m.mesh.verts,N=m.mesh.norms,P=i=>[V[i*3]+N[i*3]*0.4,V[i*3+1]+N[i*3+1]*0.4,V[i*3+2]+N[i*3+2]*0.4];
@@ -2110,7 +2122,13 @@ function bindMenus(){
   const tick=()=>{const d=new Date(),h=d.getHours(),ap=h<12?'AM':'PM',h12=h%12||12;$('#clock').textContent=`${z(h12)}:${z(d.getMinutes())}:${z(d.getSeconds())} ${ap}　${z(d.getMonth()+1)}/${z(d.getDate())}/${d.getFullYear()}`;};tick();setInterval(tick,1000);
 }
 /* ===== 超音波（CARTOSOUND 風）：カテーテルから見た扇形の断面と、自動の輪郭 ===== */
-const US={fan:0.62,depth:70,bins:96,on:false,best:null,slab:null,g:null,img:null,wall:null};
+const US={fan:0.62,depth:70,bins:96,on:false,best:null,slab:null,g:null,img:null,wall:null,frozen:false,showC:true,tagOS:false};
+/* 画面下の数値（取説の Readings Dashboard）：最後に取った点（LIVE）の値。取れていなければ N/A */
+function usReadings(){
+  const L=SIM.live,f=(v,d)=>(Number.isFinite(v)?v.toFixed(d):'N/A');
+  const t=L?`LAT ${Number.isFinite(L.lat)?Math.round(L.lat):'N/A'} ms ｜ CL — ｜ Bi ${f(L.bip,2)} mV ｜ Imp ${L.imp?Math.round(L.imp)+' Ω':'N/A'} ｜ Force N/A`:'LAT N/A ｜ CL N/A ｜ Bi N/A ｜ Imp N/A ｜ Force N/A';
+  const el=$('#usRead');if(el&&el.textContent!==t)el.textContent=t;
+}
 function usGeom(){
   const sh=SIM.sheath||[-14,-3,-4];
   const tip=(SIM.sites&&SIM.sites[0])?SIM.sites[0].pos:[0,0,0];
@@ -2197,7 +2215,8 @@ function usDraw(){
   // 自動の輪郭（壁）：なめらかな線
   c.beginPath();
   for(let i=0;i<US.bins;i++){const a=-US.fan+(i+0.5)*2*US.fan/US.bins,dep=dw[i];const [x,y]=pt(dep,dep*Math.tan(a));if(i===0)c.moveTo(x,y);else c.lineTo(x,y);}
-  c.strokeStyle='#6dff8a';c.lineWidth=2;c.stroke();
+  if(US.showC){c.strokeStyle='#6dff8a';c.lineWidth=2;c.stroke();}
+  usReadings();
   // 深さの目盛り（右）と情報
   c.fillStyle='#9ab';c.font='11px sans-serif';
   for(let dd=10;dd<=US.depth;dd+=10){const y=oy+dd*sc;c.fillRect(W-14,y,8,1);c.fillText(dd+' mm',W-50,y+3);}
@@ -2210,7 +2229,7 @@ function usCapture(){
   const T=SIM.T,m=T.mesh;let n=0;
   for(const b of US.best){if(!b)continue;const vi=b[2];
     const pos=[m.verts[vi*3],m.verts[vi*3+1],m.verts[vi*3+2]];
-    const p={id:SIM.nextId++,x:pos[0],y:pos[1],z:pos[2],bip:+(T.bip[vi]*T.q[vi]).toFixed(2),uni:+(T.uni[vi]*T.q[vi]).toFixed(2),lat:Number.isFinite(T.lat[vi])?T.lat[vi]:NaN,imp:100,ref:SIM_REF,woi:[-80,160],us:true,mapAnn:NaN};
+    const p={id:SIM.nextId++,x:pos[0],y:pos[1],z:pos[2],bip:+(T.bip[vi]*T.q[vi]).toFixed(2),uni:+(T.uni[vi]*T.q[vi]).toFixed(2),lat:Number.isFinite(T.lat[vi])?T.lat[vi]:NaN,imp:100,ref:SIM_REF,woi:[-80,160],us:true,mapAnn:NaN,tag:US.tagOS?'OS':undefined};
     p.egmGen=()=>simEGM({cath:'abl',tip:simSiteParams({vi,pos})});initPoint(p);p.loaded=false;
     SIM.map.points.push(p);n++;}
   SIM.map.version++;SIM.ver++;dirtyAll('cp');simRenderPanel();
@@ -2227,7 +2246,7 @@ function verifOff(){
   if(!document.body.classList.contains('verif'))return;
   document.body.classList.toggle('verif',false);US.on=false;$('#usView').style.display='none';
 }
-setInterval(()=>{if(US.on&&SIM.active){usCompute();usDraw();}},400);
+setInterval(()=>{if(US.on&&SIM.active&&!US.frozen){usCompute();usDraw();}},400);
 function setWF(k,btn){
   if(k==='study')return $('#inDir').click();
   if(k==='check')return $('#btnDiag').click();
@@ -3139,6 +3158,10 @@ function simFamDone(){if(!SIM.fam)return;if(SIM.fam.timer){clearInterval(SIM.fam
 function simBind(){
   $('#btnSim').onclick=simStart;$('#simStart').onclick=simStart;
   $$('input[name=simCath]').forEach(r=>r.onchange=e=>{if(!e.target.checked)return;SIM.cath=e.target.value;SIM.sites=[];SIM.shaft=[];if(SIM.lastHv)SIM.hv=SIM.lastHv;SIM.ver++;dirtyAll('');simRenderPanel();});
+  $('#usFreeze').onclick=()=>{US.frozen=!US.frozen;$('#usFreeze').classList.toggle('on',US.frozen);toast(US.frozen?'超音波の画像を止めました（フリーズ）':'超音波の画像を動かしました');};
+  $('#usContour').onclick=()=>{US.showC=!US.showC;$('#usContour').classList.toggle('on',US.showC);dirtyAll('v');};
+  $('#usTapBtn').onclick=()=>usCapture();
+  $('#usOS').onchange=e=>{US.tagOS=e.target.checked;};
   $('#simFamGo').onclick=simFamGo;$('#simFamDone').onclick=simFamDone;$('#simFamAng').oninput=e=>{if(SIM.fam){if(SIM.fam.timer){clearInterval(SIM.fam.timer);SIM.fam.timer=null;}SIM.fam.ang=+e.target.value;simFamApply();}};
   $('#simTpi').onchange=e=>{SIM.tpi=e.target.checked;toast(SIM.tpi?'TPIフィルター：オン（B・C・E・F・G・H の5-6番電極を含むバイポーラは取得されません）':'TPIフィルター：オフ');};$('#simTpiMode').onchange=e=>{SIM.tpiMode=e.target.value;};
   simPfaRender();$('#simPfa').onchange=e=>{SIM.pfa=e.target.checked;if(SIM.pfa){const r=document.querySelector('input[name=simCath][value=cir]');r.checked=true;r.dispatchEvent(new Event('change'));toast('PFA：円形カテーテルをマップに置いて、「通電（A）」で4回連続通電します');}};
