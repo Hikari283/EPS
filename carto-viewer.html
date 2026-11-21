@@ -1371,6 +1371,8 @@ class Viewer{
     if(S.opt.cvOn&&m.mesh)for(const s of cvArrows(m))segs.push({...s,depth:true});
     if(S.opt.ripple&&m.mesh)for(const s of rippleBars(m))segs.push({...s,depth:true});
     if(vtForMap(m)&&S.opt.vtOn&&S.opt.vtChain)for(const g of vtChain())segs.push({a:[g.a.x,g.a.y,g.a.z],b:[g.b.x,g.b.y,g.b.z],c:[0.45,0.7,1,1],w:Math.max(0.5,S.opt.vtSize*0.35),depth:true});
+    // 超音波の輪郭（緑の枠）：検証の画面で、左の超音波に引いた輪郭を、マップにも出す
+    if(typeof US!=='undefined'&&US.on&&US.c3&&SIM.map===m&&US.c3.length>1){const q=US.c3;for(let i=0;i<q.length;i++){const a=q[i],b=q[(i+1)%q.length];segs.push({a,b,c:[0.42,1,0.55,1],w:4,depth:true});}}
     if(vtForMap(m)&&S.opt.vtOn&&S.opt.gapShow&&S.gaps)for(const g of S.gaps)segs.push({a:[g.a.x,g.a.y,g.a.z],b:[g.b.x,g.b.y,g.b.z],c:[1,0.15,0.15,1],w:0.9,depth:false});
     if(m.mesh&&S.meas.map===m){
       const V=m.mesh.verts,N=m.mesh.norms,P=i=>[V[i*3]+N[i*3]*0.4,V[i*3+1]+N[i*3+1]*0.4,V[i*3+2]+N[i*3+2]*0.4];
@@ -2132,6 +2134,9 @@ function usCompute(){
     if(!best[b]||dep<best[b][0])best[b]=[dep,lat,i];
   }
   US.slab=slab;US.best=best;US.g=g;
+  // 輪郭を 3D の座標にして、マップの上にも出せるようにする
+  US.c3=best.filter(Boolean).map(b=>[m.verts[b[2]*3],m.verts[b[2]*3+1],m.verts[b[2]*3+2]]);
+  if(US.on)dirtyAll('v');
 }
 /* 壁の深さ（角度ごと、mm）。取れていない角度は両隣から補い、ギザギザを中央値で減らす */
 function usWallDepth(){
