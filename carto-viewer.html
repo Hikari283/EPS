@@ -1400,6 +1400,8 @@ class Viewer{
       // 壁が見つかった角度どうしだけつなぐ（見つからない角度を横切る線は引かない）
       // 深さが大きく飛ぶところ（壁がない＝僧帽弁・肺静脈の入口など）は線を切る
       for(let i=0;i<B;i++){const j=(i+1)%B;if(!US.best[i]||!US.best[j])continue;if(Math.abs(dw[i]-dw[j])>6)continue;segs.push({a:Q[i],b:Q[j],c:[0.42,1,0.55,1],w:4,depth:false});}
+      // 扇形の面：先端から輪郭までの細い線（実機の「薄い緑の板」の見え方に近づける）
+      for(let i=0;i<B;i+=3){if(!US.best[i])continue;segs.push({a:g.tip,b:Q[i],c:[0.42,1,0.55,0.45],w:1,depth:false});}
     }
     if(vtForMap(m)&&S.opt.vtOn&&S.opt.gapShow&&S.gaps)for(const g of S.gaps)segs.push({a:[g.a.x,g.a.y,g.a.z],b:[g.b.x,g.b.y,g.b.z],c:[1,0.15,0.15,1],w:0.9,depth:false});
     if(m.mesh&&S.meas.map===m){
