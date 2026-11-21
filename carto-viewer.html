@@ -1995,6 +1995,31 @@ function aboutText(){
     '【シミュレーターの「実際の形」の出典】','Martínez Díaz P, Goetz C, Dasi A, Unger LA, Haas A, Dössel O, Luik A, Loewe A.','"Atrial Models with Personalized Effective Refractory Period", Zenodo (2024), doi:10.5281/zenodo.10726677','ライセンス：CC BY 4.0。形・電圧・伝導速度の配列を取り出して形式を変換しています（元の作成者は、この変更を承認していません）。'].join('\n');
 }
 
+/* ---- メニュー項目（取説の説明に沿ったもの）---- */
+// Catheter > Reset TPI：組織近接度（TPI）を初期化し、カテーテルを動かして再トレーニングさせる（取説：TPI のリセット）
+function resetTPI(){
+  SIM.tpiReset=(SIM.tpiReset||0)+1;SIM.posBuf=[];
+  toast('TPI をリセットしました（取説：Reset TPI）。カテーテルを動かして再トレーニングしてください');
+}
+// Catheter > Create Snapshot：現在のカテーテル位置を保存（取説：ユーザー定義の時刻のカテーテル位置）
+function createSnapshot(){
+  if(!SIM.sites||!SIM.sites.length)return toast('先に、マップの上にカテーテルを置いてください');
+  SIM.snaps=(SIM.snaps||[]);SIM.snaps.push({n:SIM.snaps.length+1,pos:SIM.sites[0].pos.slice(),t:new Date().toLocaleTimeString()});
+  toast('カテーテルの位置を保存しました（スナップショット '+SIM.snaps.length+'）');
+}
+// Point > Copy/Move Point To：選んだポイントを、別のマップへコピー（move なら元は除外）（取説：MEM・ポイントの操作）
+function pointTargets(move){
+  if(!S.sel||!S.study)return[{h:'ポイントを選んでください'}];
+  return S.study.maps.filter(m=>m!==S.sel.map).map(m=>({l:m.name,a:()=>copyPointTo(S.sel.p,S.sel.map,m,move)}))
+    .concat(S.study.maps.length<2?[{h:'コピー先のマップがありません'}]:[]);
+}
+function copyPointTo(p,from,to,move){
+  const q=Object.assign({},p,{id:SIM.nextId?SIM.nextId++:Math.max(0,...to.points.map(x=>x.id))+1,excluded:false});
+  delete q.egmGen;if(p.egmGen)q.egmGen=p.egmGen;q.loaded=false;
+  to.points.push(q);to.version=(to.version||0)+1;
+  if(move){p.excluded=true;from.version=(from.version||0)+1;}
+  dirtyAll('cp');toast((move?'移動':'コピー')+'しました → '+to.name);
+}
 const MENUS={
   study:()=>[
     D('Continue Study'),{l:'Rename Study',a:renameStudy,d:need},
@@ -2034,7 +2059,7 @@ const MENUS={
     return[{h:'マップ'},...st.maps.map((m,i)=>({l:`${m.name}（${m.points.length}点）`,c:()=>v.map===m,a:()=>$('#selMap').onchange({target:{value:i}})})),SEP,
       {h:'表示'},...typesForMap(v.map).map(t=>({l:t.label,c:()=>v.type===t.k,a:()=>{$('#selType').value=t.k;$('#selType').onchange({target:{value:t.k}});}}))];},
   point:()=>[
-    U('Copy Point To'),U('Move Point To'),SEP,
+    {l:'Copy Point To',sub:()=>pointTargets(false),d:()=>!S.sel},{l:'Move Point To',sub:()=>pointTargets(true),d:()=>!S.sel},SEP,
     {l:'Delete Point',a:()=>toggleExclude(S.sel.map,S.sel.p),d:()=>!S.sel||S.sel.p.excluded},{l:'Restore Point',a:()=>toggleExclude(S.sel.map,S.sel.p),d:()=>!S.sel||!S.sel.p.excluded},SEP,
     {l:'Point Tag & Type...',a:pointTag,d:()=>!S.sel},{l:'Restore Annotation',a:()=>$('#latRevert').click(),d:()=>!S.sel},
     SEP,viewerHd,
@@ -2042,10 +2067,10 @@ const MENUS={
     {l:'クリックで選択',c:()=>S.mode==='select',a:()=>setMode('select')},{l:'クリックで除外',c:()=>S.mode==='exclude',a:()=>setMode('exclude')},
     {l:'LATを吸着',a:latSnap,d:()=>!S.sel},{l:'ポイントを表示',c:()=>isOn('#showPts'),a:()=>tog('#showPts')},{l:'除外した点も表示',c:()=>isOn('#showExcl'),a:()=>tog('#showExcl')}],
   catheter:()=>[
-    D('Create Snapshot'),U('Snapshot Settings'),SEP,
+    {l:'Create Snapshot',a:createSnapshot,d:need},U('Snapshot Settings'),SEP,
     U('Catheter Projection'),U('Catheter Projection Settings',{arrow:1}),
     {l:'Reset Visualization',a:()=>{const v=av();v.setView('FIT');afterCam(v);},d:need},
-    U('Reset TPI'),U('VARIPULSE™ TPI Calibration',{arrow:1}),D('Reset Sheath Pairing'),SEP,
+    {l:'Reset TPI',a:resetTPI,d:need},U('VARIPULSE™ TPI Calibration',{arrow:1}),D('Reset Sheath Pairing'),SEP,
     U('Launch Catheter Definition Tool'),
     SEP,viewerHd,
     {l:'電極の表示',sub:()=>[{l:'マッピング電極（Bi/Uni/Ref）',c:()=>W.layout==='map',a:()=>setSel('#wLayout','map')},{l:'全電極',c:()=>W.layout==='all',a:()=>setSel('#wLayout','all')}]},
