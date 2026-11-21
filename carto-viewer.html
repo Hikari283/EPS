@@ -1780,7 +1780,7 @@ function bindPanel(){
     const ae=document.activeElement;if(ae&&ae.matches('input[type=text],input[type=number],textarea,select'))return;if(ae&&ae.matches('input,button'))ae.blur();
     if(!$('#slideOv').classList.contains('hidden')){if(e.key==='ArrowRight')slideGo(1);else if(e.key==='ArrowLeft')slideGo(-1);else if(e.key==='Escape')closeSlides();return;}
     if(SIM.active&&(e.key==='c'||e.key==='C')&&!e.ctrlKey&&!e.metaKey){const order=['oct','abl','cir'],nx=order[(order.indexOf(SIM.cath)+1)%3],r=document.querySelector(`input[name=simCath][value=${nx}]`);r.checked=true;r.dispatchEvent(new Event('change'));toast('カテーテル：'+(nx==='oct'?'オクタレイ':nx==='abl'?'焼灼カテーテル':'円形カテーテル'));e.preventDefault();return;}
-    if(SIM.active&&(e.key==='Enter'||e.key==='a'||e.key==='A')&&!e.ctrlKey&&!e.metaKey){if(e.key==='Enter')simAcquire();else if(document.body.classList.contains('verif'))usCapture();else simAblate();e.preventDefault();return;}
+    if(SIM.active&&(e.key==='Enter'||e.key==='a'||e.key==='A')&&!e.ctrlKey&&!e.metaKey){if(e.key==='Enter'){if(!document.body.classList.contains('verif'))simAcquire();else toast('検証の画面では、Enter では点を取りません（Aキーで超音波の輪郭を取ります）');}else if(document.body.classList.contains('verif'))usCapture();else simAblate();e.preventDefault();return;}
     if(e.key==='ArrowRight'){stepPoint(1);e.preventDefault();}else if(e.key==='ArrowLeft'){stepPoint(-1);e.preventDefault();}
     else if(e.key==='Delete'||e.key==='Backspace'){if(S.sel){toggleExclude(S.sel.map,S.sel.p);e.preventDefault();}}
     else if(e.key===' '){togglePropPlay();e.preventDefault();}
@@ -2242,7 +2242,8 @@ function usCapture(){
   const T=SIM.T,m=T.mesh;let n=0;
   for(const b of US.best){if(!b)continue;const vi=b[2];
     const pos=[m.verts[vi*3],m.verts[vi*3+1],m.verts[vi*3+2]];
-    const p={id:SIM.nextId++,x:pos[0],y:pos[1],z:pos[2],bip:+(T.bip[vi]*T.q[vi]).toFixed(2),uni:+(T.uni[vi]*T.q[vi]).toFixed(2),lat:Number.isFinite(T.lat[vi])?T.lat[vi]:NaN,imp:100,ref:SIM_REF,woi:[-80,160],us:true,mapAnn:NaN,tag:US.tagOS?'OS':undefined};
+    // 超音波の輪郭の点は、電気的な値（電圧・LAT）を持たない＝マップの色には使わない
+    const p={id:SIM.nextId++,x:pos[0],y:pos[1],z:pos[2],bip:NaN,uni:NaN,lat:NaN,imp:NaN,ref:SIM_REF,woi:[-80,160],us:true,mapAnn:NaN,tag:US.tagOS?'OS':undefined};
     p.egmGen=()=>simEGM({cath:'abl',tip:simSiteParams({vi,pos})});initPoint(p);p.loaded=false;
     SIM.map.points.push(p);n++;}
   SIM.map.version++;SIM.ver++;dirtyAll('cp');simRenderPanel();
@@ -3017,6 +3018,8 @@ function simAcquire(){
 const SIM_FILT={pos:4,lat:4,beat:800};
 function simAutoStep(){
   if(!SIM.auto||!SIM.sites.length)return;
+  // 検証の画面では、マウスで点を勝手に取らない（点は超音波の「マップに取る」「Aキー」でだけ取る）
+  if(typeof US!=='undefined'&&US.on)return;
   const cur=SIM.sites[0].pos,now=performance.now();
   SIM.posBuf=(SIM.posBuf||[]).filter(e=>now-e.t<2000);SIM.posBuf.push({t:now,p:cur});
   if(!SIM.rej)SIM.rej={pos:0,lat:0,den:0};
