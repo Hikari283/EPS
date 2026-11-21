@@ -1379,7 +1379,7 @@ class Viewer{
   }
   segments(){
     const segs=[],m=this.map;if(!m)return segs;
-    if(SIM.active&&SIM.map===m&&SIM.sites.length&&!(typeof US!=='undefined'&&US.on))for(const s of simShaftSegs())segs.push(s);   // 検証の画面では、マッピングのカテーテル（オクタレイ）は出さない
+    if(SIM.active&&SIM.map===m&&SIM.sites.length&&S.opt.catProj!==false&&!(typeof US!=='undefined'&&US.on))for(const s of simShaftSegs())segs.push(s);   // 検証の画面では、マッピングのカテーテル（オクタレイ）は出さない
     if(S.opt.cvOn&&m.mesh)for(const s of cvArrows(m))segs.push({...s,depth:true});
     if(S.opt.ripple&&m.mesh)for(const s of rippleBars(m))segs.push({...s,depth:true});
     if(vtForMap(m)&&S.opt.vtOn&&S.opt.vtChain)for(const g of vtChain())segs.push({a:[g.a.x,g.a.y,g.a.z],b:[g.b.x,g.b.y,g.b.z],c:[0.45,0.7,1,1],w:Math.max(0.5,S.opt.vtSize*0.35),depth:true});
@@ -1446,7 +1446,7 @@ class Viewer{
     this.drawLit('p',this.ptsCount,MVP,V,1);this.drawLit('v',this.vtCount,MVP,V,1);
     if(op<0.999){gl.depthMask(false);drawMesh();gl.depthMask(true);}
     gl.depthMask(false);this.drawLit('h',this.hlCount,MVP,V,1);gl.depthMask(true);
-    if(SIM.active&&SIM.map===this.map&&SIM.sites.length){if(this.catVer!==SIM.ver)this.updateCatheter();gl.disable(gl.DEPTH_TEST);this.drawLit('c',this.catCount,MVP,V,1);gl.enable(gl.DEPTH_TEST);}
+    if(SIM.active&&SIM.map===this.map&&SIM.sites.length&&S.opt.catProj!==false){if(this.catVer!==SIM.ver)this.updateCatheter();gl.disable(gl.DEPTH_TEST);this.drawLit('c',this.catCount,MVP,V,1);gl.enable(gl.DEPTH_TEST);}
     this.drawSegs(this.segments(),MVP);
     this.drawEcho(MVP);
   }
@@ -2068,7 +2068,7 @@ const MENUS={
     {l:'LATを吸着',a:latSnap,d:()=>!S.sel},{l:'ポイントを表示',c:()=>isOn('#showPts'),a:()=>tog('#showPts')},{l:'除外した点も表示',c:()=>isOn('#showExcl'),a:()=>tog('#showExcl')}],
   catheter:()=>[
     {l:'Create Snapshot',a:createSnapshot,d:need},U('Snapshot Settings'),SEP,
-    U('Catheter Projection'),U('Catheter Projection Settings',{arrow:1}),
+    {l:'Catheter Projection',c:()=>S.opt.catProj!==false,a:()=>{S.opt.catProj=S.opt.catProj===false;toast(S.opt.catProj?'カテーテルの表示：オン':'カテーテルの表示：オフ（マップだけ表示）');dirtyAll('');}},U('Catheter Projection Settings',{arrow:1}),
     {l:'Reset Visualization',a:()=>{const v=av();v.setView('FIT');afterCam(v);},d:need},
     {l:'Reset TPI',a:resetTPI,d:need},U('VARIPULSE™ TPI Calibration',{arrow:1}),D('Reset Sheath Pairing'),SEP,
     U('Launch Catheter Definition Tool'),
