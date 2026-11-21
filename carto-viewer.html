@@ -1399,9 +1399,9 @@ class Viewer{
         Q.push(v3.add(g.sh,v3.add(v3.sc(g.dir,d),v3.sc(g.L,lat))));}
       // 壁が見つかった角度どうしだけつなぐ（見つからない角度を横切る線は引かない）
       // 深さが大きく飛ぶところ（壁がない＝僧帽弁・肺静脈の入口など）は線を切る
-      for(let i=0;i<B;i++){const j=(i+1)%B;if(!US.best[i]||!US.best[j])continue;if(Math.abs(dw[i]-dw[j])>6)continue;segs.push({a:Q[i],b:Q[j],c:[0.42,1,0.55,1],w:4,depth:false});}
+      for(let i=0;i<B;i++){const j=(i+1)%B;if(!US.best[i]||!US.best[j])continue;if(Math.abs(dw[i]-dw[j])>6)continue;segs.push({a:Q[i],b:Q[j],c:[0.42,1,0.55,1],w:2,depth:false});}
       // 扇形の面：先端から輪郭までの細い線（実機の「薄い緑の板」の見え方に近づける）
-      for(let i=0;i<B;i+=3){if(!US.best[i])continue;segs.push({a:g.tip,b:Q[i],c:[0.42,1,0.55,0.45],w:1,depth:false});}
+      for(let i=0;i<B;i+=4){if(!US.best[i])continue;segs.push({a:g.tip,b:Q[i],c:[0.42,1,0.55,0.3],w:0.6,depth:false});}
     }
     if(vtForMap(m)&&S.opt.vtOn&&S.opt.gapShow&&S.gaps)for(const g of S.gaps)segs.push({a:[g.a.x,g.a.y,g.a.z],b:[g.b.x,g.b.y,g.b.z],c:[1,0.15,0.15,1],w:0.9,depth:false});
     if(m.mesh&&S.meas.map===m){
@@ -1448,6 +1448,29 @@ class Viewer{
     gl.depthMask(false);this.drawLit('h',this.hlCount,MVP,V,1);gl.depthMask(true);
     if(SIM.active&&SIM.map===this.map&&SIM.sites.length){if(this.catVer!==SIM.ver)this.updateCatheter();gl.disable(gl.DEPTH_TEST);this.drawLit('c',this.catCount,MVP,V,1);gl.enable(gl.DEPTH_TEST);}
     this.drawSegs(this.segments(),MVP);
+    this.drawEcho(MVP);
+  }
+  /* 超音波の画像を、マップ上の扇形の面（緑の線の場所）に重ねて映す（左の画面と同じ画像を、右の 3D の位置に投影） */
+  drawEcho(MVP){
+    if(!US.on||!SIM.active||SIM.map!==this.map||!US.g||!US.slab)return;
+    if(!this.echoCv){this.echoCv=document.createElement('canvas');this.echoCv.style.cssText='position:absolute;inset:0;width:100%;height:100%;pointer-events:none';this.canvas.parentElement.appendChild(this.echoCv);}
+    const W=this.canvas.width,H=this.canvas.height,cv=this.echoCv;
+    if(cv.width!==W||cv.height!==H){cv.width=W;cv.height=H;}
+    const c=cv.getContext('2d');c.clearRect(0,0,W,H);
+    const g=US.g,m=MVP,dw=usWallDepth(),B=US.bins;
+    const proj=p=>{const x=p[0],y=p[1],z=p[2],w=m[3]*x+m[7]*y+m[11]*z+m[15];if(w<=0)return null;
+      return[((m[0]*x+m[4]*y+m[8]*z+m[12])/w+1)/2*W,(1-(m[1]*x+m[5]*y+m[9]*z+m[13])/w)/2*H];};
+    for(let dep=1;dep<US.depth;dep+=1.2){
+      for(let bi=0;bi<B;bi++){
+        const a=-US.fan+(bi+0.5)*2*US.fan/B,lat=dep*Math.tan(a);
+        const t=dep-dw[bi];let v;
+        if(t<-0.6)v=10+14*usHash(bi,dep*5|0,1);
+        else{const att=Math.exp(-dep/38),echo=160*Math.exp(-(t*t)/3.5),tissue=70*Math.exp(-Math.max(0,t)/14),sp=0.45+1.1*usHash(bi,dep*5|0,2);v=Math.min(255,(echo+tissue)*att*sp);}
+        const p3=v3.add(g.sh,v3.add(v3.sc(g.dir,dep),v3.sc(g.L,lat)));
+        const s=proj(p3);if(!s)continue;
+        const k=v/255;c.fillStyle=`rgba(${v|0},${v|0},${v|0},${Math.min(0.85,0.25+k)})`;c.fillRect(s[0]-1.5,s[1]-1.5,3,3);
+      }
+    }
   }
   updateCatheter(){const s=buildSpheres((typeof US!=='undefined'&&US.on)?[]:simCatItems());this.upload('cP',s.P);this.upload('cN',s.N);this.upload('cC',s.C);this.catCount=s.count;this.catVer=SIM.ver;}
   ray(cx,cy){const r=this.canvas.getBoundingClientRect();const x=(cx-r.left)/r.width*2-1,y=1-(cy-r.top)/r.height*2;
