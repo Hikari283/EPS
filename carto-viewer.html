@@ -398,7 +398,7 @@ body,button,select,input,textarea{font-family:Tahoma,"Segoe UI",Verdana,"Meiryo 
         <div class="small">取説（TRUPULSE）：電極は最大10個、<b>連続した6個以上</b>を選びます。1回のアプリケーションは1秒未満で、開始すると<b>4回</b>連続して供給されます（間隔1秒）。実機では電極どうしが重なるとエラー（301）で通電できませんが、ここでは再現していません。通電ごとに、電極の選択は全部に戻ります。熱は使わないので、接触力・出力・Tag Index はありません。</div>
       </fieldset>
       <div class="row"><label><input type="checkbox" id="simAuto" checked> 連続取得（カテーテルを動かすと自動で入る）</label></div>
-      <div class="row"><span class="lb" style="min-width:auto">点の間隔</span><input type="number" id="simMin" value="3" min="1" max="10" step="0.5"> mm 以上</div>
+      <div class="row"><span class="lb" style="min-width:auto">点の間隔</span><input type="number" id="simMin" value="1" min="0.5" max="10" step="0.5"> mm 以上（取説の既定値は 1 mm。0.5 mm で最大密度＝点を重ねる）</div>
       <div class="muted small">ゆっくり動かすと入ります。急に大きく動かした瞬間は、入りません（安定していないため）。条件は簡易的な想定で、CARTOの取得条件とは違います。</div>
       <div class="row"><button id="simAcq" class="primary">ポイント取得（Enter）</button><button id="simClear">取得点を全部消す</button></div>
       <div class="muted small">円形カテーテルは肺静脈の入口に置くと、血管をぐるっと囲みます。取得すると9点（隣り合う電極の組）が入ります。</div>
@@ -2532,7 +2532,7 @@ const SIM_SPL='ABCDEFGH',SIM_OCT_COL=[[1,0.6,0.24],[0.36,0.45,1],[1,0.88,0.3],[1
    1本のスプラインに電極6つ＝双極5つ。最初の電極の位置（中心から 3 mm）は私の想定。 */
 function simOctRadii(cfg){const gaps=String(cfg).split('-').map(Number);let x=3;const e=[x];for(const g of gaps){x+=g;e.push(x);}return e.slice(0,5).map((v,j)=>(v+e[j+1])/2);}
 const SIM={pfa:false,pfaSel:Array(10).fill(true),pfaPrev:Array(10).fill(true),tpi:false,tpiMode:'either',active:false,map:null,T:null,cath:'oct',octRot:0.3,octCfg:'3-3-3-3-3',octR:[4.5,7.5,10.5,13.5,16.5],sites:[],shaft:[],live:null,ver:0,hv:null,lastHv:null,dirtyLive:true,nextId:1,sess:1,
-  auto:true,minDist:3,maxJump:9,grid:new Map(),autoPrev:null,autoDirty:false,autoT:0,autoN:0,autoSkip:0,
+  auto:true,minDist:1,maxJump:9,grid:new Map(),autoPrev:null,autoDirty:false,autoT:0,autoN:0,autoSkip:0,
   cfg:{power:35,time:20,force:12},leads:null,sheath:[-14,-3,-4],sheathOut:[-38,-9,-16]};
 const simHash=i=>{const s=Math.sin(i*12.9898+78.233)*43758.5453;return s-Math.floor(s);};
 const simPos=(m,i)=>[m.verts[i*3],m.verts[i*3+1],m.verts[i*3+2]];
@@ -3009,7 +3009,7 @@ function simBind(){
   $('#simTruth').onchange=e=>{if(SIM.active)simTruth(e.target.checked);};
   $('#simOctCfg').onchange=e=>{SIM.octCfg=e.target.value;SIM.octR=simOctRadii(SIM.octCfg);SIM.sites=[];SIM.shaft=[];if(SIM.lastHv)SIM.hv=SIM.lastHv;SIM.ver++;dirtyAll('');toast('オクタレイの電極の並び：'+SIM.octCfg+'（取説：電極の間隔はmm。スパインの長さは 2 cm、2-2-2-2-2 のみ 1.5 cm）',5000);};
   $('#simAuto').onchange=e=>{SIM.auto=e.target.checked;SIM.autoPrev=null;toast(SIM.auto?'連続取得：オン（カテーテルをゆっくり動かすと、点が入ります）':'連続取得：オフ（Enterキーで1点ずつ取ります）');};
-  $('#simMin').addEventListener('input',e=>{const x=+e.target.value;if(fin(x)&&x>=1)SIM.minDist=x;});
+  $('#simMin').addEventListener('input',e=>{const x=+e.target.value;if(fin(x)&&x>=0.5)SIM.minDist=x;});
 }
 /* ===================== メインループ ===================== */
 let lastT=performance.now(),labelT=0;
